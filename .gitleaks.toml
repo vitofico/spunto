@@ -1,0 +1,19 @@
+# Read by the gitleaks pre-commit hook and by .github/workflows/security.yml.
+#
+# A test that needs a secret-shaped value uses a fixed, obviously fake sentinel,
+# and the sentinel is allowlisted here by its exact value, never by path, so a
+# real secret pasted into a test file still fails the scan. A test sentinel
+# would be added like this:
+#
+#   [[allowlists]]
+#   description = "Test sentinels, never real"
+#   regexTarget = "secret"
+#   regexes = ['''^fake-key-for-tests-0001$''']
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public Android release certificate fingerprint, not a signing key or credential"
+regexTarget = "secret"
+regexes = ['''^27799072ba669055e4451cb07af03548658505a9399743a51b62c221bb45cc86$''']

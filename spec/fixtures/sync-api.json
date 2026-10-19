@@ -1,0 +1,384 @@
+{
+  "format": 1,
+  "synthetic": true,
+  "push_request": {
+    "epoch": "00000000",
+    "ops": [
+      {
+        "op_id": "00000000-0000-4000-8000-000000000001",
+        "type": "note.create",
+        "note_id": "01920000-0000-7000-8000-000000000001",
+        "body": "Synthetic offline note #fixture",
+        "created_at": 1760000000000
+      }
+    ]
+  },
+  "push_response": {
+    "epoch": "00000000",
+    "results": [
+      {
+        "op_id": "00000000-0000-4000-8000-000000000001",
+        "status": "applied",
+        "version": 1,
+        "note": {
+          "id": "01920000-0000-7000-8000-000000000001",
+          "body": "Synthetic offline note #fixture",
+          "body_hash": "7036c33aa9d2a4decdcc8a7c12de0232ef30e2109f84a40f4cc9f91ba1ffa17e",
+          "title": "Synthetic offline note #fixture",
+          "labels": [
+            "fixture"
+          ],
+          "version": 1,
+          "change_seq": 1,
+          "created_at": "2025-10-09T08:53:20.000Z",
+          "updated_at": "2025-10-09T08:53:20.000Z",
+          "pinned": false,
+          "archived": false,
+          "trashed": false,
+          "private": false,
+          "flag_times": {
+            "pinned": 0,
+            "archived": 0,
+            "trashed": 0,
+            "private": 0
+          },
+          "open_tasks": 0,
+          "source": {
+            "kind": "android",
+            "ref": null
+          },
+          "origin": "owner",
+          "updated_via_agent": false,
+          "machine": false,
+          "conflict_of": null,
+          "suggestions": [],
+          "annotations": []
+        }
+      }
+    ]
+  },
+  "pull_response": {
+    "epoch": "00000000",
+    "cursor": "00000000.1",
+    "has_more": false,
+    "plugins_rev": 0,
+    "items": [
+      {
+        "kind": "note",
+        "change_seq": 1,
+        "data": {
+          "id": "01920000-0000-7000-8000-000000000001",
+          "body": "Synthetic offline note #fixture",
+          "body_hash": "7036c33aa9d2a4decdcc8a7c12de0232ef30e2109f84a40f4cc9f91ba1ffa17e",
+          "title": "Synthetic offline note #fixture",
+          "labels": [
+            "fixture"
+          ],
+          "version": 1,
+          "change_seq": 1,
+          "created_at": "2025-10-09T08:53:20.000Z",
+          "updated_at": "2025-10-09T08:53:20.000Z",
+          "pinned": false,
+          "archived": false,
+          "trashed": false,
+          "private": false,
+          "flag_times": {
+            "pinned": 0,
+            "archived": 0,
+            "trashed": 0,
+            "private": 0
+          },
+          "open_tasks": 0,
+          "source": {
+            "kind": "android",
+            "ref": null
+          },
+          "origin": "owner",
+          "updated_via_agent": false,
+          "machine": false,
+          "conflict_of": null,
+          "suggestions": [],
+          "annotations": []
+        }
+      }
+    ]
+  },
+  "reconcile_request": {
+    "epoch": "00000000",
+    "notes": [
+      {
+        "id": "01920000-0000-7000-8000-000000000001",
+        "body_hash": "7036c33aa9d2a4decdcc8a7c12de0232ef30e2109f84a40f4cc9f91ba1ffa17e",
+        "updated_at": "2025-10-09T08:53:20.000Z"
+      }
+    ]
+  },
+  "reconcile_response": {
+    "epoch": "00000000",
+    "restore_ids": []
+  },
+  "push_duplicate_response": {
+    "epoch": "00000000",
+    "results": [
+      {
+        "op_id": "00000000-0000-4000-8000-000000000001",
+        "status": "duplicate",
+        "original": {
+          "status": "applied",
+          "version": 1,
+          "note": {
+            "id": "01920000-0000-7000-8000-000000000001",
+            "body": "Synthetic offline note #fixture",
+            "body_hash": "7036c33aa9d2a4decdcc8a7c12de0232ef30e2109f84a40f4cc9f91ba1ffa17e",
+            "title": "Synthetic offline note #fixture",
+            "labels": [
+              "fixture"
+            ],
+            "version": 1,
+            "change_seq": 1,
+            "created_at": "2025-10-09T08:53:20.000Z",
+            "updated_at": "2025-10-09T08:53:20.000Z",
+            "pinned": false,
+            "archived": false,
+            "trashed": false,
+            "private": false,
+            "flag_times": {
+              "pinned": 0,
+              "archived": 0,
+              "trashed": 0,
+              "private": 0
+            },
+            "open_tasks": 0,
+            "source": {
+              "kind": "android",
+              "ref": null
+            },
+            "origin": "owner",
+            "updated_via_agent": false,
+            "machine": false,
+            "conflict_of": null,
+            "suggestions": [],
+            "annotations": []
+          }
+        }
+      }
+    ]
+  },
+  "push_merged_response": {
+    "epoch": "00000000",
+    "results": [
+      {
+        "op_id": "00000000-0000-4000-8000-000000000003",
+        "status": "merged",
+        "version": 3,
+        "body": "Synthetic OFFLINE note #fixture\nServer append",
+        "note": {
+          "id": "01920000-0000-7000-8000-000000000001",
+          "body": "Synthetic OFFLINE note #fixture\nServer append",
+          "body_hash": "e68fd714c09a2b5b6ff1cc016f7d8c768b1c676c4bc40927031a6a9fe675cfc5",
+          "title": "Synthetic OFFLINE note #fixture",
+          "labels": [
+            "fixture"
+          ],
+          "version": 3,
+          "change_seq": 3,
+          "created_at": "2025-10-09T08:53:20.000Z",
+          "updated_at": "2025-10-09T08:53:20.000Z",
+          "pinned": false,
+          "archived": false,
+          "trashed": false,
+          "private": false,
+          "flag_times": {
+            "pinned": 0,
+            "archived": 0,
+            "trashed": 0,
+            "private": 0
+          },
+          "open_tasks": 0,
+          "source": {
+            "kind": "android",
+            "ref": null
+          },
+          "origin": "owner",
+          "updated_via_agent": false,
+          "machine": false,
+          "conflict_of": null,
+          "suggestions": [],
+          "annotations": [],
+          "merged": true
+        }
+      }
+    ]
+  },
+  "push_conflict_response": {
+    "epoch": "00000000",
+    "results": [
+      {
+        "op_id": "00000000-0000-4000-8000-000000000004",
+        "status": "conflict",
+        "version": 3,
+        "note": {
+          "id": "01920000-0000-7000-8000-000000000002",
+          "body": "Phone conflicting text",
+          "body_hash": "a483fbfd877d8eb781b62769e385dee5d737b0aab0da450d8d40d8f6765d95dd",
+          "title": "Phone conflicting text",
+          "labels": [],
+          "version": 1,
+          "change_seq": 4,
+          "created_at": "2025-10-09T08:53:20.000Z",
+          "updated_at": "2025-10-09T08:53:20.000Z",
+          "pinned": false,
+          "archived": false,
+          "trashed": false,
+          "private": false,
+          "flag_times": {
+            "pinned": 0,
+            "archived": 0,
+            "trashed": 0,
+            "private": 0
+          },
+          "open_tasks": 0,
+          "source": {
+            "kind": "android",
+            "ref": null
+          },
+          "origin": "owner",
+          "updated_via_agent": false,
+          "machine": false,
+          "conflict_of": "01920000-0000-7000-8000-000000000001",
+          "suggestions": [],
+          "annotations": []
+        },
+        "conflict_id": "01920000-0000-7000-8000-000000000002"
+      }
+    ]
+  },
+  "push_rejected_response": {
+    "epoch": "00000000",
+    "results": [
+      {
+        "op_id": "00000000-0000-4000-8000-000000000005",
+        "status": "rejected",
+        "code": "invalid_operation"
+      }
+    ]
+  },
+  "pull_plugins_response": {
+    "epoch": "00000000",
+    "cursor": "00000000.6",
+    "has_more": false,
+    "plugins_rev": 0,
+    "items": [
+      {
+        "kind": "annotation",
+        "change_seq": 5,
+        "data": {
+          "plugin_id": "tasks",
+          "note_id": "01920000-0000-7000-8000-000000000001",
+          "kind": "member:tasks",
+          "payload": {
+            "value": true
+          },
+          "change_seq": 5,
+          "updated_at": "2025-10-09T08:53:20.000Z",
+          "id": "tasks/01920000-0000-7000-8000-000000000001/member:tasks",
+          "plugin": "tasks"
+        }
+      },
+      {
+        "kind": "suggestion",
+        "change_seq": 6,
+        "data": {
+          "id": "01920000-0000-7000-8000-000000000003",
+          "plugin": "tasks",
+          "note_id": "01920000-0000-7000-8000-000000000001",
+          "note_version": 3,
+          "action": "append_text",
+          "payload": {
+            "text": "Proposal"
+          },
+          "confidence": null,
+          "reason": "",
+          "status": "pending",
+          "change_seq": 6,
+          "created_at": "2025-10-09T08:53:20.000Z",
+          "decided_at": null
+        }
+      }
+    ]
+  },
+  "pull_tombstone_response": {
+    "epoch": "00000000",
+    "cursor": "00000000.11",
+    "has_more": false,
+    "plugins_rev": 0,
+    "items": [
+      {
+        "kind": "note",
+        "change_seq": 8,
+        "data": {
+          "id": "01920000-0000-7000-8000-000000000002",
+          "body": "Phone conflicting text",
+          "body_hash": "a483fbfd877d8eb781b62769e385dee5d737b0aab0da450d8d40d8f6765d95dd",
+          "title": "Phone conflicting text",
+          "labels": [],
+          "version": 2,
+          "change_seq": 8,
+          "created_at": "2025-10-09T08:53:20.000Z",
+          "updated_at": "2025-10-09T08:53:20.000Z",
+          "pinned": false,
+          "archived": false,
+          "trashed": false,
+          "private": false,
+          "flag_times": {
+            "pinned": 0,
+            "archived": 0,
+            "trashed": 0,
+            "private": 0
+          },
+          "open_tasks": 0,
+          "source": {
+            "kind": "android",
+            "ref": null
+          },
+          "origin": "owner",
+          "updated_via_agent": false,
+          "machine": false,
+          "conflict_of": null,
+          "suggestions": [],
+          "annotations": []
+        }
+      },
+      {
+        "kind": "tombstone",
+        "change_seq": 9,
+        "data": {
+          "kind": "suggestion",
+          "id": "01920000-0000-7000-8000-000000000003",
+          "change_seq": 9,
+          "deleted_at": "2025-10-09T08:53:20.000Z"
+        }
+      },
+      {
+        "kind": "tombstone",
+        "change_seq": 10,
+        "data": {
+          "kind": "annotation",
+          "id": "tasks/01920000-0000-7000-8000-000000000001/member:tasks",
+          "change_seq": 10,
+          "deleted_at": "2025-10-09T08:53:20.000Z"
+        }
+      },
+      {
+        "kind": "tombstone",
+        "change_seq": 11,
+        "data": {
+          "kind": "note",
+          "id": "01920000-0000-7000-8000-000000000001",
+          "change_seq": 11,
+          "deleted_at": "2025-10-09T08:53:20.000Z"
+        }
+      }
+    ]
+  }
+}

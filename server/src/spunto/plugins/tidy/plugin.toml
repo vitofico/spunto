@@ -1,0 +1,19 @@
+id = "tidy"
+name = "Tidy text"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "capture"
+description = "Tidy text through guarded owner actions."
+entry = "spunto.plugins.tidy:plugin"
+requires = ["ai.chat"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "suggest", "ai.chat"]
+
+[[contributes.commands]]
+id = "tidy"
+title = "Tidy text"
+where = ["note-actions"]
+online = true

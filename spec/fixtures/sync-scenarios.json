@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "synthetic": true,
+  "scenarios": [
+    {"name":"clean concurrent lines","base":"one\ntwo","server":"ONE\ntwo","incoming":"one\nTWO","status":"merged","bodies":["ONE\nTWO"]},
+    {"name":"overlapping concurrent lines","base":"one\ntwo","server":"SERVER\ntwo","incoming":"PHONE\ntwo","status":"conflict","bodies":["SERVER\ntwo","PHONE\ntwo"]},
+    {"name":"append beside offline edit","base":"one\ntwo","server":"one\ntwo\nappended","incoming":"one\nTWO","status":"merged","bodies":["one\nTWO\nappended"]},
+    {"name":"identical edits","base":"one\ntwo","server":"ONE\ntwo","incoming":"ONE\ntwo","status":"merged","bodies":["ONE\ntwo"]}
+  ]
+}

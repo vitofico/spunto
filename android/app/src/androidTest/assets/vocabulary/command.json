@@ -1,0 +1,8 @@
+{
+  "type": "command",
+  "id": "agent-inbox_mark-reviewed",
+  "args": {
+    "note_id": "example"
+  },
+  "title": "Mark reviewed"
+}

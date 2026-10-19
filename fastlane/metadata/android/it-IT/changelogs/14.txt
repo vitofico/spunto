@@ -1,0 +1,6 @@
+Prima versione pubblica.
+Scrittura e ricerca offline, con Markdown, liste di attività ed etichette annidate.
+Una breve guida iniziale presenta l’app; puoi riaprirla dalle impostazioni.
+Associa Android al server con un QR o un codice monouso.
+Cinque temi, blocco facoltativo dell’app, cronologia ed esportazione Markdown.
+I plugin web facoltativi aggiungono raccolte di contesto, un diario delle decisioni e funzioni IA, con scelta dei modelli nelle impostazioni.

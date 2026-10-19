@@ -1,0 +1,21 @@
+id = "tasks"
+name = "Tasks"
+version = "1.0.0"
+api = "0.4"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "Collect notes with open checkboxes."
+entry = "spunto.plugins.tasks:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read", "annotate"]
+
+[[contributes.views]]
+id = "tasks"
+title = "Tasks"
+filter = { open_tasks = true }
+
+[contributes.meta]
+title = "Task progress"

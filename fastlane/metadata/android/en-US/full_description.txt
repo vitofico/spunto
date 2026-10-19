@@ -1,0 +1,18 @@
+Keep a place for unfinished thoughts. Spunto is a native Android notes app that works offline, with optional sync to a Spunto server you choose.
+
+Capture a quick thought, write in Markdown, make a checklist, add nested #labels and find it again with local search. Pin what matters, archive completed work and revisit a note’s history. A short first-run guide introduces capture, labels, search and sync; replay it from Settings.
+
+<b>Make it your own</b>
+Choose a reading style, light or dark mode and one of five built-in colour themes. An optional app lock uses Android biometrics or your screen lock. It protects access to the interface; it does not encrypt the local notes database. Share saved notes or export them as Markdown, even offline.
+
+<b>Connect when you want to</b>
+Capture, editing and search work without signing in. Synchronization requires a Spunto server. Pair from the server’s web Settings using a QR or one-use code. The camera scanner decodes frames on the device; you can paste a code instead without camera access.
+
+The server adds the web app and optional plugins for organization, capture and AI assistance. Multi-account servers offer username/password sign-in and optional SSO; web users can share a note or a space with view or edit access. Space owners choose available models from configured providers in web Settings → AI. AI is optional and may send eligible note content to the configured provider. Private notes are excluded from built-in AI processing.
+
+<b>Capture from other apps</b>
+Share text or images to Spunto, or capture selected text. Optional voice features use the microphone and an installed speech-recognition service. Languages and offline support depend on the device and service. Spunto asks before enabling its online fallback; check the speech service’s policy for how recognition is processed.
+
+Spunto has no advertising or telemetry. Android 8 or newer is required. You choose where to host the server and which optional services to enable. The app does not include hosted storage or an AI subscription.
+
+<a href="https://github.com/vitofico/spunto/blob/main/PRIVACY.md">Privacy policy</a>

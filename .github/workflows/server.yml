@@ -1,0 +1,261 @@
+name: Server
+
+# Lint and test the Python server, then prove its image builds for both
+# architectures, starts, backs up and restores. The release workflow calls this
+# too, so nothing ships that fails it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "web/**"
+      - ".dockerignore"
+      - "scripts/smoke-selfhost.sh"
+      - "scripts/check-image-size.py"
+      - ".github/workflows/server.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - "web/**"
+      - ".dockerignore"
+      - "scripts/smoke-selfhost.sh"
+      - "scripts/check-image-size.py"
+      - ".github/workflows/server.yml"
+  workflow_call:
+  schedule:
+    - cron: "37 6 * * 1" # rescan unchanged images when new advisories arrive
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # github.workflow is the caller's name under workflow_call, so a release run never
+  # waits on, or cancels, a run of this workflow on the same branch.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  web:
+    name: Web types, tests and budgets
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "26.9.0"
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          version: "0.13.0"
+      - run: npm install --global pnpm@12.11.2
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --project ../server --locked
+      - name: Verify generated API and theme tokens
+        run: |
+          pnpm generate:api
+          pnpm generate:tokens
+          git diff --exit-code -- src/lib/openapi.json src/lib/api-types.ts src/styles/tokens.css ../server/src/spunto/host/theme_tokens.json
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm format:check
+      - run: pnpm build
+
+  test:
+    name: Lint and test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.13.0" # the uv in server/Dockerfile
+          enable-cache: true # keyed on server/uv.lock
+      - run: uv sync --locked
+      # ruff comes from uv.lock, at the version the pre-commit hook pins.
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - run: uv run pytest
+
+  postgres:
+    name: PostgreSQL 18 isolation, hosted auth and recovery
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        # Match the operator composition; a major upgrade needs reviewed migrations.
+        image: pgvector/pgvector:pg18@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+        env:
+          POSTGRES_USER: spunto_admin
+          POSTGRES_DB: spunto_ci
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}-ci-postgres
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U spunto_admin -d spunto_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.13.0"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Create restricted fixture roles
+        env:
+          # Disposable fixture only. Requests use the two restricted roles.
+          SPUNTO_TEST_POSTGRES_ADMIN_URL: postgresql://spunto_admin:${{ github.run_id }}-${{ github.run_attempt }}-ci-postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/spunto_ci
+        run: |
+          uv run python - <<'PY'
+          import os
+          import secrets
+          from urllib.parse import quote, urlsplit, urlunsplit
+          import psycopg
+          from psycopg import sql
+
+          admin = os.environ["SPUNTO_TEST_POSTGRES_ADMIN_URL"]
+          parsed = urlsplit(admin)
+          with psycopg.connect(admin) as connection, open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"SPUNTO_TEST_POSTGRES_ADMIN_URL={admin}\n")
+              for role, variable in (
+                  ("spunto_runtime", "SPUNTO_TEST_POSTGRES_URL"),
+                  ("spunto_identity", "SPUNTO_TEST_IDENTITY_URL"),
+              ):
+                  password = secrets.token_urlsafe(32)
+                  print(f"::add-mask::{password}")
+                  connection.execute(sql.SQL(
+                      "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB "
+                      "NOCREATEROLE NOINHERIT NOBYPASSRLS"
+                  ).format(sql.Identifier(role), sql.Literal(password)))
+                  authority = f"{role}:{quote(password, safe='')}@{parsed.hostname}:{parsed.port}"
+                  url = urlunsplit((parsed.scheme, authority, parsed.path, "", ""))
+                  print(f"::add-mask::{url}")
+                  output.write(f"{variable}={url}\n")
+              connection.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
+              connection.execute("REVOKE ALL ON DATABASE spunto_ci FROM PUBLIC")
+              connection.execute("GRANT CONNECT ON DATABASE spunto_ci TO spunto_runtime,spunto_identity")
+              connection.execute("GRANT TEMPORARY ON DATABASE spunto_ci TO spunto_runtime")
+          PY
+      - name: Run operator migration and grant minimal access
+        env:
+          SPUNTO_DATABASE_ADMIN_URL: ${{ env.SPUNTO_TEST_POSTGRES_ADMIN_URL }}
+          SPUNTO_DATABASE_ROLE: spunto_runtime
+          SPUNTO_IDENTITY_DATABASE_ROLE: spunto_identity
+        run: uv run spunto database migrate
+      - name: Exercise real PostgreSQL and signed OIDC fixtures
+        run: |
+          uv run pytest tests/test_postgres.py tests/test_hosted.py tests/test_oidc.py \
+            tests/test_hosted_local_auth.py tests/test_operator_workspace.py \
+            tests/test_sqlite_import.py tests/test_postgres_snapshot.py \
+            --junitxml="$RUNNER_TEMP/postgres.xml" -ra
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          report = ET.parse(os.path.join(os.environ["RUNNER_TEMP"], "postgres.xml"))
+          cases = report.findall(".//testcase")
+          assert cases, "PostgreSQL acceptance collected no tests"
+          assert not report.findall(".//skipped"), "Real PostgreSQL acceptance must not skip"
+          PY
+
+  image:
+    name: Image (${{ matrix.architecture }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Export gzip OCI image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/${{ matrix.architecture }}
+          outputs: type=oci,dest=${{ runner.temp }}/spunto.oci.tar,compression=gzip,force-compression=true
+          cache-from: type=gha,scope=server-${{ matrix.architecture }}
+          cache-to: type=gha,mode=max,scope=server-${{ matrix.architecture }}
+      - name: Enforce 150 MB compressed image budget
+        run: >-
+          python3 scripts/check-image-size.py "$RUNNER_TEMP/spunto.oci.tar"
+          --platform linux/${{ matrix.architecture }}
+      # Load the same architecture from the cache for scanning and hardened smoke.
+      - name: Load the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/${{ matrix.architecture }}
+          load: true
+          tags: spunto:ci
+          cache-from: type=gha,scope=server-${{ matrix.architecture }}
+      - name: Scan OS and Python packages
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: spunto:ci
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          timeout: 10m0s
+      - run: scripts/smoke-selfhost.sh spunto:ci
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        if: matrix.architecture == 'amd64'
+        with:
+          node-version: "26.9.0"
+      - name: Chromium, Firefox and WebKit acceptance including collaboration
+        id: browser_acceptance
+        if: matrix.architecture == 'amd64'
+        working-directory: web
+        run: |
+          npm install --global pnpm@12.11.2
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium firefox webkit
+          docker run -d --name spunto-browser --read-only --tmpfs /tmp \
+            --tmpfs /data:rw,uid=10001,gid=10001,mode=0750 --cap-drop ALL \
+            --security-opt no-new-privileges -p 127.0.0.1:18081:8080 \
+            -e SPUNTO_PUBLIC_URL=http://127.0.0.1:18081 \
+            -e 'SPUNTO_OWNER_PASSWORD=browser acceptance password' spunto:ci
+          trap 'docker rm -f spunto-browser' EXIT
+          for _ in $(seq 60); do
+            curl -sf http://127.0.0.1:18081/readyz >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:18081/readyz >/dev/null
+          # Includes collaboration.spec.ts: account/space fences, role controls,
+          # shared-note editing and conflict preservation against API fixtures.
+          # Other acceptance specs exercise the real packaged SQLite API.
+          SPUNTO_E2E_URL=http://127.0.0.1:18081 pnpm test:e2e \
+            --project=chromium --project=firefox --project=webkit
+      - name: Retain browser failure evidence
+        if: failure() && steps.browser_acceptance.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: browser-failure-evidence
+          path: |
+            web/test-results/
+            web/playwright-report/
+          retention-days: 7

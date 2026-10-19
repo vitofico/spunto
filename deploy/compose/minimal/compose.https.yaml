@@ -1,0 +1,23 @@
+services:
+  caddy:
+    # Official caddy:2.11.7-alpine index verified 2026-10-14; includes linux/amd64.
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - spunto
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  caddy-data: {}
+  caddy-config: {}

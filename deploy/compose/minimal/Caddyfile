@@ -1,0 +1,7 @@
+{
+	admin off
+}
+
+spunto.example.org {
+	reverse_proxy spunto:8080
+}

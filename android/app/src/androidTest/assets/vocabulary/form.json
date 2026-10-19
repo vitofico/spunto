@@ -1,0 +1,13 @@
+{
+  "type": "form",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "time": {
+        "type": "string",
+        "format": "time",
+        "default": "08:00"
+      }
+    }
+  }
+}

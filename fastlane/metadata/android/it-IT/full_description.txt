@@ -1,0 +1,18 @@
+Un posto per i pensieri ancora da sviluppare. Spunto è un’app nativa per Android che funziona offline, con sincronizzazione facoltativa verso un server Spunto scelto da te.
+
+Cattura un’idea, scrivi in Markdown, crea una lista di attività, aggiungi #etichette annidate e ritrova le note con la ricerca locale. Fissa le note importanti, archivia il lavoro concluso e consulta la cronologia delle modifiche. Una breve guida iniziale presenta acquisizione, etichette, ricerca e sincronizzazione; puoi riaprirla dalle impostazioni.
+
+<b>Scegli come leggere e scrivere</b>
+Personalizza lo stile di lettura, la modalità chiara o scura e uno dei cinque temi inclusi. Il blocco facoltativo dell’app usa la biometria o il blocco schermo di Android. Protegge l’accesso all’interfaccia, ma non cifra il database locale delle note. Condividi le note salvate o esportale in Markdown, anche offline.
+
+<b>Collegati quando vuoi</b>
+Puoi acquisire, modificare e cercare note senza accedere a un account. La sincronizzazione richiede un server Spunto. Associa il dispositivo dalle impostazioni web del server con un QR o un codice monouso. Lo scanner elabora i fotogrammi sul dispositivo; puoi invece incollare un codice senza concedere accesso alla fotocamera.
+
+Il server aggiunge l’app web e plugin facoltativi per organizzazione, acquisizione e assistenza IA. I server con più account offrono accesso con nome utente e password e SSO facoltativo; dall’app web puoi condividere una nota o uno spazio con permessi di lettura o modifica. I proprietari degli spazi scelgono i modelli disponibili dai fornitori configurati in Settings → AI sul web. L’IA è facoltativa e può inviare al fornitore configurato i contenuti delle note ammesse. Le note private sono escluse dall’elaborazione IA integrata.
+
+<b>Acquisisci da altre app</b>
+Condividi testo o immagini con Spunto oppure acquisisci un testo selezionato. Le funzioni vocali facoltative usano il microfono e un servizio di riconoscimento vocale installato. Lingue e supporto offline dipendono dal dispositivo e dal servizio. Spunto chiede il consenso per abilitare il riconoscimento online; consulta le regole del servizio vocale per il trattamento dei dati.
+
+Spunto non contiene pubblicità né telemetria. Richiede Android 8 o successivo. Decidi tu dove ospitare il server e quali servizi facoltativi attivare. L’app non include spazio ospitato né abbonamenti IA. L’interfaccia e le schermate dimostrative sono attualmente in inglese.
+
+<a href="https://github.com/vitofico/spunto/blob/main/PRIVACY.md">Informativa sulla privacy</a>

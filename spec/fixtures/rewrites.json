@@ -1,0 +1,7 @@
+[
+  {"body": "#work #work/x #workout `#work`", "old": "work", "new": "job", "expected": "#job #job/x #workout `#work`"},
+  {"body": "Start #Work/x. End #work!", "old": "WORK", "new": null, "expected": "Start . End !"},
+  {"body": "#Straße/x #STRASSE/y #strassengang", "old": "STRASSE", "new": "street", "expected": "#street/x #street/y #strassengang"},
+  {"body": "#a/b/c #a/c", "old": "a/b", "new": "z", "expected": "#z/c #a/c"},
+  {"body": "https://x/#work \\#work\n~~~\n#work\n~~~", "old": "work", "new": "job", "expected": "https://x/#work \\#work\n~~~\n#work\n~~~"}
+]

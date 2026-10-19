@@ -1,0 +1,23 @@
+id = "title-summary"
+name = "Title and summary"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "Title and summary through guarded owner actions."
+entry = "spunto.plugins.title_summary:plugin"
+requires = ["ai.chat"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "suggest", "annotate", "ai.chat"]
+
+[[contributes.commands]]
+id = "summarize"
+title = "Title and summary"
+where = ["note-actions"]
+online = true
+
+[contributes.panel]
+title = "Summary"
+mode = "stored"

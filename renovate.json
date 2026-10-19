@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["github-actions", "dockerfile", "pep621", "pre-commit", "npm"],
+  "automerge": false,
+  "pinDigests": true,
+  "lockFileMaintenance": {"enabled": true},
+  "packageRules": [
+    {
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
+      "groupName": "ruff and its pre-commit hook"
+    }
+  ]
+}

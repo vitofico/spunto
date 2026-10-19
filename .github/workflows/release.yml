@@ -1,0 +1,217 @@
+name: Release
+
+# Cut a release from main by hand (Actions, Release, Run workflow): the server
+# checks run first, then the image is pushed as ghcr.io/vitofico/spunto-server:<version>
+# and :stable, and only then are tags and GitHub releases created. Server
+# images use CalVer YYYY.MM.MICRO (02 §10.1). Android uses the checked-in
+# YYYY.MM.DD.<run> version (02 §11.7), under android/<version> tags.
+on:
+  workflow_dispatch:
+    inputs:
+      publish_android:
+        description: "Also publish the checked-in Android CalVer (bump it first for a new APK)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # A literal name: the called server workflow groups by this workflow's name, and
+  # a shared group would make the two wait on each other.
+  group: release
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/vitofico/spunto-server
+
+defaults:
+  run:
+    # Adds pipefail: a failed tag lookup must stop the run, not restart MICRO at 0.
+    shell: bash
+
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/server.yml
+
+  android-checks:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/android.yml
+
+  release:
+    needs: [checks, android-checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the tag and the release
+      packages: write # the image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Pick the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          month=$(date -u +%Y.%m)
+          micro=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$month." --jq '.[].ref' \
+            | sed -n "s|^refs/tags/$month\.\([0-9]*\)$|\1|p" | sort -n | tail -1)
+          # Reserve the October private release's version in the new public repository.
+          if [[ "$month" == "2026.10" && -z "$micro" ]]; then
+            micro=0
+          fi
+          echo "version=$month.$((${micro:--1} + 1))" >> "$GITHUB_OUTPUT"
+      - name: Check Android CalVer before publication
+        if: inputs.publish_android
+        id: android_version
+        run: |
+          python3 scripts/android-version.py --check-tags > "$RUNNER_TEMP/android-version.json"
+          python3 - "$RUNNER_TEMP/android-version.json" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          version = json.load(open(sys.argv[1]))
+          print(f"name={version['versionName']}")
+          print(f"tag={version['tag']}")
+          PY
+      - name: Refuse an existing Android tag
+        if: inputs.publish_android
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_TAG: ${{ steps.android_version.outputs.tag }}
+        run: |
+          python3 scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$ANDROID_TAG" \
+            --require-absent-tag
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: inputs.publish_android
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        if: inputs.publish_android
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;34.0.0"
+      - name: Build and sign Android APK before publishing
+        if: inputs.publish_android
+        env:
+          ANDROID_VERSION: ${{ steps.android_version.outputs.name }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$ANDROID_RELEASE_KEYSTORE_BASE64"
+          test -n "$ANDROID_RELEASE_KEYSTORE_PASSWORD"
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/spunto-signing.XXXXXX")
+          trap 'rm -rf "$signing_dir"' EXIT
+          chmod 700 "$signing_dir"
+          umask 077
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/spunto-release.p12"
+          printf '%s\n' "$ANDROID_RELEASE_KEYSTORE_PASSWORD" > "$signing_dir/password.txt"
+          (cd android && ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleRelease)
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            --ks "$signing_dir/spunto-release.p12" --ks-key-alias spunto \
+            --ks-pass "file:$signing_dir/password.txt" \
+            --out "spunto-$ANDROID_VERSION.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "spunto-$ANDROID_VERSION.apk" > "$RUNNER_TEMP/android-verification.txt"
+          python3 scripts/check-apk-size.py "spunto-$ANDROID_VERSION.apk"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "spunto-$ANDROID_VERSION.apk" > "$RUNNER_TEMP/android-badging.txt"
+          python3 scripts/android-release.py --source-sha "$GITHUB_SHA" \
+            --apk "spunto-$ANDROID_VERSION.apk" --badging "$RUNNER_TEMP/android-badging.txt" \
+            --verification "$RUNNER_TEMP/android-verification.txt"
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: inputs.publish_android
+        with:
+          version: "0.13.0"
+      - name: Verify APK reproduction before publishing
+        if: inputs.publish_android
+        env:
+          ANDROID_VERSION: ${{ steps.android_version.outputs.name }}
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/apk-reproduction"
+          uv pip install --python "$RUNNER_TEMP/apk-reproduction/bin/python" -r scripts/reproducibility-requirements.txt
+          (cd android && ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleRelease)
+          "$RUNNER_TEMP/apk-reproduction/bin/python" scripts/check-apk-reproducibility.py \
+            "spunto-$ANDROID_VERSION.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            --apksigner "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # The image goes out before the tag exists, so a tag never names an image
+      # that was not pushed. If the push fails nothing is tagged, and a rerun
+      # picks the same version.
+      - name: Build and push amd64 and arm64
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.version.outputs.version }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:stable
+          cache-from: type=gha
+          provenance: mode=max
+          sbom: true
+      - name: Verify the published image index before creating release tags
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE@$IMAGE_DIGEST" --raw > "$RUNNER_TEMP/published-image.json"
+          python3 - "$RUNNER_TEMP/published-image.json" "$IMAGE_DIGEST" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+          if re.fullmatch(r"sha256:[0-9a-f]{64}", sys.argv[2]) is None:
+              raise SystemExit("Published image must have a SHA-256 index digest.")
+          index = json.loads(Path(sys.argv[1]).read_text())
+          platforms = {
+              (entry.get("platform", {}).get("os"), entry.get("platform", {}).get("architecture"))
+              for entry in index.get("manifests", [])
+              if entry.get("annotations", {}).get("vnd.docker.reference.type") != "attestation-manifest"
+          }
+          if not {("linux", "amd64"), ("linux", "arm64")} <= platforms:
+              raise SystemExit("Published image index must contain linux/amd64 and linux/arm64.")
+          print(f"Verified linux/amd64 and linux/arm64 at {sys.argv[2]}.")
+          PY
+          printf 'Verified server image: `%s@%s` (linux/amd64 and linux/arm64).\n' \
+            "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      - name: Create the verified Android recovery tag
+        if: inputs.publish_android
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_TAG: ${{ steps.android_version.outputs.tag }}
+        run: |
+          # The image already exists. Establish recovery before the server
+          # release can succeed, so Android can be repaired without a new version.
+          # A claimed ref fails instead of replacing another publisher's tag.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$ANDROID_TAG" -f "sha=$GITHUB_SHA"
+      - name: Tag and publish the server release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          # Refuse a concurrently claimed tag instead of accepting another source commit.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$VERSION" -f "sha=$GITHUB_SHA" > /dev/null
+          gh release create "$VERSION" --verify-tag --title "$VERSION" \
+            --latest=false --generate-notes \
+            --notes "Image: \`$IMAGE:$VERSION\` (linux/amd64 and linux/arm64). Verified index: \`$IMAGE@$IMAGE_DIGEST\`."
+      - name: Publish the Android release
+        if: inputs.publish_android
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_VERSION: ${{ steps.android_version.outputs.name }}
+          ANDROID_TAG: ${{ steps.android_version.outputs.tag }}
+        run: |
+          python3 scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$ANDROID_TAG" \
+            --title "$ANDROID_VERSION" --latest true \
+            --asset "spunto-$ANDROID_VERSION.apk" --asset "spunto-$ANDROID_VERSION.apk.sha256" --asset android-version.json

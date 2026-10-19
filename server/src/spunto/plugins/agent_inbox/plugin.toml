@@ -1,0 +1,23 @@
+id = "agent-inbox"
+name = "From agents"
+version = "1.0.0"
+api = "0.4"
+kind = "server"
+runtime = "in-process"
+category = "agents"
+description = "Review notes agents created or changed."
+entry = "spunto.plugins.agent_inbox:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read", "annotate"]
+
+[[contributes.views]]
+id = "reviewed"
+title = "From agents"
+filter = { source = "agent", not_member = "reviewed" }
+
+[[contributes.commands]]
+id = "mark-reviewed"
+title = "Mark reviewed"
+where = ["note-actions"]

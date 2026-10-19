@@ -1,0 +1,35 @@
+id = "label-gardener"
+name = "Label gardener"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "Review sampled tag usage and propose renames, removals or new clusters."
+entry = "spunto.plugins.label_gardener:plugin"
+requires = ["ai.chat", "ai.embed"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "suggest", "ai.chat", "ai.embed", "schedule"]
+
+[[contributes.commands]]
+id = "review-now"
+title = "Review tags now"
+where = ["palette", "slash"]
+online = true
+
+[[contributes.schedules]]
+id = "weekly"
+weekday = "{weekday}"
+time = "{time}"
+
+[settings]
+type = "object"
+[settings.properties.weekday]
+type = "string"
+enum = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+default = "sunday"
+[settings.properties.time]
+type = "string"
+format = "time"
+default = "18:00"

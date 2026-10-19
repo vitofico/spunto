@@ -1,0 +1,8 @@
+{
+  "type": "markdown",
+  "text": "**A thought** with a [note](/n/example).",
+  "fallback": {
+    "type": "text",
+    "text": "A thought with a note."
+  }
+}

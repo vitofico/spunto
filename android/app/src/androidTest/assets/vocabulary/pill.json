@@ -1,0 +1,6 @@
+{
+  "type": "pill",
+  "suggestion_id": "example",
+  "label": "#project",
+  "action": "add_label"
+}

@@ -1,0 +1,4 @@
+Share saved notes through Android's Sharesheet or save them as Markdown, even offline.
+Clarify single-owner login and add an optional private display name in web Settings.
+Link Android Settings to the server's Profile and full notes export.
+Include the reviewed dictation discard fix.

@@ -1,0 +1,4 @@
+Condividi le note salvate con Android o esportale in Markdown, anche offline.
+Accesso più chiaro con la password del proprietario e nome facoltativo privato nelle impostazioni web.
+Collegamenti Android al profilo web e all'esportazione completa delle note.
+Include la correzione dell'annullamento della dettatura.

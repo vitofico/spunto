@@ -1,0 +1,22 @@
+# Apply separately: this policy belongs to Ollama's namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-spunto
+  namespace: ollama
+spec:
+  podSelector:
+    matchLabels:
+      app: ollama
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: spunto
+          podSelector:
+            matchLabels:
+              app: spunto
+      ports:
+        - protocol: TCP
+          port: 11434

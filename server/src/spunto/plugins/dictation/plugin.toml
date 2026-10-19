@@ -1,0 +1,10 @@
+id = "dictation"
+name = "Dictation"
+version = "1.0.0"
+api = "0.4"
+kind = "device"
+category = "capture"
+description = "Speak into the composer using this phone's speech service."
+requires = []
+default = "on"
+permissions = ["mic"]

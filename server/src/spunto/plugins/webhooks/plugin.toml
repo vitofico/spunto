@@ -1,0 +1,27 @@
+id = "webhooks"
+name = "Webhooks out"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "capture"
+description = "Deliver public note events to explicitly configured guarded URLs."
+entry = "spunto.plugins.webhooks:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read", "net.out:<configured>"]
+
+[settings]
+type = "object"
+additionalProperties = false
+[settings.properties.urls]
+type = "array"
+default = []
+[settings.properties.urls.items]
+type = "string"
+maxLength = 2048
+
+[settings.properties.token]
+type = "string"
+x-secret = true

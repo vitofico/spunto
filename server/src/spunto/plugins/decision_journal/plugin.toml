@@ -1,0 +1,41 @@
+id = "decision-journal"
+name = "Decision journal"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+runtime = "in-process"
+category = "develop"
+description = "Keep decisions, reasons and expected results, then record what happened."
+entry = "spunto.plugins.decision_journal:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read", "notes.create", "annotate"]
+creates = "owner"
+
+[[contributes.commands]]
+id = "record-decision"
+title = "Record decision"
+where = ["palette", "slash", "note-actions"]
+online = true
+
+[[contributes.commands]]
+id = "review-decision"
+title = "Review decision"
+where = ["note-actions"]
+online = true
+
+[[contributes.commands]]
+id = "journal"
+title = "Decision journal"
+where = ["palette", "slash"]
+online = true
+
+[[contributes.views]]
+id = "journal"
+title = "Decisions"
+filter = { member = "journal" }
+
+[contributes.panel]
+title = "Decision journal"
+mode = "stored"

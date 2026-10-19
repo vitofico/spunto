@@ -1,0 +1,20 @@
+id = "develop"
+name = "Develop a note"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "develop"
+description = "Develop a note through guarded owner actions."
+entry = "spunto.plugins.develop:plugin"
+requires = ["ai.chat"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "notes.create", "ai.chat"]
+creates = "machine"
+
+[[contributes.commands]]
+id = "develop"
+title = "Develop this"
+where = ["note-actions"]
+online = true

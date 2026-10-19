@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "now": 1791979200000,
+  "plugin_id": "example",
+  "notes": [
+    {
+      "key": "nested",
+      "body": "Work #project/spunto\n- [ ] ship",
+      "age_days": 2,
+      "pinned": true
+    },
+    {
+      "key": "parent",
+      "body": "Done #project\n- [x] ship",
+      "age_days": 7,
+      "archived": true
+    },
+    {
+      "key": "unlabelled",
+      "body": "Fresh thought",
+      "age_days": 0
+    },
+    {
+      "key": "agent-created",
+      "body": "Captured by agent",
+      "age_days": 1,
+      "source": "agent"
+    },
+    {
+      "key": "agent-updated",
+      "body": "Edited by agent #other",
+      "age_days": 1,
+      "latest_agent": true
+    },
+    {
+      "key": "reviewed",
+      "body": "Agent already reviewed",
+      "age_days": 3,
+      "source": "agent",
+      "members": [
+        "reviewed"
+      ]
+    },
+    {
+      "key": "plugin-note",
+      "body": "Plugin digest",
+      "age_days": 4,
+      "source": "plugin",
+      "source_ref": "digest"
+    }
+  ],
+  "cases": [
+    {
+      "filter": {
+        "labels": [
+          "PROJECT"
+        ]
+      },
+      "expected": [
+        "nested",
+        "parent"
+      ]
+    },
+    {
+      "filter": {
+        "labels": [
+          "project/spunto"
+        ]
+      },
+      "expected": [
+        "nested"
+      ]
+    },
+    {
+      "filter": {
+        "no_labels": true
+      },
+      "expected": [
+        "agent-created",
+        "plugin-note",
+        "reviewed",
+        "unlabelled"
+      ]
+    },
+    {
+      "filter": {
+        "open_tasks": true
+      },
+      "expected": [
+        "nested"
+      ]
+    },
+    {
+      "filter": {
+        "open_tasks": false,
+        "pinned": false,
+        "archived": true
+      },
+      "expected": [
+        "parent"
+      ]
+    },
+    {
+      "filter": {
+        "source": "agent",
+        "not_member": "reviewed"
+      },
+      "expected": [
+        "agent-created",
+        "agent-updated"
+      ]
+    },
+    {
+      "filter": {
+        "member": "reviewed"
+      },
+      "expected": [
+        "reviewed"
+      ]
+    },
+    {
+      "filter": {
+        "source": "plugin:digest"
+      },
+      "expected": [
+        "plugin-note"
+      ]
+    },
+    {
+      "filter": {
+        "created_within_days": 2
+      },
+      "expected": [
+        "agent-created",
+        "agent-updated",
+        "unlabelled"
+      ]
+    }
+  ]
+}

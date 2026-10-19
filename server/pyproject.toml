@@ -1,0 +1,53 @@
+[project]
+name = "spunto"
+version = "0.1.0"
+description = "Self-hosted, AI-first notes server"
+license = "AGPL-3.0-only"
+requires-python = ">=3.14"
+dependencies = [
+    "anthropic>=1.13.0",
+    "sqlite-vec==0.1.9",
+    "aiosqlite>=0.22.1",
+    "argon2-cffi>=25.1.0",
+    "fastapi>=0.143.0",
+    "httpcore>=1.0.9",
+    "httpx>=0.28.1",
+    "markdown-it-py>=4.0.0",
+    "mcp==2.3.0",
+    "nh3>=0.3.2",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "uvicorn>=0.54.0",
+    "psycopg[binary,pool]>=3.2,<4",
+    "pyjwt[crypto]>=2.10,<3",
+]
+
+[project.scripts]
+spunto = "spunto.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert, and use throwaway passwords.
+"tests/**" = ["S101", "S105", "S106"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "hypothesis>=6.151.0",
+    "pytest>=9.1.1",
+    "ruff==0.17.0",
+]

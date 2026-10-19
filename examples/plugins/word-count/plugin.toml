@@ -1,0 +1,14 @@
+id = "word-count"
+name = "Word count"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+category = "organize"
+description = "A local word count in the note panel. No network or AI."
+entry = "plugin:plugin"
+default = "off"
+permissions = ["notes.read", "annotate"]
+
+[contributes.panel]
+title = "Word count"
+mode = "stored"

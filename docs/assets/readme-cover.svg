@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title description">
+  <title id="title">Capture a thought. Keep the thread.</title>
+  <desc id="description">Warm paper, terracotta ink and connected points: a cover for Spunto, a personal home for notes and ideas.</desc>
+  <defs>
+    <pattern id="points" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#DED7CD"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="#F8F5F0"/>
+  <rect x="790" y="24" width="466" height="312" rx="16" fill="url(#points)"/>
+  <text x="64" y="64" fill="#9F4C2A" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" letter-spacing="3">A PLACE TO START</text>
+  <g fill="#29241E" font-family="Georgia, 'Times New Roman', serif" font-size="58">
+    <text x="60" y="151">Capture a thought.</text>
+    <text x="60" y="221">Keep the thread.</text>
+  </g>
+  <path d="M64 260h60" stroke="#9F4C2A" stroke-width="3" stroke-linecap="round"/>
+  <text x="64" y="304" fill="#625A50" font-family="Arial, Helvetica, sans-serif" font-size="18">Your notes, on a server you own.</text>
+  <g fill="none" stroke="#C6B9A8" stroke-width="2">
+    <path d="M857 243C861 149 942 194 960 115S1073 63 1130 109"/>
+    <path d="M960 115C983 193 1093 152 1128 242"/>
+  </g>
+  <circle cx="857" cy="243" r="19" fill="#F8F5F0" stroke="#9F4C2A" stroke-width="2"/>
+  <circle cx="857" cy="243" r="5" fill="#9F4C2A"/>
+  <circle cx="960" cy="115" r="34" fill="#9F4C2A"/>
+  <circle cx="1130" cy="109" r="12" fill="#F8F5F0" stroke="#9F4C2A" stroke-width="2"/>
+  <circle cx="1128" cy="242" r="24" fill="#EBDDD1"/>
+  <circle cx="1128" cy="242" r="7" fill="#9F4C2A"/>
+  <g fill="#625A50" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="1.5">
+    <text x="818" y="288">CAPTURE</text>
+    <text x="915" y="62">CONNECT</text>
+    <text x="1094" y="288">RETURN</text>
+  </g>
+</svg>

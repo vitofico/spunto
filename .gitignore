@@ -1,0 +1,29 @@
+.DS_Store
+/spikes/
+/.claude/
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets and local overrides that compose examples read
+owner_password.txt
+.env
+
+# Web build and browser test output
+node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+*.tsbuildinfo
+
+# Android local build output and signing material
+/android/.gradle/
+/android/.kotlin/
+/android/**/build/
+/android/local.properties
+*.jks
+*.keystore
+*.p12

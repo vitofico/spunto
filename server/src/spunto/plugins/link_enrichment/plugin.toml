@@ -1,0 +1,26 @@
+id = "link-enrichment"
+name = "Link enrichment"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "capture"
+description = "Fetch a saved owner link once; other sources require Fetch link details."
+entry = "spunto.plugins.link_enrichment:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["net.fetch", "ai.chat", "suggest", "annotate", "search.text"]
+
+[[contributes.commands]]
+id = "fetch"
+title = "Fetch link details"
+where = ["note-actions"]
+online = true
+
+[contributes.panel]
+title = "Source"
+mode = "stored"
+
+[contributes.meta]
+title = "Reading time"

@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spunto
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: spunto
+  template:
+    metadata:
+      labels:
+        app: spunto
+    spec:
+      # Kubernetes' SPUNTO_PORT service link would collide with application config.
+      enableServiceLinks: false
+      # The hostpath PVC and locally imported amd64 image live on this node.
+      nodeSelector:
+        kubernetes.io/hostname: theficos
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: spunto
+          # Fail-closed placeholder; render-local.py replaces it with an imported immutable image.
+          image: spunto:dev-local
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SPUNTO_PUBLIC_URL
+              value: https://spunto.theficos.dedyn.io
+            - name: SPUNTO_DATA_DIR
+              value: /data
+            - name: SPUNTO_OWNER_PASSWORD_HASH_FILE
+              value: /run/secrets/owner_password_hash
+            - name: TZ
+              value: Europe/Rome
+            - name: SPUNTO_BACKUP_DIR
+              value: /backups
+            - name: SPUNTO_ATTACHMENTS_DIR
+              value: /attachments
+            - name: SPUNTO_AI_PROFILES
+              value: ollama
+            - name: SPUNTO_AI_OLLAMA_PROVIDER
+              value: openai
+            - name: SPUNTO_AI_OLLAMA_BASE_URL
+              value: http://ollama.ollama.svc.cluster.local:11434/v1
+            # The owner approved cloud chat; embeddings remain on the cluster node.
+            - name: SPUNTO_AI_OLLAMA_CHAT_MODEL
+              value: gpt-oss:20b-cloud
+            # Local embeddings; the gateway checks the model's vector dimensions.
+            - name: SPUNTO_AI_OLLAMA_EMBED_MODEL
+              value: embeddinggemma-2:270m
+            - name: SPUNTO_AI_OLLAMA_CONCURRENCY
+              value: "1"
+            - name: SPUNTO_AI_OLLAMA_RATE_PER_MIN
+              value: "30"
+            - name: SPUNTO_AI_OLLAMA_TIMEOUT_S
+              value: "120"
+            - name: SPUNTO_AI_CHAT_PROFILE
+              value: ollama
+            - name: SPUNTO_AI_EMBED_PROFILE
+              value: ollama
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: owner
+              mountPath: /run/secrets
+              readOnly: true
+            - name: backups
+              mountPath: /backups
+            - name: attachments
+              mountPath: /attachments
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: spunto-data
+        - name: tmp
+          emptyDir: {}
+        - name: owner
+          secret:
+            secretName: spunto-owner
+            optional: false
+            defaultMode: 0444
+            items:
+              - key: owner_password_hash
+                path: owner_password_hash
+        - name: backups
+          persistentVolumeClaim:
+            claimName: spunto-backups
+        - name: attachments
+          persistentVolumeClaim:
+            claimName: spunto-attachments

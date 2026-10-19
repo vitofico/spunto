@@ -1,0 +1,22 @@
+{
+  "carta": {
+    "name": "Carta",
+    "description": "Warm paper, a rust accent."
+  },
+  "ardesia": {
+    "name": "Ardesia",
+    "description": "Cool slate, a blue accent."
+  },
+  "salvia": {
+    "name": "Salvia",
+    "description": "Sage paper, a green accent."
+  },
+  "corallo": {
+    "name": "Corallo",
+    "description": "Coral and rose, with deep wine ink."
+  },
+  "elettrica": {
+    "name": "Elettrica",
+    "description": "Electric blue and violet, with lavender light."
+  }
+}

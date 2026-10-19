@@ -1,0 +1,26 @@
+id = "translate"
+name = "Translate"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "develop"
+description = "Translate through guarded owner actions."
+entry = "spunto.plugins.translate:plugin"
+requires = ["ai.chat"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "notes.create", "ai.chat"]
+creates = "machine"
+
+[[contributes.commands]]
+id = "translate"
+title = "Translate"
+where = ["note-actions"]
+online = true
+
+[[contributes.commands]]
+id = "save-translation"
+title = "Save as note"
+where = []
+online = true

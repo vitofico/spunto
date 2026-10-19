@@ -1,0 +1,90 @@
+# M7 capture plugins: detailed implementation contracts
+
+This document specifies the owner-authorized M7 capture wave before implementation. It supplements, without editing, approved requirements CAP-11, CAP-12, AI-18, MCP-11 and decisions D24/D30 in `01-requirements.md`, and the catalog, plugin context, AI gateway and guarded fetch contracts in `02-spec.md` §§2.13–2.19, 7 and 9.7. The separate Markdown importer belongs to the other M7 workstream. All four plugins default off. Tests use synthetic notes, attachments, pages and fake providers/transports; no production destination is contacted.
+
+## Ownership and integration
+
+Capture also owns bounded optional event metadata and legacy sink dispatch in `store/db.py`, including rollback behavior. The event metadata whitelist permits attachment ID and trusted private/machine/origin/change-sequence flags only, never body or title. Core trash/purge transactions capture those flags before deletion; webhooks fail closed if they are absent or private. Purge retries contain metadata only, and never persist note-body copies.
+
+Capture owns `plugins/link_enrichment/`, `plugins/image_text/`, `plugins/voice_memos/`, `plugins/webhooks/`, the small shared `plugins/_capture.py` helper, new `core/plugin_capture.py`, scoped attachment additions in `core/attachments.py`, the attachment-link event region in `core/notes.py`, exact-origin additions in `net/fetch.py`, bounded external-data fencing in `ai/gateway.py`, and focused tests/fixtures. The server host owner supplies coordinated context/runtime glue. Existing Android, web, themes, root configuration and approved documents remain outside this assignment.
+
+The catalog's grants remain binding:
+
+| Plugin | Required declared grants | Contributions | Requirements |
+|---|---|---|---|
+| Link enrichment | `net.fetch`, `ai.chat`, `suggest`, `annotate`, `search.text` | Title pill, stored Source panel, reading-time meta, owner Fetch command | None; chat is optional |
+| Image text | `attachments.read`, `ai.vision`, `search.text` | Live In this image panel backed by plugin records; owner Read image text command | Attachments and vision binding |
+| Voice memos | `attachments.read`, `attachments.write`, `ai.transcribe`, `suggest` | Transcript proposal, live recording/transcript panel, Transcribe command | Attachments and transcription binding |
+| Webhooks | `notes.read`, `net.out:<configured>` | Generated settings only | Configured destination list to send anything |
+
+No broad `notes.read`, `annotate` or `routes` grant is silently added to a capture manifest. Metadata/body access that the feature needs comes from a constrained, generic host capability, not a bundled-plugin ID exemption. Panels use the existing dedicated panel dispatcher rather than a general writable route.
+
+## Constrained context and attachment contracts
+
+`Ctx` adds optional `capture_note_id` and `operation` fields, populated by the host. Hook/job contexts bind the queued row's note ID and operation (`hook:note.saved`, `job:enrich`, etc.). An explicit owner command binds its validated `note_id`/`id` target; MCP agents and arbitrary routes cannot create that owner scope. `ctx.capture` lazily creates `ScopedCapture`.
+
+`ScopedCapture.note(id)` exposes only the exact bound note under an appropriate declared/granted `net.fetch`, AI or suggestion capability. It never exposes private, machine-written or trashed notes. Background contexts additionally require owner origin and no latest agent edit. External/agent/email/import notes require an explicit owner context. Host-owned queued work can preserve that approval through its existing unattended flag; plugin arguments cannot forge it. There is no general note query or body-reading API.
+
+The attachment facade adds bounded `info`/`list` methods returning metadata and eligible linked note ID/version, not arbitrary note bodies. Reads can bind `note_id` and `note_version`. Private, machine and trash exclusions apply before file I/O and again after it, along with exact linkage/version. A note made private, changed, detached, trashed or purged while bytes are read cannot reach a provider or a cached result. Blob content remains immutable and content-addressed. `ScopedCapture.proposal_state(note_id, suggestion_id)` exposes only the owning plugin's status/version for a proposal on the eligible bound source under `suggest`; no unrelated payload or history is returned.
+
+The existing upload-level `attachment.added` notification remains valid. Linking a new attachment into a note emits a committed, scoped attachment notification with optional note ID/version and attachment ID. Only hook dispatch filters optional supplied fields to the handler's accepted keywords; command and route argument validation stays strict. `note.saved` also discovers linked attachments, covering uploads committed before note creation and reconnect/replay. Duplicate notifications are harmless.
+
+Result receipts, panels and search text carry note/attachment/version provenance. Publication rechecks current eligibility and source version; records keyed to a note participate in normal privacy/purge cleanup. A delayed result cannot overwrite a more recent result or resurrect output for a hidden note.
+
+## Link enrichment
+
+Automatic work runs only after an owner capture: composer, share and selection all have owner provenance, including the ordinary owner API capture path. It skips private/machine/trash notes and any note whose latest body was edited by an agent. It extracts the saved source URL first, otherwise the first HTTP(S) link from the note. Agent, external, email and plugin-origin links are read only through the explicit owner **Fetch link details** command. Merely opening a note or a panel never fetches a page.
+
+Each note/URL pair has one durable receipt. Interrupted output publication resumes from that receipt without another GET or model call; a source-version mismatch prevents publishing an interrupted earlier result. A separate hash-only success marker prevents automatic refetch after privacy cleanup removes its source record; an explicit owner Fetch may restore those cleared details. Repeated saves, duplicate jobs, reconnects, and plugin re-enable reuse it. A failing request has no successful receipt; bounded host retry remains available. An explicit repeat Fetch returns stored details rather than silently contacting the site again. A changed saved URL has its own receipt. Fetching writes no new note and changes no owner body.
+
+One GET uses only `ctx.fetch`: public HTTP(S), standard ports, pinned/rechecked DNS, every redirect checked, no ambient cookies/credentials/Referer, at most five redirects, ten seconds total and five MB. HTML extraction runs the bounded standard-library parser through `ctx.to_thread`; script/style contents and executable markup are discarded, no embedded resource is fetched, and only plain title/body text is kept. Title is a one-line proposal of at most 80 characters. Reading time is `ceil(words / 200)` minutes, minimum one when body text exists. The Source panel contains a title/link, reading time and available summary/label ideas within vocabulary budgets. Meta is the short reading-time fact. Title/search text stays available with AI off.
+
+When a chat profile is bound, the fixed prompt requests a faithful summary (≤700 characters) and bounded grammar-valid label ideas. Fetched page text is passed as **external data** to the gateway, never spliced into instructions. `external_text` is bounded, independently escaped and gateway-fenced; it cannot close a note/source delimiter. Owner note data still travels through normal note fences. Structured output is validated before use; label proposals require valid canonical grammar and never silently edit labels. Provider failure leaves safe title/reading-time details usable. No fetched page HTML is sent to a client.
+
+## Image text
+
+Eligible linked PNG/JPEG/WebP/GIF attachments enqueue vision work. Attachment bytes/MIME and source eligibility come from the scoped facade. Each note/attachment/content-hash pair is processed once; repeated note saves with unchanged images reuse results, while removing an image removes it from the panel/search aggregate. No image in a private or machine note is submitted. External/agent-origin sources require the owner's explicit **Read image text** action. This additive note-action contribution was approved by the owner through root; it uses the existing grants, command budget and surface type. It never runs vision on panel reads.
+
+The vision output model contains bounded OCR text and a short visual description. OCR text is data, not an instruction or a note rewrite. The plugin stores provenance-tagged records and contributes up to 20,000 characters of aggregate OCR/description through `search.text`, so existing keyword and embedding indexing can find it. The live **In this image** panel reads only eligible current records and emits host-validated components (≤4,000 characters of Markdown per panel result), preserving original attachment links. Reading the panel never calls vision. It makes no owner-body or attachment modification.
+
+## Voice memos
+
+Turning on this optional plugin is the owner's choice to retain/upload audio; ordinary dictation remains audio-free. The phone's separate recording UI is root-owned. The server processes already-uploaded, linked recordings and never records a microphone itself. It retains immutable originals and never deletes a recording as an incidental side effect of transcription. Referenced recordings stay until the owner removes their link or purges the note; then the core attachment-retention policy applies. No plugin timer silently destroys a referenced recording.
+
+A scoped `attachment.added`/`note.saved` job reads an eligible recording once and calls `ctx.ai.transcribe` with its MIME and bounded duration (0 < duration ≤3,600 seconds). WAV headers and the approved native Ogg Opus container provide server-checked duration. Ogg duration uses the final 48 kHz granule minus Opus pre-skip ([RFC 7845 §§4.2–4.3](https://www.rfc-editor.org/rfc/rfc7845)). Other containers are not submitted, and the plugin accepts no caller-supplied duration. Unsupported/malformed/oversized recordings are kept without a proposal rather than using an invented duration. Italian, English or automatic language can be selected; this is a model hint, not a promise of recognition quality.
+
+The existing gateway supplies structured transcript validation, repeated-hallucination checks, output-length bounds, provider routing and privacy checks. A transcript and its provenance must fit the existing 64 KB serialized JSON result budget for a resumable receipt; oversized output stores an actionable metadata-only failure, preserving the recording and preventing repeated provider charges. An eligible transcript is proposed as `replace_body` against the observed note version. The full proposal stays in the core suggestion; completed provenance-tagged receipts retain transcript text for combining linked recordings and a bounded panel preview. Multiple linked clips form one combined diff, preserving owner comments and existing links. The owner sees the diff before accepting; neither transcription nor panel viewing modifies the original body. The recording link is retained by default and can be omitted in the proposed body when the owner chooses `keep_link=false`; declining retention changes only that accepted note representation, not an unannounced deletion of original bytes. Tidy remains a separate explicit plugin action. Duplicate events/commands reuse the same pending/result receipt. Completed transcripts regenerate a current-version proposal after comment edits supersede the earlier diff, without another provider call. A current pending proposal is reused; intentional accepted or dismissed decisions remain final and their words are excluded from later combined proposals.
+
+The live panel returns the eligible recording link and a bounded transcript preview. It hides cached results immediately when the source becomes private/machine/trashed or is detached. Missing transcription binding leaves the plugin Waiting with the host's existing capability message; no fake transcript or network fallback is produced.
+
+## Webhooks
+
+The settings-only plugin accepts an owner-configured array `urls`, at most ten distinct destinations (each URL ≤2,048 characters), plus an optional environment-only credential if authentication is needed. The optional `token` is `x-secret`, read only from `SPUNTO_PLUGIN_WEBHOOKS_TOKEN`; it is a Bearer header, never written to settings or returned by the API. An empty destination list sends nothing. Note text, source URLs and agent input never select a destination.
+
+All sends use `ctx.fetch` with POST, a JSON content type and a stable idempotency key. Host mapping retains legacy single-URL plugins and converts the configured webhook list into normalized **exact origins** (scheme, host, effective port). Guarded fetch enforces that list at the initial request and every redirect; crossing it is refused, and origin changes strip authentication/custom credentials. Configured LAN hosts may be allowed by the owner's explicit settings, but self/cloud-metadata/otherwise-forbidden destinations remain subject to the central guard. The plugin does not instantiate its own HTTP client.
+
+Automatic saved-note delivery follows the same owner-capture source guard, so agent/external input cannot initiate network output. Only currently public, non-machine notes are delivered. Payloads include event type, stable event ID, note ID/version/change sequence, and the bounded current note representation; private data is never included. Before each attempt the plugin rechecks eligibility and event currency. A pending event that became private, obsolete, detached from its source or disabled is cancelled without a send. Logs contain only codes/counts, never payloads, note text, credentials or full URLs.
+
+Delivery is at-least-once with explicit destination idempotency: a receipt marks success only after a 2xx response; retries reuse identical event ID/key/payload. A receiver must deduplicate a request whose response was lost. Transient timeout/408/429/5xx errors retry at most three times with bounded exponential delays; invalid destinations and ordinary 4xx stop. Retry batches retain every failed configured destination instead of collapsing them into the host's per-note queue key. Retry jobs contain event/source metadata and target URLs only. Successful receipts contain a hash and delivery fact; no untagged note-body copy survives privacy cleanup. Response bodies are capped and never persisted as note content. The generic async `pre_send` callback rechecks exact source version/privacy/provenance and configured target after DNS, before every redirect transport call, and before pinned stream writes (including after TCP/TLS waits). Host-owned generation/grant checks run before and after every awaited guard and cannot be replaced. Permission/source denials are rethrown by guarded fetch instead of becoming transient network failures. Expected source/destination changes cancel the plugin work without publication, retry or host failure-count increments; disable/generation and task cancellation still propagate. No writer is held across network I/O.
+
+## Acceptance and evidence
+
+Tests run production SQLite stores in temporary directories with fake DNS/transports/adapters. Required cases include:
+
+- Default-off manifests, exact contributions/grants, unmet AI requirements and switch-off removal.
+- Owner auto-enrich once; explicit external/agent enrichment; no agent/route-created owner scope; no private/machine fetch.
+- Title/reading time with AI off; fenced page injection; invalid model labels/output; preserved owner body.
+- OCR searchable by FTS and discoverable by the existing embedding index; duplicate and multiple-image aggregation; no provider call on panel read.
+- Transcript proposal and dismissal/acceptance provenance, duration/MIME bounds, recording retained, duplicate upload/link notifications.
+- Privacy/version/linkage changes during attachment I/O, model execution, publication and webhook attempts.
+- Exact-origin redirect/port enforcement, DNS rebinding/private/metadata/self addresses, credential stripping, size/time limits (existing SSRF suite plus new cases).
+- Fake webhook capture only, stable retries/idempotency/lost acknowledgement, configuration change/disable/privacy cancellation; no external send in the suite.
+
+Independent corrective review closed the server capture findings. Root owns final client integration, actual Android/browser checks, coordinated builds, any local-provider acceptance and deployment. Provider/device limitations are recorded from evidence; synthetic/fake success is not represented as real vision/transcription quality.
+
+
+## Local implementation evidence
+
+The focused gate passed 254 tests across capture, guarded fetch, gateway, store, first-party/wave-2 plugins, host and plugin API tests (`/tmp/spunto-m7-capture-final-targeted.log`); the subsequent full capture gate passed 677 tests and the later upload-limit gate passed 755. Capture tests use the real temporary SQLite database and real context/permission/runtime facades. Vision and transcription additionally exercise production Gateway adapters against a synthetic ASGI provider; no configured production endpoint is used. Source evidence is retained under `/tmp/spunto-m7-capture/` and `/tmp/spunto-upload-limit/`. The current host lifecycle delta needs fresh server/browser gates; the previous counts are not claimed for changed source.
+
+Real vision accuracy, Italian/English transcription accuracy, Android recording and physical-phone behavior remain root-owned acceptance checks. The server implementation supports linked native Ogg Opus and synthetic PCM WAV containers; other audio containers are retained without transcription. No physical or live-provider result is claimed by these tests.

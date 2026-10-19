@@ -1,0 +1,62 @@
+# Provision the exports and Borg coverage before applying this base.
+# NFS exports are backed by the node's separate btrfs /mnt/cluster-data filesystem.
+# Capacity here is metadata, not an enforced filesystem quota.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: spunto-backups
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: spunto
+    name: spunto-backups
+  mountOptions: [hard, nfsvers=4.2, timeo=600, retrans=2]
+  nfs:
+    server: 192.168.1.48
+    path: /mnt/cluster-data/spunto/backups
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spunto-backups
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: spunto-backups
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: spunto-attachments
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: spunto
+    name: spunto-attachments
+  mountOptions: [hard, nfsvers=4.2, timeo=600, retrans=2]
+  nfs:
+    server: 192.168.1.48
+    path: /mnt/cluster-data/spunto/attachments
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spunto-attachments
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: spunto-attachments
+  resources:
+    requests:
+      storage: 20Gi

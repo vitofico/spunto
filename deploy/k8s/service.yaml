@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: spunto
+spec:
+  selector:
+    app: spunto
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

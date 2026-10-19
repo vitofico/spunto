@@ -1,0 +1,3441 @@
+{
+  "created_at": "2026-10-14T11:24:59.515044+00:00",
+  "scope": "synthetic fixtures only",
+  "fixture_sha256": "58bafa2e88f94daf3ad30369f7e9a5341788db40dcf6407f06ecfda73913557c",
+  "fixture_documents": 60,
+  "fixture_queries": 30,
+  "ollama_version": "0.40.4",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "logical_cpus": 14,
+  "conditions": {
+    "num_gpu": 0,
+    "query_repeats": 3,
+    "truncate": false,
+    "ranking": "exact normalized cosine; no similarity floor, FTS or reranker",
+    "timings": "sequential local HTTP wall time; warm, excluding explicit first warmup"
+  },
+  "models": [
+    {
+      "model": "embeddinggemma",
+      "runner": {
+        "name": "embeddinggemma:latest",
+        "model": "embeddinggemma:latest",
+        "size": 692993392,
+        "digest": "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma3",
+          "families": [
+            "gemma3"
+          ],
+          "parameter_size": "307.58M",
+          "quantization_level": "BF16"
+        },
+        "expires_at": "2026-10-14T13:35:00.680284+02:00",
+        "size_vram": 0,
+        "context_length": 2048,
+        "runner": "llamacpp"
+      },
+      "digest": "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+      "size_bytes": 621875917,
+      "dimension": 768,
+      "query_prefix": "task: search result | query: ",
+      "document_prefix": "title: none | text: ",
+      "cold_warmup_ms": 1146.809,
+      "document_latency": {
+        "count": 60,
+        "p50_ms": 204.518,
+        "p95_ms": 597.534,
+        "mean_ms": 251.81
+      },
+      "query_latency": {
+        "count": 90,
+        "p50_ms": 202.346,
+        "p95_ms": 712.162,
+        "mean_ms": 277.823
+      },
+      "metrics": {
+        "all": {
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0
+        },
+        "en": {
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0
+        },
+        "it": {
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0
+        }
+      },
+      "model_details": {
+        "parent_model": "embeddinggemma:300m-bf16",
+        "format": "gguf",
+        "family": "gemma3",
+        "families": [
+          "gemma3"
+        ],
+        "parameter_size": "307.58M",
+        "quantization_level": "BF16",
+        "context_length": 2048,
+        "embedding_length": 768,
+        "runner": "ggml"
+      },
+      "model_info": {
+        "gemma3.attention.causal": false,
+        "gemma3.attention.head_count": 3,
+        "gemma3.attention.head_count_kv": 1,
+        "gemma3.attention.key_length": 256,
+        "gemma3.attention.layer_norm_rms_epsilon": 1e-06,
+        "gemma3.attention.sliding_window": 512,
+        "gemma3.attention.sliding_window_pattern": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          true,
+          true,
+          false
+        ],
+        "gemma3.attention.value_length": 256,
+        "gemma3.block_count": 24,
+        "gemma3.context_length": 2048,
+        "gemma3.embedding_length": 768,
+        "gemma3.feed_forward_length": 1152,
+        "gemma3.pooling_type": 1,
+        "gemma3.rope.freq_base": 1000000,
+        "general.architecture": "gemma3",
+        "general.basename": "embeddinggemma",
+        "general.file_type": 32,
+        "general.license": "gemma",
+        "general.parameter_count": 307581696,
+        "general.quantization_version": 2,
+        "general.size_label": "300M",
+        "general.tags": [
+          "sentence-transformers",
+          "sentence-similarity",
+          "feature-extraction",
+          "text-embeddings-inference",
+          "sentence-similarity"
+        ],
+        "general.type": "model",
+        "tokenizer.ggml.add_bos_token": true,
+        "tokenizer.ggml.add_eos_token": true,
+        "tokenizer.ggml.add_sep_token": false,
+        "tokenizer.ggml.add_space_prefix": false,
+        "tokenizer.ggml.bos_token_id": 2,
+        "tokenizer.ggml.eos_token_id": 1,
+        "tokenizer.ggml.model": "llama",
+        "tokenizer.ggml.padding_token_id": 0,
+        "tokenizer.ggml.pre": "default",
+        "tokenizer.ggml.scores": [],
+        "tokenizer.ggml.token_type": [],
+        "tokenizer.ggml.tokens": [],
+        "tokenizer.ggml.unknown_token_id": 3
+      },
+      "document_vectors_sha256": "9bd3c7956e76ce093f1858c7c6b58d4bc07ca757f2bd559c1af7c8a54ce739a9",
+      "queries": [
+        {
+          "query_id": "backup-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "backup-en",
+              "score": 0.60205182
+            },
+            {
+              "id": "backup-it",
+              "score": 0.51259068
+            },
+            {
+              "id": "cache-en",
+              "score": 0.4035705
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.3888879
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.35387608
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            145.91,
+            150.199,
+            150.81
+          ]
+        },
+        {
+          "query_id": "backup-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "backup-it",
+              "score": 0.58789178
+            },
+            {
+              "id": "backup-en",
+              "score": 0.56726707
+            },
+            {
+              "id": "cache-it",
+              "score": 0.40009832
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.38919314
+            },
+            {
+              "id": "backup-distractor-it",
+              "score": 0.38222984
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            160.587,
+            146.647,
+            174.392
+          ]
+        },
+        {
+          "query_id": "tomato-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "tomato-en",
+              "score": 0.6502558
+            },
+            {
+              "id": "tomato-it",
+              "score": 0.60124098
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.32618225
+            },
+            {
+              "id": "tomato-distractor-it",
+              "score": 0.23799825
+            },
+            {
+              "id": "solar-en",
+              "score": 0.22180492
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            140.627,
+            134.852,
+            183.406
+          ]
+        },
+        {
+          "query_id": "tomato-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "tomato-it",
+              "score": 0.62222256
+            },
+            {
+              "id": "tomato-en",
+              "score": 0.54331583
+            },
+            {
+              "id": "tomato-distractor-it",
+              "score": 0.27357646
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.26204796
+            },
+            {
+              "id": "solar-it",
+              "score": 0.24939206
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            183.411,
+            166.766,
+            154.034
+          ]
+        },
+        {
+          "query_id": "train-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "train-en",
+              "score": 0.5018465
+            },
+            {
+              "id": "train-it",
+              "score": 0.46412868
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.22673734
+            },
+            {
+              "id": "train-distractor-it",
+              "score": 0.22503956
+            },
+            {
+              "id": "shelf-en",
+              "score": 0.16449928
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            145.024,
+            176.208,
+            164.57
+          ]
+        },
+        {
+          "query_id": "train-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "train-it",
+              "score": 0.65622686
+            },
+            {
+              "id": "train-en",
+              "score": 0.5772127
+            },
+            {
+              "id": "train-distractor-it",
+              "score": 0.38269491
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.32849153
+            },
+            {
+              "id": "museum-it",
+              "score": 0.25777211
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            227.627,
+            196.706,
+            194.512
+          ]
+        },
+        {
+          "query_id": "bread-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bread-en",
+              "score": 0.72117602
+            },
+            {
+              "id": "bread-it",
+              "score": 0.56123928
+            },
+            {
+              "id": "bread-distractor-en",
+              "score": 0.44874893
+            },
+            {
+              "id": "journal-en",
+              "score": 0.37712657
+            },
+            {
+              "id": "journal-it",
+              "score": 0.35720014
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            168.711,
+            168.352,
+            221.887
+          ]
+        },
+        {
+          "query_id": "bread-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bread-it",
+              "score": 0.68886057
+            },
+            {
+              "id": "bread-en",
+              "score": 0.52688249
+            },
+            {
+              "id": "journal-it",
+              "score": 0.43989176
+            },
+            {
+              "id": "bread-distractor-en",
+              "score": 0.43405154
+            },
+            {
+              "id": "bread-distractor-it",
+              "score": 0.43252774
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            240.032,
+            222.189,
+            222.375
+          ]
+        },
+        {
+          "query_id": "bookclub-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bookclub-en",
+              "score": 0.55733671
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.46956041
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.4340909
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.35781103
+            },
+            {
+              "id": "shelf-en",
+              "score": 0.30543453
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            301.222,
+            254.637,
+            241.963
+          ]
+        },
+        {
+          "query_id": "bookclub-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bookclub-it",
+              "score": 0.55650562
+            },
+            {
+              "id": "bookclub-en",
+              "score": 0.52647319
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.49011913
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.46239463
+            },
+            {
+              "id": "translation-it",
+              "score": 0.34049638
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            319.65,
+            580.883,
+            327.426
+          ]
+        },
+        {
+          "query_id": "bike-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bike-en",
+              "score": 0.82343452
+            },
+            {
+              "id": "bike-it",
+              "score": 0.62487085
+            },
+            {
+              "id": "bike-distractor-en",
+              "score": 0.48661504
+            },
+            {
+              "id": "bike-distractor-it",
+              "score": 0.37644694
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.1770057
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            345.182,
+            200.673,
+            183.478
+          ]
+        },
+        {
+          "query_id": "bike-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bike-it",
+              "score": 0.68059202
+            },
+            {
+              "id": "bike-en",
+              "score": 0.56582294
+            },
+            {
+              "id": "bike-distractor-it",
+              "score": 0.45558662
+            },
+            {
+              "id": "bike-distractor-en",
+              "score": 0.34636437
+            },
+            {
+              "id": "museum-it",
+              "score": 0.26029601
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            207.762,
+            206.147,
+            220.082
+          ]
+        },
+        {
+          "query_id": "translation-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "translation-en",
+              "score": 0.57958709
+            },
+            {
+              "id": "translation-it",
+              "score": 0.55825251
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.29203278
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.27948912
+            },
+            {
+              "id": "shelf-en",
+              "score": 0.26296955
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            157.371,
+            180.248,
+            163.155
+          ]
+        },
+        {
+          "query_id": "translation-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "translation-it",
+              "score": 0.54601089
+            },
+            {
+              "id": "translation-en",
+              "score": 0.48645271
+            },
+            {
+              "id": "journal-it",
+              "score": 0.28562146
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.27272636
+            },
+            {
+              "id": "translation-distractor-it",
+              "score": 0.25836619
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            150.743,
+            167.038,
+            162.338
+          ]
+        },
+        {
+          "query_id": "shelf-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "shelf-en",
+              "score": 0.61165605
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.41863203
+            },
+            {
+              "id": "shelf-distractor-en",
+              "score": 0.34130059
+            },
+            {
+              "id": "shelf-distractor-it",
+              "score": 0.26946587
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.1910818
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            159.106,
+            146.683,
+            195.839
+          ]
+        },
+        {
+          "query_id": "shelf-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "shelf-it",
+              "score": 0.64734679
+            },
+            {
+              "id": "shelf-en",
+              "score": 0.39248324
+            },
+            {
+              "id": "pottery-distractor-it",
+              "score": 0.28025763
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.2590626
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.25261813
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            178.63,
+            215.883,
+            180.47
+          ]
+        },
+        {
+          "query_id": "music-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "music-en",
+              "score": 0.70500817
+            },
+            {
+              "id": "music-it",
+              "score": 0.52862062
+            },
+            {
+              "id": "music-distractor-en",
+              "score": 0.36566506
+            },
+            {
+              "id": "music-distractor-it",
+              "score": 0.2503478
+            },
+            {
+              "id": "museum-en",
+              "score": 0.24725152
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            149.679,
+            160.686,
+            165.126
+          ]
+        },
+        {
+          "query_id": "music-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "music-it",
+              "score": 0.65073115
+            },
+            {
+              "id": "music-en",
+              "score": 0.51555578
+            },
+            {
+              "id": "music-distractor-it",
+              "score": 0.40578138
+            },
+            {
+              "id": "music-distractor-en",
+              "score": 0.35610405
+            },
+            {
+              "id": "solar-it",
+              "score": 0.2377087
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            221.037,
+            205.429,
+            189.101
+          ]
+        },
+        {
+          "query_id": "museum-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "museum-en",
+              "score": 0.58501987
+            },
+            {
+              "id": "museum-it",
+              "score": 0.5379613
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.43179338
+            },
+            {
+              "id": "pottery-en",
+              "score": 0.39179363
+            },
+            {
+              "id": "museum-distractor-it",
+              "score": 0.35989848
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            144.611,
+            143.548,
+            152.169
+          ]
+        },
+        {
+          "query_id": "museum-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "museum-it",
+              "score": 0.60635015
+            },
+            {
+              "id": "museum-en",
+              "score": 0.50835646
+            },
+            {
+              "id": "museum-distractor-it",
+              "score": 0.44437783
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.38839827
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.38377128
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            275.693,
+            180.626,
+            175.554
+          ]
+        },
+        {
+          "query_id": "solar-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "solar-en",
+              "score": 0.6832624
+            },
+            {
+              "id": "solar-it",
+              "score": 0.64345442
+            },
+            {
+              "id": "solar-distractor-en",
+              "score": 0.38999413
+            },
+            {
+              "id": "solar-distractor-it",
+              "score": 0.3437051
+            },
+            {
+              "id": "tomato-en",
+              "score": 0.25752253
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            249.437,
+            473.808,
+            298.943
+          ]
+        },
+        {
+          "query_id": "solar-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "solar-it",
+              "score": 0.72730274
+            },
+            {
+              "id": "solar-en",
+              "score": 0.61749311
+            },
+            {
+              "id": "solar-distractor-it",
+              "score": 0.42340128
+            },
+            {
+              "id": "solar-distractor-en",
+              "score": 0.33665918
+            },
+            {
+              "id": "tomato-it",
+              "score": 0.31455812
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            622.252,
+            563.044,
+            277.662
+          ]
+        },
+        {
+          "query_id": "journal-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "journal-en",
+              "score": 0.64959556
+            },
+            {
+              "id": "journal-it",
+              "score": 0.49543867
+            },
+            {
+              "id": "journal-distractor-en",
+              "score": 0.42093881
+            },
+            {
+              "id": "journal-distractor-it",
+              "score": 0.33824916
+            },
+            {
+              "id": "translation-distractor-en",
+              "score": 0.257595
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            728.208,
+            679.992,
+            578.163
+          ]
+        },
+        {
+          "query_id": "journal-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "journal-it",
+              "score": 0.63754589
+            },
+            {
+              "id": "journal-en",
+              "score": 0.53976259
+            },
+            {
+              "id": "journal-distractor-it",
+              "score": 0.4390035
+            },
+            {
+              "id": "journal-distractor-en",
+              "score": 0.37468912
+            },
+            {
+              "id": "train-distractor-it",
+              "score": 0.3450085
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            632.211,
+            712.162,
+            885.7
+          ]
+        },
+        {
+          "query_id": "cache-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "cache-en",
+              "score": 0.69456361
+            },
+            {
+              "id": "cache-it",
+              "score": 0.62988566
+            },
+            {
+              "id": "cache-distractor-en",
+              "score": 0.34938737
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.34083484
+            },
+            {
+              "id": "cache-distractor-it",
+              "score": 0.33621041
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            778.567,
+            367.671,
+            180.499
+          ]
+        },
+        {
+          "query_id": "cache-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "cache-it",
+              "score": 0.69144057
+            },
+            {
+              "id": "cache-en",
+              "score": 0.59167494
+            },
+            {
+              "id": "cache-distractor-it",
+              "score": 0.44864447
+            },
+            {
+              "id": "cache-distractor-en",
+              "score": 0.34566352
+            },
+            {
+              "id": "backup-it",
+              "score": 0.30981045
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            200.515,
+            244.845,
+            378.99
+          ]
+        },
+        {
+          "query_id": "pottery-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "pottery-en",
+              "score": 0.72580624
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.53243674
+            },
+            {
+              "id": "pottery-distractor-en",
+              "score": 0.40340782
+            },
+            {
+              "id": "museum-en",
+              "score": 0.38976518
+            },
+            {
+              "id": "museum-it",
+              "score": 0.35142869
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            449.179,
+            292.305,
+            316.102
+          ]
+        },
+        {
+          "query_id": "pottery-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "pottery-it",
+              "score": 0.71246616
+            },
+            {
+              "id": "pottery-en",
+              "score": 0.54637701
+            },
+            {
+              "id": "museum-it",
+              "score": 0.45654524
+            },
+            {
+              "id": "pottery-distractor-it",
+              "score": 0.44941023
+            },
+            {
+              "id": "museum-en",
+              "score": 0.36433764
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            559.332,
+            1017.231,
+            440.884
+          ]
+        },
+        {
+          "query_id": "privacy-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "privacy-en",
+              "score": 0.66672301
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.59506793
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.51452686
+            },
+            {
+              "id": "cache-en",
+              "score": 0.45897028
+            },
+            {
+              "id": "cache-it",
+              "score": 0.40572395
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            251.526,
+            172.718,
+            219.155
+          ]
+        },
+        {
+          "query_id": "privacy-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "privacy-it",
+              "score": 0.55960859
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.48085445
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.38987658
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.35636469
+            },
+            {
+              "id": "cache-it",
+              "score": 0.34968534
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            204.019,
+            170.761,
+            208.448
+          ]
+        }
+      ],
+      "ranking_sha256": "426a64b78855e0d25807305733811078d7f43324a8de586ea3e3113f3099a1b5"
+    },
+    {
+      "model": "bge-m3",
+      "runner": {
+        "name": "bge-m3:latest",
+        "model": "bge-m3:latest",
+        "size": 1235778271,
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "bert",
+          "families": [
+            "bert"
+          ],
+          "parameter_size": "566.70M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-10-14T13:35:41.954475+02:00",
+        "size_vram": 0,
+        "context_length": 8192,
+        "runner": "llamacpp"
+      },
+      "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+      "size_bytes": 1157672605,
+      "dimension": 1024,
+      "query_prefix": "",
+      "document_prefix": "",
+      "cold_warmup_ms": 1061.808,
+      "document_latency": {
+        "count": 60,
+        "p50_ms": 191.6,
+        "p95_ms": 1612.197,
+        "mean_ms": 467.808
+      },
+      "query_latency": {
+        "count": 90,
+        "p50_ms": 56.841,
+        "p95_ms": 319.886,
+        "mean_ms": 89.676
+      },
+      "metrics": {
+        "all": {
+          "recall3": 0.983333,
+          "recall5": 1.0,
+          "cross_language_recall3": 0.966667
+        },
+        "en": {
+          "recall3": 0.966667,
+          "recall5": 1.0,
+          "cross_language_recall3": 0.933333
+        },
+        "it": {
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0
+        }
+      },
+      "model_details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "bert",
+        "families": [
+          "bert"
+        ],
+        "parameter_size": "566.70M",
+        "quantization_level": "F16",
+        "context_length": 8192,
+        "embedding_length": 1024,
+        "runner": "ggml"
+      },
+      "model_info": {
+        "bert.attention.causal": false,
+        "bert.attention.head_count": 16,
+        "bert.attention.layer_norm_epsilon": 1e-05,
+        "bert.block_count": 24,
+        "bert.context_length": 8192,
+        "bert.embedding_length": 1024,
+        "bert.feed_forward_length": 4096,
+        "bert.pooling_type": 2,
+        "general.architecture": "bert",
+        "general.file_type": 1,
+        "general.license": "mit",
+        "general.parameter_count": 566703104,
+        "general.quantization_version": 2,
+        "general.size_label": "567M",
+        "general.tags": [
+          "sentence-transformers",
+          "feature-extraction",
+          "sentence-similarity",
+          "sentence-similarity"
+        ],
+        "general.type": "model",
+        "tokenizer.ggml.add_bos_token": true,
+        "tokenizer.ggml.add_eos_token": true,
+        "tokenizer.ggml.add_space_prefix": true,
+        "tokenizer.ggml.bos_token_id": 0,
+        "tokenizer.ggml.cls_token_id": 0,
+        "tokenizer.ggml.eos_token_id": 2,
+        "tokenizer.ggml.mask_token_id": 250001,
+        "tokenizer.ggml.model": "t5",
+        "tokenizer.ggml.padding_token_id": 1,
+        "tokenizer.ggml.pre": "default",
+        "tokenizer.ggml.precompiled_charsmap": [],
+        "tokenizer.ggml.remove_extra_whitespaces": true,
+        "tokenizer.ggml.scores": [],
+        "tokenizer.ggml.seperator_token_id": 2,
+        "tokenizer.ggml.token_type": [],
+        "tokenizer.ggml.token_type_count": 1,
+        "tokenizer.ggml.tokens": [],
+        "tokenizer.ggml.unknown_token_id": 3
+      },
+      "document_vectors_sha256": "ab3bd86f4728fec908c168cdcf2e1313ab57c01608b7b238915649524f9b7184",
+      "queries": [
+        {
+          "query_id": "backup-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "backup-en",
+              "score": 0.66718992
+            },
+            {
+              "id": "backup-it",
+              "score": 0.60350929
+            },
+            {
+              "id": "cache-en",
+              "score": 0.59643013
+            },
+            {
+              "id": "cache-it",
+              "score": 0.58618372
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.55485122
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            42.837,
+            21.574,
+            75.061
+          ]
+        },
+        {
+          "query_id": "backup-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "backup-en",
+              "score": 0.65308243
+            },
+            {
+              "id": "backup-it",
+              "score": 0.62795034
+            },
+            {
+              "id": "cache-it",
+              "score": 0.59489758
+            },
+            {
+              "id": "cache-en",
+              "score": 0.57577303
+            },
+            {
+              "id": "backup-distractor-it",
+              "score": 0.53119044
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            229.882,
+            74.265,
+            50.583
+          ]
+        },
+        {
+          "query_id": "tomato-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "tomato-en",
+              "score": 0.67316236
+            },
+            {
+              "id": "tomato-it",
+              "score": 0.58022712
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.50331999
+            },
+            {
+              "id": "tomato-distractor-it",
+              "score": 0.45454857
+            },
+            {
+              "id": "shelf-distractor-en",
+              "score": 0.40945667
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            38.407,
+            80.313,
+            77.54
+          ]
+        },
+        {
+          "query_id": "tomato-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "tomato-it",
+              "score": 0.61913174
+            },
+            {
+              "id": "tomato-en",
+              "score": 0.57536483
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.50835945
+            },
+            {
+              "id": "tomato-distractor-it",
+              "score": 0.44937551
+            },
+            {
+              "id": "shelf-distractor-en",
+              "score": 0.3772337
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            52.935,
+            45.248,
+            38.354
+          ]
+        },
+        {
+          "query_id": "train-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "train-en",
+              "score": 0.60194523
+            },
+            {
+              "id": "train-it",
+              "score": 0.58545167
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.46102212
+            },
+            {
+              "id": "train-distractor-it",
+              "score": 0.41081318
+            },
+            {
+              "id": "translation-it",
+              "score": 0.37344122
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            34.762,
+            47.128,
+            68.062
+          ]
+        },
+        {
+          "query_id": "train-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "train-it",
+              "score": 0.6742605
+            },
+            {
+              "id": "train-en",
+              "score": 0.65633334
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.49607602
+            },
+            {
+              "id": "train-distractor-it",
+              "score": 0.47568191
+            },
+            {
+              "id": "translation-it",
+              "score": 0.42120048
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            44.74,
+            29.659,
+            43.214
+          ]
+        },
+        {
+          "query_id": "bread-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bread-en",
+              "score": 0.7360653
+            },
+            {
+              "id": "bread-it",
+              "score": 0.54263735
+            },
+            {
+              "id": "journal-en",
+              "score": 0.51477782
+            },
+            {
+              "id": "bread-distractor-en",
+              "score": 0.50021343
+            },
+            {
+              "id": "journal-it",
+              "score": 0.48421648
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            98.125,
+            102.897,
+            49.074
+          ]
+        },
+        {
+          "query_id": "bread-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bread-it",
+              "score": 0.69119528
+            },
+            {
+              "id": "bread-en",
+              "score": 0.5853958
+            },
+            {
+              "id": "bread-distractor-en",
+              "score": 0.52255455
+            },
+            {
+              "id": "journal-en",
+              "score": 0.47587797
+            },
+            {
+              "id": "bread-distractor-it",
+              "score": 0.47561251
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            78.93,
+            123.174,
+            142.308
+          ]
+        },
+        {
+          "query_id": "bookclub-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bookclub-en",
+              "score": 0.64129633
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.57647369
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.50692899
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.50228095
+            },
+            {
+              "id": "translation-it",
+              "score": 0.47947415
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            75.978,
+            54.593,
+            56.152
+          ]
+        },
+        {
+          "query_id": "bookclub-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bookclub-en",
+              "score": 0.61026392
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.55198556
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.50775939
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.50468271
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.45461182
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            83.724,
+            23.101,
+            50.29
+          ]
+        },
+        {
+          "query_id": "bike-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bike-en",
+              "score": 0.78641607
+            },
+            {
+              "id": "bike-distractor-en",
+              "score": 0.61614149
+            },
+            {
+              "id": "bike-distractor-it",
+              "score": 0.59265616
+            },
+            {
+              "id": "bike-it",
+              "score": 0.58994782
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.45945564
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 1.0,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            39.591,
+            54.557,
+            183.202
+          ]
+        },
+        {
+          "query_id": "bike-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bike-it",
+              "score": 0.69051659
+            },
+            {
+              "id": "bike-en",
+              "score": 0.58530028
+            },
+            {
+              "id": "bike-distractor-it",
+              "score": 0.57093371
+            },
+            {
+              "id": "bike-distractor-en",
+              "score": 0.54401701
+            },
+            {
+              "id": "museum-distractor-it",
+              "score": 0.42916794
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            57.191,
+            48.658,
+            125.053
+          ]
+        },
+        {
+          "query_id": "translation-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "translation-en",
+              "score": 0.65473084
+            },
+            {
+              "id": "translation-it",
+              "score": 0.59704151
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.43354491
+            },
+            {
+              "id": "train-it",
+              "score": 0.40841005
+            },
+            {
+              "id": "journal-en",
+              "score": 0.40824881
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            109.239,
+            319.886,
+            47.703
+          ]
+        },
+        {
+          "query_id": "translation-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "translation-en",
+              "score": 0.61014337
+            },
+            {
+              "id": "translation-it",
+              "score": 0.6060284
+            },
+            {
+              "id": "journal-en",
+              "score": 0.39903902
+            },
+            {
+              "id": "train-it",
+              "score": 0.39305163
+            },
+            {
+              "id": "bookclub-en",
+              "score": 0.38525035
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            439.255,
+            245.257,
+            366.799
+          ]
+        },
+        {
+          "query_id": "shelf-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "shelf-en",
+              "score": 0.6202254
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.51168411
+            },
+            {
+              "id": "shelf-distractor-en",
+              "score": 0.4589473
+            },
+            {
+              "id": "shelf-distractor-it",
+              "score": 0.44569942
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.40340374
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            192.052,
+            148.643,
+            347.02
+          ]
+        },
+        {
+          "query_id": "shelf-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "shelf-it",
+              "score": 0.60254635
+            },
+            {
+              "id": "shelf-en",
+              "score": 0.46950162
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.42898438
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.39637452
+            },
+            {
+              "id": "bookclub-en",
+              "score": 0.39290919
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            263.963,
+            336.876,
+            146.076
+          ]
+        },
+        {
+          "query_id": "music-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "music-en",
+              "score": 0.67797584
+            },
+            {
+              "id": "music-it",
+              "score": 0.53713901
+            },
+            {
+              "id": "music-distractor-en",
+              "score": 0.49401765
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.48571242
+            },
+            {
+              "id": "music-distractor-it",
+              "score": 0.41904139
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            87.212,
+            130.256,
+            80.167
+          ]
+        },
+        {
+          "query_id": "music-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "music-it",
+              "score": 0.6529845
+            },
+            {
+              "id": "music-en",
+              "score": 0.59518085
+            },
+            {
+              "id": "music-distractor-en",
+              "score": 0.49187766
+            },
+            {
+              "id": "music-distractor-it",
+              "score": 0.45523503
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.4531929
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            55.164,
+            30.974,
+            56.287
+          ]
+        },
+        {
+          "query_id": "museum-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "museum-en",
+              "score": 0.67269415
+            },
+            {
+              "id": "museum-it",
+              "score": 0.65115563
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.4774304
+            },
+            {
+              "id": "museum-distractor-it",
+              "score": 0.46393813
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.45294098
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            45.325,
+            47.212,
+            38.74
+          ]
+        },
+        {
+          "query_id": "museum-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "museum-en",
+              "score": 0.65256513
+            },
+            {
+              "id": "museum-it",
+              "score": 0.6514472
+            },
+            {
+              "id": "museum-distractor-it",
+              "score": 0.47681086
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.47356329
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.46818771
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            50.359,
+            83.605,
+            121.774
+          ]
+        },
+        {
+          "query_id": "solar-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "solar-en",
+              "score": 0.75044543
+            },
+            {
+              "id": "solar-it",
+              "score": 0.67889307
+            },
+            {
+              "id": "solar-distractor-en",
+              "score": 0.60848611
+            },
+            {
+              "id": "solar-distractor-it",
+              "score": 0.56806047
+            },
+            {
+              "id": "tomato-en",
+              "score": 0.46966378
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            36.242,
+            42.355,
+            70.092
+          ]
+        },
+        {
+          "query_id": "solar-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "solar-it",
+              "score": 0.71722961
+            },
+            {
+              "id": "solar-en",
+              "score": 0.71710562
+            },
+            {
+              "id": "solar-distractor-en",
+              "score": 0.57473613
+            },
+            {
+              "id": "solar-distractor-it",
+              "score": 0.55679394
+            },
+            {
+              "id": "tomato-en",
+              "score": 0.48031713
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            128.086,
+            69.34,
+            62.257
+          ]
+        },
+        {
+          "query_id": "journal-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "journal-en",
+              "score": 0.64063288
+            },
+            {
+              "id": "journal-it",
+              "score": 0.5444401
+            },
+            {
+              "id": "journal-distractor-it",
+              "score": 0.45347134
+            },
+            {
+              "id": "translation-it",
+              "score": 0.4434475
+            },
+            {
+              "id": "journal-distractor-en",
+              "score": 0.43431428
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            64.269,
+            109.013,
+            63.04
+          ]
+        },
+        {
+          "query_id": "journal-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "journal-it",
+              "score": 0.62091397
+            },
+            {
+              "id": "journal-en",
+              "score": 0.56955581
+            },
+            {
+              "id": "journal-distractor-it",
+              "score": 0.50472604
+            },
+            {
+              "id": "translation-distractor-en",
+              "score": 0.4572552
+            },
+            {
+              "id": "translation-it",
+              "score": 0.44836856
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            77.632,
+            56.49,
+            33.723
+          ]
+        },
+        {
+          "query_id": "cache-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "cache-en",
+              "score": 0.69871276
+            },
+            {
+              "id": "cache-it",
+              "score": 0.67925829
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.50845045
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.47546358
+            },
+            {
+              "id": "cache-distractor-en",
+              "score": 0.45618339
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            50.263,
+            55.959,
+            48.939
+          ]
+        },
+        {
+          "query_id": "cache-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "cache-it",
+              "score": 0.71470279
+            },
+            {
+              "id": "cache-en",
+              "score": 0.65921423
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.47361212
+            },
+            {
+              "id": "backup-en",
+              "score": 0.45694829
+            },
+            {
+              "id": "backup-it",
+              "score": 0.4447568
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            50.718,
+            79.576,
+            62.292
+          ]
+        },
+        {
+          "query_id": "pottery-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "pottery-en",
+              "score": 0.73751621
+            },
+            {
+              "id": "pottery-distractor-en",
+              "score": 0.57188395
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.56516693
+            },
+            {
+              "id": "museum-en",
+              "score": 0.49126961
+            },
+            {
+              "id": "pottery-distractor-it",
+              "score": 0.48997382
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            47.345,
+            85.754,
+            45.209
+          ]
+        },
+        {
+          "query_id": "pottery-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "pottery-it",
+              "score": 0.71779298
+            },
+            {
+              "id": "pottery-en",
+              "score": 0.5322185
+            },
+            {
+              "id": "pottery-distractor-it",
+              "score": 0.48055491
+            },
+            {
+              "id": "pottery-distractor-en",
+              "score": 0.47485182
+            },
+            {
+              "id": "museum-en",
+              "score": 0.46629129
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            83.194,
+            64.967,
+            53.835
+          ]
+        },
+        {
+          "query_id": "privacy-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "privacy-en",
+              "score": 0.66420092
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.63578905
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.58938179
+            },
+            {
+              "id": "cache-en",
+              "score": 0.53985254
+            },
+            {
+              "id": "cache-it",
+              "score": 0.52680595
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            37.756,
+            21.803,
+            25.875
+          ]
+        },
+        {
+          "query_id": "privacy-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "privacy-it",
+              "score": 0.6657526
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.61611233
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.56023905
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.53405777
+            },
+            {
+              "id": "cache-it",
+              "score": 0.49009627
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            40.737,
+            29.929,
+            43.109
+          ]
+        }
+      ],
+      "ranking_sha256": "f6b9016f43224852b29b431e1d2c0230decab9167d4792fab042633f6302b0a9"
+    },
+    {
+      "model": "nomic-embed-text",
+      "runner": {
+        "name": "nomic-embed-text:latest",
+        "model": "nomic-embed-text:latest",
+        "size": 389053152,
+        "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "nomic-bert",
+          "families": [
+            "nomic-bert"
+          ],
+          "parameter_size": "137M",
+          "quantization_level": "F16"
+        },
+        "expires_at": "2026-10-14T13:36:18.558455+02:00",
+        "size_vram": 0,
+        "context_length": 2048,
+        "runner": "llamacpp"
+      },
+      "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "size_bytes": 274302450,
+      "dimension": 768,
+      "query_prefix": "search_query: ",
+      "document_prefix": "search_document: ",
+      "cold_warmup_ms": 316.613,
+      "document_latency": {
+        "count": 60,
+        "p50_ms": 190.435,
+        "p95_ms": 1114.674,
+        "mean_ms": 293.55
+      },
+      "query_latency": {
+        "count": 90,
+        "p50_ms": 34.529,
+        "p95_ms": 327.768,
+        "mean_ms": 92.819
+      },
+      "metrics": {
+        "all": {
+          "recall3": 0.6,
+          "recall5": 0.633333,
+          "cross_language_recall3": 0.2
+        },
+        "en": {
+          "recall3": 0.7,
+          "recall5": 0.766667,
+          "cross_language_recall3": 0.4
+        },
+        "it": {
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0
+        }
+      },
+      "model_details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "nomic-bert",
+        "families": [
+          "nomic-bert"
+        ],
+        "parameter_size": "137M",
+        "quantization_level": "F16",
+        "context_length": 2048,
+        "embedding_length": 768,
+        "runner": "ggml"
+      },
+      "model_info": {
+        "general.architecture": "nomic-bert",
+        "general.file_type": 1,
+        "general.parameter_count": 136727040,
+        "nomic-bert.attention.causal": false,
+        "nomic-bert.attention.head_count": 12,
+        "nomic-bert.attention.layer_norm_epsilon": 1e-12,
+        "nomic-bert.block_count": 12,
+        "nomic-bert.context_length": 2048,
+        "nomic-bert.embedding_length": 768,
+        "nomic-bert.feed_forward_length": 3072,
+        "nomic-bert.pooling_type": 1,
+        "nomic-bert.rope.freq_base": 1000,
+        "tokenizer.ggml.bos_token_id": 101,
+        "tokenizer.ggml.cls_token_id": 101,
+        "tokenizer.ggml.eos_token_id": 102,
+        "tokenizer.ggml.mask_token_id": 103,
+        "tokenizer.ggml.model": "bert",
+        "tokenizer.ggml.padding_token_id": 0,
+        "tokenizer.ggml.scores": [],
+        "tokenizer.ggml.seperator_token_id": 102,
+        "tokenizer.ggml.token_type": [],
+        "tokenizer.ggml.token_type_count": 2,
+        "tokenizer.ggml.tokens": [],
+        "tokenizer.ggml.unknown_token_id": 100
+      },
+      "document_vectors_sha256": "b22c68795a7f23bfecfdecef2d75cdb95754857534df82425257bfcec7733d35",
+      "queries": [
+        {
+          "query_id": "backup-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.68544738
+            },
+            {
+              "id": "backup-en",
+              "score": 0.67624462
+            },
+            {
+              "id": "cache-en",
+              "score": 0.64488196
+            },
+            {
+              "id": "backup-it",
+              "score": 0.62457134
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.61335814
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 1.0,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            9.998,
+            10.757,
+            17.629
+          ]
+        },
+        {
+          "query_id": "backup-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "cache-it",
+              "score": 0.72109082
+            },
+            {
+              "id": "backup-distractor-it",
+              "score": 0.71287858
+            },
+            {
+              "id": "backup-it",
+              "score": 0.69879481
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.68225719
+            },
+            {
+              "id": "cache-distractor-it",
+              "score": 0.67758393
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            22.977,
+            127.978,
+            19.097
+          ]
+        },
+        {
+          "query_id": "tomato-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "tomato-en",
+              "score": 0.81458161
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.64296121
+            },
+            {
+              "id": "solar-en",
+              "score": 0.57426716
+            },
+            {
+              "id": "pottery-en",
+              "score": 0.56575175
+            },
+            {
+              "id": "music-en",
+              "score": 0.55350281
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            16.926,
+            19.97,
+            13.275
+          ]
+        },
+        {
+          "query_id": "tomato-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "tomato-it",
+              "score": 0.70747192
+            },
+            {
+              "id": "bread-it",
+              "score": 0.62180079
+            },
+            {
+              "id": "bike-it",
+              "score": 0.61021495
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.60354327
+            },
+            {
+              "id": "museum-it",
+              "score": 0.60071972
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            20.59,
+            14.144,
+            23.002
+          ]
+        },
+        {
+          "query_id": "train-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "train-en",
+              "score": 0.7400006
+            },
+            {
+              "id": "train-distractor-en",
+              "score": 0.57820504
+            },
+            {
+              "id": "train-it",
+              "score": 0.53075683
+            },
+            {
+              "id": "pottery-distractor-en",
+              "score": 0.5101378
+            },
+            {
+              "id": "museum-en",
+              "score": 0.49841141
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            16.369,
+            39.83,
+            30.458
+          ]
+        },
+        {
+          "query_id": "train-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "train-it",
+              "score": 0.73217016
+            },
+            {
+              "id": "museum-it",
+              "score": 0.6108814
+            },
+            {
+              "id": "train-distractor-it",
+              "score": 0.6046412
+            },
+            {
+              "id": "translation-it",
+              "score": 0.57876797
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.5781118
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            20.802,
+            30.991,
+            35.598
+          ]
+        },
+        {
+          "query_id": "bread-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bread-en",
+              "score": 0.78679878
+            },
+            {
+              "id": "journal-en",
+              "score": 0.6343403
+            },
+            {
+              "id": "bread-distractor-en",
+              "score": 0.61486569
+            },
+            {
+              "id": "translation-en",
+              "score": 0.56586517
+            },
+            {
+              "id": "train-en",
+              "score": 0.53394049
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            17.117,
+            62.838,
+            27.054
+          ]
+        },
+        {
+          "query_id": "bread-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bread-it",
+              "score": 0.69878885
+            },
+            {
+              "id": "journal-it",
+              "score": 0.61534873
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.61049862
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.60944369
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.60688644
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            32.906,
+            72.075,
+            30.663
+          ]
+        },
+        {
+          "query_id": "bookclub-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bookclub-en",
+              "score": 0.70061936
+            },
+            {
+              "id": "translation-en",
+              "score": 0.61535295
+            },
+            {
+              "id": "bookclub-distractor-en",
+              "score": 0.61265245
+            },
+            {
+              "id": "museum-en",
+              "score": 0.5940634
+            },
+            {
+              "id": "journal-en",
+              "score": 0.58789263
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            16.95,
+            36.843,
+            54.341
+          ]
+        },
+        {
+          "query_id": "bookclub-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bookclub-it",
+              "score": 0.74260401
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.64815465
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.64601227
+            },
+            {
+              "id": "bread-it",
+              "score": 0.63375047
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.6310792
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            314.723,
+            327.768,
+            471.839
+          ]
+        },
+        {
+          "query_id": "bike-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "bike-en",
+              "score": 0.83034276
+            },
+            {
+              "id": "bike-distractor-en",
+              "score": 0.65354747
+            },
+            {
+              "id": "bike-it",
+              "score": 0.57629431
+            },
+            {
+              "id": "museum-en",
+              "score": 0.57062373
+            },
+            {
+              "id": "museum-it",
+              "score": 0.55657856
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            22.853,
+            35.237,
+            73.794
+          ]
+        },
+        {
+          "query_id": "bike-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "bike-it",
+              "score": 0.74661638
+            },
+            {
+              "id": "museum-it",
+              "score": 0.63475928
+            },
+            {
+              "id": "bike-distractor-it",
+              "score": 0.62709702
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.62143411
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.60119622
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            24.78,
+            124.101,
+            60.658
+          ]
+        },
+        {
+          "query_id": "translation-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "translation-en",
+              "score": 0.76487632
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.59700143
+            },
+            {
+              "id": "translation-it",
+              "score": 0.58992006
+            },
+            {
+              "id": "translation-distractor-it",
+              "score": 0.58651795
+            },
+            {
+              "id": "cache-it",
+              "score": 0.58584031
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            17.986,
+            75.951,
+            28.085
+          ]
+        },
+        {
+          "query_id": "translation-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "translation-it",
+              "score": 0.66377275
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.66187387
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.65281217
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.64547559
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.64252894
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            27.328,
+            23.463,
+            22.897
+          ]
+        },
+        {
+          "query_id": "shelf-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "shelf-en",
+              "score": 0.81041422
+            },
+            {
+              "id": "shelf-distractor-en",
+              "score": 0.65829728
+            },
+            {
+              "id": "pottery-distractor-en",
+              "score": 0.58891662
+            },
+            {
+              "id": "museum-en",
+              "score": 0.57124945
+            },
+            {
+              "id": "pottery-en",
+              "score": 0.56784918
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            57.301,
+            42.517,
+            33.622
+          ]
+        },
+        {
+          "query_id": "shelf-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "shelf-it",
+              "score": 0.75861794
+            },
+            {
+              "id": "privacy-it",
+              "score": 0.67547839
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.66248415
+            },
+            {
+              "id": "cache-it",
+              "score": 0.63719167
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.63197043
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            98.806,
+            41.718,
+            23.915
+          ]
+        },
+        {
+          "query_id": "music-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "music-en",
+              "score": 0.77012366
+            },
+            {
+              "id": "music-it",
+              "score": 0.60600088
+            },
+            {
+              "id": "music-distractor-en",
+              "score": 0.60421928
+            },
+            {
+              "id": "train-en",
+              "score": 0.5594834
+            },
+            {
+              "id": "museum-en",
+              "score": 0.55258343
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            34.691,
+            14.505,
+            39.11
+          ]
+        },
+        {
+          "query_id": "music-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "music-it",
+              "score": 0.75668068
+            },
+            {
+              "id": "museum-it",
+              "score": 0.65754858
+            },
+            {
+              "id": "bookclub-distractor-it",
+              "score": 0.64689019
+            },
+            {
+              "id": "train-it",
+              "score": 0.64505528
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.6388588
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            25.455,
+            36.225,
+            58.837
+          ]
+        },
+        {
+          "query_id": "museum-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "museum-en",
+              "score": 0.75801033
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.65769666
+            },
+            {
+              "id": "museum-it",
+              "score": 0.63628819
+            },
+            {
+              "id": "pottery-en",
+              "score": 0.57879483
+            },
+            {
+              "id": "translation-en",
+              "score": 0.57817011
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            26.327,
+            43.951,
+            38.481
+          ]
+        },
+        {
+          "query_id": "museum-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "museum-it",
+              "score": 0.76062002
+            },
+            {
+              "id": "shelf-distractor-it",
+              "score": 0.66190247
+            },
+            {
+              "id": "cache-it",
+              "score": 0.65237313
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.63787727
+            },
+            {
+              "id": "train-it",
+              "score": 0.63452256
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            177.28,
+            51.41,
+            22.653
+          ]
+        },
+        {
+          "query_id": "solar-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "solar-en",
+              "score": 0.77286007
+            },
+            {
+              "id": "solar-distractor-en",
+              "score": 0.6157535
+            },
+            {
+              "id": "tomato-en",
+              "score": 0.60940556
+            },
+            {
+              "id": "tomato-distractor-en",
+              "score": 0.48463999
+            },
+            {
+              "id": "music-en",
+              "score": 0.47252278
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            24.793,
+            35.305,
+            28.426
+          ]
+        },
+        {
+          "query_id": "solar-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "solar-it",
+              "score": 0.79777258
+            },
+            {
+              "id": "tomato-it",
+              "score": 0.63603143
+            },
+            {
+              "id": "solar-distractor-it",
+              "score": 0.63373092
+            },
+            {
+              "id": "bread-it",
+              "score": 0.62415825
+            },
+            {
+              "id": "journal-it",
+              "score": 0.6198271
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            46.914,
+            38.191,
+            60.36
+          ]
+        },
+        {
+          "query_id": "journal-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "journal-en",
+              "score": 0.74948741
+            },
+            {
+              "id": "journal-distractor-en",
+              "score": 0.54708987
+            },
+            {
+              "id": "translation-en",
+              "score": 0.52574833
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.51396846
+            },
+            {
+              "id": "backup-en",
+              "score": 0.51087272
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            20.098,
+            36.731,
+            54.211
+          ]
+        },
+        {
+          "query_id": "journal-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "journal-it",
+              "score": 0.72381258
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.6270011
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.62639832
+            },
+            {
+              "id": "pottery-distractor-it",
+              "score": 0.61625825
+            },
+            {
+              "id": "journal-distractor-it",
+              "score": 0.61380584
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            39.719,
+            18.405,
+            29.552
+          ]
+        },
+        {
+          "query_id": "cache-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "cache-en",
+              "score": 0.74037923
+            },
+            {
+              "id": "cache-distractor-en",
+              "score": 0.60683954
+            },
+            {
+              "id": "cache-it",
+              "score": 0.60326138
+            },
+            {
+              "id": "privacy-en",
+              "score": 0.58274453
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.55486401
+            }
+          ],
+          "recall3": 1.0,
+          "recall5": 1.0,
+          "cross_language_recall3": 1.0,
+          "query_latency_ms": [
+            27.465,
+            33.024,
+            15.227
+          ]
+        },
+        {
+          "query_id": "cache-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "cache-it",
+              "score": 0.8006857
+            },
+            {
+              "id": "cache-distractor-it",
+              "score": 0.67385333
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.63756605
+            },
+            {
+              "id": "backup-it",
+              "score": 0.63383649
+            },
+            {
+              "id": "shelf-distractor-it",
+              "score": 0.63193427
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            14.789,
+            84.284,
+            228.407
+          ]
+        },
+        {
+          "query_id": "pottery-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "pottery-en",
+              "score": 0.81002673
+            },
+            {
+              "id": "pottery-distractor-en",
+              "score": 0.63445098
+            },
+            {
+              "id": "museum-distractor-en",
+              "score": 0.60437729
+            },
+            {
+              "id": "museum-en",
+              "score": 0.59292702
+            },
+            {
+              "id": "pottery-it",
+              "score": 0.55427458
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 1.0,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            72.926,
+            57.033,
+            56.708
+          ]
+        },
+        {
+          "query_id": "pottery-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "pottery-it",
+              "score": 0.76119562
+            },
+            {
+              "id": "museum-it",
+              "score": 0.62996479
+            },
+            {
+              "id": "shelf-distractor-it",
+              "score": 0.62793873
+            },
+            {
+              "id": "tomato-it",
+              "score": 0.61077823
+            },
+            {
+              "id": "bread-it",
+              "score": 0.60826242
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            1422.913,
+            1440.524,
+            881.38
+          ]
+        },
+        {
+          "query_id": "privacy-q-en",
+          "language": "en",
+          "top5": [
+            {
+              "id": "privacy-en",
+              "score": 0.76786888
+            },
+            {
+              "id": "privacy-distractor-en",
+              "score": 0.68614031
+            },
+            {
+              "id": "cache-en",
+              "score": 0.62341105
+            },
+            {
+              "id": "cache-it",
+              "score": 0.53067985
+            },
+            {
+              "id": "cache-distractor-en",
+              "score": 0.51525761
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            24.485,
+            44.708,
+            20.48
+          ]
+        },
+        {
+          "query_id": "privacy-q-it",
+          "language": "it",
+          "top5": [
+            {
+              "id": "privacy-it",
+              "score": 0.75736203
+            },
+            {
+              "id": "privacy-distractor-it",
+              "score": 0.6977774
+            },
+            {
+              "id": "bookclub-it",
+              "score": 0.66615633
+            },
+            {
+              "id": "music-distractor-it",
+              "score": 0.65665541
+            },
+            {
+              "id": "shelf-it",
+              "score": 0.64792486
+            }
+          ],
+          "recall3": 0.5,
+          "recall5": 0.5,
+          "cross_language_recall3": 0.0,
+          "query_latency_ms": [
+            34.367,
+            51.144,
+            51.712
+          ]
+        }
+      ],
+      "ranking_sha256": "4d73c7bb3aab41d73e49a94e037c09cb8f539792d59b7f0d604961c91d32f60b"
+    }
+  ]
+}

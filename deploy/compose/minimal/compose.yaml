@@ -1,0 +1,41 @@
+# Local imported image; use compose.https.yaml for the confirmed public HTTPS hostname.
+services:
+  spunto:
+    image: ${SPUNTO_IMAGE:?set an imported immutable Spunto image tag or digest}
+    pull_policy: never
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    read_only: true                             # the server writes only to /data and /tmp
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8080:8080"                   # put a TLS proxy (Caddy, Traefik) in front
+    volumes:
+      - spunto-data:/data
+    environment:
+      SPUNTO_PUBLIC_URL: https://spunto.theficos.dedyn.io
+      SPUNTO_OWNER_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
+      TZ: Europe/Rome
+      # Optional AI, the default setup (D16): chat and vision on Ollama cloud, embeddings on the host's Ollama.
+      # SPUNTO_AI_PROFILES: local,cloud
+      # SPUNTO_AI_LOCAL_BASE_URL: http://host.docker.internal:11434/v1
+      # SPUNTO_AI_LOCAL_EMBED_MODEL: embeddinggemma          # ollama pull embeddinggemma
+      # SPUNTO_AI_CLOUD_BASE_URL: https://ollama.com/v1
+      # SPUNTO_AI_CLOUD_API_KEY_FILE: /run/secrets/ollama_key
+      # SPUNTO_AI_CLOUD_CHAT_MODEL: gpt-oss:120b
+      # SPUNTO_AI_CLOUD_VISION_MODEL: qwen3-vl:235b
+      # SPUNTO_AI_CHAT_PROFILE: cloud
+      # SPUNTO_AI_VISION_PROFILE: cloud
+      # SPUNTO_AI_EMBED_PROFILE: local
+      # Fully local instead: point CHAT_PROFILE at local and add SPUNTO_AI_LOCAL_CHAT_MODEL (e.g. qwen3:4b).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"     # reach the host's Ollama on Linux too
+    secrets:
+      - owner_password_hash
+secrets:
+  owner_password_hash:
+    file: ${SPUNTO_OWNER_HASH_FILE:?set the absolute path of the protected owner Argon2id hash file}
+volumes:
+  spunto-data: {}

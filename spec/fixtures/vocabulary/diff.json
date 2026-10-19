@@ -1,0 +1,20 @@
+{
+  "type": "diff",
+  "base_version": 3,
+  "hunks": [
+    {
+      "old_start": 0,
+      "new_start": 0,
+      "old_lines": [
+        "Before"
+      ],
+      "new_lines": [
+        "After"
+      ]
+    }
+  ],
+  "fallback": {
+    "type": "text",
+    "text": "Before → After"
+  }
+}

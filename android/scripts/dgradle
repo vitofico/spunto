@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run gradle inside the build image; Java is not installed on the host.
+# Usage: scripts/dgradle <gradle-args...>   e.g. scripts/dgradle :app:assembleDebug
+set -euo pipefail
+
+IMAGE="spunto-build:latest"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "[dgradle] building $IMAGE under linux/amd64 (Rosetta on Apple Silicon, ~5 min)…"
+  docker build --platform linux/amd64 -t "$IMAGE" "$ROOT"
+fi
+
+# A TTY only when there is one, so the script also runs from CI and agent shells.
+TTY_FLAGS=(-i)
+if [ -t 0 ] && [ -t 1 ]; then
+  TTY_FLAGS+=(-t)
+fi
+
+# The android volume holds the debug keystore: keep it, or every build gets a
+# new signature and `adb install -r` over an earlier build fails.
+exec docker run --rm "${TTY_FLAGS[@]}" \
+  --platform linux/amd64 \
+  -v "$ROOT":/workspace \
+  -v "$ROOT/../spec":/spec:ro \
+  -v spunto-gradle-cache:/root/.gradle \
+  -v spunto-android-cache:/root/.android \
+  -v spunto-m2-cache:/root/.m2 \
+  "$IMAGE" \
+  ./gradlew "$@"

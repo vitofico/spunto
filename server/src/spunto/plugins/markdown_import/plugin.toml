@@ -1,0 +1,18 @@
+id = "markdown-import"
+name = "Import Markdown"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "data"
+description = "Preview and import a Markdown ZIP or an operator-selected folder."
+entry = "spunto.plugins.markdown_import:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.create", "notes.update_own", "attachments.write", "routes"]
+creates = "import"
+
+[settings]
+type = "object"
+additionalProperties = false

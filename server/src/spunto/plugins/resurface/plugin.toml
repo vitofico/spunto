@@ -1,0 +1,32 @@
+id = "resurface"
+name = "Resurface"
+version = "1.0.0"
+api = "0.4"
+kind = "server"
+runtime = "in-process"
+category = "recall"
+description = "Show one older note each day."
+entry = "spunto.plugins.resurface:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read", "annotate", "schedule"]
+
+[contributes.slip]
+title = "From your notes"
+
+[[contributes.schedules]]
+id = "daily"
+daily = true
+time = "{time}"
+
+[settings]
+type = "object"
+[settings.properties.time]
+type = "string"
+format = "time"
+default = "08:00"
+[settings.properties.min_age_days]
+type = "integer"
+minimum = 1
+default = 30

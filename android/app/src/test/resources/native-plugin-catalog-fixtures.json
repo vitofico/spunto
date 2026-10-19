@@ -1,0 +1,1073 @@
+{
+  "fixtures": [
+    {
+      "id": "actual-wanted-waiting",
+      "provenance": "/tmp/spunto-full-product/browser-harness/recording-waiting-catalog.actual.json",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 0,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "wantedOn": true,
+        "activeContribution": false,
+        "unmanagedPin": true,
+        "onCount": 1,
+        "missingTranscribe": true
+      }
+    },
+    {
+      "id": "pin-number-on",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 1,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": false,
+        "lockUnknown": false
+      }
+    },
+    {
+      "id": "pin-number-off",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 0,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": true,
+        "lockUnknown": false
+      }
+    },
+    {
+      "id": "pin-boolean-on",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": true,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": false,
+        "lockUnknown": false
+      }
+    },
+    {
+      "id": "pin-boolean-off",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": false,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": true,
+        "lockUnknown": false
+      }
+    },
+    {
+      "id": "pin-invalid-string",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": "1",
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": false,
+        "lockUnknown": true
+      }
+    },
+    {
+      "id": "pin-invalid-number",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 2,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": false,
+        "lockUnknown": true
+      }
+    },
+    {
+      "id": "pin-invalid-float",
+      "provenance": "Synthetic mutation of saved API row",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 1.0,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "toggleAllowedIfOnline": false,
+        "lockUnknown": true
+      }
+    },
+    {
+      "id": "wanted-failed-no-active-manifest",
+      "provenance": "Synthetic",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "failed",
+        "pinned_by_env": 0,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": 1760000000000,
+        "last_error": "synthetic_callback_failed",
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "wantedOn": true,
+        "activeContribution": false,
+        "onCount": 1,
+        "failureCounterKnown": false
+      }
+    },
+    {
+      "id": "waiting-added-permission",
+      "provenance": "Synthetic",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest",
+          "notes.read"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          }
+        },
+        "settings": {
+          "language": "auto",
+          "keep_link": true
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 0,
+        "granted": [
+          "attachments.read",
+          "attachments.write",
+          "ai.transcribe",
+          "suggest"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": "Plugin permission review required.",
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {},
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "wantedOn": true,
+        "permissionReviewRequired": true,
+        "automaticUndoMayGrantNewPermission": false
+      }
+    },
+    {
+      "id": "named-ai-network-schedule",
+      "provenance": "Synthetic exact current field shapes",
+      "row": {
+        "id": "voice-memos",
+        "name": "Voice memos",
+        "version": "1.0.0",
+        "api": "0.9",
+        "kind": "server",
+        "runtime": "in-process",
+        "category": "capture",
+        "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+        "entry": "spunto.plugins.voice_memos:plugin",
+        "requires": [
+          "attachments",
+          "ai.transcribe"
+        ],
+        "default": "off",
+        "data_version": 0,
+        "permissions": [
+          "notes.read",
+          "ai.chat",
+          "ai.embed",
+          "net.fetch",
+          "schedule"
+        ],
+        "contributes": {
+          "commands": [
+            {
+              "id": "transcribe",
+              "title": "Transcribe recording",
+              "where": [
+                "note-actions"
+              ],
+              "online": true
+            }
+          ],
+          "panel": {
+            "title": "Recording",
+            "mode": "live"
+          },
+          "schedules": [
+            {
+              "id": "weekly",
+              "weekday": "{weekday}",
+              "time": "{time}"
+            }
+          ]
+        },
+        "settings": {
+          "weekday": "sunday",
+          "time": "18:00"
+        },
+        "switch": "on",
+        "state": "waiting",
+        "pinned_by_env": 0,
+        "granted": [
+          "notes.read",
+          "ai.chat",
+          "ai.embed",
+          "net.fetch",
+          "schedule"
+        ],
+        "position": 23,
+        "last_run_at": null,
+        "last_error": null,
+        "ai_route": {},
+        "network_destinations": [],
+        "ai_destinations": {
+          "chat": {
+            "profile": "synthetic_chat",
+            "model": "synthetic-cloud",
+            "host": "ollama.synthetic.lan",
+            "leaves_network": true
+          },
+          "embed": {
+            "profile": "synthetic_embed",
+            "model": "synthetic-embed",
+            "host": "ollama.synthetic.lan",
+            "leaves_network": false
+          }
+        },
+        "data_size_bytes": 1,
+        "data_counts": {
+          "plugin_kv": 1,
+          "plugin_record": 0,
+          "annotation": 0,
+          "suggestion": 0,
+          "note_text": 0
+        },
+        "data_count": 1,
+        "permission_sentences": [
+          "Reads attachments",
+          "Writes attachments",
+          "Requires the transcribe model",
+          "Proposes edits for your review",
+          "Never reads private notes"
+        ],
+        "secrets": {}
+      },
+      "expected": {
+        "chatOutsideNetwork": true,
+        "embedOutsideNetwork": false,
+        "schedule": "Sunday 18:00 (server time)",
+        "fetchFacts": true,
+        "guessNetworkFromHost": false
+      }
+    },
+    {
+      "id": "api1-env-secret-network",
+      "provenance": "Current real API1.0 manifest plus synthetic host fields",
+      "row": {
+        "id": "telegram",
+        "name": "Telegram",
+        "version": "1.0.0",
+        "api": "1.0",
+        "kind": "server",
+        "category": "capture",
+        "description": "Capture private bot messages from explicitly allowed account IDs.",
+        "entry": "spunto.plugins.telegram:plugin",
+        "default": "off",
+        "creates": "external",
+        "permissions": [
+          "net.out:api.telegram.org",
+          "notes.create"
+        ],
+        "needs": [
+          {
+            "setting": "allow_accounts",
+            "reason": "Needs a list of allowed senders"
+          },
+          {
+            "setting": "bot_token",
+            "reason": "Set the bot token in the environment"
+          }
+        ],
+        "switch": "off",
+        "state": "available",
+        "pinned_by_env": 0,
+        "granted": [],
+        "position": 0,
+        "settings": {
+          "allow_accounts": []
+        },
+        "network_destinations": [
+          "api.telegram.org"
+        ],
+        "ai_destinations": {},
+        "secrets": {
+          "bot_token": {
+            "set": false,
+            "source": "environment"
+          }
+        },
+        "data_count": 0,
+        "data_counts": {},
+        "data_size_bytes": 0,
+        "last_run_at": null,
+        "last_error": null
+      },
+      "settingsPage": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "bot_token": {
+              "type": "string",
+              "title": "Bot token",
+              "x-secret": true
+            },
+            "allow_accounts": {
+              "type": "array",
+              "title": "Allowed numeric Telegram account IDs",
+              "items": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "default": []
+            }
+          }
+        },
+        "values": {
+          "allow_accounts": [],
+          "bot_token": "SYNTHETIC_SECRET_SENTINEL_DO_NOT_RENDER_OR_CACHE"
+        },
+        "secrets": {
+          "bot_token": {
+            "set": false,
+            "source": "environment"
+          }
+        }
+      },
+      "expected": {
+        "envVariable": "SPUNTO_PLUGIN_TELEGRAM_BOT_TOKEN",
+        "secretInputs": 0,
+        "secretValueRendered": false,
+        "deviceSettingsWrites": false,
+        "manageWebRoute": "/settings/plugins/telegram"
+      }
+    },
+    {
+      "id": "removed-producer-dependent",
+      "provenance": "Synthetic pending server producer contract discussed with m5_server; not live current API",
+      "row": {
+        "id": "synthetic-removed",
+        "name": "Removed fixture",
+        "description": "Synthetic missing code row",
+        "api": "1.0",
+        "version": "1.0.0",
+        "kind": "server",
+        "category": "data",
+        "switch": "off",
+        "state": "removed",
+        "pinned_by_env": 0,
+        "permissions": [],
+        "granted": [],
+        "data_count": 214,
+        "data_size_bytes": 1000,
+        "contributes": {},
+        "origin": "operator",
+        "source_kind": "folder",
+        "can_enable": false,
+        "can_delete_data": true
+      },
+      "expected": {
+        "nativeSwitch": false,
+        "nativeSettingsGet": false,
+        "nativeDeleteRequest": false,
+        "notesStayCopy": true,
+        "liveAcceptanceRequiresServerProducer": true
+      }
+    }
+  ],
+  "scope": "Authored data only; no fixture execution, credentials, owner data, provider or network"
+}

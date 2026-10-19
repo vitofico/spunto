@@ -1,0 +1,23 @@
+id = "image-text"
+name = "Text in images"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "capture"
+description = "Read owner image captures into searchable text without changing the note."
+entry = "spunto.plugins.image_text:plugin"
+requires = ["attachments", "ai.vision"]
+default = "off"
+data_version = 1
+permissions = ["attachments.read", "ai.vision", "search.text"]
+
+[[contributes.commands]]
+id = "read"
+title = "Read image text"
+where = ["note-actions"]
+online = true
+
+[contributes.panel]
+title = "In this image"
+mode = "live"

@@ -1,0 +1,31 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: spunto-https
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spunto-http
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: spunto-spunto-https@kubernetescrd
+    # cert-manager's more specific challenge route must win over this fallback.
+    traefik.ingress.kubernetes.io/router.priority: "1"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: spunto.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: spunto
+                port:
+                  name: http

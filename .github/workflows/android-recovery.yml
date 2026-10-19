@@ -1,0 +1,133 @@
+name: Repair Android release
+
+# Repair an existing tag without cutting a version or touching the server image.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing android/YYYY.MM.DD.run tag to repair"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Same group as normal publication; neither can race the other over assets.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Build source from the existing tag and use the reviewed workflow's tools.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts
+            spec/android-release-certificate.sha256
+          persist-credentials: false
+      - name: Verify existing CalVer tag and source
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          python3 - "$TAG" >> "$GITHUB_OUTPUT" <<'PY'
+          import importlib.util, pathlib, sys
+          directory = pathlib.Path('.release-tools/scripts')
+          spec = importlib.util.spec_from_file_location('release_tools', directory / 'android-release.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          root = pathlib.Path.cwd()
+          version = module.VERSION.read_version((root / 'android/gradle.properties').read_text())
+          module.source_identity(root, version, tag=sys.argv[1])
+          print(f"name={version['versionName']}")
+          print(f"tag={version['tag']}")
+          PY
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;34.0.0"
+      - name: Download existing immutable APK if present
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          python3 .release-tools/scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$TAG" \
+            --fetch-existing "spunto-$VERSION.apk" --destination "spunto-$VERSION.apk" >> "$GITHUB_OUTPUT"
+      - name: Build and sign only a missing APK
+        if: steps.existing.outputs.existing != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_B64" && test -n "$STORE_PASSWORD"
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/spunto-signing.XXXXXX")
+          trap 'rm -rf "$signing_dir"' EXIT
+          umask 077
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$signing_dir/spunto-release.p12"
+          printf '%s\n' "$STORE_PASSWORD" > "$signing_dir/password.txt"
+          (cd android && ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleRelease)
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            --ks "$signing_dir/spunto-release.p12" --ks-key-alias spunto \
+            --ks-pass "file:$signing_dir/password.txt" \
+            --out "spunto-$VERSION.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Verify the actual preserved or rebuilt APK
+        env:
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "spunto-$VERSION.apk" > "$RUNNER_TEMP/android-verification.txt"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "spunto-$VERSION.apk" > "$RUNNER_TEMP/android-badging.txt"
+          # The trusted current public pin also covers historical source tags.
+          cp .release-tools/spec/android-release-certificate.sha256 "$RUNNER_TEMP/android-release-certificate.sha256"
+          python3 .release-tools/scripts/android-release.py --root "$GITHUB_WORKSPACE" --tag "$TAG" \
+            --certificate-sha256 "$RUNNER_TEMP/android-release-certificate.sha256" \
+            --apk "spunto-$VERSION.apk" --badging "$RUNNER_TEMP/android-badging.txt" --verification "$RUNNER_TEMP/android-verification.txt"
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.existing.outputs.existing != 'true'
+        with:
+          version: "0.13.0"
+      - name: Verify rebuilt APK reproduction before repairing the release
+        if: steps.existing.outputs.existing != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/apk-reproduction"
+          uv pip install --python "$RUNNER_TEMP/apk-reproduction/bin/python" -r .release-tools/scripts/reproducibility-requirements.txt
+          (cd android && ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleRelease)
+          "$RUNNER_TEMP/apk-reproduction/bin/python" .release-tools/scripts/check-apk-reproducibility.py \
+            "spunto-$VERSION.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            --apksigner "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+      - name: Add missing immutable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          # Repair does not change the Latest badge on an existing release.
+          # A recreated historical release is deliberately not marked Latest.
+          python3 .release-tools/scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$TAG" \
+            --title "$VERSION" --latest false \
+            --asset "spunto-$VERSION.apk" --asset "spunto-$VERSION.apk.sha256" --asset android-version.json

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Sign the assembled release APK with an owner-controlled key outside the repository.
+set -euo pipefail
+signing_dir=${1:?usage: sign-release /absolute/private/signing-directory}
+case "$signing_dir" in /*) ;; *) echo 'Use an absolute signing-directory path.' >&2; exit 2;; esac
+for signing_file in spunto-release.p12 keystore-password.txt; do
+  test -r "$signing_dir/$signing_file" || { echo "Missing signing file: $signing_file" >&2; exit 2; }
+done
+android_root=$(cd "$(dirname "$0")/.." && pwd)
+test -f "$android_root/app/build/outputs/apk/release/app-release-unsigned.apk" || {
+  echo 'Assemble :app:assembleRelease before signing.' >&2
+  exit 2
+}
+docker run --rm --network none --read-only --tmpfs /tmp --cap-drop ALL \
+  --security-opt no-new-privileges --platform linux/amd64 --user "$(id -u):$(id -g)" \
+  -v "$android_root/app/build/outputs/apk/release/app-release-unsigned.apk":/unsigned.apk:ro \
+  -v "$android_root/app/build/outputs/apk/release":/output \
+  -v "$signing_dir/spunto-release.p12":/signing/spunto-release.p12:ro \
+  -v "$signing_dir/keystore-password.txt":/signing/keystore-password.txt:ro \
+  spunto-build:latest bash -euc '
+    signer="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+    "$signer" sign --ks /signing/spunto-release.p12 --ks-key-alias spunto \
+      --ks-pass file:/signing/keystore-password.txt \
+      --out /output/spunto-release.apk /unsigned.apk
+    "$signer" verify --verbose --print-certs /output/spunto-release.apk
+  '
+python3 "$android_root/../scripts/check-apk-size.py" "$android_root/app/build/outputs/apk/release/spunto-release.apk"

@@ -1,0 +1,44 @@
+id = "email-in"
+name = "Email in"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+category = "capture"
+description = "Read-only capture from a configured mailbox and allowed sender addresses."
+entry = "spunto.plugins.email_in:plugin"
+default = "off"
+creates = "external"
+permissions = ["net.out:<configured>", "notes.create"]
+needs = [
+  {setting="allow_senders", reason="Needs a list of allowed senders"},
+  {setting="url", reason="Needs an imaps:// mailbox server"},
+  {setting="username", reason="Needs a mailbox username"},
+  {setting="password", reason="Set the mailbox password in the environment"},
+]
+
+[settings]
+type = "object"
+[settings.properties.url]
+type = "string"
+title = "Mailbox server (imaps://host:993)"
+maxLength = 500
+default = ""
+[settings.properties.username]
+type = "string"
+title = "Mailbox username"
+maxLength = 320
+default = ""
+[settings.properties.password]
+type = "string"
+title = "Mailbox password"
+x-secret = true
+[settings.properties.folder]
+type = "string"
+title = "Mailbox folder"
+maxLength = 128
+default = "INBOX"
+[settings.properties.allow_senders]
+type = "array"
+title = "Allowed sender addresses"
+items = {type="string", maxLength=320}
+default = []

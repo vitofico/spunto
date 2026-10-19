@@ -1,0 +1,6 @@
+First public release.
+Write and search offline, with Markdown, checklists and nested labels.
+A short first-run guide introduces the app; replay it from Settings.
+Pair Android with your server using a QR or one-use code.
+Choose from five themes, an optional app lock, revision history and Markdown export.
+Optional web plugins add context packs, a decision journal and AI features, with model choices in web Settings.

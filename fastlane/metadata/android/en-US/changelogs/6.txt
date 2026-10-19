@@ -1,0 +1,3 @@
+Separate Spunto Debug from the installed release app so development tests keep their own notes and settings.
+Prepare localized store information and real screenshots made with synthetic offline notes.
+Keep the release package and signing identity stable for future updates.

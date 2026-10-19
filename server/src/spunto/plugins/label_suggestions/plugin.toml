@@ -1,0 +1,38 @@
+id = "label-suggestions"
+name = "Label suggestions"
+version = "1.0.0"
+api = "0.4"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "Learn from past tag usage and suggest up to three labels after a save."
+entry = "spunto.plugins.label_suggestions:plugin"
+requires = ["ai.chat"]
+default = "on-with-ai"
+data_version = 1
+permissions = ["notes.read", "suggest", "ai.chat", "ai.embed"]
+
+[[contributes.commands]]
+id = "suggest-now"
+title = "Suggest labels"
+where = ["note-actions"]
+online = true
+
+[[contributes.views]]
+id = "unlabeled"
+title = "Unlabeled"
+filter = { no_labels = true }
+
+[settings]
+type = "object"
+additionalProperties = false
+[settings.properties.auto_accept_existing]
+type = "boolean"
+title = "Accept existing labels automatically"
+default = false
+[settings.properties.confidence_threshold]
+type = "number"
+title = "Minimum confidence for automatic acceptance"
+minimum = 0.7
+maximum = 1.0
+default = 0.9

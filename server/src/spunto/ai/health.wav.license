@@ -1,0 +1,21 @@
+SPDX-FileCopyrightText: 2026 vitofico
+SPDX-License-Identifier: AGPL-3.0-only
+
+Synthetic speech probe saying "test", generated for Spunto with eSpeak NG's
+built-in en-us formant voice. No human recording, MBROLA voice, downloaded model
+or operating-system voice is used.
+
+Generator: eSpeak NG 1.52.0 (Debian package 1.52.0+dfsg-5).
+Source and generator license: https://github.com/espeak-ng/espeak-ng (GPL-3.0-or-later).
+The utterance and generated probe are distributed under Spunto's project license.
+
+Generation commands (eSpeak NG and FFmpeg are development tools, not runtime
+dependencies):
+
+  espeak-ng -v en-us -s 175 -z -w health-source.wav "test"
+  ffmpeg -i health-source.wav -ac 1 -ar 16000 -c:a pcm_s16le -map_metadata -1 \
+    -fflags +bitexact -flags:a +bitexact health.wav
+
+The result is non-silent, mono, 16-bit PCM at 16 kHz, shorter than the health
+probe's one-second accounting limit. Generator/resampler versions may change
+the waveform; the checked-in file is the runtime input.

@@ -1,0 +1,10 @@
+id = "quick-capture"
+name = "Quick capture"
+version = "1.0.0"
+api = "0.4"
+kind = "device"
+category = "capture"
+description = "Open the composer from a home-screen widget or Quick Settings tile."
+requires = []
+default = "on"
+permissions = []

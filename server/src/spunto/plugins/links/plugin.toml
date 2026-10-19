@@ -1,0 +1,23 @@
+id = "links"
+name = "Links"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "Links through guarded owner actions."
+entry = "spunto.plugins.links:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read", "annotate", "suggest"]
+
+[[contributes.commands]]
+id = "link"
+title = "Link to note"
+where = ["note-actions"]
+online = true
+
+[contributes.panel]
+title = "Backlinks"
+mode = "stored"

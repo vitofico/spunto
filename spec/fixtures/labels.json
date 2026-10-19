@@ -1,0 +1,14 @@
+[
+  {"body": "#Idea #idea #project/spunto", "paths": ["Idea", "idea", "project/spunto"], "keys": ["idea", "idea", "project/spunto"]},
+  {"body": "(#work), [#workout] #perché #perche", "paths": ["work", "workout", "perché", "perche"], "keys": ["work", "workout", "perché", "perche"]},
+  {"body": "# Title\nfixed #948 https://x.y/#frag \\#escaped `#code` #real", "paths": ["real"], "keys": ["real"]},
+  {"body": "```python\n#hidden\n```\n#visible\n~~~\n#hidden\n~~~", "paths": ["visible"], "keys": ["visible"]},
+  {"body": "``a ` #code`` #outside", "paths": ["outside"], "keys": ["outside"]},
+  {"body": "`first\n#code\nlast`\n#ok", "paths": ["ok"], "keys": ["ok"]},
+  {"body": "#café #CAFÉ #Straße #STRASSE #日本語/東京", "paths": ["café", "CAFÉ", "Straße", "STRASSE", "日本語/東京"], "keys": ["café", "café", "strasse", "strasse", "日本語/東京"]},
+  {"body": "#a/b/c/d/e #a/b/c/d/e/f #a/ #/a #12abc #123/word", "paths": ["a/b/c/d/e", "12abc"], "keys": ["a/b/c/d/e", "12abc"]},
+  {"body": "#some_label #kebab-label #x.,;:!?)", "paths": ["some_label", "kebab-label", "x"], "keys": ["some_label", "kebab-label", "x"]},
+  {"body": "text#no {#no} /#no #yes", "paths": ["yes"], "keys": ["yes"]},
+  {"body": "```\n#unfinished", "paths": [], "keys": []},
+  {"body": "`unmatched #ordinary", "paths": ["ordinary"], "keys": ["ordinary"]}
+]

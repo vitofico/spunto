@@ -1,0 +1,31 @@
+id = "semantic-search"
+name = "Semantic search"
+version = "1.0.0"
+api = "0.4"
+kind = "server"
+runtime = "in-process"
+category = "recall"
+description = "Find notes by similar meaning in the search box."
+entry = "spunto.plugins.semantic_search:plugin"
+requires = ["ai.embed"]
+default = "on-with-ai"
+data_version = 1
+permissions = ["ai.embed"]
+
+[contributes.search_source]
+title = "Similar meaning"
+route = "search"
+
+[settings]
+type = "object"
+additionalProperties = false
+[settings.properties.model_family]
+type = "string"
+title = "Similarity calibration"
+enum = ["embeddinggemma", "bge-m3", "nomic-embed-text"]
+default = "embeddinggemma"
+[settings.properties.similarity_floor]
+type = "number"
+title = "Minimum similarity"
+minimum = 0.0
+maximum = 1.0

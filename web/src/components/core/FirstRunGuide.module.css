@@ -1,0 +1,90 @@
+.guide {
+  min-height: 100dvh;
+  padding: 24px clamp(16px, 5vw, 64px) 48px;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.header :global(.wordmark) {
+  font-size: clamp(1.25rem, 6vw, 1.875rem);
+  white-space: nowrap;
+}
+.header button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.guide button {
+  min-height: 44px;
+}
+.content {
+  width: 100%;
+  max-width: 38rem;
+  margin: auto;
+  padding-top: clamp(40px, 8vh, 88px);
+}
+.progress {
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+  margin: 0 0 20px;
+}
+.content h1 {
+  font: 400 clamp(2rem, 6vw, 3rem) / 1.2 var(--f-serif);
+  letter-spacing: -0.025em;
+  margin: 0 0 20px;
+}
+.content h1:focus {
+  outline: none;
+}
+.body {
+  font-size: 1rem;
+  line-height: 1.65;
+  margin: 0;
+  color: var(--ink-2);
+}
+.example {
+  margin: 28px 0;
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--raised);
+}
+.example figcaption {
+  font: 400 0.75rem / 1.5 var(--f-sans);
+  color: var(--ink-3);
+  margin-bottom: 12px;
+}
+.example > div {
+  font: 400 1.125rem / 1.6 var(--f-serif);
+}
+.example p {
+  margin: 0;
+}
+.example span {
+  color: var(--accent);
+}
+.example .query {
+  font: 400 0.875rem / 1.6 var(--f-sans);
+}
+.example .query + p {
+  margin-top: 12px;
+}
+.hint {
+  color: var(--ink-2);
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 36px;
+}

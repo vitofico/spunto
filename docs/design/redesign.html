@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spunto redesign mockups</title>
+<meta name="description" content="The small-core-plus-plugins redesign of spunto: slots, the plugin manager, AI plugins at work and three built-in themes, on Android and web, in light and dark. Companion to 05-redesign-ux.md.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..600&family=JetBrains+Mono:wght@400;500&family=Literata:ital,opsz,wght@0,7..72,400..600;1,7..72,400..600&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   0. Fonts and presentation board (not product UI). The board follows
+      the chosen theme so frames never sit on a clashing background.
+   ===================================================================== */
+:root{
+  --f-serif:"Literata", Georgia, "Times New Roman", serif;
+  --f-sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --dz:1; --pz:1;
+  color-scheme: light dark;
+}
+body{--pg-bg:#E9E5DE;--pg-panel:#F3F0EA;--pg-ink:#221D18;--pg-ink2:#5B544C;--pg-ink3:#665F57;--pg-rule:#D8D2C8;--pg-accent:#8E4325;--pg-bezel:#1D1A17}
+body[data-pack="ardesia"]{--pg-bg:#E3E7EC;--pg-panel:#EFF2F5;--pg-ink:#161B22;--pg-ink2:#4A5361;--pg-ink3:#56606E;--pg-rule:#D0D6DE;--pg-accent:#2B5791;--pg-bezel:#15181C}
+body[data-pack="salvia"]{--pg-bg:#E3E8E0;--pg-panel:#EEF1EB;--pg-ink:#1A1F1B;--pg-ink2:#4D564F;--pg-ink3:#58625A;--pg-rule:#CFD7CB;--pg-accent:#285F47;--pg-bezel:#161A17}
+@media (prefers-color-scheme: dark){
+  body{--pg-bg:#0E0D0B;--pg-panel:#161411;--pg-ink:#EAE5DD;--pg-ink2:#BDB6AE;--pg-ink3:#9D978F;--pg-rule:#2D2925;--pg-accent:#E7986F;--pg-bezel:#2A2622}
+  body[data-pack="ardesia"]{--pg-bg:#0B0D10;--pg-panel:#14171B;--pg-ink:#E4E8EE;--pg-ink2:#B3BAC5;--pg-ink3:#929AA6;--pg-rule:#272C33;--pg-accent:#8DB2EE;--pg-bezel:#262A30}
+  body[data-pack="salvia"]{--pg-bg:#0B0E0C;--pg-panel:#131714;--pg-ink:#E2E8E2;--pg-ink2:#B2BCB4;--pg-ink3:#919C94;--pg-rule:#262C28;--pg-accent:#7FC4A0;--pg-bezel:#252A26}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--pg-bg);color:var(--pg-ink);font:400 15px/1.55 var(--f-sans);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.pg-wrap{max-width:1720px;margin:0 auto;padding:0 32px}
+@media (max-width:640px){.pg-wrap{padding:0 16px}}
+.pg-head{padding:56px 0 28px}
+.pg-brand{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+.pg-mark{font:600 56px/1 var(--f-serif);letter-spacing:-.02em}
+.pg-mark .dot{color:var(--pg-accent)}
+.pg-tag{font:500 12px/1 var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--pg-ink3)}
+.pg-lede{max-width:48rem;margin:18px 0 0;font:400 18px/1.6 var(--f-serif);color:var(--pg-ink2)}
+.pg-lede code,.pg-sub code{font:400 .85em var(--f-mono)}
+.pg-bar{display:flex;flex-wrap:wrap;gap:14px 28px;align-items:center;margin-top:28px}
+.pg-ctl{display:flex;align-items:center;gap:10px;font:500 12px var(--f-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--pg-ink3)}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--pg-panel);box-shadow:0 0 0 1px var(--pg-rule)}
+.seg button{height:32px;padding:0 15px;border-radius:999px;font:500 13px var(--f-sans);letter-spacing:0;text-transform:none;color:var(--pg-ink2)}
+.seg button[aria-pressed="true"]{background:var(--pg-ink);color:var(--pg-bg)}
+.seg button:focus-visible,.pg-nav a:focus-visible{outline:2px solid var(--pg-accent);outline-offset:2px}
+.pg-nav{display:flex;flex-wrap:wrap;gap:8px 20px;font:500 13px var(--f-sans)}
+.pg-nav a{color:var(--pg-ink2);text-decoration:none}
+.pg-nav a:hover{color:var(--pg-ink)}
+.pg-legend{display:flex;flex-wrap:wrap;gap:10px 28px;list-style:none;margin:20px 0 0;padding:0;font:400 13px var(--f-sans);color:var(--pg-ink2)}
+.pg-legend li{display:flex;align-items:center;gap:10px}
+.lg-dash{display:inline-flex;align-items:center;height:24px;padding:0 10px;border:1px dashed var(--pg-accent);border-radius:999px;color:var(--pg-accent);font:500 12px var(--f-sans)}
+.lg-serif{font:400 20px/1 var(--f-serif)}
+.lg-sans{font:400 18px/1 var(--f-sans)}
+.lg-spark{width:18px;height:18px;color:var(--pg-accent)}
+.lg-co{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--pg-ink);color:var(--pg-bg);font:600 12px/1 var(--f-sans)}
+.pg-sec{padding:40px 0 24px;border-top:1px solid var(--pg-rule)}
+.pg-sec>.pg-wrap>h2{font:600 32px/1.15 var(--f-serif);letter-spacing:-.01em;margin:0}
+.pg-sec>.pg-wrap>p.pg-sub{max-width:46rem;margin:10px 0 32px;color:var(--pg-ink2);font-size:15px}
+.figs-phone{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(800px * var(--pz))),1fr));gap:56px 40px}
+body:not([data-show="both"]) .figs-phone{grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(390px * var(--pz))),1fr))}
+.figs-phone+.desk-figs,.desk-figs+.figs-phone{margin-top:64px}
+.fig{margin:0;display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-start}
+.pair{display:flex;gap:20px;flex-wrap:wrap}
+.pair.stack{flex-direction:column;gap:28px;width:100%}
+.cap{flex:1 1 240px;max-width:360px;padding-top:4px}
+.cap .id{font:500 11.5px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--pg-accent)}
+.cap h3{font:600 19px/1.3 var(--f-serif);margin:6px 0 6px}
+.cap p{margin:0;color:var(--pg-ink2);font-size:13.5px;line-height:1.55}
+.cap p+p{margin-top:8px}
+.cap .req{margin-top:8px;font:400 11.5px var(--f-mono);color:var(--pg-ink3)}
+.cap ol{margin:8px 0 0;padding-left:0;list-style:none;color:var(--pg-ink2);font-size:13.5px;line-height:1.5}
+.cap ol li{display:flex;gap:10px;align-items:flex-start;margin-top:6px}
+.cap ol .lg-co{flex:none;width:20px;height:20px;font-size:11px}
+.desk-figs{display:flex;flex-direction:column;gap:64px}
+.desk-figs .cap{max-width:58rem;flex-basis:100%}
+.tw{position:relative}
+.tw::after{content:attr(data-theme);position:absolute;top:-22px;left:2px;font:500 10.5px var(--f-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--pg-ink3)}
+body:not([data-show="both"]) .tw::after{display:none}
+body[data-show="light"] .tw[data-theme="dark"],body[data-show="dark"] .tw[data-theme="light"]{display:none}
+body[data-show="both"] .pair{padding-top:22px}
+/* annotation markers drawn on top of frames: presentation only */
+.co{position:absolute;z-index:6;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--pg-ink);color:var(--pg-bg);font:600 12px/1 var(--f-sans);box-shadow:0 0 0 3px var(--pg-bg);pointer-events:none}
+.co.in{position:relative;display:inline-grid;flex:none;margin-left:10px}
+
+/* =====================================================================
+   1. Theme packs (05-redesign-ux.md §8). Every frame carries
+      data-pack and data-theme; product UI uses only these tokens.
+   ===================================================================== */
+[data-theme="light"]{
+  --kb-bg:#E8E4DE; --kb-key:#FCFBF8; --kb-key2:#D7D1C8; --kb-ink:#221D18;
+  --scrim:rgb(var(--sh) / .32);
+  --state-hover:rgb(var(--sh) / .05); --state-press:rgb(var(--sh) / .09);
+  --e1:0 0 0 1px var(--rule);
+  --e2:0 1px 2px rgb(var(--sh) / .06),0 8px 24px rgb(var(--sh) / .08);
+  --e3:0 2px 6px rgb(var(--sh) / .08),0 24px 64px rgb(var(--sh) / .18);
+  color-scheme:light;
+}
+[data-theme="dark"]{
+  --scrim:rgb(0 0 0 / .5);
+  --state-hover:rgb(var(--sh) / .06); --state-press:rgb(var(--sh) / .1);
+  --e1:0 0 0 1px var(--rule);
+  --e2:inset 0 1px 0 rgb(255 255 255 / .04),0 1px 2px rgb(0 0 0 / .4),0 8px 24px rgb(0 0 0 / .35);
+  --e3:inset 0 1px 0 rgb(255 255 255 / .04),0 2px 6px rgb(0 0 0 / .5),0 24px 64px rgb(0 0 0 / .55);
+  color-scheme:dark;
+}
+/* Carta: warm paper, terracotta (the 03-design.md theme, unchanged) */
+[data-pack="carta"][data-theme="light"]{
+  --paper:#F8F5F0; --raised:#FEFDFA; --sunken:#F0EDE6;
+  --ink:#221D18; --ink-2:#5B544C; --ink-3:#6E6860;
+  --rule:#E3DFD8; --rule-strong:#CCC7BE; --field:#8A857E;
+  --accent:#9F4C2A; --accent-strong:#883A1D; --accent-soft:#FAE9DE; --on-accent:#FEF9F4;
+  --highlight:#F5E4B0; --danger:#AF2934; --warn:#CD9130; --sh:34 29 24;
+  --chrome:#E4DFD7; --chrome-pill:#F8F5F0;
+}
+[data-pack="carta"][data-theme="dark"]{
+  --paper:#171412; --raised:#211D1A; --sunken:#100E0C;
+  --ink:#EAE5DD; --ink-2:#BDB6AE; --ink-3:#9D978F;
+  --rule:#2D2925; --rule-strong:#413C37; --field:#736E67;
+  --accent:#E7986F; --accent-strong:#F6B38B; --accent-soft:#3F271D; --on-accent:#24140C;
+  --highlight:#5F4A1A; --danger:#ED7473; --warn:#E1AD57; --sh:234 229 221;
+  --chrome:#0C0B0A; --chrome-pill:#1C1916;
+}
+/* Ardesia: cool slate, ink blue */
+[data-pack="ardesia"][data-theme="light"]{
+  --paper:#F4F6F8; --raised:#FCFDFE; --sunken:#EBEEF2;
+  --ink:#161B22; --ink-2:#4A5361; --ink-3:#5E6775;
+  --rule:#DEE2E8; --rule-strong:#C5CBD4; --field:#7D8592;
+  --accent:#2F5E9E; --accent-strong:#234B82; --accent-soft:#E3EBF7; --on-accent:#F7FAFE;
+  --highlight:#F2E5A8; --danger:#B4232F; --warn:#C98A1E; --sh:22 27 34;
+  --chrome:#DFE3E9; --chrome-pill:#F4F6F8;
+}
+[data-pack="ardesia"][data-theme="dark"]{
+  --paper:#13161A; --raised:#1C2026; --sunken:#0D0F12;
+  --ink:#E4E8EE; --ink-2:#B3BAC5; --ink-3:#929AA6;
+  --rule:#272C33; --rule-strong:#3A4049; --field:#6C7480;
+  --accent:#8DB2EE; --accent-strong:#B0CBF5; --accent-soft:#1E2B40; --on-accent:#0F1A2B;
+  --highlight:#57481A; --danger:#F07A7A; --warn:#E0AE55; --sh:228 232 238;
+  --chrome:#0A0C0E; --chrome-pill:#1A1D22;
+}
+/* Salvia: sage paper, forest green */
+[data-pack="salvia"][data-theme="light"]{
+  --paper:#F3F5F0; --raised:#FBFCF9; --sunken:#E9EDE5;
+  --ink:#1A1F1B; --ink-2:#4D564F; --ink-3:#616A63;
+  --rule:#DCE1D8; --rule-strong:#C3CABF; --field:#7E877F;
+  --accent:#2D6A4F; --accent-strong:#22553F; --accent-soft:#DDEEE3; --on-accent:#F6FBF7;
+  --highlight:#EFE3A8; --danger:#B0282F; --warn:#C08A2A; --sh:26 31 27;
+  --chrome:#DEE3DA; --chrome-pill:#F3F5F0;
+}
+[data-pack="salvia"][data-theme="dark"]{
+  --paper:#121614; --raised:#1B201D; --sunken:#0C0F0D;
+  --ink:#E2E8E2; --ink-2:#B2BCB4; --ink-3:#919C94;
+  --rule:#262C28; --rule-strong:#39413B; --field:#6B756D;
+  --accent:#7FC4A0; --accent-strong:#A6DABD; --accent-soft:#1C3327; --on-accent:#0D1F15;
+  --highlight:#4F4A1C; --danger:#EE7C78; --warn:#DDB05A; --sh:226 232 226;
+  --chrome:#090B0A; --chrome-pill:#191D1A;
+}
+/* Type tokens per platform (web px, Android sp drawn 1:1) */
+.desk{--fs-body:17px;--lh-body:27px;--fs-bsm:15px;--lh-bsm:23px;--fs-head:19px;--lh-head:27px;--fs-title:24px;--lh-title:31px;--fs-ui:14px;--fs-meta:12.5px;--fs-over:11.5px;--gutter:64px;--fs-gen:16px;--lh-gen:25px}
+.phone{--fs-body:16px;--lh-body:25px;--fs-bsm:15px;--lh-bsm:22px;--fs-head:18px;--lh-head:25px;--fs-title:22px;--lh-title:28px;--fs-ui:14px;--fs-meta:12px;--fs-over:11px;--fs-gen:15px;--lh-gen:23px}
+
+/* =====================================================================
+   2. Icons
+   ===================================================================== */
+.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.i.s16{width:16px;height:16px}.i.s14{width:14px;height:14px}.i.s18{width:18px;height:18px}.i.s24{width:24px;height:24px}
+.spk{color:var(--accent)}
+
+/* =====================================================================
+   3. Shared product components (from mockups.html, unchanged)
+   ===================================================================== */
+.body{font-family:var(--f-serif);font-size:var(--fs-body);line-height:var(--lh-body);color:var(--ink);font-weight:400}
+.body p{margin:0}
+.body p+p,.body p+ul,.body ul+p,.body p+.tasks{margin-top:.6em}
+.body ul{margin:.5em 0 0;padding-left:1.15em}
+.body ul.tasks{padding-left:0}
+.body em{font-style:italic}
+.body a,.ln{color:inherit;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px;text-decoration-thickness:1px}
+.body.sm{font-size:var(--fs-bsm);line-height:var(--lh-bsm)}
+.lbl{color:var(--accent)}
+.lblrow{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:0;margin-top:6px;font:400 calc(var(--fs-body) - 2px)/22px var(--f-serif);color:var(--accent)}
+.over{font:500 var(--fs-over)/16px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font:400 var(--fs-meta)/16px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums;margin-top:8px}
+.meta .src{display:inline-flex;align-items:center;gap:3px}
+.agent{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 6px;border-radius:999px;background:var(--sunken);color:var(--ink-2);font:500 11.5px/1 var(--f-sans);white-space:nowrap}
+.agent .spk{color:var(--accent)}
+.ring{display:inline-block;width:7px;height:7px;border-radius:50%;box-shadow:inset 0 0 0 1.4px var(--ink-3)}
+.sugg{position:relative;display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin-top:12px;white-space:nowrap}
+.prop{display:inline-flex;align-items:center;gap:3px;height:26px;padding:0 11px 0 9px;border:1px dashed var(--accent);border-radius:999px;color:var(--accent);font:500 var(--fs-meta)/1 var(--f-sans);white-space:nowrap}
+.prop .new{font-weight:400;color:var(--ink-3);margin-left:5px}
+.prop .i{width:14px;height:14px;margin-right:2px}
+.prop.hover{background:var(--state-hover)}
+.more{display:inline-flex;align-items:center;height:26px;padding:0 9px;border-radius:999px;background:var(--sunken);color:var(--ink-2);font:500 var(--fs-meta)/1 var(--f-sans);font-variant-numeric:tabular-nums}
+.dismiss{font:400 var(--fs-meta)/1 var(--f-sans);color:var(--ink-3);padding:0 4px}
+mark{background:var(--highlight);color:var(--ink);border-radius:3px;padding:0 2px;margin:0 -1px}
+.tasks{list-style:none;margin:.5em 0 0;padding:0}
+.tasks li{display:flex;gap:11px;align-items:flex-start}
+.tasks li+li{margin-top:2px}
+.cb{flex:none;width:16px;height:16px;margin-top:calc((var(--lh-body) - 16px)/2);border:1.5px solid var(--ink-2);border-radius:4px;display:grid;place-items:center}
+.cb.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cb .i{width:12px;height:12px;stroke-width:2.4}
+.tasks li.done{color:var(--ink-3)}
+.caret{display:inline-block;width:2px;height:1.15em;margin:0 1px;vertical-align:-.2em;border-radius:1px;background:var(--accent)}
+.ph{font-style:italic;color:var(--ink-3)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 15px;border-radius:999px;font:500 14px/1 var(--f-sans);white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.tonal{background:var(--accent-soft);color:var(--accent-strong)}
+.btn.outline{box-shadow:inset 0 0 0 1px var(--field);color:var(--ink)}
+.btn.ghost{color:var(--ink-2)}
+.btn.text{color:var(--accent);padding:0 8px}
+.btn.lg{height:40px;padding:0 20px}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:5px;background:var(--paper);box-shadow:inset 0 0 0 1px var(--rule-strong),inset 0 -1px 0 var(--rule-strong);font:500 11px/1 var(--f-sans);color:var(--ink-2)}
+.hint{display:inline-flex;align-items:center;gap:6px;font:400 12.5px/1 var(--f-sans);color:var(--ink-3)}
+.spacer{flex:1}
+.scrim{position:absolute;inset:0;background:var(--scrim)}
+.cite{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;margin:0 1px 0 2px;border-radius:5px;background:var(--accent-soft);color:var(--accent-strong);font:600 10.5px/1 var(--f-sans);vertical-align:2px}
+
+/* =====================================================================
+   4. Android phone
+   ===================================================================== */
+.phone{zoom:var(--pz);width:380px;height:800px;flex:none;padding:10px;border-radius:44px;background:var(--pg-bezel);
+  box-shadow:0 0 0 1px rgb(0 0 0 / .25),0 30px 60px -20px rgb(0 0 0 / .35),0 12px 24px -12px rgb(0 0 0 / .25)}
+.scr{position:relative;width:360px;height:780px;border-radius:34px;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--f-sans);display:flex;flex-direction:column}
+.scr-body{position:absolute;inset:0;display:flex;flex-direction:column}
+.sb{flex:none;position:relative;height:34px;display:flex;align-items:center;justify-content:space-between;padding:2px 22px 0 26px;font:500 13px/1 var(--f-sans);color:var(--ink);font-variant-numeric:tabular-nums}
+.sb::before{content:"";position:absolute;left:50%;top:10px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#0A0908}
+.sb .ic{display:flex;gap:4px;align-items:center}
+.sb .ic .i{width:14px;height:14px}
+.appbar{flex:none;height:56px;display:flex;align-items:center;padding:0 4px 0 20px;gap:2px}
+.ab-title{display:flex;align-items:center;gap:4px;font:500 19px/1 var(--f-sans);letter-spacing:-.01em;color:var(--ink)}
+.ab-title .i{color:var(--ink-2)}
+.ib{width:48px;height:48px;display:grid;place-items:center;color:var(--ink-2);border-radius:50%}
+.ib .i{width:22px;height:22px}
+.p-comp{margin:4px 12px 6px;padding:14px 16px 16px;border-radius:16px;background:var(--raised);box-shadow:0 0 0 1px var(--rule-strong),var(--e2)}
+.p-comp.mini{padding:12px 16px;box-shadow:var(--e1)}
+.p-review{position:relative;padding:6px 20px 2px;font:400 13px/20px var(--f-sans);color:var(--ink-2)}
+.p-review b{font-weight:500;color:var(--accent)}
+.p-day{padding:20px 20px 0}
+.p-entry{position:relative;padding:12px 20px 16px}
+.p-entry+.p-entry{border-top:1px solid var(--rule)}
+.fab{position:absolute;right:16px;bottom:40px;width:56px;height:56px;border-radius:16px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;box-shadow:var(--e2)}
+.fab .i{width:24px;height:24px}
+.gest{position:absolute;left:0;right:0;bottom:0;height:22px;display:grid;place-items:center;pointer-events:none}
+.gest::after{content:"";width:108px;height:4px;border-radius:2px;background:var(--ink);opacity:.38}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--raised);border-radius:28px 28px 0 0;box-shadow:var(--e3)}
+.handle{width:32px;height:4px;margin:10px auto 6px;border-radius:2px;background:var(--rule-strong)}
+.row{display:flex;align-items:center;gap:16px;height:48px;padding:0 24px;font:400 15px/1 var(--f-sans);color:var(--ink)}
+.row .i{color:var(--ink-2)}
+
+/* =====================================================================
+   5. Desktop web
+   ===================================================================== */
+.desk{zoom:var(--dz);width:1200px;height:800px;flex:none;border-radius:12px;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--f-sans);
+  box-shadow:0 0 0 1px rgb(0 0 0 / .14),0 40px 80px -30px rgb(0 0 0 / .35),0 16px 32px -16px rgb(0 0 0 / .2);display:flex;flex-direction:column}
+.desk.short{height:640px}
+.desk.tall{height:960px}
+.desk.xtall{height:1360px}
+.chrome{flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--chrome)}
+.chrome .tl{width:12px;height:12px;border-radius:50%;background:color-mix(in srgb,var(--ink) 18%,transparent)}
+.chrome .url{margin:0 auto;display:flex;align-items:center;gap:8px;width:440px;height:26px;padding:0 12px;border-radius:8px;background:var(--chrome-pill);font:400 12.5px/1 var(--f-sans);color:var(--ink-2);justify-content:center}
+.chrome .url .i{width:12px;height:12px;color:var(--ink-3)}
+.app{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:248px minmax(0,1fr)}
+.rail{background:var(--sunken);padding:18px 12px 14px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.wm{font:600 22px/1 var(--f-serif);letter-spacing:-.015em;color:var(--ink);padding:6px 10px 18px}
+.wm .dot{color:var(--accent)}
+.sbtn{display:flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 10px;margin-bottom:14px;border-radius:10px;background:var(--paper);box-shadow:var(--e1);font:400 14px/1 var(--f-sans);color:var(--ink-3)}
+.sbtn .i{width:17px;height:17px}
+.ri{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:8px;font:400 14px/1 var(--f-sans);color:var(--ink-2)}
+.ri .i{width:18px;height:18px;color:var(--ink-3)}
+.ri .n{margin-left:auto;font:400 12.5px/1 var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ri.on{background:var(--accent-soft);color:var(--accent-strong);font-weight:500}
+.ri.on .i,.ri.on .n{color:var(--accent-strong)}
+.ri.l1{padding-left:34px}
+.ri .chev{width:14px;height:14px;margin:0 -2px;color:var(--ink-3)}
+.ri .nc{width:14px;margin:0 -2px}
+.rsec{display:flex;align-items:center;margin:20px 10px 6px}
+.rfoot{margin-top:auto;padding-top:12px;border-top:1px solid var(--rule)}
+.rstat{padding:8px 10px 0;font:400 12px/1 var(--f-sans);color:var(--ink-3)}
+.main{position:relative;min-height:0;overflow:hidden}
+.col{width:680px;margin:0 auto;padding:36px 0 0}
+.d-comp{margin-left:calc(var(--gutter) - 17px);width:calc(576px + 34px);padding:15px 16px 10px;border-radius:14px;background:var(--raised);box-shadow:0 0 0 1px var(--rule-strong),var(--e2)}
+.d-comp .body{min-height:54px}
+.tools{display:flex;align-items:center;gap:2px;margin:10px -6px 0}
+.tool{width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:var(--ink-2)}
+.tool .i{width:19px;height:19px}
+.d-review{position:relative;padding:14px 0 0 var(--gutter);font:400 13px/20px var(--f-sans);color:var(--ink-2)}
+.d-review b{font-weight:500;color:var(--accent)}
+.day{padding:30px 0 2px var(--gutter)}
+.entry{position:relative;display:grid;grid-template-columns:var(--gutter) minmax(0,1fr) 40px;padding:16px 0 18px}
+.entry+.entry{background:linear-gradient(var(--rule),var(--rule)) no-repeat var(--gutter) 0/576px 1px}
+.entry .t{padding-top:5px;font:400 12.5px/16px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.entry .acts{display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:1px;color:var(--ink-3)}
+.measure{max-width:576px}
+.pal{position:absolute;left:50%;top:64px;width:640px;margin-left:-320px;background:var(--raised);border-radius:20px;box-shadow:var(--e3);overflow:hidden;z-index:3}
+.pal.wide{width:720px;margin-left:-360px;top:48px}
+.pal-in{display:flex;align-items:center;gap:12px;height:58px;padding:0 18px;border-bottom:1px solid var(--rule);font:400 17px/1 var(--f-sans);color:var(--ink)}
+.pal-in .i{color:var(--ink-3)}
+.pal-sec{padding:14px 18px 6px}
+.pr{display:flex;gap:14px;align-items:flex-start;padding:10px 18px}
+.pr.sel{background:var(--state-hover);box-shadow:inset 2px 0 0 var(--accent)}
+.pr .ico{flex:none;width:28px;height:28px;margin-top:1px;border-radius:8px;display:grid;place-items:center;background:var(--sunken);color:var(--ink-2)}
+.pr .ico.ask{background:var(--accent-soft);color:var(--accent)}
+.pr .ico .i{width:17px;height:17px}
+.pr .meta{margin-top:5px}
+.pal-foot{display:flex;align-items:center;gap:18px;padding:11px 18px;border-top:1px solid var(--rule);font:400 12px/1 var(--f-sans);color:var(--ink-3)}
+.pal-foot span{display:inline-flex;align-items:center;gap:6px}
+.answer{font:400 15.5px/25px var(--f-sans);color:var(--ink)}
+.answer p{margin:0}
+.answer p+p{margin-top:10px}
+.dlg{position:absolute;left:50%;top:110px;width:500px;margin-left:-250px;padding:24px;border-radius:20px;background:var(--raised);box-shadow:var(--e3);z-index:3}
+.dlg h4{margin:0 0 4px;font:500 18px/1.3 var(--f-sans);color:var(--ink)}
+
+/* =====================================================================
+   6. Redesign components (05-redesign-ux.md §3)
+   ===================================================================== */
+/* Generated notes: a model wrote them, so they are set in the sans */
+.gen{font:400 var(--fs-gen)/var(--lh-gen) var(--f-sans);color:var(--ink)}
+.gen p{margin:0}
+.gen p+p,.gen p+ul,.gen ul+p,.gen ul+h6,.gen p+h6{margin-top:.6em}
+.gen h5{margin:0 0 .25em;font:600 calc(var(--fs-gen) + 2px)/1.35 var(--f-sans);letter-spacing:-.01em;color:var(--ink)}
+.gen h6{margin:1em 0 .2em;font:500 var(--fs-over)/16px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.gen ul{margin:.3em 0 0;padding-left:1.1em}
+.gen li+li{margin-top:.35em}
+.gen li::marker{color:var(--ink-3)}
+.voice{display:flex;align-items:center;gap:8px;margin-top:14px;font:400 var(--fs-meta)/16px var(--f-sans);color:var(--ink-3)}
+/* Note panel: web margin, Android "About this note" sheet */
+.np-sec{border-top:1px solid var(--rule)}
+.np-h{display:flex;align-items:center;gap:8px;min-height:40px}
+.np-h .over{color:var(--ink-2)}
+.np-h .hn{font:400 12.5px/1 var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.np-h .chv{margin-left:auto;width:16px;height:16px;color:var(--ink-3)}
+.np-body{padding:0 0 16px}
+.np-attr{margin-top:10px;font:400 11.5px/16px var(--f-sans);color:var(--ink-3)}
+.np-t{font:500 14px/20px var(--f-sans);color:var(--ink)}
+.np-p{margin-top:6px;font:400 13.5px/20px var(--f-sans);color:var(--ink-2)}
+.ref{padding:9px 0;border-top:1px solid var(--rule)}
+.ref:first-child{border-top:0}
+.colophon{display:flex;align-items:center;gap:10px;margin:20px 20px 0;padding:14px 0;border-top:1px solid var(--rule);font:400 13px/18px var(--f-sans);color:var(--ink-3)}
+.colophon b{font-weight:500;color:var(--ink-2)}
+.colophon .i{color:var(--ink-3)}
+.srow{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 24px;font:400 15px/1.3 var(--f-sans);color:var(--ink)}
+.srow .by{margin-left:auto;font:400 12px var(--f-sans);color:var(--ink-3)}
+.srow .i{color:var(--ink-2)}
+.srow .i.spk{color:var(--accent)}
+/* Palette command rows */
+.cmd{display:flex;align-items:center;gap:12px;height:42px;padding:0 18px;font:400 14.5px/1 var(--f-sans);color:var(--ink)}
+.cmd.sel{background:var(--state-hover);box-shadow:inset 2px 0 0 var(--accent)}
+.cmd .ico{flex:none;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--sunken);color:var(--ink-2)}
+.cmd .ico .i{width:16px;height:16px}
+.cmd .ico.m{background:var(--accent-soft);color:var(--accent)}
+.cmd .by{margin-left:auto;font:400 12.5px/1 var(--f-sans);color:var(--ink-3)}
+.cmd .kbd{margin-left:10px}
+/* Switch */
+.tg{position:relative;flex:none;display:inline-block;width:36px;height:20px;border-radius:999px;box-shadow:inset 0 0 0 1.5px var(--field)}
+.tg::after{content:"";position:absolute;left:4px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--field)}
+.tg.on{background:var(--accent);box-shadow:none}
+.tg.on::after{left:19px;top:3px;width:14px;height:14px;background:var(--on-accent)}
+.phone .tg{width:52px;height:32px;box-shadow:inset 0 0 0 2px var(--field)}
+.phone .tg::after{left:8px;top:8px;width:16px;height:16px}
+.phone .tg.on{box-shadow:none}
+.phone .tg.on::after{left:24px;top:4px;width:24px;height:24px}
+/* Plugin manager */
+.plg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 24px;align-items:center;padding:13px 0;border-top:1px solid var(--rule)}
+.plg .nm{font:500 14.5px/20px var(--f-sans);color:var(--ink)}
+.plg .ds{font:400 13.5px/20px var(--f-sans);color:var(--ink-2)}
+.plg .fx{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:3px;font:400 12px/16px var(--f-sans);color:var(--ink-3)}
+.plg .fx span{display:inline-flex;align-items:center;gap:5px}
+.plg .fx .i{width:13px;height:13px}
+.plg .ctl{display:flex;align-items:center;gap:16px}
+.plg .ctl .lnk{font:500 13px var(--f-sans);color:var(--accent)}
+.plg .ctl .na{font:400 12.5px var(--f-sans);color:var(--ink-3)}
+.phone .plg{padding:12px 20px 12px 20px;gap:4px 16px}
+.phone .plg .nm{font-size:15px}
+.phone .plg .ds{font-size:13px;line-height:18px}
+.grp{display:flex;align-items:baseline;gap:10px;padding:26px 0 8px}
+.grp .hn{font:400 12px var(--f-sans);color:var(--ink-3)}
+.tag{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;background:var(--sunken);font:500 11px/1 var(--f-sans);color:var(--ink-2);margin-left:8px;vertical-align:1px}
+.sgc{display:inline-flex;padding:3px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--rule-strong);width:max-content}
+.sgc span{display:grid;place-items:center;height:28px;padding:0 13px;border-radius:999px;font:500 13px/1 var(--f-sans);color:var(--ink-2);white-space:nowrap}
+.sgc span.on{background:var(--accent-soft);color:var(--accent-strong)}
+/* Permissions */
+.perm{display:flex;gap:14px;align-items:flex-start;padding:8px 0}
+.perm>.i{flex:none;margin-top:1px;color:var(--ink-2)}
+.perm div{font:400 14px/20px var(--f-sans);color:var(--ink)}
+.perm .sub{display:block;font:400 12.5px/17px var(--f-sans);color:var(--ink-3);margin-top:1px}
+.where{display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--sunken);font:400 13.5px/20px var(--f-sans);color:var(--ink-2)}
+.where b{font-weight:500;color:var(--ink)}
+.where .i{flex:none;margin-top:1px;color:var(--ink-2)}
+/* Auto-generated settings form */
+.fsec{padding:26px 0 4px}
+.frow{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;align-items:center;padding:12px 0;border-top:1px solid var(--rule)}
+.frow .fl{font:400 14px/20px var(--f-sans);color:var(--ink)}
+.frow .fh{font:400 12.5px/17px var(--f-sans);color:var(--ink-3);margin-top:2px}
+.frow .fv{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pick{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 10px 0 12px;border-radius:10px;box-shadow:inset 0 0 0 1px var(--field);font:400 14px/1 var(--f-sans);color:var(--ink);width:max-content}
+.pick .i{width:16px;height:16px;color:var(--ink-3)}
+.lchip{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 6px 0 11px;border-radius:999px;background:var(--sunken);font:400 14px/1 var(--f-serif);color:var(--accent)}
+.lchip .i{width:14px;height:14px;color:var(--ink-3)}
+.addl{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--rule-strong);font:400 13px/1 var(--f-sans);color:var(--ink-2)}
+/* Theme picker */
+.tcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.tcard{border-radius:16px;padding:6px;box-shadow:inset 0 0 0 1px var(--rule-strong)}
+.tcard.sel{box-shadow:inset 0 0 0 2px var(--accent)}
+.tcard .tn{display:flex;align-items:center;gap:8px;padding:10px 6px 2px;font:500 14px/1.2 var(--f-sans);color:var(--ink)}
+.tcard .tn .i{margin-left:auto;width:18px;height:18px;color:var(--accent);visibility:hidden}
+.tcard.sel .tn .i{visibility:visible}
+.tcard .td{padding:2px 6px 6px;font:400 12.5px/17px var(--f-sans);color:var(--ink-3)}
+.mini{border-radius:11px;background:var(--paper);color:var(--ink);padding:12px 12px 12px;box-shadow:inset 0 0 0 1px var(--rule)}
+.mini .mt{font:400 10.5px/14px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.mini .mb{font:400 13.5px/19px var(--f-serif);color:var(--ink);margin-top:3px}
+.mini .ml{font:400 12.5px/16px var(--f-serif);color:var(--accent);margin-top:5px}
+.mini .mp{display:inline-flex;align-items:center;height:20px;padding:0 8px;border:1px dashed var(--accent);border-radius:999px;font:500 10.5px/1 var(--f-sans);color:var(--accent);margin-top:8px}
+.mini .ms{display:flex;gap:5px;margin-top:10px}
+.mini .ms i{display:block;width:16px;height:16px;border-radius:5px;box-shadow:inset 0 0 0 1px rgb(127 127 127 / .25)}
+.phone .tcards{gap:8px}
+.phone .tcard{padding:4px;border-radius:14px}
+.phone .mini{padding:9px 9px 10px}
+.phone .mini .mb{font-size:12px;line-height:16px}
+.phone .mini .ml{font-size:11px}
+.phone .tcard .tn{font-size:13px;padding:8px 4px 2px}
+.phone .tcard .td{display:none}
+/* Diff (Tidy): deletions struck, insertions dashed because they are proposed */
+.df-del{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--ink-3)}
+.df-ins{color:var(--accent);text-decoration:underline dashed var(--accent);text-underline-offset:4px;text-decoration-thickness:1px}
+/* Daily slip: the only boxed card in a timeline */
+.slip{position:relative;margin:22px 0 0 calc(var(--gutter) - 17px);width:calc(576px + 34px);padding:14px 16px 16px;border-radius:14px;background:var(--sunken)}
+.slip-h{display:flex;align-items:center;gap:2px;margin:-4px -8px 0 0}
+.phone .slip{margin:10px 12px 4px;width:auto;padding:12px 16px 14px}
+/* Review queue cards (proposals, not notes, so they may be boxed) */
+.rv-g{display:flex;align-items:baseline;gap:8px;padding:18px 20px 8px}
+.rv-g .hn{font:400 12px var(--f-sans);color:var(--ink-3)}
+.rv{margin:0 12px 10px;padding:14px 16px 12px;border-radius:16px;background:var(--raised);box-shadow:var(--e1)}
+.rv .q{font:400 14.5px/21px var(--f-sans);color:var(--ink)}
+.rv .q .lbl{font-family:var(--f-serif)}
+.rv .acts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px -6px 0}
+.rv .acts .btn{height:32px;padding:0 12px;font-size:13.5px}
+.rv .pair-n{margin-top:10px;border-left:2px solid var(--rule-strong);padding-left:12px}
+.rv .pair-n+.pair-n{margin-top:8px}
+.step{display:inline-flex;align-items:center;height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px var(--field);font:400 14px/1 var(--f-sans);color:var(--ink);font-variant-numeric:tabular-nums}
+.step span{display:grid;place-items:center;min-width:34px;height:34px;color:var(--ink-2)}
+.step b{font-weight:400;min-width:28px;text-align:center;color:var(--ink)}
+.envrow{display:flex;align-items:center;gap:8px;font:400 13px/18px var(--f-sans);color:var(--ink-2)}
+.envrow code{font:400 12px/16px var(--f-mono);color:var(--ink);background:var(--sunken);border-radius:6px;padding:2px 6px}
+.prow{padding:12px 0;border-top:1px solid var(--rule)}
+.prow .fl{font:400 15px/20px var(--f-sans);color:var(--ink)}
+.prow .fh{font:400 12.5px/17px var(--f-sans);color:var(--ink-3);margin-top:2px}
+.prow .fv{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.lockd{display:inline-flex;align-items:center;gap:6px;font:400 12.5px var(--f-sans);color:var(--ink-3)}
+/* Generated-note entry on the web timeline */
+.entry .gen h5{margin-bottom:.15em}
+/* Android action sheet */
+.qa{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 16px 14px}
+.qa div{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 0 11px;border-radius:16px;background:var(--sunken);font:500 12px/1 var(--f-sans);color:var(--ink-2)}
+.qa .i{width:22px;height:22px}
+
+/* =====================================================================
+   7. Theme specimens and token table (board)
+   ===================================================================== */
+.spx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,500px),1fr));gap:28px}
+.spx-col h3{font:600 22px/1.2 var(--f-serif);margin:0 0 4px}
+.spx-col p{margin:0 0 14px;color:var(--pg-ink2);font-size:13.5px}
+.spx-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+body:not([data-show="both"]) .spx-pair{grid-template-columns:1fr}
+body[data-show="light"] .spx[data-theme="dark"],body[data-show="dark"] .spx[data-theme="light"]{display:none}
+.spx{border-radius:16px;background:var(--paper);color:var(--ink);padding:18px;box-shadow:0 0 0 1px rgb(0 0 0 / .08)}
+.spx .over{margin-bottom:8px}
+.spx .sw{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:14px}
+.spx .sw i{display:block;height:26px;border-radius:7px;box-shadow:inset 0 0 0 1px rgb(127 127 127 / .22)}
+.spx .swl{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:4px;font:400 10px/1.2 var(--f-mono);color:var(--ink-3)}
+.ttab{width:100%;border-collapse:collapse;font:400 13px/1.4 var(--f-sans);color:var(--pg-ink2);background:var(--pg-panel);border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px var(--pg-rule)}
+.ttab th{font:500 11px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--pg-ink3);text-align:left;padding:12px 14px;border-bottom:1px solid var(--pg-rule)}
+.ttab td{padding:8px 14px;border-top:1px solid var(--pg-rule);font-variant-numeric:tabular-nums;vertical-align:middle}
+.ttab td.tk{font:500 12px var(--f-mono);color:var(--pg-ink)}
+.ttab .sq{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:8px;box-shadow:inset 0 0 0 1px rgb(127 127 127 / .3)}
+.ttab .hx{font:400 12px var(--f-mono)}
+.ttab .ok{color:var(--pg-ink)}
+.tbl-wrap{overflow-x:auto;margin-top:28px}
+.pg-foot{padding:40px 0 64px;color:var(--pg-ink3);font-size:13px;border-top:1px solid var(--pg-rule)}
+</style>
+</head>
+<body data-show="both" data-pack="carta">
+
+<!-- Icon sprite (stand-ins for Material Symbols Rounded, weight 300) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<defs>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.5 19.5h3.8L19 8.8a2 2 0 0 0 0-2.8l-1-1a2 2 0 0 0-2.8 0L4.5 15.7z"/><path d="M13.5 6.5l4 4"/></symbol>
+<symbol id="i-hash" viewBox="0 0 24 24"><path d="M9.8 4.5l-2 15M16.2 4.5l-2 15M5.5 9.3h14M4.5 14.7h14"/></symbol>
+<symbol id="i-cbox" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20 15.5l-4.5-4.5L7 19.5"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6M10 4v5.5L7 13.5h10L14 9.5V4M12 13.5V20"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4" rx="1.2"/><path d="M5 8.5v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V8.5M10 12.5h4"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.9 12.5h9.2L17.5 7"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-more-v" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M19.5 12h-15M10.5 6l-6 6 6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5"/></symbol>
+<symbol id="i-tune" viewBox="0 0 24 24"><path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9"/><circle cx="15" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M7.5 10l2.5 2.2-2.5 2.3M12.5 15h4"/></symbol>
+<symbol id="i-out" viewBox="0 0 24 24"><path d="M8 16L16.5 7.5M9.5 7.5h7v7"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 4c.6 4.9 2.6 6.9 7.5 7.5-4.9.6-6.9 2.6-7.5 7.5-.6-4.9-2.6-6.9-7.5-7.5C9.4 10.9 11.4 8.9 12 4z"/></symbol>
+<symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 6.5h14M5 12h14M5 17.5h9"/></symbol>
+<symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3.5" y="5" width="6" height="6" rx="1.6"/><rect x="3.5" y="13" width="6" height="6" rx="1.6"/><path d="M13 8h7.5M13 16h7.5M5.2 8.1l1.1 1.1 1.9-2.2"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.2h3.2M12 8v4.3l2.8 1.7"/></symbol>
+<symbol id="i-signal" viewBox="0 0 24 24"><path d="M20.5 3.5v17h-17z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20L2 8.5a15 15 0 0 1 20 0z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-batt" viewBox="0 0 24 24"><rect x="7" y="4.5" width="10" height="17" rx="2" fill="currentColor" stroke="none"/><rect x="10" y="2.5" width="4" height="2.5" rx=".6" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.6 2.5 13.4 0 16M12 4c-2.5 2.6-2.5 13.4 0 16"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-sprout" viewBox="0 0 24 24"><path d="M12 20v-8M12 12c0-3.5-2.5-6-7-6 0 3.5 2.5 6 7 6zM12 14.5c0-3 2.2-5.5 6.5-5.5 0 3-2.2 5.5-6.5 5.5z"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M4.5 5.5A1.5 1.5 0 0 1 6 4h5.5v15H6a1.5 1.5 0 0 0-1.5 1.5zM19.5 5.5A1.5 1.5 0 0 0 18 4h-5.5v15H18a1.5 1.5 0 0 1 1.5 1.5z"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><circle cx="17" cy="6" r="2.3"/><circle cx="7" cy="12" r="2.3"/><circle cx="17" cy="18" r="2.3"/><path d="M9 11l6-3.8M9 13l6 3.8"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+<symbol id="i-wand" viewBox="0 0 24 24"><path d="M5 19l10-10M13.5 7.5l3 3M17 3.5v2M20.5 7h-2M18.6 5.4l1.4-1.4"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 4v4M15 4v4M7 8h10v3a5 5 0 0 1-10 0zM12 16v4"/></symbol>
+<symbol id="i-net" viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="6" rx="2"/><rect x="4" y="13.5" width="16" height="6" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4.5 7l7.5 6 7.5-6"/></symbol>
+<symbol id="i-drag" viewBox="0 0 24 24"><circle cx="9" cy="7" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="7" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="17" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="1.2" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-translate" viewBox="0 0 24 24"><path d="M4 6h9M8.5 4v2M6 6c.8 3.2 2.9 5.8 6 7M11 6c-.8 3.4-3.3 6.4-6.5 8M13 20l3.5-8.5L20 20M14.3 17h4.4"/></symbol>
+<symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 17.5h6M10 20.5h4M12 3.5a5.5 5.5 0 0 0-3.2 10c.8.6 1.2 1.4 1.2 2.4v1.6h4v-1.6c0-1 .4-1.8 1.2-2.4A5.5 5.5 0 0 0 12 3.5z"/></symbol>
+<symbol id="i-summary" viewBox="0 0 24 24"><path d="M5 6.5h14M5 11h14M5 15.5h8"/><path d="M16 18.5l1.5 1.5 3-3"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v3M15.5 3.5v3"/></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 0 0 16c1.2 0 1.8-.8 1.8-1.7 0-1.2-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7h2A3.4 3.4 0 0 0 20 10.6C20 6.9 16.4 4 12 4z"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="11" cy="7.8" r="1" fill="currentColor" stroke="none"/><circle cx="15.2" cy="8.4" r="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-dictate" viewBox="0 0 24 24"><rect x="9.5" y="3.5" width="5" height="9" rx="2.5"/><path d="M6.5 10.5a5.5 5.5 0 0 0 11 0M12 16v2.5M4 21h16"/></symbol>
+</defs>
+</svg>
+
+<header class="pg-head">
+  <div class="pg-wrap">
+    <div class="pg-brand">
+      <span class="pg-mark">spunto<span class="dot">.</span></span>
+      <span class="pg-tag">Redesign mockups · small core, plugins · v0.2 · 13 October 2026</span>
+    </div>
+    <p class="pg-lede">The same quiet notebook as <code>design/mockups.html</code>, rebuilt as a small core with everything else as a plugin. Plugins never draw their own screens: they fill a handful of fixed slots with the app's own parts, so a page with eighteen plugins on still reads like a page of notes. Read with <code>05-redesign-ux.md</code>; the plugin mechanism is in <code>04-redesign.md</code>. Sample notes are invented but realistic.</p>
+    <div class="pg-bar">
+      <div class="pg-ctl">Theme
+        <div class="seg" role="group" aria-label="Theme" data-ctl="pack">
+          <button type="button" data-v="carta" aria-pressed="true">Carta</button>
+          <button type="button" data-v="ardesia" aria-pressed="false">Ardesia</button>
+          <button type="button" data-v="salvia" aria-pressed="false">Salvia</button>
+        </div>
+      </div>
+      <div class="pg-ctl">Mode
+        <div class="seg" role="group" aria-label="Mode shown" data-ctl="show">
+          <button type="button" data-v="light" aria-pressed="false">Light</button>
+          <button type="button" data-v="dark" aria-pressed="false">Dark</button>
+          <button type="button" data-v="both" aria-pressed="true">Both</button>
+        </div>
+      </div>
+      <nav class="pg-nav" aria-label="Sections"><a href="#core">Core and default</a><a href="#note">A note</a><a href="#commands">Commands</a><a href="#queues">Slip and Review</a><a href="#ai">AI at work</a><a href="#plugins">Plugins</a><a href="#themes">Themes</a></nav>
+    </div>
+    <ul class="pg-legend">
+      <li><span class="lg-dash">+ idea</span> dashed means proposed, not yet yours</li>
+      <li><span class="lg-serif">Aa</span> serif is your words</li>
+      <li><span class="lg-sans">Aa</span> sans is the app, or a model</li>
+      <li><svg class="i lg-spark"><use href="#i-spark"/></svg> text goes to your model</li>
+      <li><span class="lg-co">1</span> annotation, not product UI</li>
+    </ul>
+  </div>
+</header>
+
+<main>
+<!-- =================================================================
+     1. CORE ONLY VERSUS THE DEFAULT SET
+     ================================================================= -->
+<section class="pg-sec" id="core">
+ <div class="pg-wrap">
+  <h2>Core only, then the default set</h2>
+  <p class="pg-sub">On the left, a fresh install with no AI configured: the core and nothing else. On the right, the same notes once an AI provider is set and the four default plugins switch on (Label suggestions, Semantic search, Related notes, Ask your notes). The whole visible difference on the timeline is two lines of text. No new buttons, no new rail rows, no new colours.</p>
+  <div class="figs-phone">
+
+  <!-- R1 core only -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="14:33"></div>
+    <div class="appbar"><div class="ab-title">All notes <svg class="i s18"><use href="#i-down"/></svg></div><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-search"/></svg></span></div>
+    <div class="p-comp mini"><div class="body ph">What's on your mind?</div></div>
+    <div class="p-day over">Today</div>
+    <div class="p-entry">
+      <div class="body">Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app.</div>
+      <div class="meta">14:32</div>
+    </div>
+    <div class="p-entry">
+      <div class="body">Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed.</div>
+      <div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div>
+      <div class="meta">11:05 <span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body"><p>Saturday on theficos:</p>
+        <ul class="tasks"><li class="done"><span class="cb on"><svg class="i"><use href="#i-check"/></svg></span>Postgres 17 for Blinko</li><li><span class="cb"></span>borg check on the Pi</li><li><span class="cb"></span>renew the dedyn token</li></ul></div>
+      <div class="lblrow"><span>#homelab</span></div>
+      <div class="meta">09:12 <span class="ring" title="Not synced yet"></span></div>
+    </div>
+    <div class="fab"><svg class="i"><use href="#i-edit"/></svg></div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R1 · Core only</div><h3>A finished notebook with nothing switched on</h3><p>Composer, timeline, labels typed inline, keyword search, sync, the agent chip and the unsynced ring. Nothing is switched on, not even dictation, and nothing on screen hints at a missing feature. This is the reference every plugin is measured against.</p><div class="req">Core · AI-2</div></div>
+  </figure>
+
+  <!-- R2 default set -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="14:33"></div>
+    <div class="appbar"><div class="ab-title">All notes <svg class="i s18"><use href="#i-down"/></svg></div><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-search"/></svg></span></div>
+    <div class="p-comp mini"><div class="body ph">What's on your mind?</div></div>
+    <div class="p-review">6 suggestions · <b>Review</b><span class="co" style="right:14px;top:4px">1</span></div>
+    <div class="p-day over">Today</div>
+    <div class="p-entry">
+      <div class="body">Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app.</div>
+      <div class="meta">14:32</div>
+      <div class="sugg" style="margin-top:10px"><span class="prop">+ project/spunto</span><span class="prop">+ idea</span><span class="dismiss">Dismiss</span><span class="co" style="right:-6px;top:2px">2</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body">Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed.</div>
+      <div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div>
+      <div class="meta">11:05 <span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body"><p>Saturday on theficos:</p>
+        <ul class="tasks"><li class="done"><span class="cb on"><svg class="i"><use href="#i-check"/></svg></span>Postgres 17 for Blinko</li><li><span class="cb"></span>borg check on the Pi</li><li><span class="cb"></span>renew the dedyn token</li></ul></div>
+      <div class="lblrow"><span>#homelab</span></div>
+      <div class="meta">09:12 <span class="ring" title="Not synced yet"></span></div>
+    </div>
+    <div class="fab"><svg class="i"><use href="#i-edit"/></svg></div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R2 · Default set on</div><h3>Two lines of difference</h3><ol><li><span class="lg-co">1</span><span>The Review line: one core line for every plugin's proposals, shown only from three pending. Here they are all label suggestions.</span></li><li><span class="lg-co">2</span><span>The suggestion line under a fresh note: dashed pills, one line at most.</span></li></ol><p style="margin-top:10px">Semantic search, Related notes and Ask show up only where they are summoned: the search box, the note's "About this note" sheet and the Ask row. About 60 dp of a 780 dp screen changed. Dictation and Quick capture, on by default even without AI, add nothing here: their mic and widget live in the composer and on the home screen.</p><div class="req">label-suggestions · semantic-search · related · ask (D31)</div></div>
+  </figure>
+
+  </div>
+
+  <div class="desk-figs" style="margin-top:72px">
+  <!-- R3 core web -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R3 · Web, core only</div><h3>The rail has no Views section until a plugin brings one</h3><p>All notes, Archive and Trash, then labels. "From agents" is now the Agent inbox plugin's view, but the "via Claude Code" chip on a note stays core. The status line says "Synced" and nothing about AI; the palette searches by keyword and lists core actions.</p><div class="req">Core · WEB-1</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk short">
+    <div class="chrome" data-url="spunto.example.org"></div>
+    <div class="app">
+     <aside class="rail" data-rail="core" data-on="all"></aside>
+     <div class="main"><div class="col">
+      <div class="d-comp">
+        <div class="body"><span class="caret" style="margin-left:0"></span><span class="ph">What's on your mind?</span></div>
+        <div class="tools"><span class="tool"><svg class="i"><use href="#i-hash"/></svg></span><span class="tool"><svg class="i"><use href="#i-cbox"/></svg></span><span class="tool"><svg class="i"><use href="#i-image"/></svg></span><span class="spacer"></span><span class="hint"><span class="kbd">⌘</span><span class="kbd">↵</span></span><span class="btn primary" style="margin-left:10px;opacity:.45">Save</span></div>
+      </div>
+      <div class="day over">Today · Monday 13 October</div>
+      <article class="entry"><div class="t">14:32</div><div class="c"><div class="body"><p>Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app, like a slip of paper left on the desk.</p></div></div><div class="acts"></div></article>
+      <article class="entry"><div class="t">11:05</div><div class="c"><div class="body"><p>Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed. Spunto needs exactly the same thing.</p></div><div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div><div class="meta"><span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div></div><div class="acts"></div></article>
+      <article class="entry"><div class="t">09:12</div><div class="c"><div class="body"><p>Saturday on theficos:</p><ul class="tasks"><li class="done"><span class="cb on"><svg class="i"><use href="#i-check"/></svg></span>Postgres 17 for Blinko</li><li><span class="cb"></span>borg check on the Pi</li><li><span class="cb"></span>renew the dedyn token</li></ul></div><div class="lblrow"><span>#homelab</span></div></div><div class="acts"></div></article>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- R4 default web -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R4 · Web, default set on</div><h3>Same page, two lines and a status word</h3><ol><li><span class="lg-co">1</span><span>The Review line under the composer.</span></li><li><span class="lg-co">2</span><span>Suggestion line under the newest note. Hover shows a <b>×</b> per pill; <span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">a</span> accepts the whole line, <span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">x</span> dismisses it.</span></li><li><span class="lg-co">3</span><span>The status line adds "AI ready" (or the indexing count while the backfill runs).</span></li></ol><p style="margin-top:10px">Label suggestions also brings an Unlabeled view. Because the owner did not switch that plugin on by hand, its view starts hidden; <span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">⌘K</span> reaches it and one click shows it in the rail.</p><div class="req">Review line · Suggestion line · AI-3 · SRC-2</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk short">
+    <div class="chrome" data-url="spunto.example.org"></div>
+    <div class="app" data-id="r4app">
+     <aside class="rail" data-rail="default" data-on="all" data-co="3"></aside>
+     <div class="main"><div class="col">
+      <div class="d-comp">
+        <div class="body"><span class="caret" style="margin-left:0"></span><span class="ph">What's on your mind?</span></div>
+        <div class="tools"><span class="tool"><svg class="i"><use href="#i-hash"/></svg></span><span class="tool"><svg class="i"><use href="#i-cbox"/></svg></span><span class="tool"><svg class="i"><use href="#i-image"/></svg></span><span class="spacer"></span><span class="hint"><span class="kbd">⌘</span><span class="kbd">↵</span></span><span class="btn primary" style="margin-left:10px;opacity:.45">Save</span></div>
+      </div>
+      <div class="d-review">6 suggestions · <b>Review</b><span class="co" style="left:340px;top:13px">1</span></div>
+      <div class="day over">Today · Monday 13 October</div>
+      <article class="entry"><div class="t">14:32</div><div class="c"><div class="body"><p>Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app, like a slip of paper left on the desk.</p></div>
+        <div class="sugg"><span class="prop">+ project/spunto</span><span class="prop hover">+ idea<span style="display:inline-grid;place-items:center;margin:0 -4px 0 4px;width:16px;height:16px;color:var(--ink-3)"><svg class="i s14"><use href="#i-close"/></svg></span></span><span class="prop">+ design<span class="new">new</span></span><span class="dismiss">Dismiss</span><span class="co" style="left:396px;top:2px">2</span></div></div><div class="acts"></div></article>
+      <article class="entry"><div class="t">11:05</div><div class="c"><div class="body"><p>Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed. Spunto needs exactly the same thing.</p></div><div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div><div class="meta"><span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div></div><div class="acts"></div></article>
+      <article class="entry"><div class="t">09:12</div><div class="c"><div class="body"><p>Saturday on theficos:</p><ul class="tasks"><li class="done"><span class="cb on"><svg class="i"><use href="#i-check"/></svg></span>Postgres 17 for Blinko</li><li><span class="cb"></span>borg check on the Pi</li><li><span class="cb"></span>renew the dedyn token</li></ul></div><div class="lblrow"><span>#homelab</span></div></div><div class="acts"></div></article>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     2. A NOTE AND ITS FURNITURE
+     ================================================================= -->
+<section class="pg-sec" id="note">
+ <div class="pg-wrap">
+  <h2>A note and its furniture</h2>
+  <p class="pg-sub">From here on the instance has eighteen of its 25 plugins on. A link saved from Chrome shows every slot a note can carry: the suggestion line under the text, one plugin fact in the meta line, and the note panel, which is the right margin on the web and the "About this note" sheet on Android. Panel sections start closed and stay the way you leave them.</p>
+  <div class="figs-phone">
+
+  <!-- R5 phone note -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr"><div class="scr-body" data-id="r5body">
+    <div class="sb" data-t="18:20"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-pin"/></svg></span><span class="ib"><svg class="i"><use href="#i-more-v"/></svg></span></div>
+    <div style="padding:4px 20px 0">
+      <div class="over">Monday 13 October · 18:03</div>
+      <div class="meta" style="position:relative"><span class="src"><svg class="i s14"><use href="#i-out"/></svg>inkandswitch.com</span><span>· from Chrome</span><span>· 23 min read</span><span class="co" style="left:298px;top:-3px">3</span></div>
+      <div class="body" style="margin-top:14px">
+        <p><a>inkandswitch.com/local-first</a></p>
+        <p>Rileggere la parte sui sette ideali prima di scrivere il capitolo sync di spunto. The <em>longevity</em> ideal is the one Blinko fails for me: my notes should outlive the app that wrote them.</p>
+      </div>
+      <div class="lblrow"><span>#reading/essays</span></div>
+      <div class="sugg"><span class="prop">+ Page title</span><span class="prop">+ local-first<span class="new">new</span></span><span class="more">+2</span><span class="dismiss">Dismiss</span><span class="co" style="right:-14px;top:-26px">1</span></div>
+    </div>
+    <div class="colophon" style="position:relative"><svg class="i s18"><use href="#i-info"/></svg><span><b>About this note</b> · Source · Related 5 · Backlinks 1</span><span class="spacer"></span><svg class="i s16"><use href="#i-right"/></svg><span class="co" style="right:26px;top:-11px">2</span></div>
+    <div class="gest"></div>
+   </div></div></div></div></div>
+   <div class="cap"><div class="id">R5 · Note, Android</div><h3>Three slots, each with a budget</h3><ol><li><span class="lg-co">1</span><span>Suggestion line: Link enrichment offers the page title, Label suggestions offers labels. What does not fit collapses into "+2"; tapping it unfolds the rest in place.</span></li><li><span class="lg-co">2</span><span>The note ends with one colophon line naming its panel sections. No icon was added to the top bar.</span></li><li><span class="lg-co">3</span><span>One plugin fact in the meta line ("23 min read"), after the core source chip.</span></li></ol><div class="req">link-enrichment · label-suggestions · links · related</div></div>
+  </figure>
+
+  <!-- R6 phone about sheet -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div data-include="r5body"></div>
+    <div class="scrim"></div>
+    <div class="sheet" style="top:150px;padding-bottom:30px">
+      <div class="handle"></div>
+      <div style="display:flex;align-items:center;padding:8px 16px 8px 24px"><span style="font:500 17px var(--f-sans)">About this note</span><span class="spacer"></span><span class="btn text" style="height:32px"><svg class="i s16"><use href="#i-drag"/></svg>Arrange</span></div>
+      <div style="padding:0 24px">
+        <div class="np-sec" style="border-top:0">
+          <div class="np-h" style="min-height:48px"><span class="over">Source</span><span class="hn">inkandswitch.com</span><svg class="i chv"><use href="#i-down"/></svg></div>
+          <div class="np-body">
+            <div class="np-t" style="font-size:15px;line-height:21px">Local-first software: you own your data, in spite of the cloud</div>
+            <div class="meta" style="margin-top:4px">Kleppmann, Wiggins, van Hardenberg, McGranaghan · 2019 · 23 min read</div>
+            <div class="np-p" style="font-size:14px;line-height:21px">Argues that the copy on your own device should come first and the server should only help. Names seven ideals: fast, multi-device, offline, collaboration, longevity, privacy and user control.</div>
+            <div style="display:flex;gap:4px;margin:10px -8px 0"><span class="btn text" style="height:32px"><svg class="i s16"><use href="#i-out"/></svg>Open page</span><span class="btn ghost" style="height:32px;padding:0 8px">Copy link</span></div>
+            <div class="np-attr">Link enrichment · fetched 18:03 · summary by qwen3.5</div>
+          </div>
+        </div>
+        <div class="np-sec"><div class="np-h" style="min-height:52px"><span class="over">Related</span><span class="hn">5 notes</span><svg class="i chv"><use href="#i-right"/></svg></div></div>
+        <div class="np-sec"><div class="np-h" style="min-height:52px"><span class="over">Backlinks</span><span class="hn">1 note</span><svg class="i chv"><use href="#i-right"/></svg></div></div>
+      </div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R6 · About this note</div><h3>One sheet for everything plugins know about a note</h3><p>Opened from the colophon line or the note menu. Each plugin gets one section with a one-line summary when closed; the owner opens what they care about and the sheet remembers it on this phone. Arrange reorders sections by drag. A section with nothing to say is absent, which is why this short note has no Summary.</p><div class="req">Note panel · link-enrichment · related · links</div></div>
+  </figure>
+  </div>
+
+  <div class="desk-figs" style="margin-top:72px">
+  <!-- R7 desktop note -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R7 · Note, web</div><h3>The margin is the note panel</h3><ol><li><span class="lg-co">1</span><span>The suggestion line has room for three pills here, so only one folds into "+1".</span></li><li><span class="lg-co">2</span><span>The panel sits in the right margin from 1280 px; narrower, it moves under the note. Source is open because the owner opened it once; Related and Backlinks stay one line each.</span></li><li><span class="lg-co">3</span><span>The meta line carries one plugin fact, never more. A second plugin wanting the spot goes to the panel instead.</span></li></ol><div class="req">Suggestion line · Note panel · Meta token</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome" data-url="spunto.example.org/n/01JA9X4K"></div>
+    <div class="app" data-id="r7app">
+     <aside class="rail" data-rail="plugins" data-on="essays"></aside>
+     <div class="main">
+      <div style="display:grid;grid-template-columns:640px 230px;gap:40px;justify-content:center;padding-top:30px">
+       <div style="padding-left:64px">
+        <div class="hint" style="font-size:13px;color:var(--ink-2)"><svg class="i s16"><use href="#i-back"/></svg>#reading/essays</div>
+        <div class="over" style="margin-top:26px">Monday 13 October · 18:03</div>
+        <div class="meta" style="position:relative"><span class="src"><svg class="i s14"><use href="#i-out"/></svg>inkandswitch.com</span><span>· from Chrome</span><span>· 23 min read</span><span class="co in">3</span></div>
+        <div class="body measure" style="margin-top:16px">
+          <p><a>inkandswitch.com/local-first</a></p>
+          <p>Rileggere la parte sui sette ideali prima di scrivere il capitolo sync di spunto. The <em>longevity</em> ideal is the one Blinko fails for me: my notes should outlive the app that wrote them.</p>
+          <p>Worth stealing for the README: "the cloud is a helper, not the home of your data". It says in one line what D1 and D10 took a page to say.</p>
+        </div>
+        <div class="lblrow"><span>#reading/essays</span></div>
+        <div class="sugg"><span class="prop">+ Page title</span><span class="prop">+ local-first<span class="new">new</span></span><span class="prop">+ project/spunto</span><span class="more">+1</span><span class="dismiss">Dismiss</span><span class="co in">1</span></div>
+        <div class="meta" style="margin-top:18px">Saved · <span class="src"><svg class="i s14"><use href="#i-history"/></svg>2 versions</span></div>
+       </div>
+       <aside style="position:relative;padding-top:92px">
+        <span class="co" style="left:-34px;top:90px">2</span>
+        <div class="np-sec">
+          <div class="np-h"><span class="over">Source</span><svg class="i chv"><use href="#i-down"/></svg></div>
+          <div class="np-body">
+            <div class="np-t">Local-first software: you own your data, in spite of the cloud</div>
+            <div class="meta" style="margin-top:4px">Kleppmann and others · 2019 · 23 min</div>
+            <div class="np-p">Argues that the copy on your own device should come first and the server should only help. Names seven ideals, from fast and offline to longevity and user control.</div>
+            <div style="margin:8px -8px 0"><span class="btn text" style="height:28px;font-size:13px"><svg class="i s14"><use href="#i-out"/></svg>Open page</span></div>
+            <div class="np-attr">Link enrichment · summary by qwen3.5</div>
+          </div>
+        </div>
+        <div class="np-sec"><div class="np-h"><span class="over">Related</span><span class="hn">5</span><svg class="i chv"><use href="#i-right"/></svg></div></div>
+        <div class="np-sec"><div class="np-h"><span class="over">Backlinks</span><span class="hn">1</span><svg class="i chv"><use href="#i-right"/></svg></div></div>
+        <div class="np-sec" style="padding-top:12px"><span class="hint"><svg class="i s14"><use href="#i-drag"/></svg>Arrange</span></div>
+       </aside>
+      </div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     3. COMMANDS
+     ================================================================= -->
+<section class="pg-sec" id="commands">
+ <div class="pg-wrap">
+  <h2>Commands live where commands already were</h2>
+  <p class="pg-sub">Plugins add verbs, never buttons. A plugin's commands appear in the <code>⌘K</code> palette, the composer's <code>/</code> menu and the Android note action sheet, each with the plugin's name when it is not obvious from the verb. A spark marks every command that sends text to your model.</p>
+  <div class="desk-figs">
+  <!-- R8 palette -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R8 · ⌘K on an open note</div><h3>"This note" first, then everything else</h3><p>With a note open, the palette leads with what can be done to it: plugin verbs first, ordered by how often the owner uses them, then core actions with their keys. Each plugin gets at most three commands per context. Typing filters across all of them; nothing here has a toolbar twin.</p><div class="req">Commands slot · develop · tidy · links · ask · digest · tasks</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome" data-url="spunto.example.org/n/01JA9X4K"></div>
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column">
+     <div data-include="r7app" style="flex:1"></div>
+     <div class="scrim"></div>
+     <div class="pal">
+      <div class="pal-in"><svg class="i"><use href="#i-search"/></svg><span class="caret" style="margin:0 -8px 0 0"></span><span style="color:var(--ink-3)">Search notes, or type a command</span><span class="spacer"></span><span class="kbd">esc</span></div>
+      <div class="pal-sec over">This note</div>
+      <div class="cmd sel"><span class="ico m"><svg class="i"><use href="#i-spark"/></svg></span>Develop this idea<span class="by"></span><span class="kbd">↵</span></div>
+      <div class="cmd"><span class="ico m"><svg class="i"><use href="#i-spark"/></svg></span>Tidy text<span class="by">Tidy</span></div>
+      <div class="cmd"><span class="ico"><svg class="i"><use href="#i-link"/></svg></span>Link to note…<span class="by">Links</span></div>
+      <div class="cmd"><span class="ico"><svg class="i"><use href="#i-pin"/></svg></span>Pin<span class="by"></span><span class="kbd">p</span></div>
+      <div class="cmd"><span class="ico"><svg class="i"><use href="#i-archive"/></svg></span>Archive<span class="by"></span><span class="kbd">y</span></div>
+      <div class="pal-sec over">Actions</div>
+      <div class="cmd"><span class="ico m"><svg class="i"><use href="#i-spark"/></svg></span>Ask your notes…<span class="by"></span><span class="kbd">⌘↵</span></div>
+      <div class="cmd"><span class="ico m"><svg class="i"><use href="#i-spark"/></svg></span>Write this week's digest<span class="by">Weekly digest</span></div>
+      <div class="cmd"><span class="ico"><svg class="i"><use href="#i-tasks"/></svg></span>Go to Tasks<span class="by">Tasks</span></div>
+      <div class="cmd"><span class="ico"><svg class="i"><use href="#i-sprout"/></svg></span>Review 6 suggestions<span class="by"></span><span class="kbd">g r</span></div>
+      <div class="cmd"><span class="ico"><svg class="i"><use href="#i-edit"/></svg></span>New note<span class="by"></span><span class="kbd">n</span></div>
+      <div class="pal-foot"><span><span class="kbd">↑</span><span class="kbd">↓</span> move</span><span><span class="kbd">↵</span> run</span><span><svg class="i s14 spk"><use href="#i-spark"/></svg> sends text to your model</span><span class="spacer"></span><span>Plugin commands name their plugin</span></div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+
+  <div class="figs-phone" style="margin-top:72px">
+  <!-- R9 phone action sheet -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div data-include="r5body"></div>
+    <div class="scrim"></div>
+    <div class="sheet" style="padding-bottom:30px">
+      <div class="handle"></div>
+      <div style="padding:8px 24px 12px">
+        <div class="body sm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">inkandswitch.com/local-first · Rileggere la parte sui sette ideali…</div>
+        <div class="meta" style="margin-top:4px">Today · 18:03</div>
+      </div>
+      <div class="qa">
+        <div><svg class="i"><use href="#i-pin"/></svg>Pin</div>
+        <div><svg class="i"><use href="#i-copy"/></svg>Copy</div>
+        <div><svg class="i"><use href="#i-share"/></svg>Share</div>
+        <div><svg class="i"><use href="#i-archive"/></svg>Archive</div>
+      </div>
+      <div style="border-top:1px solid var(--rule);margin:2px 0 4px"></div>
+      <div class="srow"><svg class="i spk"><use href="#i-spark"/></svg>Develop this idea</div>
+      <div class="srow"><svg class="i spk"><use href="#i-spark"/></svg>Tidy text<span class="by">Tidy</span></div>
+      <div class="srow"><svg class="i"><use href="#i-link"/></svg>Link to note…<span class="by">Links</span></div>
+      <div style="border-top:1px solid var(--rule);margin:4px 0"></div>
+      <div class="srow"><svg class="i"><use href="#i-trash"/></svg>Move to trash</div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R9 · Note actions, Android</div><h3>Long-press, or the note's ⋮</h3><p>Core actions stay as four tiles on top and Trash at the bottom, where they always were. Plugin verbs sit between two hairlines, at most three per plugin, ordered by use; past six they fold under "More". The composer's <span style="font-family:var(--f-mono)">/</span> menu uses the same list, shown as a strip above the keyboard like label autocomplete.</p><div class="req">Commands slot · AND-7</div></div>
+  </figure>
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     4. THE DAILY SLIP AND REVIEW
+     ================================================================= -->
+<section class="pg-sec" id="queues">
+ <div class="pg-wrap">
+  <h2>The daily slip and Review</h2>
+  <p class="pg-sub">Two shared places hold what does not belong under one note. The daily slip shows one older note a day at the top of the timeline (and on the widget). Review is one core screen for every proposal that needs a decision about more than one note: label merges, new labels for clusters, duplicate pairs, and notes still waiting for labels. Both have a budget of one: one slip a day, one line pointing to Review.</p>
+  <div class="desk-figs">
+  <!-- R10 desktop home showcase -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R10 · Home with eighteen plugins on</div><h3>Still a page of notes</h3><ol><li><span class="lg-co">1</span><span>The Review line, from three pending proposals up. One line whatever the number of plugins.</span></li><li><span class="lg-co">2</span><span>The daily slip, from Resurface. Open, Archive, or × for "not today"; dismissing is final until tomorrow.</span></li><li><span class="lg-co">3</span><span>A saved Ask answer is an ordinary entry, set in the sans with a spark chip because a model wrote it.</span></li><li><span class="lg-co">4</span><span>Views from plugins the owner switched on: From agents, Tasks, Digests. No badges, counts in grey.</span></li></ol><div class="req">Review · Daily slip · New notes · Views · resurface · ask · digest · tasks · agent-inbox</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome" data-url="spunto.example.org"></div>
+    <div class="app" data-id="r10app">
+     <aside class="rail" data-rail="plugins" data-on="all" data-co-views="4"></aside>
+     <div class="main"><div class="col">
+      <div class="d-comp">
+        <div class="body"><span class="caret" style="margin-left:0"></span><span class="ph">What's on your mind?</span></div>
+        <div class="tools"><span class="tool"><svg class="i"><use href="#i-hash"/></svg></span><span class="tool"><svg class="i"><use href="#i-cbox"/></svg></span><span class="tool"><svg class="i"><use href="#i-image"/></svg></span><span class="spacer"></span><span class="hint"><span class="kbd">/</span> commands</span><span class="hint" style="margin-left:14px"><span class="kbd">⌘</span><span class="kbd">↵</span></span><span class="btn primary" style="margin-left:10px;opacity:.45">Save</span></div>
+      </div>
+      <div class="d-review">6 suggestions · <b>Review</b><span class="co" style="left:230px;top:13px">1</span></div>
+      <div class="slip">
+        <div class="slip-h"><span class="over">From your notes · 19 March 2025</span><span class="spacer"></span><span class="btn text" style="height:28px">Open</span><span class="btn ghost" style="height:28px;padding:0 8px">Archive</span><span class="tool" style="width:28px;height:28px" title="Not today"><svg class="i s16"><use href="#i-close"/></svg></span></div>
+        <div class="body" style="margin-top:6px">Learn enough Compose to stop being afraid of it. Start with the share sheet: it is the smallest screen that matters most.</div>
+        <span class="co" style="right:-34px;top:14px">2</span>
+      </div>
+      <div class="day over">Today · Monday 13 October</div>
+      <article class="entry"><div class="t">14:32</div><div class="c"><div class="body"><p>Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app, like a slip of paper left on the desk.</p></div>
+        <div class="sugg"><span class="prop">+ project/spunto</span><span class="prop">+ idea</span><span class="prop">+ design<span class="new">new</span></span><span class="dismiss">Dismiss</span></div></div><div class="acts"></div></article>
+      <article class="entry"><div class="t">12:40</div><div class="c"><div class="gen"><h5>What did I decide about sync conflicts?</h5><p>Keep both versions instead of picking a winner. The newer text stays on the note and the other edit becomes a linked conflicted copy you merge by hand<span class="cite">1</span>. CRDT libraries were ruled out as too heavy for one person<span class="cite">2</span>.</p></div>
+        <div class="meta" style="position:relative"><span class="agent"><svg class="i s14 spk"><use href="#i-spark"/></svg>via Ask your notes</span><span class="co" style="left:160px;top:-3px">3</span></div></div><div class="acts"></div></article>
+      <div class="day over">Yesterday · Sunday 12 October</div>
+      <article class="entry"><div class="t">18:00</div><div class="c"><div class="gen"><h5>Week 41 · 6 to 12 October</h5><p>Three threads this week: capture speed, sync conflicts and running in Rome. Two questions are still open, and #reading went quiet for the first time since June.</p></div>
+        <div class="meta"><span class="agent"><svg class="i s14 spk"><use href="#i-spark"/></svg>via Weekly digest</span></div></div><div class="acts"></div></article>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+
+  <div class="figs-phone" style="margin-top:72px">
+  <!-- R11 phone Review -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="08:52"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-close"/></svg></span><div class="ab-title" style="margin-left:4px">Review</div><span class="spacer"></span><span style="font:400 13px var(--f-sans);color:var(--ink-3);padding-right:20px;font-variant-numeric:tabular-nums">6 waiting</span></div>
+    <div style="padding:0 20px;font:400 13px/19px var(--f-sans);color:var(--ink-2)">Nothing changes until you choose.</div>
+    <div class="rv-g"><span class="over">Notes</span><span class="hn">Label suggestions</span></div>
+    <div class="srow" style="min-height:40px;padding:0 20px">3 notes wait for labels<span class="spacer"></span><span class="btn text" style="height:32px">One by one</span></div>
+    <div class="rv-g"><span class="over">Labels</span><span class="hn">Label gardener</span></div>
+    <div class="rv">
+      <div class="q">Merge <span class="lbl">#reading/essay</span> into <span class="lbl">#reading/essays</span>? They look like one label.</div>
+      <div class="meta" style="margin-top:4px">3 notes and 19 notes · whole labels only</div>
+      <div class="acts"><span class="btn tonal">Merge</span><span class="btn ghost">Not the same</span></div>
+    </div>
+    <div class="rv">
+      <div class="q"><span class="ln">7 unlabeled notes</span> are about running routes in Rome.</div>
+      <div class="acts" style="margin-top:10px"><span class="prop" style="height:30px;margin-left:6px">+ running/routes<span class="new">new</span></span><span class="spacer"></span><span class="btn ghost" style="color:var(--ink-3)">Dismiss</span></div>
+    </div>
+    <div class="rv-g"><span class="over">Duplicates</span><span class="hn">Duplicate finder</span></div>
+    <div class="rv">
+      <div class="pair-n"><div class="body sm">Quick Settings tile must be in the first row, or it is slower than the widget.</div><div class="meta" style="margin-top:2px">9 Oct · <span class="lbl">#project/spunto</span></div></div>
+      <div class="pair-n"><div class="body sm">Tile: first row of quick settings or it loses to the widget.</div><div class="meta" style="margin-top:2px">2 Sep · <span class="lbl">#android</span></div></div>
+      <div class="acts"><span class="btn tonal">Compare</span><span class="btn ghost">Keep both</span></div>
+    </div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R11 · Review, Android</div><h3>One queue, grouped by kind, attributed in grey</h3><p>Cards here are proposals, not notes, so they may be boxed. Merges go through the core rename and merge dialog with its impact line, and need a connection; the cluster label is a dashed pill like any proposal; Compare opens the core side-by-side merge. "One by one" opens the familiar label review, one note at a time. When the queue is empty: "All caught up." and the Review line disappears.</p><div class="req">Review slot · label-gardener · duplicates · label-suggestions · label_change · merge_notes</div></div>
+  </figure>
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     5. AI AT WORK
+     ================================================================= -->
+<section class="pg-sec" id="ai">
+ <div class="pg-wrap">
+  <h2>AI plugins at work</h2>
+  <p class="pg-sub">Answers appear where they were asked for, as a command result, and become notes only when the owner keeps them. Scheduled work, like the weekly digest, writes an ordinary note with a spark chip. Changes to the owner's own text, like Tidy, are always a diff to accept.</p>
+  <div class="desk-figs">
+  <!-- R12 Ask -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R12 · Ask your notes, web</div><h3>An answer you can keep</h3><p>The answer is a command result inside the palette: the sans, numbered citations, the owner's notes listed in the serif. The footer names the model and where it runs. <span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">⌘S</span> saves it as a note headed by the question <span class="lg-co" style="width:18px;height:18px;font-size:10.5px;vertical-align:1px">1</span>; <span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">esc</span> forgets it. Saved answers are left out of later answers until the owner edits them, so Ask never cites itself.</p><div class="req">Command result · ask · AI-8 · D29</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome" data-url="spunto.example.org"></div>
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column">
+     <div data-include="r4app" style="flex:1"></div>
+     <div class="scrim"></div>
+     <div class="pal wide">
+      <div class="pal-in"><svg class="i spk"><use href="#i-spark"/></svg><span style="font:italic 400 16px var(--f-serif);color:var(--ink-2)">what did I decide about sync conflicts?</span><span class="spacer"></span><span class="kbd">esc</span></div>
+      <div style="padding:20px 18px 6px">
+        <div class="answer">
+          <p>You decided to keep both versions instead of picking a winner. When two devices edit the same note, the newer text stays on the note and the other edit becomes a linked conflicted copy that you merge by hand<span class="cite">1</span>. Flags such as pinned and archived simply take the last write<span class="cite">1</span>.</p>
+          <p>You ruled out CRDT libraries as too heavy for a one-person notebook<span class="cite">2</span>, after last-writer-wins lost an edit in Quire<span class="cite">3</span>.</p>
+        </div>
+      </div>
+      <div class="pal-sec over" style="padding-top:18px">Sources</div>
+      <div class="pr" style="padding-top:6px;padding-bottom:6px"><span class="cite" style="margin-top:3px">1</span><div><div class="body sm">Sync conflicts: keep both versions, never pick a winner silently.</div><div class="meta" style="margin-top:2px">3 Oct · <span class="lbl">#project/spunto</span></div></div></div>
+      <div class="pr" style="padding-top:6px;padding-bottom:6px"><span class="cite" style="margin-top:3px">2</span><div><div class="body sm">CRDTs are the right answer for collaborative editors and the wrong one for a one-person notebook.</div><div class="meta" style="margin-top:2px">2025 · <span class="lbl">#idea</span></div></div></div>
+      <div class="pr" style="padding-top:6px;padding-bottom:12px"><span class="cite" style="margin-top:3px">3</span><div><div class="body sm">Last writer wins was fine in Quire until two phones edited the same book note on a train.</div><div class="meta" style="margin-top:2px">14 Aug · <span class="lbl">#project/quire</span></div></div></div>
+      <div class="pal-foot" style="position:relative"><span>From 3 notes · qwen3.5 at ollama.home.arpa · read-only</span><span class="spacer"></span><span class="btn ghost" style="height:30px"><svg class="i s16"><use href="#i-copy"/></svg>Copy</span><span class="btn tonal" style="height:30px">Save as note <span class="kbd" style="margin-left:4px;background:transparent">⌘S</span></span><span class="co" style="right:118px;top:-11px">1</span></div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- R14 digest note -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R13 · Weekly digest, web</div><h3>A note the machine wrote, and says so</h3><ol><li><span class="lg-co">1</span><span>The spark chip names the plugin; the time is when it ran.</span></li><li><span class="lg-co">2</span><span>The body is set in the sans: the model's words, not the owner's.</span></li><li><span class="lg-co">3</span><span>Citations are the note's own links; on wide screens they render as sidenotes in the margin, in the serif, because they point at the owner's notes.</span></li><li><span class="lg-co">4</span><span>One quiet line states the rule: plugins skip this note until the owner edits it. The first edit adopts it: the serif, a plain "from Weekly digest" chip, and plugins may read it.</span></li></ol><div class="req">New notes · digest · Digests view · D29</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk tall">
+    <div class="chrome" data-url="spunto.example.org/n/01JA8M2D"></div>
+    <div class="app">
+     <aside class="rail" data-rail="plugins" data-on="digests"></aside>
+     <div class="main">
+      <div style="display:grid;grid-template-columns:640px 230px;gap:40px;justify-content:center;padding-top:30px">
+       <div style="padding-left:64px">
+        <div class="hint" style="font-size:13px;color:var(--ink-2)"><svg class="i s16"><use href="#i-back"/></svg>Digests</div>
+        <div class="over" style="margin-top:26px">Sunday 12 October · 18:00</div>
+        <div class="meta" style="position:relative"><span class="agent"><svg class="i s14 spk"><use href="#i-spark"/></svg>via Weekly digest</span><span>· read 31 notes</span><span class="co" style="left:226px;top:-2px">1</span></div>
+        <div class="gen measure" style="margin-top:16px;position:relative">
+          <span class="co" style="left:-40px;top:4px">2</span>
+          <h5 style="font-size:24px;line-height:31px;margin-bottom:10px">Week 41 · 6 to 12 October</h5>
+          <h6 style="margin-top:0">Themes</h6>
+          <ul>
+            <li>Capture speed keeps coming back: the tile, the widget and cold start<span class="cite">1</span><span class="cite">2</span><span class="cite">3</span>. The one open choice is which note the widget shows<span class="cite">1</span>.</li>
+            <li>Sync conflicts are settled: keep both versions and merge by hand<span class="cite">4</span>.</li>
+            <li>Running in Rome: the Appia Antica loop and the map of nasoni along the Tevere<span class="cite">5</span><span class="cite">6</span>.</li>
+          </ul>
+          <h6>Open questions</h6>
+          <ul>
+            <li>Should the widget show the resurfaced note or the last one?<span class="cite">1</span></li>
+            <li>Does the Pi 3 join the cluster or stay the offsite backup?<span class="cite">7</span></li>
+          </ul>
+          <h6>Worth continuing</h6>
+          <ul>
+            <li>The nasoni map has two notes and no next step. You guessed the comune publishes the fountains as open data; checking that would unblock it<span class="cite">6</span>.</li>
+          </ul>
+          <h6>Quiet this week</h6>
+          <p>No new notes under #reading for the first time since June.</p>
+        </div>
+        <div class="voice" style="position:relative"><svg class="i s14 spk"><use href="#i-spark"/></svg>Written by Weekly digest with qwen3.5. Plugins leave it out until you edit it.<span class="co" style="right:-30px;top:-3px">4</span></div>
+       </div>
+       <aside style="position:relative;padding-top:120px">
+        <span class="co" style="left:-34px;top:118px">3</span>
+        <div class="over">Sources</div>
+        <div style="margin-top:8px">
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">1</span><div><div class="body sm">Capture budget</div><div class="meta" style="margin-top:2px">Sat 11 Oct</div></div></div>
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">2</span><div><div class="body sm">The tile has to be in the first row of quick settings.</div><div class="meta" style="margin-top:2px">Thu 9 Oct</div></div></div>
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">3</span><div><div class="body sm">Cold start must stay under a second.</div><div class="meta" style="margin-top:2px">Wed 8 Oct</div></div></div>
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">4</span><div><div class="body sm">Conflicted copies: show both, merge by hand.</div><div class="meta" style="margin-top:2px">Tue 7 Oct</div></div></div>
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">5</span><div><div class="body sm">Appia Antica loop on Sunday.</div><div class="meta" style="margin-top:2px">Sun 12 Oct</div></div></div>
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">6</span><div><div class="body sm">Idea per il weekend: mappa dei nasoni lungo il Tevere.</div><div class="meta" style="margin-top:2px">Sun 12 Oct</div></div></div>
+          <div class="ref" style="display:flex;gap:8px"><span class="cite" style="margin-top:3px">7</span><div><div class="body sm">Pi 3: offsite borg target or cluster node?</div><div class="meta" style="margin-top:2px">Fri 10 Oct</div></div></div>
+        </div>
+       </aside>
+      </div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+
+  <div class="figs-phone" style="margin-top:72px">
+  <!-- R13 phone Ask sheet -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="21:38"></div>
+    <div style="display:flex;align-items:center;gap:4px;height:64px;padding:0 4px;border-bottom:1px solid var(--rule)">
+      <span class="ib"><svg class="i"><use href="#i-back"/></svg></span>
+      <div style="flex:1;font:400 16px var(--f-sans);color:var(--ink)">what did I decide about sync conflicts?</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--rule)">
+      <span style="width:36px;height:36px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center"><svg class="i"><use href="#i-spark"/></svg></span>
+      <div style="font:500 14.5px/20px var(--f-sans)">Ask your notes</div>
+    </div>
+    <div class="p-entry"><div class="body sm" style="font-weight:600">Sync conflicts: keep both versions, never pick a winner silently.</div><div class="meta">3 Oct · <span class="lbl">#project/spunto</span></div></div>
+    <div class="scrim"></div>
+    <div class="sheet" style="top:96px;padding-bottom:28px">
+      <div class="handle"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 8px 4px 24px"><svg class="i s18 spk"><use href="#i-spark"/></svg><span style="font:500 15px var(--f-sans)">Ask your notes</span><span class="spacer"></span><span class="ib" style="width:40px;height:40px"><svg class="i s18"><use href="#i-close"/></svg></span></div>
+      <div style="padding:0 24px">
+        <div style="font:italic 400 15px/22px var(--f-serif);color:var(--ink-2)">what did I decide about sync conflicts?</div>
+        <div class="answer" style="font-size:15px;line-height:23px;margin-top:12px">
+          <p>Keep both versions instead of picking a winner. The newer text stays on the note; the other edit becomes a linked conflicted copy you merge by hand<span class="cite">1</span>.</p>
+          <p>CRDT libraries were ruled out as too heavy for one person<span class="cite">2</span>, after last-writer-wins lost an edit in Quire<span class="cite">3</span>.</p>
+        </div>
+        <div class="over" style="margin-top:18px">Sources</div>
+        <div style="margin-top:6px">
+          <div class="ref" style="display:flex;gap:10px"><span class="cite" style="margin-top:3px">1</span><div class="body sm">Sync conflicts: keep both versions, never pick a winner silently.</div></div>
+          <div class="ref" style="display:flex;gap:10px"><span class="cite" style="margin-top:3px">2</span><div class="body sm">CRDTs are the wrong answer for a one-person notebook.</div></div>
+          <div class="ref" style="display:flex;gap:10px"><span class="cite" style="margin-top:3px">3</span><div class="body sm">Last writer wins was fine in Quire until two phones…</div></div>
+        </div>
+        <div class="meta" style="margin-top:12px">From 3 notes · qwen3.5 at ollama.home.arpa</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 16px 0"><span class="btn ghost lg"><svg class="i s16"><use href="#i-copy"/></svg>Copy</span><span class="spacer"></span><span class="btn primary lg">Save as note</span></div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R14 · Ask your notes, Android</div><h3>The command result is a sheet</h3><p>From the search screen's Ask row, the answer rises as a sheet over the results, which stay underneath for a plain look. Save as note keeps it; swiping the sheet down forgets it. Offline, the Ask row is absent and search runs on the phone by keyword.</p><div class="req">Command result · ask · SRC-4</div></div>
+  </figure>
+
+  <!-- R15 phone Tidy -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="07:52"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-pin"/></svg></span><span class="ib"><svg class="i"><use href="#i-more-v"/></svg></span></div>
+    <div style="padding:4px 20px 0">
+      <div class="over">Monday 13 October · 07:46</div>
+      <div class="meta"><span class="src"><svg class="i s14"><use href="#i-mic"/></svg>dictated</span></div>
+      <div class="body" style="margin-top:12px">allora ehm idea per il weekend mappa dei nasoni lungo il tevere da segnare mentre corro magari con una foto per ogni nasone e poi la metto su open street map cioè su osm</div>
+      <div class="sugg"><span class="prop"><svg class="i"><use href="#i-wand"/></svg>Tidy text</span><span class="prop">+ running</span><span class="prop">+ roma<span class="new">new</span></span></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="padding-bottom:30px">
+      <div class="handle"></div>
+      <div style="display:flex;align-items:center;padding:8px 24px 6px"><span style="font:500 17px var(--f-sans)">Tidy text</span><span class="spacer"></span><span class="meta" style="margin:0">Tidy · qwen3.5</span></div>
+      <div class="body" style="padding:6px 24px 0;font-size:16px;line-height:27px">
+        <span class="df-del">allora ehm idea</span> <span class="df-ins">Idea</span> per il weekend<span class="df-ins">:</span> mappa dei nasoni lungo il <span class="df-del">tevere</span> <span class="df-ins">Tevere,</span> da segnare mentre corro<span class="df-ins">.</span> <span class="df-del">magari</span> <span class="df-ins">Magari</span> con una foto per ogni nasone<span class="df-ins">,</span> e poi la metto su <span class="df-del">open street map cioè su osm</span> <span class="df-ins">OpenStreetMap.</span>
+      </div>
+      <div style="margin:14px 24px 0;font:400 13px/19px var(--f-sans);color:var(--ink-2)">Removed filler words and a repeat, added punctuation and capitals. Nothing else changed.</div>
+      <div style="display:flex;align-items:center;gap:8px;padding:18px 16px 0"><span class="btn ghost lg">Keep mine</span><span class="spacer"></span><span class="btn primary lg">Use tidy text</span></div>
+      <div style="margin:12px 24px 0;font:400 12px/16px var(--f-sans);color:var(--ink-3)">Your version stays in History.</div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R15 · Tidy a dictated note</div><h3>Changes to your words are a diff, never a rewrite</h3><p>A minute after a dictated note is saved, Tidy offers one pill on the suggestion line, with a wand instead of a plus because it changes text rather than adding to it. Tapping opens the diff: struck words go, dashed words are proposed. "Use tidy text" applies it as an ordinary edit, so it merges with anything typed meanwhile and lives in History; the result stays in the serif because the owner accepted it.</p><div class="req">Suggestion line · replace_body · diff · tidy</div></div>
+  </figure>
+
+  <!-- R16 develop this idea -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="08:06"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-pin"/></svg></span><span class="ib"><svg class="i"><use href="#i-more-v"/></svg></span></div>
+    <div style="padding:4px 20px 0">
+      <div class="over">Monday 13 October · 08:05</div>
+      <div class="meta" style="position:relative"><span class="agent"><svg class="i s14 spk"><use href="#i-spark"/></svg>via Develop this idea</span><span class="co" style="left:150px;top:-1px">1</span></div>
+      <div style="position:relative;margin-top:14px;padding-left:12px;border-left:2px solid var(--rule-strong)">
+        <div style="font:400 12px/16px var(--f-sans);color:var(--ink-3)">Develops</div>
+        <div class="body sm" style="margin-top:2px">Idea per il weekend: mappa dei nasoni lungo il Tevere, da segnare mentre corro.</div>
+        <div class="meta" style="margin-top:2px">Sun 12 Oct · #running</div>
+        <span class="co" style="right:-8px;top:2px">2</span>
+      </div>
+      <div class="gen" style="margin-top:16px;position:relative">
+        <span class="co" style="right:-8px;top:-4px">3</span>
+        <h5>Mapping the nasoni along the Tevere</h5>
+        <h6 style="margin-top:.4em">Questions</h6>
+        <ul>
+          <li>Does Roma Capitale already publish the fountains as open data, and under which licence?</li>
+          <li>Only the stretch you run, or the whole river?</li>
+        </ul>
+        <h6>Next steps</h6>
+        <ul>
+          <li>Check which nasoni are already on OpenStreetMap as drinking water.</li>
+          <li>Photograph each one on Sunday's run<span class="cite">1</span>, with location on.</li>
+        </ul>
+        <h6>Angles</h6>
+        <ul>
+          <li>A runner's map: water every two kilometres, from Ponte Milvio to the Magliana.</li>
+        </ul>
+      </div>
+      <div class="voice"><svg class="i s14 spk"><use href="#i-spark"/></svg>Written by Develop this idea with qwen3.5. Plugins leave it out until you edit it.</div>
+    </div>
+    <div class="colophon"><svg class="i s18"><use href="#i-info"/></svg><span><b>About this note</b> · Related 4</span><span class="spacer"></span><svg class="i s16"><use href="#i-right"/></svg></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R16 · Develop this idea</div><h3>A follow-up note, linked both ways</h3><ol><li><span class="lg-co">1</span><span>Run from the note's actions or ⌘K, it writes a new note and opens it. The original is never edited.</span></li><li><span class="lg-co">2</span><span>The first block points back to the note it develops, in the serif because those are the owner's words. With Links on, the original lists this note under Backlinks.</span></li><li><span class="lg-co">3</span><span>Questions, next steps and angles in the sans, citing the related notes it read. Editing any line adopts the note.</span></li></ol><div class="req">Commands · New notes · develop · links · D29</div></div>
+  </figure>
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     6. PLUGINS
+     ================================================================= -->
+<section class="pg-sec" id="plugins">
+ <div class="pg-wrap">
+  <h2>Settings → Plugins</h2>
+  <p class="pg-sub">One list of every installed plugin, grouped by what it helps with, one switch each. Under each name, a single grey line says what the plugin touches: for AI plugins, which capability it uses and exactly where your text goes. Switching one on shows that again as a short sheet before anything runs. There is no store: whoever runs the server installs plugins, and this page only switches them.</p>
+  <div class="desk-figs">
+  <!-- R17 manager web -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R17 · Plugins, web</div><h3>A list you can read in one pass</h3><p>Rows carry no icons and no colour: name, one sentence, one grey line of facts, a switch. A spark marks AI and is followed by the capability and the destination, computed from the plugin's AI route, never declared by the plugin. "Needs a vision model" replaces the switch when a requirement is missing; "Set in the environment" when the operator pinned it. "On 18" filters to what is running.</p><div class="req">PLG-1 · PLG-3 · PLG-5 · D16 · D27 · D31</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk xtall">
+    <div class="chrome" data-url="spunto.example.org/settings/plugins"></div>
+    <div class="app" data-id="r16app">
+     <aside class="rail" data-rail="settings" data-on="plugins"></aside>
+     <div class="main"><div style="width:700px;margin:0 auto;padding-top:38px">
+      <div style="font:600 28px/1.2 var(--f-serif);letter-spacing:-.015em">Plugins</div>
+      <p style="margin:10px 0 0;font:400 14.5px/22px var(--f-sans);color:var(--ink-2);max-width:600px">Everything beyond notes, labels and search. Switch one on and it takes its place; switch it off and it leaves the screen, while its data and any notes it wrote stay. New plugins are added by whoever runs the server, in <span style="font:400 13px var(--f-mono)">/data/plugins</span>.</p>
+      <div style="display:flex;align-items:center;gap:16px;margin:22px 0 0"><span class="sgc"><span class="on">All 25</span><span>On 18</span></span><span class="spacer"></span><span class="hint"><svg class="i s14 spk"><use href="#i-spark"/></svg>Chat qwen3.5 · Embed nomic-embed-text · at ollama.home.arpa</span><span class="btn text" style="height:28px;font-size:13px">AI settings</span></div>
+      <div data-plugins="web"></div>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- R18 permission dialog web -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R18 · Turning on a plugin, web</div><h3>What it will do, before it does it</h3><p>The sheet is generated from the plugin's permissions and its AI route, in plain sentences. Translate is routed to a bigger cloud model, so the destination line says "outside your network" in words, not in red. "Change route" jumps to AI settings. Nothing runs until Turn on.</p><div class="req">PLG-3 · §3.8 rules 1 and 2 · D16</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome" data-url="spunto.example.org/settings/plugins"></div>
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column">
+     <div data-include="r16app" style="flex:1"></div>
+     <div class="scrim"></div>
+     <div class="dlg" style="top:70px;width:520px;margin-left:-260px">
+      <h4>Turn on Translate?</h4>
+      <div style="font:400 14px/21px var(--f-sans);color:var(--ink-2)">Italian to English and back. The translation appears as a result you can save as a note linked to the original.</div>
+      <div class="over" style="margin:20px 0 2px">It will</div>
+      <div class="perm"><svg class="i s18"><use href="#i-book"/></svg><div>Read the note you translate<span class="sub">Only when you run it. Never private notes.</span></div></div>
+      <div class="perm"><svg class="i s18"><use href="#i-edit"/></svg><div>Write a new note when you save a translation<span class="sub">Marked "via Translate" and linked both ways. The original is not changed.</span></div></div>
+      <div class="over" style="margin:16px 0 0">AI and where note text goes</div>
+      <div class="where"><svg class="i s18"><use href="#i-out"/></svg><div><b>Chat:</b> the note goes to <b>gpt-oss:120b at ollama.com</b>, outside your network. Other plugins use qwen3.5 at ollama.home.arpa.</div></div>
+      <div class="over" style="margin:18px 0 2px">Where it shows up</div>
+      <div class="perm"><svg class="i s18"><use href="#i-search"/></svg><div>"Translate…" in ⌘K, the / menu and the note menu<span class="sub">Nothing else on screen.</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:22px"><span class="btn text" style="padding:0 4px">Change route</span><span class="spacer"></span><span class="btn ghost lg">Cancel</span><span class="btn primary lg">Turn on</span></div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- R19 plugin settings page web -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R19 · A plugin's own page</div><h3>Generated, so every plugin's page looks the same</h3><ol><li><span class="lg-co">1</span><span>Settings come from the plugin's schema: a three-value enum becomes a segmented control, a time a time picker, an integer a stepper, a list of labels label chips. Secret fields never appear as inputs (see R22).</span></li><li><span class="lg-co">2</span><span>Everything below is drawn by the host for every plugin: the AI route and where text goes, its commands, last run and failures, its access in sentences, and "Delete this plugin's data".</span></li></ol><div class="req">PLG-2 · PLG-4 · digest manifest (04 §3.2)</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk tall" style="height:1180px">
+    <div class="chrome" data-url="spunto.example.org/settings/plugins/digest"></div>
+    <div class="app">
+     <aside class="rail" data-rail="settings" data-on="plugins"></aside>
+     <div class="main"><div style="width:680px;margin:0 auto;padding-top:34px">
+      <div class="hint" style="font-size:13px;color:var(--ink-2)"><svg class="i s16"><use href="#i-back"/></svg>Plugins</div>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:20px"><div style="font:600 28px/1.2 var(--f-serif);letter-spacing:-.015em">Weekly digest</div><span class="spacer"></span><span style="font:400 13px var(--f-sans);color:var(--ink-2)">On</span><span class="tg on"></span></div>
+      <p style="margin:10px 0 0;font:400 14.5px/22px var(--f-sans);color:var(--ink-2);max-width:600px">Each week, a short note on what you captured: themes, open questions and threads worth continuing, each linked to its notes.</p>
+      <div class="meta" style="margin-top:8px">Recall · built in · 1.0.0 · on since 2 September</div>
+      <div class="fsec" style="position:relative"><span class="co" style="left:-40px;top:24px">1</span><span class="over">Settings</span></div>
+      <div class="frow"><div class="fl">Day</div><div class="fv"><span class="sgc"><span>Monday</span><span>Friday</span><span class="on">Sunday</span></span></div></div>
+      <div class="frow"><div class="fl">Time</div><div class="fv"><span class="pick"><svg class="i"><use href="#i-clock"/></svg>18:00<svg class="i"><use href="#i-down"/></svg></span></div></div>
+      <div class="frow"><div><div class="fl">Skip weeks with fewer notes than</div><div class="fh">A quiet week gets no digest.</div></div><div class="fv"><span class="step"><span>−</span><b>5</b><span>+</span></span></div></div>
+      <div class="frow"><div><div class="fl">Leave out</div><div class="fh">Notes with these labels are never read.</div></div><div class="fv"><span class="lchip">#diario<svg class="i"><use href="#i-close"/></svg></span><span class="lchip">#health<svg class="i"><use href="#i-close"/></svg></span><span class="addl">Add label</span></div></div>
+      <div class="fsec" style="position:relative;padding-top:30px"><span class="co" style="left:-40px;top:28px">2</span><span class="over">AI</span></div>
+      <div class="frow"><div><div class="fl">Chat model</div><div class="fh">From your AI profiles.</div></div><div class="fv"><span class="pick"><svg class="i spk"><use href="#i-spark"/></svg>qwen3.5 at ollama.home.arpa<svg class="i"><use href="#i-down"/></svg></span></div></div>
+      <div class="where" style="margin-top:4px"><svg class="i s18"><use href="#i-lock"/></svg><div>A week of notes goes to <b>qwen3.5 at ollama.home.arpa</b>, on your network. Private notes never do.</div></div>
+      <div class="fsec"><span class="over">Run</span></div>
+      <div style="display:flex;align-items:center;gap:14px;padding-top:8px"><span class="btn outline"><svg class="i s16 spk"><use href="#i-spark"/></svg>Write this week's digest</span><span class="hint">Usually under a minute. The note appears in your timeline and in Digests.</span></div>
+      <div class="fsec"><span class="over">Activity</span></div>
+      <div style="padding-top:6px;font:400 13.5px/22px var(--f-sans);color:var(--ink-2)">Last run Sunday 12 October, 18:00 · read 31 notes · wrote 1 note · no failures<br>This month: 5 runs, every answer passed validation.</div>
+      <div class="fsec"><span class="over">Access</span></div>
+      <div style="padding-top:6px;font:400 13.5px/22px var(--f-sans);color:var(--ink-2)">Reads your notes, never private ones · Writes new notes marked "via Weekly digest", at most five a day · Sends a week of notes to the chat model · Runs every Sunday at 18:00 · Adds one tool for agents, <span style="font:400 12.5px var(--f-mono)">digest_latest</span></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:22px"><span class="btn ghost" style="color:var(--danger);padding:0 6px">Delete this plugin's data…</span><span class="hint">Its notes stay: they are notes.</span></div>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+
+  <div class="figs-phone" style="margin-top:72px">
+  <!-- R20 phone manager -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr"><div class="scr-body" data-id="r19body">
+    <div class="sb" data-t="10:05"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><div class="ab-title" style="margin-left:4px">Plugins</div><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-search"/></svg></span></div>
+    <div style="padding:0 20px 4px"><span class="sgc"><span class="on">All 25</span><span>On 18</span></span></div>
+    <div data-plugins="phone" style="overflow:hidden"></div>
+    <div class="gest"></div>
+   </div></div></div></div></div>
+   <div class="cap"><div class="id">R20 · Plugins, Android</div><h3>The same list, thumb-sized</h3><p>Settings → Plugins on the phone is the same list with 52 dp switches. Device plugins say "Android" and switch the phone's own features (the mic, the widget and tiles), the only plugin-owned buttons anywhere. Toggles sync: switching on the phone changes the web within seconds.</p><div class="req">PLG-1 · §3.6 device plugins</div></div>
+  </figure>
+
+  <!-- R21 phone permission sheet -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div data-include="r19body"></div>
+    <div class="scrim"></div>
+    <div class="sheet" style="padding-bottom:30px">
+      <div class="handle"></div>
+      <div style="padding:6px 24px 0">
+        <div style="font:500 20px/26px var(--f-sans)">Turn on Link enrichment?</div>
+        <div style="margin-top:6px;font:400 14px/20px var(--f-sans);color:var(--ink-2)">For a link you save: the page title, a short summary and label ideas.</div>
+        <div class="over" style="margin:16px 0 0">It will</div>
+        <div class="perm"><svg class="i s18"><use href="#i-globe"/></svg><div>Fetch the page your note links to<span class="sub">Once, from your server, only for links you saved yourself. The site sees your server's address.</span></div></div>
+        <div class="perm"><svg class="i s18"><use href="#i-book"/></svg><div>Read notes that contain a link<span class="sub">Never private notes.</span></div></div>
+        <div class="perm"><svg class="i s18"><use href="#i-plus"/></svg><div>Propose a title and labels<span class="sub">As dashed pills you accept or dismiss.</span></div></div>
+        <div class="over" style="margin:12px 0 0">AI and where text goes</div>
+        <div class="where" style="font-size:13px;line-height:19px"><svg class="i s18"><use href="#i-lock"/></svg><div><b>Chat:</b> page text and your note go to <b>qwen3.5 at ollama.home.arpa</b>, on your network.</div></div>
+        <div style="margin-top:12px;font:400 12.5px/18px var(--f-sans);color:var(--ink-3)">Shows up as pills under the note, a Source section in About this note, and the reading time on the note.</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:16px 16px 0"><span class="spacer"></span><span class="btn ghost lg">Cancel</span><span class="btn primary lg">Turn on</span></div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R21 · Turning on, Android</div><h3>Four headings, every time</h3><p>Same sheet on every plugin: what it does, what it will do, its AI capability and where text goes, where it shows up. A plugin with no AI and no network says "Stays on your server". The URL fetch is spelled out because it is new: the server reaching the web for you (D30).</p><div class="req">PLG-3 · D30 · link-enrichment</div></div>
+  </figure>
+
+  <!-- R22 phone telegram settings -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="10:07"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><div class="ab-title" style="margin-left:4px">Telegram</div><span class="spacer"></span><span class="tg on" style="margin-right:16px"></span></div>
+    <div style="padding:0 20px">
+      <div style="font:400 14px/20px var(--f-sans);color:var(--ink-2)">Messages to your own bot become notes.</div>
+      <div class="meta" style="margin-top:6px">Capture · built in · 1.0.0</div>
+      <div class="over" style="margin:22px 0 4px">Settings</div>
+      <div class="prow"><div class="fl">Bot token</div><div class="fv"><span class="envrow"><svg class="i s16"><use href="#i-lock"/></svg>Set in the environment</span></div><div class="fv" style="margin-top:6px"><span class="envrow"><code>SPUNTO_PLUGIN_TELEGRAM_BOT_TOKEN</code></span></div></div>
+      <div class="prow"><div class="fl">Accept messages from</div><div class="fh">Everyone else is refused and counted.</div><div class="fv"><span class="lchip" style="font-family:var(--f-sans);color:var(--ink)">@vitofico<svg class="i"><use href="#i-close"/></svg></span><span class="addl">Add</span></div></div>
+      <div class="prow"><div class="fl">Label new notes with</div><div class="fv"><span class="lchip">#inbox<svg class="i"><use href="#i-close"/></svg></span></div></div>
+      <div class="prow" style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="fl">Keep photos as attachments</div></div><span class="tg on"></span></div>
+      <div class="over" style="margin:18px 0 0">Where text goes</div>
+      <div class="where" style="font-size:13px;line-height:19px"><svg class="i s18"><use href="#i-lock"/></svg><div>Nowhere new: Telegram has your messages already. The server only talks to api.telegram.org.</div></div>
+      <div class="over" style="margin:18px 0 6px">Activity</div>
+      <div style="font:400 13px/19px var(--f-sans);color:var(--ink-2)">Last message 09:12 · 3 notes today · 1 refused</div>
+    </div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R22 · A generated page with a secret</div><h3>Secrets are never form fields</h3><p>The bot token is marked secret in the schema, so the page shows where it comes from instead of an input: an environment variable, like every other secret on the server. The rest of the form is generated from the same schema the web uses, so Android draws it offline from the cached manifest, read-only until it reconnects.</p><div class="req">x-secret · HOST-2 · telegram · D32</div></div>
+  </figure>
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     7. THEMES
+     ================================================================= -->
+<section class="pg-sec" id="themes">
+ <div class="pg-wrap">
+  <h2>Three themes, light and dark</h2>
+  <p class="pg-sub">A theme is a pack of colour values and nothing else: type, spacing, shapes and motion are fixed, so plugin output can never look wrong in one theme and right in another. Carta is the original warm paper. Ardesia is cool slate with ink blue, for long sessions on bright screens. Salvia is pale sage with forest green, the softest of the three. Each text colour clears WCAG AA in both modes; the table at the end computes the ratios live from the same values the frames use.</p>
+  <div class="desk-figs">
+  <!-- R23 appearance web -->
+  <figure class="fig">
+   <div class="cap"><div class="id">R23 · Appearance, web</div><h3>Pick by looking, not by name</h3><p>Each card is a small live page in its own theme, in the current mode: a note, a label, a dashed proposal and the theme's five key colours. The theme applies to every device; one switch keeps a different theme on this device only. Mode stays per device. The page switches instantly, with no transition.</p><div class="req">THM-1 · THM-2 · THM-3</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome" data-url="spunto.example.org/settings/appearance"></div>
+    <div class="app">
+     <aside class="rail" data-rail="settings" data-on="appearance"></aside>
+     <div class="main"><div style="width:680px;margin:0 auto;padding-top:38px">
+      <div style="font:600 28px/1.2 var(--f-serif);letter-spacing:-.015em">Appearance</div>
+      <p style="margin:10px 0 0;font:400 14.5px/22px var(--f-sans);color:var(--ink-2);max-width:600px">Themes change colour only. Type, spacing and layout stay the same, so every plugin looks right in every theme.</p>
+      <div class="fsec"><span class="over">Theme</span></div>
+      <div class="tcards" style="margin-top:10px" data-tcards></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:14px;font:400 13.5px var(--f-sans);color:var(--ink-2)"><span class="tg"></span>Use a different theme on this device</div>
+      <div class="frow" style="margin-top:18px"><div><div class="fl">Mode</div><div class="fh">This device only.</div></div><div class="fv"><span class="sgc"><span class="on">System</span><span>Light</span><span>Dark</span></span></div></div>
+      <div class="frow"><div><div class="fl">Reading face</div><div class="fh">For your notes. Generated notes always use the sans and keep their spark chip.</div></div><div class="fv"><span class="sgc"><span class="on" style="font-family:var(--f-serif);font-weight:400">Serif</span><span>Sans</span></span></div></div>
+      <div class="frow"><div class="fl">Text size</div><div class="fv"><span class="sgc"><span>S</span><span class="on">M</span><span>L</span></span></div></div>
+      <div class="frow"><div><div class="fl">More themes</div></div><div style="font:400 13.5px/20px var(--f-sans);color:var(--ink-2)">Packs added in <span style="font:400 12.5px var(--f-mono)">/data/themes</span> appear here. One that fails the contrast check names the failing pair.</div></div>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+  </div>
+
+  <div class="figs-phone" style="margin-top:72px">
+  <!-- R24 appearance phone -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb" data-t="22:10"></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><div class="ab-title" style="margin-left:4px">Appearance</div></div>
+    <div style="padding:0 16px">
+      <div class="over" style="padding:8px 4px 10px">Theme</div>
+      <div class="tcards" data-tcards></div>
+    </div>
+    <div class="srow" style="margin-top:8px;padding:0 20px">Only on this phone<span class="spacer"></span><span class="tg"></span></div>
+    <div style="padding:6px 20px 0;border-top:1px solid var(--rule);margin-top:6px">
+      <div class="prow" style="border-top:0"><div class="fl">Mode</div><div class="fv"><span class="sgc"><span class="on">System</span><span>Light</span><span>Dark</span></span></div></div>
+      <div class="prow" style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="fl">Pure black in dark mode</div><div class="fh">For OLED screens.</div></div><span class="tg"></span></div>
+      <div class="prow" style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="fl">Wallpaper colours</div><div class="fh">Replaces the theme's paper and accent.</div></div><span class="tg"></span></div>
+      <div class="prow"><div class="fl">Reading face</div><div class="fv"><span class="sgc"><span class="on" style="font-family:var(--f-serif);font-weight:400">Serif</span><span>Sans</span></span></div></div>
+    </div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">R24 · Appearance, Android</div><h3>Three cards across one thumb's reach</h3><p>The same cards, compact. Pure black and wallpaper colours stay Android options that apply on top of any theme: pure black darkens its dark set, wallpaper colours replace its paper and accent while keeping its ink.</p><div class="req">THM-1 · THM-2 · A9</div></div>
+  </figure>
+  </div>
+
+  <div style="margin-top:72px" class="spx-grid" data-specimens></div>
+  <div class="tbl-wrap"><table class="ttab" data-tokentable></table></div>
+ </div>
+</section>
+</main>
+
+<footer class="pg-foot"><div class="pg-wrap">spunto redesign mockups v0.2 · 13 October 2026 · Companion to 04-redesign.md and 05-redesign-ux.md. Fonts load from Google Fonts for this preview only; the product self-hosts them. Icons are hand-drawn stand-ins for Material Symbols Rounded (Apache 2.0).</div></footer>
+
+<script>
+(function(){
+  'use strict';
+  function I(id,cls){return '<svg class="i'+(cls?' '+cls:'')+'"><use href="#i-'+id+'"/></svg>';}
+
+  // ---- 1. Scenery templates: status bars, browser chrome
+  document.querySelectorAll('.sb[data-t]').forEach(function(el){
+    el.innerHTML='<span></span><span class="ic">'+I('signal')+I('wifi')+I('batt')+'</span>';
+    el.firstElementChild.textContent=el.getAttribute('data-t');
+  });
+  document.querySelectorAll('.chrome[data-url]').forEach(function(el){
+    el.innerHTML='<span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url">'+I('lock')+'</div>';
+    el.querySelector('.url').append(document.createTextNode(el.getAttribute('data-url')));
+  });
+
+  // ---- 2. Web rails: core, default set, the 18-plugin showcase, settings
+  function item(ic,label,n,on,extra){
+    return '<div class="ri'+(on?' on':'')+(extra||'')+'">'+(ic?I(ic):'')+label+(n?'<span class="n">'+n+'</span>':'')+'</div>';
+  }
+  function rail(kind,on){
+    var h='<div class="wm">spunto<span class="dot">.</span></div>';
+    if(kind==='settings'){
+      h+='<div class="ri" style="margin-bottom:12px">'+I('back')+'Back to notes</div><div class="rsec" style="margin-top:4px"><span class="over">Settings</span></div>';
+      [['appearance','Appearance'],['plugins','Plugins','18 on'],['devices','Devices','3'],['tokens','Access tokens','3'],['agents','Agents'],['ai','AI'],['data','Data']].forEach(function(r){h+=item(null,r[1],r[2],on===r[0]);});
+      return h+'<div class="rfoot"><div class="ri">Status</div><div class="rstat">v0.2.0 · stable</div></div>';
+    }
+    h+='<div class="sbtn">'+I('search')+'Search<span class="spacer"></span><span class="kbd">⌘K</span></div>';
+    h+=item('notes','All notes','214',on==='all')+item('archive','Archive','',false)+item('trash','Trash','',false);
+    if(kind==='plugins'){
+      h+='<div class="rsec" style="position:relative"><span class="over">Views</span></div>'
+        +item('term','From agents','9',on==='agents')+item('tasks','Tasks','7',on==='tasks')+item('spark','Digests','6',on==='digests');
+    }
+    h+='<div class="rsec"><span class="over">Labels</span></div>';
+    h+=item(null,'<svg class="i chev"><use href="#i-down"/></svg>project','41',false)
+      +item(null,'spunto','18',on==='spunto',' l1')+item(null,'quire','14',false,' l1')+item(null,'galley','9',false,' l1')
+      +item(null,'<span class="nc"></span>homelab','27',false)+item(null,'<span class="nc"></span>idea','23',false);
+    if(on==='essays'){
+      h+=item(null,'<svg class="i chev"><use href="#i-down"/></svg>reading','19',false)+item(null,'essays','12',true,' l1')+item(null,'books','7',false,' l1');
+    } else {
+      h+=item(null,'<svg class="i chev"><use href="#i-right"/></svg>reading','19',false);
+    }
+    h+=item(null,'<span class="nc"></span>running','11',false);
+    var stat=kind==='core'?'Synced':'Synced · AI ready';
+    return h+'<div class="rfoot"><div class="ri">'+I('tune')+'Settings</div><div class="rstat" style="position:relative">'+stat+'</div></div>';
+  }
+  function callout(parent,value,left,top){
+    if(!parent||!value) return;
+    var el=document.createElement('span');
+    el.className='co';
+    el.style.left=left+'px';
+    el.style.top=top+'px';
+    el.textContent=value;
+    parent.append(el);
+  }
+  document.querySelectorAll('.rail[data-rail]').forEach(function(el){
+    var kind=el.getAttribute('data-rail');
+    el.innerHTML=rail(kind,el.getAttribute('data-on'));
+    if(kind!=='settings') callout(el.querySelector('.rfoot .rstat'),el.getAttribute('data-co'),122,0);
+    if(kind==='plugins') callout(el.querySelector('.rsec'),el.getAttribute('data-co-views'),150,-4);
+  });
+
+  // ---- 3. Plugin list (04 §4 catalog; the showcase instance has 18 of 25 on)
+  var L='ollama.home.arpa';
+  var PL=[
+   ['Capture',[
+    ['Dictation','Speak a note in the composer, in Italian or English.',[['lock','Stays on the phone']],'on','Android'],
+    ['Quick capture','A home-screen widget and Quick Settings tiles, each with Dictate.',[['lock','Stays on the phone']],'on','Android'],
+    ['Voice memos','Keeps a recording and transcribes it; the transcript arrives as a diff to accept.',[['spark','Transcribe: audio to whisper at '+L]],'off'],
+    ['Link enrichment','For a link you save: the page title, a short summary and label ideas.',[['globe','Fetches the linked page'],['spark','Chat: page and note to qwen3.5 at '+L]],'on'],
+    ['Image text','Reads the text in images you attach, so search can find them.',[['spark','Vision: no vision model is set up']],'wait','','Needs a vision model'],
+    ['Tidy','Cleans up dictated or pasted text without changing what it says.',[['spark','Chat: the note to qwen3.5 at '+L]],'on'],
+    ['Email in','Mail from senders you allow becomes a note.',[['mail','Reads one mailbox at mail.home.arpa']],'env'],
+    ['Telegram','Messages to your own bot become notes.',[['mail','Talks to api.telegram.org']],'on']]],
+   ['Organize',[
+    ['Label suggestions','Up to three labels after you save. Nothing changes until you accept.',[['spark','Chat: the note to qwen3.5 at '+L]],'on','Default with AI'],
+    ['Title and summary','For long notes: a proposed title, and a short summary in the note panel.',[['spark','Chat: the note to qwen3.5 at '+L]],'on'],
+    ['Label gardener','Proposes merging labels that overlap, and new labels for clusters of notes.',[['spark','Chat and embed: label names and samples to '+L]],'on'],
+    ['Duplicate finder','Finds notes that say the same thing, to compare and merge.',[['lock','Stays on your server: uses the index']],'on'],
+    ['Links','Link one note to another, with Backlinks in the note panel.',[['lock','Stays on your server']],'on'],
+    ['Tasks','Collects notes with open checkboxes into a Tasks view.',[['lock','Stays on your server']],'on']]],
+   ['Recall',[
+    ['Semantic search','Finds notes by meaning as well as by words.',[['spark','Embed: every non-private note to nomic-embed-text at '+L]],'on','Default with AI'],
+    ['Related notes','Up to five related notes in the note panel.',[['lock','Stays on your server: uses the index']],'on','Default with AI'],
+    ['Ask your notes','Answers a question from your notes, with citations.',[['spark','Chat: up to 8 notes per question to qwen3.5 at '+L]],'on','Default with AI'],
+    ['Resurface','One older note a day, at the top of the timeline and on the widget.',[['lock','Stays on your server']],'on'],
+    ['Weekly digest','A note each week: themes, open questions and threads to continue.',[['spark','Chat: a week of notes to qwen3.5 at '+L],['clock','Sundays 18:00']],'on']]],
+   ['Develop',[
+    ['Develop this idea','Turns a note into a linked follow-up: questions, next steps, angles.',[['spark','Chat: the note and its related notes to qwen3.5 at '+L]],'on'],
+    ['Translate','Italian to English and back, savable as a linked note.',[['out','Chat: the note to gpt-oss:120b at ollama.com, outside your network']],'off']]],
+   ['Agents',[
+    ['Agent inbox','A From agents view, with Mark reviewed.',[['lock','Stays on your server']],'on'],
+    ['Webhooks','Sends note events to URLs you set, such as n8n or Hermes.',[['out','The URLs you set; never private notes']],'off']]],
+   ['Data',[
+    ['Blinko import','Imports notes, tags and attachments from a running Blinko.',[['net','Reads blinko.example.org']],'off'],
+    ['Markdown import','Imports a folder or zip of Markdown from Obsidian, Bear or Memos.',[['lock','Stays on your server']],'off']]]
+  ];
+  function plugRows(phone){
+    var h='';
+    PL.forEach(function(g){
+      var on=g[1].filter(function(p){return p[3]==='on';}).length;
+      h+='<div class="grp"'+(phone?' style="padding:18px 20px 4px"':'')+'><span class="over">'+g[0]+'</span><span class="hn">'+on+' of '+g[1].length+' on</span></div>';
+      g[1].forEach(function(p){
+        var facts=(phone?p[2].slice(0,1):p[2]).map(function(f){return '<span>'+I(f[0],f[0]==='spark'?'spk':'')+f[1]+'</span>';}).join('');
+        var ctl;
+        if(p[3]==='env') ctl='<span class="lockd">'+I('lock','s14')+(phone?'Set in env':'Off · set in the environment')+'</span>';
+        else if(p[3]==='wait') ctl=(phone?'':'<span class="na">'+p[5]+'</span>')+'<span class="tg"></span>';
+        else ctl=(p[3]==='on'&&!phone?'<span class="lnk">Settings</span>':'')+'<span class="tg'+(p[3]==='on'?' on':'')+'"></span>';
+        h+='<div class="plg"><div><div class="nm">'+p[0]+(p[4]?'<span class="tag">'+p[4]+'</span>':'')+'</div><div class="ds">'+p[1]+'</div><div class="fx">'+facts+'</div></div><div class="ctl">'+ctl+'</div></div>';
+      });
+    });
+    return h;
+  }
+  document.querySelectorAll('[data-plugins]').forEach(function(el){ el.innerHTML=plugRows(el.getAttribute('data-plugins')==='phone'); });
+
+  // ---- 4. Theme cards (each card renders in its own pack)
+  var PACKS={carta:['Carta','Warm paper, terracotta. The original.'],ardesia:['Ardesia','Cool slate, ink blue. Crisp on bright screens.'],salvia:['Salvia','Sage paper, forest green. The softest.']};
+  document.querySelectorAll('[data-tcards]').forEach(function(el){
+    el.innerHTML=Object.keys(PACKS).map(function(k){
+      return '<div class="tcard" data-card="'+k+'"><div class="mini" data-pack="'+k+'" data-fix><div class="mt">14:32</div><div class="mb">Widget idea: one old note a day.</div><div class="ml">#reading</div><span class="mp">+ idea</span><div class="ms"><i style="background:var(--sunken)"></i><i style="background:var(--ink)"></i><i style="background:var(--accent)"></i><i style="background:var(--accent-soft)"></i><i style="background:var(--highlight)"></i></div></div><div class="tn">'+PACKS[k][0]+I('check')+'</div><div class="td">'+PACKS[k][1]+'</div></div>';
+    }).join('');
+  });
+
+  // ---- 5. Reuse a screen as the background of another (overlays); drop annotations from copies
+  document.querySelectorAll('[data-include]').forEach(function(el){
+    var src=document.querySelector('[data-id="'+el.getAttribute('data-include')+'"]');
+    if(!src) return;
+    var c=src.cloneNode(true); c.removeAttribute('data-id');
+    c.querySelectorAll('.co,[data-id]').forEach(function(x){ if(x.classList.contains('co')) x.remove(); else x.removeAttribute('data-id'); });
+    if(el.getAttribute('style')) c.setAttribute('style',(c.getAttribute('style')||'')+';'+el.getAttribute('style'));
+    c.setAttribute('aria-hidden','true');
+    el.replaceWith(c);
+  });
+
+  // ---- 6. Each frame is authored once in light; the dark twin is the same markup under dark tokens
+  document.querySelectorAll('.tw[data-theme="light"]').forEach(function(l){
+    var d=l.cloneNode(true); d.setAttribute('data-theme','dark'); l.after(d);
+  });
+  document.querySelectorAll('.tw').forEach(function(tw){
+    var m=tw.getAttribute('data-theme');
+    tw.querySelectorAll('[data-fix]').forEach(function(x){ x.setAttribute('data-theme',m); });
+  });
+
+  // ---- 7. Theme values (05-redesign-ux.md §8), for specimens and the live contrast table
+  var T={
+   carta:{light:{paper:'#F8F5F0',raised:'#FEFDFA',sunken:'#F0EDE6',ink:'#221D18','ink-2':'#5B544C','ink-3':'#6E6860',rule:'#E3DFD8','rule-strong':'#CCC7BE',field:'#8A857E',accent:'#9F4C2A','accent-strong':'#883A1D','accent-soft':'#FAE9DE','on-accent':'#FEF9F4',highlight:'#F5E4B0',danger:'#AF2934',warn:'#CD9130'},
+          dark:{paper:'#171412',raised:'#211D1A',sunken:'#100E0C',ink:'#EAE5DD','ink-2':'#BDB6AE','ink-3':'#9D978F',rule:'#2D2925','rule-strong':'#413C37',field:'#736E67',accent:'#E7986F','accent-strong':'#F6B38B','accent-soft':'#3F271D','on-accent':'#24140C',highlight:'#5F4A1A',danger:'#ED7473',warn:'#E1AD57'}},
+   ardesia:{light:{paper:'#F4F6F8',raised:'#FCFDFE',sunken:'#EBEEF2',ink:'#161B22','ink-2':'#4A5361','ink-3':'#5E6775',rule:'#DEE2E8','rule-strong':'#C5CBD4',field:'#7D8592',accent:'#2F5E9E','accent-strong':'#234B82','accent-soft':'#E3EBF7','on-accent':'#F7FAFE',highlight:'#F2E5A8',danger:'#B4232F',warn:'#C98A1E'},
+          dark:{paper:'#13161A',raised:'#1C2026',sunken:'#0D0F12',ink:'#E4E8EE','ink-2':'#B3BAC5','ink-3':'#929AA6',rule:'#272C33','rule-strong':'#3A4049',field:'#6C7480',accent:'#8DB2EE','accent-strong':'#B0CBF5','accent-soft':'#1E2B40','on-accent':'#0F1A2B',highlight:'#57481A',danger:'#F07A7A',warn:'#E0AE55'}},
+   salvia:{light:{paper:'#F3F5F0',raised:'#FBFCF9',sunken:'#E9EDE5',ink:'#1A1F1B','ink-2':'#4D564F','ink-3':'#616A63',rule:'#DCE1D8','rule-strong':'#C3CABF',field:'#7E877F',accent:'#2D6A4F','accent-strong':'#22553F','accent-soft':'#DDEEE3','on-accent':'#F6FBF7',highlight:'#EFE3A8',danger:'#B0282F',warn:'#C08A2A'},
+          dark:{paper:'#121614',raised:'#1B201D',sunken:'#0C0F0D',ink:'#E2E8E2','ink-2':'#B2BCB4','ink-3':'#919C94',rule:'#262C28','rule-strong':'#39413B',field:'#6B756D',accent:'#7FC4A0','accent-strong':'#A6DABD','accent-soft':'#1C3327','on-accent':'#0D1F15',highlight:'#4F4A1C',danger:'#EE7C78',warn:'#DDB05A'}}
+  };
+  function lum(h){h=h.replace('#','');return [0,2,4].map(function(i){var c=parseInt(h.substr(i,2),16)/255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}).reduce(function(a,c,i){return a+c*[0.2126,0.7152,0.0722][i];},0);}
+  function cr(a,b){var x=lum(a),y=lum(b);return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);}
+  var ROLES=[['paper','Page background',null],['raised','Composer, sheets, palette',null],['sunken','Rail, slip, quotes, chips',null],
+    ['ink','Note text, titles',['paper','raised','sunken']],['ink-2','Secondary UI text',['paper','raised','sunken']],['ink-3','Meta, counts, placeholders',['paper','raised','sunken','accent-soft']],
+    ['rule','Hairlines',null],['rule-strong','Underlines, dividers',null],['field','Field borders (3:1)',['paper','raised']],
+    ['accent','Labels, primary, focus, proposals',['paper','raised','sunken','accent-soft']],['accent-strong','Accent text on soft fills',['paper','accent-soft']],['accent-soft','Selected rows, citations',null],
+    ['on-accent','Text on accent fills',['accent']],['highlight','Search match (ink on it)',['ink']],['danger','Destructive actions',['paper','raised']],['warn','Conflict dot, with text',null]];
+  function cell(t,role,pairs){
+    if(!pairs) return '<span style="color:var(--pg-ink3)">n/a</span>';
+    var lim=role==='field'?3:4.5;
+    return pairs.map(function(p){var r=cr(t[role],t[p]);return '<span class="'+(r>=lim?'ok':'')+'">'+r.toFixed(1)+'</span> <span style="color:var(--pg-ink3)">['+p+']</span>'+(r<lim?' <b style="color:#c00">fail</b>':'');}).join(' · ');
+  }
+  function table(pack){
+    var t=T[pack], h='<thead><tr><th>Token</th><th>Role</th><th>Light</th><th>Contrast, light</th><th>Dark</th><th>Contrast, dark</th></tr></thead><tbody>';
+    ROLES.forEach(function(r){
+      h+='<tr><td class="tk">'+r[0]+'</td><td>'+r[1]+'</td><td><span class="sq" style="background:'+t.light[r[0]]+'"></span><span class="hx">'+t.light[r[0]]+'</span></td><td>'+cell(t.light,r[0],r[2])+'</td><td><span class="sq" style="background:'+t.dark[r[0]]+'"></span><span class="hx">'+t.dark[r[0]]+'</span></td><td>'+cell(t.dark,r[0],r[2])+'</td></tr>';
+    });
+    return h+'</tbody><caption style="caption-side:top;text-align:left;padding:0 0 12px;font:600 22px/1.2 var(--f-serif);color:var(--pg-ink)">'+PACKS[pack][0]+' tokens <span style="font:400 13px var(--f-sans);color:var(--pg-ink3)">WCAG ratio against the token in brackets, computed in this page</span></caption>';
+  }
+  var sp=document.querySelector('[data-specimens]');
+  sp.innerHTML=Object.keys(PACKS).map(function(k){
+    function one(m){
+      return '<div class="spx" data-pack="'+k+'" data-theme="'+m+'"><div class="over">'+PACKS[k][0]+' · '+m+'</div>'
+        +'<div class="meta" style="margin-top:0">14:32</div><div class="body" style="--fs-body:16px;--lh-body:25px;margin-top:4px">Pasta e ceci della nonna: rosmarino nel soffritto, non alla fine.</div>'
+        +'<div class="lblrow" style="--fs-body:16px">#cucina</div><div class="sugg" style="--fs-meta:12px;margin-top:10px"><span class="prop">+ ricette<span class="new">new</span></span><span class="more">+1</span></div>'
+        +'<div class="gen" style="--fs-gen:14px;--lh-gen:21px;margin-top:12px;color:var(--ink-2)">A model wrote this line, so it is set in the sans.</div>'
+        +'<div class="meta"><span class="agent">'+I('spark','s14 spk')+'via Weekly digest</span></div>'
+        +'<div class="sw">'+['paper','raised','sunken','ink','accent','accent-soft'].map(function(x){return '<i style="background:var(--'+x+')"></i>';}).join('')+'</div>'
+        +'<div class="swl">'+['paper','raised','sunken','ink','accent','soft'].map(function(x){return '<span>'+x+'</span>';}).join('')+'</div></div>';
+    }
+    return '<div class="spx-col"><h3>'+PACKS[k][0]+'</h3><p>'+PACKS[k][1]+'</p><div class="spx-pair">'+one('light')+one('dark')+'</div></div>';
+  }).join('');
+  var tt=document.querySelector('[data-tokentable]');
+
+  // ---- 8. Page switches: theme pack and mode
+  function setPack(p){
+    document.body.setAttribute('data-pack',p);
+    document.querySelectorAll('.tw').forEach(function(tw){ tw.setAttribute('data-pack',p); });
+    document.querySelectorAll('.tcard').forEach(function(c){ c.classList.toggle('sel',c.getAttribute('data-card')===p); });
+    tt.innerHTML=table(p);
+  }
+  function setShow(v){ document.body.setAttribute('data-show',v); fit(); }
+  document.querySelectorAll('.seg[data-ctl]').forEach(function(seg){
+    var btns=seg.querySelectorAll('button');
+    btns.forEach(function(b){ b.addEventListener('click',function(){
+      btns.forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});
+      if(seg.getAttribute('data-ctl')==='pack') setPack(b.getAttribute('data-v')); else setShow(b.getAttribute('data-v'));
+    });});
+  });
+
+  // ---- 9. Scale frames down to fit narrow windows (never up)
+  function fit(){
+    var wrap=document.querySelector('main .pg-wrap');
+    var cs=getComputedStyle(wrap);
+    var avail=wrap.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+    if(!(avail>0)) return;
+    document.documentElement.style.setProperty('--dz',Math.min(1,avail/1200).toFixed(4));
+    document.documentElement.style.setProperty('--pz',Math.min(1,avail/380).toFixed(4));
+  }
+  setPack('carta'); fit(); window.addEventListener('resize',fit);
+})();
+</script>
+</body>
+</html>

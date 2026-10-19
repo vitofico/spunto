@@ -1,0 +1,41 @@
+# Copy to fdroiddata after publishing; pin commit to the full release source SHA there.
+Categories:
+  - Note
+License: AGPL-3.0-only
+AuthorName: vitofico
+SourceCode: https://github.com/vitofico/spunto
+IssueTracker: https://github.com/vitofico/spunto/issues
+
+AutoName: Spunto
+
+RepoType: git
+Repo: https://github.com/vitofico/spunto.git
+Binaries: https://github.com/vitofico/spunto/releases/download/android%2F%v/spunto-%v.apk
+
+Builds:
+  - versionName: 2026.10.19.3
+    versionCode: 14
+    commit: android/2026.10.19.3
+    subdir: android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-21-jdk-headless
+      - update-alternatives --set java /usr/lib/jvm/java-21-openjdk-amd64/bin/java
+    gradle:
+      - yes
+    prebuild: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
+
+AllowedAPKSigningKeys:
+  - 27799072ba669055e4451cb07af03548658505a9399743a51b62c221bb45cc86
+
+MaintainerNotes: |-
+  The Android app builds independently of the server and web client.
+  Keep the committed baseline/startup profiles and original-profile R8 mapping mode.
+  Upstream signs with build-tools 34; preserve the developer signature via reproducible builds.
+  The upstream recipe names the immutable Android tag; pin its full source commit in fdroiddata.
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^android/[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[1-9][0-9]*$
+UpdateCheckData: android/gradle.properties|spuntoVersionCode=(\d+)|android/gradle.properties|spuntoVersionName=([\d.]+)
+CurrentVersion: 2026.10.19.3
+CurrentVersionCode: 14

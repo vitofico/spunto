@@ -1,0 +1,41 @@
+{
+  "subset_tool": "fonttools 4.66.1 with brotli 1.2.0",
+  "unicode_ranges": ["0000-017F", "2000-206F", "20AC", "2190-21FF"],
+  "fonts": [
+    {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/literata/Literata[opsz,wght].ttf",
+      "source_sha256": "b41138c9373112f32abb589cc22e8674b06ed4048b0c513be922bdd26f274440",
+      "asset": "literata-roman.ff9a0928743c.woff2",
+      "sha256": "ff9a0928743c013a7bdc2cec74e4ca07992d37cf41a8e4c07157fecdd2405332",
+      "bytes": 93892
+    },
+    {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/literata/Literata-Italic[opsz,wght].ttf",
+      "source_sha256": "d483dfaeba9cbf4ce71d32a52ee65df82f7e35b15fff8d1011cdb242d1fcd465",
+      "asset": "literata-italic.1ad9f83951a2.woff2",
+      "sha256": "1ad9f83951a2f59380b8c0bc7b4cd268b4de00b9372b1e3a13e632358ac44b6f",
+      "bytes": 93356
+    },
+    {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf",
+      "source_sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+      "asset": "inter-roman.cb91e4a081bc.woff2",
+      "sha256": "cb91e4a081bc6a96d7fa26264bb2fa05e0d53880718d634883957e2921a5f587",
+      "bytes": 53132
+    },
+    {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter-Italic[opsz,wght].ttf",
+      "source_sha256": "acd98e64795781b2058f07b18475e0ecee2a0fe2b42a49e2f9e37d0d6bf66ce6",
+      "asset": "inter-italic.20e2595f5a2f.woff2",
+      "sha256": "20e2595f5a2f25a0ec03df737a2a51a7015a41882fba7cde1cf5692467357ee3",
+      "bytes": 56576
+    },
+    {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf",
+      "source_sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
+      "asset": "jetbrains-mono.e947464fb9de.woff2",
+      "sha256": "e947464fb9dec3baf0f1f06f12839a80e5cfa6c598a02c2e135b848b884dd82c",
+      "bytes": 22532
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+id = "telegram"
+name = "Telegram"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+category = "capture"
+description = "Capture private bot messages from explicitly allowed account IDs."
+entry = "spunto.plugins.telegram:plugin"
+default = "off"
+creates = "external"
+permissions = ["net.out:api.telegram.org", "notes.create"]
+needs = [
+  {setting="allow_accounts", reason="Needs a list of allowed senders"},
+  {setting="bot_token", reason="Set the bot token in the environment"},
+]
+
+[settings]
+type = "object"
+[settings.properties.bot_token]
+type = "string"
+title = "Bot token"
+x-secret = true
+[settings.properties.allow_accounts]
+type = "array"
+title = "Allowed numeric Telegram account IDs"
+items = {type="string", maxLength=20}
+default = []

@@ -1,0 +1,34 @@
+id = "voice-memos"
+name = "Voice memos"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "capture"
+description = "Keep linked recordings and propose transcripts for the owner to accept."
+entry = "spunto.plugins.voice_memos:plugin"
+requires = ["attachments", "ai.transcribe"]
+default = "off"
+data_version = 1
+permissions = ["attachments.read", "attachments.write", "ai.transcribe", "suggest"]
+
+[[contributes.commands]]
+id = "transcribe"
+title = "Transcribe recording"
+where = ["note-actions"]
+online = true
+
+[contributes.panel]
+title = "Recording"
+mode = "live"
+
+[settings]
+type = "object"
+additionalProperties = false
+[settings.properties.language]
+type = "string"
+enum = ["auto", "it", "en"]
+default = "auto"
+[settings.properties.keep_link]
+type = "boolean"
+default = true

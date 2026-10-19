@@ -1,0 +1,80 @@
+{
+  "plugins": [
+    {
+      "id": "voice-memos",
+      "name": "Voice memos",
+      "version": "1.0.0",
+      "api": "0.9",
+      "kind": "server",
+      "runtime": "in-process",
+      "category": "capture",
+      "description": "Keep linked recordings and propose transcripts for the owner to accept.",
+      "entry": "spunto.plugins.voice_memos:plugin",
+      "requires": [
+        "attachments",
+        "ai.transcribe"
+      ],
+      "default": "off",
+      "data_version": 0,
+      "permissions": [
+        "attachments.read",
+        "attachments.write",
+        "ai.transcribe",
+        "suggest"
+      ],
+      "contributes": {
+        "commands": [
+          {
+            "id": "transcribe",
+            "title": "Transcribe recording",
+            "where": [
+              "note-actions"
+            ],
+            "online": true
+          }
+        ],
+        "panel": {
+          "title": "Recording",
+          "mode": "live"
+        }
+      },
+      "settings": {
+        "language": "auto",
+        "keep_link": true
+      },
+      "switch": "on",
+      "state": "waiting",
+      "pinned_by_env": 0,
+      "granted": [
+        "attachments.read",
+        "attachments.write",
+        "ai.transcribe",
+        "suggest"
+      ],
+      "position": 23,
+      "last_run_at": null,
+      "last_error": null,
+      "ai_route": {},
+      "network_destinations": [],
+      "ai_destinations": {},
+      "data_size_bytes": 1,
+      "data_counts": {
+        "plugin_kv": 1,
+        "plugin_record": 0,
+        "annotation": 0,
+        "suggestion": 0,
+        "note_text": 0
+      },
+      "data_count": 1,
+      "permission_sentences": [
+        "Reads attachments",
+        "Writes attachments",
+        "Requires the transcribe model",
+        "Proposes edits for your review",
+        "Never reads private notes"
+      ],
+      "secrets": {}
+    }
+  ],
+  "plugins_rev": 12
+}

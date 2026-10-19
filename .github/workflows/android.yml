@@ -1,0 +1,178 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
+  pull_request:
+    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;34.0.0"
+      - name: Android versioning and distribution checks
+        run: python3 -m unittest discover -s ../scripts/tests -p 'test_*.py'
+      - name: Disposable synthetic server
+        run: |
+          docker build -t spunto:android-ci -f ../server/Dockerfile .. > "$RUNNER_TEMP/spunto-server-build.log" 2>&1
+          docker run -d --name spunto-android-ci --read-only --tmpfs /tmp \
+            --tmpfs /data:rw,uid=10001,gid=10001,mode=0750 --cap-drop ALL \
+            --security-opt no-new-privileges -p 127.0.0.1:18085:8080 \
+            -e SPUNTO_PUBLIC_URL=http://127.0.0.1:18085 \
+            -e 'SPUNTO_OWNER_PASSWORD=browser acceptance password' spunto:android-ci
+          for _ in $(seq 60); do
+            curl -sf http://127.0.0.1:18085/readyz >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:18085/readyz >/dev/null
+      - name: Unit tests, real server sync, lint and installable APKs
+        run: >-
+          ./gradlew --no-daemon :core:model:test testDebugUnitTest
+          :core:design:lintDebug :core:plugins:lintDebug :data:local:lintDebug :data:sync:lintDebug
+          :plugins:dictation:lintDebug :plugins:quick-capture:lintDebug :app:lintDebug
+          :app:assembleDebug :app:assembleDebugAndroidTest
+          -PspuntoIntegrationUrl=http://127.0.0.1:18085
+          '-PspuntoIntegrationPassword=browser acceptance password'
+      - name: APK size budget
+        run: python3 ../scripts/check-apk-size.py app/build/outputs/apk/debug/app-debug.apk
+      - name: Remove synthetic server
+        if: always()
+        run: docker rm -f spunto-android-ci || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: android-validation
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/**/build/reports/
+            android/**/build/test-results/
+            ${{ runner.temp }}/spunto-server-build.log
+          retention-days: 7
+
+  android-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;34.0.0"
+      - name: Reclaim unused hosted .NET SDK space
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          test "${RUNNER_ENVIRONMENT:-}" = github-hosted
+          test "${RUNNER_OS:-}" = Linux
+          test -d /usr/share/dotnet
+          test ! -L /usr/share/dotnet
+          du -sh /usr/share/dotnet
+          df -h "$RUNNER_TEMP"
+          sudo rm -rf --one-file-system -- /usr/share/dotnet
+          test ! -e /usr/share/dotnet
+          df -h "$RUNNER_TEMP"
+      - name: Enable emulator acceleration
+        run: |
+          set -euo pipefail
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/spunto-avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'ANDROID_AVD_HOME=%s\n' "$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          sudo chmod a+rw /dev/kvm
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpulse0
+          sdkmanager "system-images;android-35;google_apis;x86_64"
+          echo no | avdmanager create avd -n spunto-ci -k "system-images;android-35;google_apis;x86_64"
+          printf 'ANDROID_AVD_HOME=%s\n' "$ANDROID_AVD_HOME"
+          "$ANDROID_HOME/emulator/emulator" -version 2>&1 | tee "$RUNNER_TEMP/spunto-emulator-checks.log"
+          "$ANDROID_HOME/emulator/emulator" -accel-check 2>&1 | tee -a "$RUNNER_TEMP/spunto-emulator-checks.log"
+          avdmanager list avd 2>&1 | tee -a "$RUNNER_TEMP/spunto-emulator-checks.log"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | tee "$RUNNER_TEMP/spunto-avds.log"
+          grep -Fx spunto-ci "$RUNNER_TEMP/spunto-avds.log"
+      - name: Installable APKs for native integration
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Native capture and Room integration
+        run: |
+          set -euo pipefail
+          df -h "$ANDROID_AVD_HOME"
+          "$ANDROID_HOME/emulator/emulator" -avd spunto-ci -port 5554 -no-window -no-audio -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/spunto-emulator.log" 2>&1 &
+          emulator_pid=$!
+          cleanup() {
+            result=$?
+            trap - EXIT
+            if [ "$result" -ne 0 ]; then
+              cat "$RUNNER_TEMP/spunto-emulator.log" || true
+            fi
+            if [ -n "${adb_wait_pid:-}" ]; then
+              kill "$adb_wait_pid" 2>/dev/null || true
+            fi
+            kill "$emulator_pid" 2>/dev/null || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+          require_emulator() {
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              emulator_result=0
+              wait "$emulator_pid" || emulator_result=$?
+              echo "::error::Android emulator exited with status $emulator_result before integration tests"
+              exit 1
+            fi
+          }
+          timeout 180 adb -s emulator-5554 wait-for-device &
+          adb_wait_pid=$!
+          while kill -0 "$adb_wait_pid" 2>/dev/null; do
+            require_emulator
+            sleep 1
+          done
+          wait "$adb_wait_pid"
+          adb_wait_pid=
+          for _ in $(seq 90); do
+            require_emulator
+            [ "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1 ] && break
+            sleep 2
+          done
+          test "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1
+          ./gradlew --no-daemon :app:connectedDebugAndroidTest
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: android-native-validation
+          path: |
+            android/**/build/reports/
+            android/**/build/test-results/
+            android/**/build/outputs/androidTest-results/
+            ${{ runner.temp }}/spunto-emulator.log
+            ${{ runner.temp }}/spunto-emulator-checks.log
+            ${{ runner.temp }}/spunto-avds.log
+          retention-days: 7

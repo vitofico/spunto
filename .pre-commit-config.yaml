@@ -1,0 +1,33 @@
+# Install once with `pre-commit install`; run everything with `pre-commit run --all-files`.
+# CI runs the same ruff (server.yml) and gitleaks (security.yml).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+  # Keep this rev equal to the ruff pin in server/pyproject.toml and bump both
+  # together, or the hook and CI format code differently.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check
+        files: ^server/
+      - id: ruff-format
+        files: ^server/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

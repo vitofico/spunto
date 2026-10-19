@@ -1,0 +1,3 @@
+Spunto Debug ora è separato dall'app di produzione e conserva note e impostazioni di prova nel proprio spazio.
+Preparati i testi per lo store e schermate reali con note sintetiche offline.
+L'identità del pacchetto di produzione e quella di firma restano stabili per gli aggiornamenti futuri.

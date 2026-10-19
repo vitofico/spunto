@@ -1,0 +1,578 @@
+{
+  "version": 1,
+  "scope": "synthetic only; 15 topics, bilingual relevant twins and bilingual near-topic distractors",
+  "documents": [
+    {
+      "id": "backup-en",
+      "language": "en",
+      "body": "Nightly backups keep seven daily SQLite snapshots. To restore, stop the notes service and replace its database with the selected snapshot."
+    },
+    {
+      "id": "backup-distractor-en",
+      "language": "en",
+      "body": "The photo backup copies JPEG files to a USB disk every Saturday; it contains no database snapshots."
+    },
+    {
+      "id": "backup-it",
+      "language": "it",
+      "body": "I backup notturni conservano sette snapshot giornalieri di SQLite. Per ripristinare, fermare il servizio delle note e sostituire il database con lo snapshot scelto."
+    },
+    {
+      "id": "backup-distractor-it",
+      "language": "it",
+      "body": "Il backup delle foto copia file JPEG su una chiavetta ogni sabato; non contiene snapshot del database."
+    },
+    {
+      "id": "tomato-en",
+      "language": "en",
+      "body": "Tomato seedlings on the balcony need deep pots and morning sun. Water the soil slowly when its top layer feels dry."
+    },
+    {
+      "id": "tomato-distractor-en",
+      "language": "en",
+      "body": "Basil grows in the small kitchen window pot and should be pinched above the second pair of leaves."
+    },
+    {
+      "id": "tomato-it",
+      "language": "it",
+      "body": "Le piantine di pomodoro sul balcone richiedono vasi profondi e sole del mattino. Annaffiare lentamente quando lo strato superficiale del terreno è asciutto."
+    },
+    {
+      "id": "tomato-distractor-it",
+      "language": "it",
+      "body": "Il basilico cresce nel vasetto della cucina e va cimato sopra la seconda coppia di foglie."
+    },
+    {
+      "id": "train-en",
+      "language": "en",
+      "body": "The fictional autumn trip goes from Turin to Lyon by train, changing in Chambery. The plan reserves the window seat for drawing mountain shapes."
+    },
+    {
+      "id": "train-distractor-en",
+      "language": "en",
+      "body": "For the spring trip from Turin to Genoa, the sketchbook stays at home and travel is by bus."
+    },
+    {
+      "id": "train-it",
+      "language": "it",
+      "body": "Il viaggio autunnale immaginario va da Torino a Lione in treno, con cambio a Chambery. Il piano riserva il posto al finestrino per disegnare le montagne."
+    },
+    {
+      "id": "train-distractor-it",
+      "language": "it",
+      "body": "Per il viaggio primaverile da Torino a Genova il quaderno da disegno resta a casa e si viaggia in autobus."
+    },
+    {
+      "id": "bread-en",
+      "language": "en",
+      "body": "For the Sunday sourdough experiment, mix the dough on Saturday evening, refrigerate it overnight, then bake in a covered pot."
+    },
+    {
+      "id": "bread-distractor-en",
+      "language": "en",
+      "body": "Sunday pizza uses quick yeast, rests on the counter for one hour and cooks on an uncovered tray."
+    },
+    {
+      "id": "bread-it",
+      "language": "it",
+      "body": "Per la prova del pane a lievitazione naturale della domenica, preparare l’impasto sabato sera, metterlo in frigorifero durante la notte e cuocerlo in una pentola coperta."
+    },
+    {
+      "id": "bread-distractor-it",
+      "language": "it",
+      "body": "La pizza domenicale usa lievito rapido, riposa sul tavolo per un’ora e cuoce su una teglia scoperta."
+    },
+    {
+      "id": "bookclub-en",
+      "language": "en",
+      "body": "The fictional reading group will discuss The Invisible City on Thursday. Each person should bring a passage about memory and one question for the group."
+    },
+    {
+      "id": "bookclub-distractor-en",
+      "language": "en",
+      "body": "The film club meets on Tuesday and asks everyone to bring a soundtrack recording rather than a passage from a book."
+    },
+    {
+      "id": "bookclub-it",
+      "language": "it",
+      "body": "Il gruppo di lettura immaginario discuterà La città invisibile giovedì. Ogni persona porterà un brano sulla memoria e una domanda per il gruppo."
+    },
+    {
+      "id": "bookclub-distractor-it",
+      "language": "it",
+      "body": "Il cineforum si incontra martedì e chiede a tutti di portare una registrazione musicale anziché un brano di un libro."
+    },
+    {
+      "id": "bike-en",
+      "language": "en",
+      "body": "The blue bicycle makes a clicking sound only when pedalling uphill. Check the loose rear rack bolts first, before replacing any drivetrain parts."
+    },
+    {
+      "id": "bike-distractor-en",
+      "language": "en",
+      "body": "The red bicycle squeaks while braking on flat roads; inspect the front brake pads."
+    },
+    {
+      "id": "bike-it",
+      "language": "it",
+      "body": "La bicicletta blu fa un rumore di scatto soltanto pedalando in salita. Controllare prima i bulloni allentati del portapacchi posteriore, prima di cambiare componenti della trasmissione."
+    },
+    {
+      "id": "bike-distractor-it",
+      "language": "it",
+      "body": "La bicicletta rossa cigola frenando in pianura; controllare le pastiglie del freno anteriore."
+    },
+    {
+      "id": "translation-en",
+      "language": "en",
+      "body": "For Italian vocabulary practice, collect unfamiliar words from short stories, write an English paraphrase, and review the cards on Friday."
+    },
+    {
+      "id": "translation-distractor-en",
+      "language": "en",
+      "body": "French pronunciation practice uses audio recordings every Monday and does not involve flashcards or written paraphrases."
+    },
+    {
+      "id": "translation-it",
+      "language": "it",
+      "body": "Per esercitarsi con il lessico italiano, raccogliere parole sconosciute dai racconti, scrivere una parafrasi inglese e ripassare le schede venerdì."
+    },
+    {
+      "id": "translation-distractor-it",
+      "language": "it",
+      "body": "La pratica della pronuncia francese usa registrazioni audio ogni lunedì e non prevede schede o parafrasi scritte."
+    },
+    {
+      "id": "shelf-en",
+      "language": "en",
+      "body": "The hallway bookshelf should use two narrow shelves, leaving the radiator uncovered. Measure the wall beside the door before cutting the boards."
+    },
+    {
+      "id": "shelf-distractor-en",
+      "language": "en",
+      "body": "The garage shelf should cover the full back wall and uses wide metal panels rather than narrow wooden boards."
+    },
+    {
+      "id": "shelf-it",
+      "language": "it",
+      "body": "La libreria dell’ingresso userà due ripiani stretti lasciando il termosifone scoperto. Misurare la parete accanto alla porta prima di tagliare le assi."
+    },
+    {
+      "id": "shelf-distractor-it",
+      "language": "it",
+      "body": "Lo scaffale del garage deve occupare tutta la parete posteriore e usa pannelli larghi in metallo invece di assi strette."
+    },
+    {
+      "id": "music-en",
+      "language": "en",
+      "body": "For the ambient music sketch, record rain on the roof, layer it beneath a soft piano loop and leave a long silent ending."
+    },
+    {
+      "id": "music-distractor-en",
+      "language": "en",
+      "body": "The dance track uses a fast drum pattern and ends with a sharp cymbal crash, with no rain recording."
+    },
+    {
+      "id": "music-it",
+      "language": "it",
+      "body": "Per la bozza di musica ambient, registrare la pioggia sul tetto, sovrapporla a un giro morbido di pianoforte e lasciare un lungo finale silenzioso."
+    },
+    {
+      "id": "music-distractor-it",
+      "language": "it",
+      "body": "Il brano da ballo usa una batteria veloce e finisce con un colpo netto di piatto, senza registrazioni di pioggia."
+    },
+    {
+      "id": "museum-en",
+      "language": "en",
+      "body": "The imaginary museum visit focuses on ceramic glazing. Sketch three bowls and note how blue pigment changes near their rims."
+    },
+    {
+      "id": "museum-distractor-en",
+      "language": "en",
+      "body": "At the sculpture exhibition, photograph tall bronze figures and compare their shadows; there are no glazed bowls."
+    },
+    {
+      "id": "museum-it",
+      "language": "it",
+      "body": "La visita immaginaria al museo riguarda gli smalti della ceramica. Disegnare tre ciotole e annotare come cambia il pigmento blu vicino ai bordi."
+    },
+    {
+      "id": "museum-distractor-it",
+      "language": "it",
+      "body": "Alla mostra di scultura fotografare alte figure di bronzo e confrontarne le ombre; non ci sono ciotole smaltate."
+    },
+    {
+      "id": "solar-en",
+      "language": "en",
+      "body": "The fictional garden sensor runs from a small solar panel and stores readings locally. Shade from the shed reduces charging after midday."
+    },
+    {
+      "id": "solar-distractor-en",
+      "language": "en",
+      "body": "The indoor temperature sensor runs on replaceable batteries and is unaffected by sunlight or shed shadows."
+    },
+    {
+      "id": "solar-it",
+      "language": "it",
+      "body": "Il sensore immaginario del giardino usa un piccolo pannello solare e salva le misure localmente. L’ombra del capanno riduce la ricarica dopo mezzogiorno."
+    },
+    {
+      "id": "solar-distractor-it",
+      "language": "it",
+      "body": "Il sensore di temperatura interno usa pile sostituibili e non dipende dal sole o dall’ombra del capanno."
+    },
+    {
+      "id": "journal-en",
+      "language": "en",
+      "body": "The weekly journal experiment uses one handwritten page every Sunday, organised around an unexpected event, a useful lesson and an unanswered question."
+    },
+    {
+      "id": "journal-distractor-en",
+      "language": "en",
+      "body": "The daily habit tracker is a grid of checkmarks and contains no freeform reflection or open questions."
+    },
+    {
+      "id": "journal-it",
+      "language": "it",
+      "body": "L’esperimento del diario settimanale usa una pagina scritta a mano ogni domenica, organizzata attorno a un evento inatteso, una lezione utile e una domanda senza risposta."
+    },
+    {
+      "id": "journal-distractor-it",
+      "language": "it",
+      "body": "Il registro quotidiano delle abitudini è una griglia di spunte e non contiene riflessioni libere o domande aperte."
+    },
+    {
+      "id": "cache-en",
+      "language": "en",
+      "body": "The notes search experiment caches query embeddings in memory, bounded to recent queries. A model change clears the cache because old vectors cannot be compared with the new space."
+    },
+    {
+      "id": "cache-distractor-en",
+      "language": "en",
+      "body": "The browser image cache stores downloaded thumbnails on disk and uses image modification dates for invalidation."
+    },
+    {
+      "id": "cache-it",
+      "language": "it",
+      "body": "L’esperimento di ricerca nelle note conserva gli embedding delle query recenti in memoria. Un cambio di modello svuota la cache perché i vecchi vettori non sono confrontabili nello spazio nuovo."
+    },
+    {
+      "id": "cache-distractor-it",
+      "language": "it",
+      "body": "La cache delle immagini del browser salva miniature scaricate su disco e usa la data di modifica per invalidarle."
+    },
+    {
+      "id": "pottery-en",
+      "language": "en",
+      "body": "For the clay workshop, shape the cup walls evenly and let the handle dry slightly before attaching it. Mark the base with a small spiral."
+    },
+    {
+      "id": "pottery-distractor-en",
+      "language": "en",
+      "body": "The woodworking workshop joins a stool seat to four legs using dowels and marks the underside with a square."
+    },
+    {
+      "id": "pottery-it",
+      "language": "it",
+      "body": "Per il laboratorio di argilla, formare pareti uniformi della tazza e lasciare asciugare un poco il manico prima di unirlo. Segnare la base con una piccola spirale."
+    },
+    {
+      "id": "pottery-distractor-it",
+      "language": "it",
+      "body": "Il laboratorio di falegnameria unisce la seduta dello sgabello a quattro gambe con spine e segna la parte inferiore con un quadrato."
+    },
+    {
+      "id": "privacy-en",
+      "language": "en",
+      "body": "A private note never enters the AI embedding index. Changing a note to private removes its stored chunks immediately, while ordinary keyword search remains available to its owner."
+    },
+    {
+      "id": "privacy-distractor-en",
+      "language": "en",
+      "body": "Archiving an ordinary public note hides it from the default timeline without removing its vectors; archive searches can still retrieve it."
+    },
+    {
+      "id": "privacy-it",
+      "language": "it",
+      "body": "Una nota privata non entra mai nell’indice degli embedding AI. Rendere privata una nota elimina subito i suoi blocchi memorizzati, mentre la ricerca per parole resta disponibile al proprietario."
+    },
+    {
+      "id": "privacy-distractor-it",
+      "language": "it",
+      "body": "Archiviare una nota pubblica la nasconde dalla cronologia normale senza eliminare i vettori; la ricerca nell’archivio può ancora trovarla."
+    }
+  ],
+  "queries": [
+    {
+      "id": "backup-q-en",
+      "language": "en",
+      "text": "How can I recover the notes database from a recent saved copy?",
+      "relevant": [
+        "backup-en",
+        "backup-it"
+      ]
+    },
+    {
+      "id": "backup-q-it",
+      "language": "it",
+      "text": "Come posso recuperare il database delle note da una copia recente?",
+      "relevant": [
+        "backup-en",
+        "backup-it"
+      ]
+    },
+    {
+      "id": "tomato-q-en",
+      "language": "en",
+      "text": "What care did I plan for the balcony tomato plants?",
+      "relevant": [
+        "tomato-en",
+        "tomato-it"
+      ]
+    },
+    {
+      "id": "tomato-q-it",
+      "language": "it",
+      "text": "Quali cure avevo previsto per i pomodori sul balcone?",
+      "relevant": [
+        "tomato-en",
+        "tomato-it"
+      ]
+    },
+    {
+      "id": "train-q-en",
+      "language": "en",
+      "text": "Which route and connection did I choose for the autumn rail journey?",
+      "relevant": [
+        "train-en",
+        "train-it"
+      ]
+    },
+    {
+      "id": "train-q-it",
+      "language": "it",
+      "text": "Quale percorso e cambio ho scelto per il viaggio autunnale in treno?",
+      "relevant": [
+        "train-en",
+        "train-it"
+      ]
+    },
+    {
+      "id": "bread-q-en",
+      "language": "en",
+      "text": "What is the preparation sequence for the weekend sourdough experiment?",
+      "relevant": [
+        "bread-en",
+        "bread-it"
+      ]
+    },
+    {
+      "id": "bread-q-it",
+      "language": "it",
+      "text": "Qual è la sequenza di preparazione per la prova del pane del fine settimana?",
+      "relevant": [
+        "bread-en",
+        "bread-it"
+      ]
+    },
+    {
+      "id": "bookclub-q-en",
+      "language": "en",
+      "text": "What should participants bring to the next reading-group discussion?",
+      "relevant": [
+        "bookclub-en",
+        "bookclub-it"
+      ]
+    },
+    {
+      "id": "bookclub-q-it",
+      "language": "it",
+      "text": "Che cosa devono portare i partecipanti al prossimo incontro del gruppo di lettura?",
+      "relevant": [
+        "bookclub-en",
+        "bookclub-it"
+      ]
+    },
+    {
+      "id": "bike-q-en",
+      "language": "en",
+      "text": "What should I inspect first for the uphill clicking on the blue bicycle?",
+      "relevant": [
+        "bike-en",
+        "bike-it"
+      ]
+    },
+    {
+      "id": "bike-q-it",
+      "language": "it",
+      "text": "Che cosa devo controllare per primo per lo scatto della bici blu in salita?",
+      "relevant": [
+        "bike-en",
+        "bike-it"
+      ]
+    },
+    {
+      "id": "translation-q-en",
+      "language": "en",
+      "text": "How did I plan to learn new Italian words from reading?",
+      "relevant": [
+        "translation-en",
+        "translation-it"
+      ]
+    },
+    {
+      "id": "translation-q-it",
+      "language": "it",
+      "text": "Come avevo pensato di imparare nuove parole italiane leggendo?",
+      "relevant": [
+        "translation-en",
+        "translation-it"
+      ]
+    },
+    {
+      "id": "shelf-q-en",
+      "language": "en",
+      "text": "What constraints apply to the planned hallway bookshelf?",
+      "relevant": [
+        "shelf-en",
+        "shelf-it"
+      ]
+    },
+    {
+      "id": "shelf-q-it",
+      "language": "it",
+      "text": "Quali vincoli ha la libreria progettata per l’ingresso?",
+      "relevant": [
+        "shelf-en",
+        "shelf-it"
+      ]
+    },
+    {
+      "id": "music-q-en",
+      "language": "en",
+      "text": "Which sounds and ending belong in the ambient music sketch?",
+      "relevant": [
+        "music-en",
+        "music-it"
+      ]
+    },
+    {
+      "id": "music-q-it",
+      "language": "it",
+      "text": "Quali suoni e quale finale fanno parte della bozza di musica ambient?",
+      "relevant": [
+        "music-en",
+        "music-it"
+      ]
+    },
+    {
+      "id": "museum-q-en",
+      "language": "en",
+      "text": "What observations should I make during the ceramics museum visit?",
+      "relevant": [
+        "museum-en",
+        "museum-it"
+      ]
+    },
+    {
+      "id": "museum-q-it",
+      "language": "it",
+      "text": "Quali osservazioni devo fare nella visita al museo della ceramica?",
+      "relevant": [
+        "museum-en",
+        "museum-it"
+      ]
+    },
+    {
+      "id": "solar-q-en",
+      "language": "en",
+      "text": "Why does the solar-powered garden sensor charge less in the afternoon?",
+      "relevant": [
+        "solar-en",
+        "solar-it"
+      ]
+    },
+    {
+      "id": "solar-q-it",
+      "language": "it",
+      "text": "Perché il sensore solare del giardino si ricarica meno nel pomeriggio?",
+      "relevant": [
+        "solar-en",
+        "solar-it"
+      ]
+    },
+    {
+      "id": "journal-q-en",
+      "language": "en",
+      "text": "What structure did I choose for the weekly handwritten journal?",
+      "relevant": [
+        "journal-en",
+        "journal-it"
+      ]
+    },
+    {
+      "id": "journal-q-it",
+      "language": "it",
+      "text": "Quale struttura ho scelto per il diario settimanale scritto a mano?",
+      "relevant": [
+        "journal-en",
+        "journal-it"
+      ]
+    },
+    {
+      "id": "cache-q-en",
+      "language": "en",
+      "text": "Why must the search-query vector cache be cleared when its model changes?",
+      "relevant": [
+        "cache-en",
+        "cache-it"
+      ]
+    },
+    {
+      "id": "cache-q-it",
+      "language": "it",
+      "text": "Perché si deve svuotare la cache dei vettori delle query quando cambia il modello?",
+      "relevant": [
+        "cache-en",
+        "cache-it"
+      ]
+    },
+    {
+      "id": "pottery-q-en",
+      "language": "en",
+      "text": "How should I attach and identify the cup made in the clay workshop?",
+      "relevant": [
+        "pottery-en",
+        "pottery-it"
+      ]
+    },
+    {
+      "id": "pottery-q-it",
+      "language": "it",
+      "text": "Come devo attaccare il manico e riconoscere la tazza del laboratorio di argilla?",
+      "relevant": [
+        "pottery-en",
+        "pottery-it"
+      ]
+    },
+    {
+      "id": "privacy-q-en",
+      "language": "en",
+      "text": "What happens to indexed vectors when I mark a note private?",
+      "relevant": [
+        "privacy-en",
+        "privacy-it"
+      ]
+    },
+    {
+      "id": "privacy-q-it",
+      "language": "it",
+      "text": "Che cosa succede ai vettori indicizzati quando rendo privata una nota?",
+      "relevant": [
+        "privacy-en",
+        "privacy-it"
+      ]
+    }
+  ]
+}

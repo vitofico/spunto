@@ -1,0 +1,8 @@
+{
+  "notes": [
+    {"id": "01980000-0000-7000-8000-000000000001", "body": "Synthetic shared theme one"},
+    {"id": "01980000-0000-7000-8000-000000000002", "body": "Synthetic shared theme two"}
+  ],
+  "proposal": {"new": "shared/theme", "note_ids": ["01980000-0000-7000-8000-000000000001", "01980000-0000-7000-8000-000000000002"]},
+  "expected": {"changed": 2, "labels": ["shared/theme"], "body_overwrite": false, "stale_cluster_atomic": true, "device_decision": "session_required"}
+}

@@ -1,0 +1,13 @@
+[
+  {"base": "a\nb\nc\n", "current": "A\nb\nc\n", "incoming": "a\nb\nC\n", "merged": "A\nb\nC\n"},
+  {"base": "a\nb\n", "current": "A\nb\n", "incoming": "a\nB\n", "merged": "A\nB\n"},
+  {"base": "a\nb\n", "current": "a\nB\n", "incoming": "a\nb\nappend\n", "merged": "a\nB\nappend\n"},
+  {"base": "a\n", "current": "A\n", "incoming": "OTHER\n", "merged": null},
+  {"base": "a\n", "current": "a\nx\n", "incoming": "a\ny\n", "merged": null},
+  {"base": "a\n", "current": "a\nx\n", "incoming": "a\nx\n", "merged": "a\nx\n"},
+  {"base": "a\nb\nc\n", "current": "a\nc\n", "incoming": "a\nb\nC\n", "merged": "a\nC\n"},
+  {"base": "a\nb\nc\n", "current": "a\nreplacement\n", "incoming": "a\nb\ninsert\nc\n", "merged": null},
+  {"base": "", "current": "first", "incoming": "second", "merged": null},
+  {"base": "last", "current": "last", "incoming": "changed", "merged": "changed"},
+  {"base": "a\r\nb\r\n", "current": "A\r\nb\r\n", "incoming": "a\r\nB\r\n", "merged": "A\r\nB\r\n"}
+]

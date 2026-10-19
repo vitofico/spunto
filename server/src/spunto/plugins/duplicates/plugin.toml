@@ -1,0 +1,21 @@
+id = "duplicates"
+name = "Duplicates"
+version = "1.0.0"
+api = "0.9"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "Duplicates through guarded owner actions."
+entry = "spunto.plugins.duplicates:plugin"
+requires = ["ai.embed"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "suggest", "ai.embed"]
+
+[settings]
+type = "object"
+[settings.properties.threshold]
+type = "number"
+minimum = 0.8
+maximum = 1.0
+default = 0.97

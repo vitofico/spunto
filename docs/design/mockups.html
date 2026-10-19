@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spunto design mockups</title>
+<meta name="description" content="Key screens for the spunto Android and web apps, in light and dark, built from the design tokens in 03-design.md.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..600&family=JetBrains+Mono:wght@400;500&family=Literata:ital,opsz,wght@0,7..72,400..600;1,7..72,400..600&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   0. Fonts and page (presentation board, not product UI)
+   ===================================================================== */
+:root{
+  --f-serif:"Literata", Georgia, "Times New Roman", serif;
+  --f-sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --pg-bg:#E9E5DE; --pg-panel:#F3F0EA; --pg-ink:#221D18; --pg-ink2:#5B544C; --pg-ink3:#6E6860;
+  --pg-rule:#D8D2C8; --pg-accent:#9F4C2A; --pg-accent-soft:#FAE9DE; --pg-bezel:#1D1A17;
+  --dz:1; --pz:1;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --pg-bg:#0E0D0B; --pg-panel:#161411; --pg-ink:#EAE5DD; --pg-ink2:#BDB6AE; --pg-ink3:#9D978F;
+         --pg-rule:#2D2925; --pg-accent:#E7986F; --pg-accent-soft:#3F271D; --pg-bezel:#2A2622; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--pg-bg);color:var(--pg-ink);font:400 15px/1.55 var(--f-sans);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.pg-wrap{max-width:1720px;margin:0 auto;padding:0 32px}
+@media (max-width:640px){.pg-wrap{padding:0 16px}}
+
+.pg-head{padding:56px 0 28px}
+.pg-brand{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+.pg-mark{font:600 56px/1 var(--f-serif);letter-spacing:-.02em}
+.pg-mark .dot,.wm .dot{color:var(--pg-accent)}
+.pg-tag{font:500 12px/1 var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--pg-ink3)}
+.pg-lede{max-width:46rem;margin:18px 0 0;font:400 18px/1.6 var(--f-serif);color:var(--pg-ink2)}
+.pg-lede code{font:400 .85em var(--f-mono)}
+.pg-bar{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:center;margin-top:28px}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--pg-panel);box-shadow:0 0 0 1px var(--pg-rule)}
+.seg button{height:32px;padding:0 16px;border-radius:999px;font:500 13px var(--f-sans);color:var(--pg-ink2)}
+.seg button[aria-pressed="true"]{background:var(--pg-ink);color:var(--pg-bg)}
+.seg button:focus-visible,.pg-nav a:focus-visible{outline:2px solid var(--pg-accent);outline-offset:2px}
+.pg-nav{display:flex;gap:20px;font:500 13px var(--f-sans)}
+.pg-nav a{color:var(--pg-ink2);text-decoration:none}
+.pg-nav a:hover{color:var(--pg-ink)}
+.pg-legend{display:flex;flex-wrap:wrap;gap:10px 28px;list-style:none;margin:20px 0 0;padding:0;font:400 13px var(--f-sans);color:var(--pg-ink2)}
+.pg-legend li{display:flex;align-items:center;gap:10px}
+.lg-dash{display:inline-flex;align-items:center;height:24px;padding:0 10px;border:1px dashed var(--pg-accent);border-radius:999px;color:var(--pg-accent);font:500 12px var(--f-sans)}
+.lg-serif{font:400 20px/1 var(--f-serif)}
+.lg-sans{font:400 18px/1 var(--f-sans)}
+
+.pg-sec{padding:40px 0 24px;border-top:1px solid var(--pg-rule)}
+.pg-sec>.pg-wrap>h2{font:600 32px/1.15 var(--f-serif);letter-spacing:-.01em;margin:0}
+.pg-sec>.pg-wrap>p.pg-sub{max-width:44rem;margin:10px 0 32px;color:var(--pg-ink2);font-size:15px}
+
+.figs-phone{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(800px * var(--pz))),1fr));gap:56px 40px}
+body:not([data-show="both"]) .figs-phone{grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(390px * var(--pz))),1fr))}
+.fig{margin:0;display:flex;flex-wrap:wrap;gap:20px 32px;align-items:flex-start}
+.pair{display:flex;gap:20px;flex-wrap:wrap}
+.pair.stack{flex-direction:column;gap:28px;width:100%}
+.cap{flex:1 1 240px;max-width:360px;padding-top:4px}
+.cap .id{font:500 11.5px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--pg-accent)}
+.cap h3{font:600 19px/1.3 var(--f-serif);margin:6px 0 6px}
+.cap p{margin:0;color:var(--pg-ink2);font-size:13.5px;line-height:1.55}
+.cap .req{margin-top:8px;font:400 11.5px var(--f-mono);color:var(--pg-ink3)}
+.desk-figs{display:flex;flex-direction:column;gap:64px}
+.desk-figs .cap{max-width:56rem;flex-basis:100%}
+.tw{position:relative}
+.tw::after{content:attr(data-theme);position:absolute;top:-22px;left:2px;font:500 10.5px var(--f-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--pg-ink3)}
+body:not([data-show="both"]) .tw::after{display:none}
+body[data-show="light"] .tw[data-theme="dark"],body[data-show="dark"] .tw[data-theme="light"]{display:none}
+body[data-show="both"] .pair{padding-top:22px}
+
+/* =====================================================================
+   1. Design tokens, Carta theme (03-design.md §11). Product UI uses only these.
+   ===================================================================== */
+[data-theme="light"]{
+  --paper:#F8F5F0; --raised:#FEFDFA; --sunken:#F0EDE6;
+  --ink:#221D18; --ink-2:#5B544C; --ink-3:#6E6860;
+  --rule:#E3DFD8; --rule-strong:#CCC7BE; --field:#8A857E;
+  --accent:#9F4C2A; --accent-strong:#883A1D; --accent-soft:#FAE9DE; --on-accent:#FEF9F4;
+  --highlight:#F5E4B0; --danger:#AF2934; --warn:#CD9130;
+  --scrim:rgb(34 29 24 / .32);
+  --state-hover:rgb(34 29 24 / .05); --state-press:rgb(34 29 24 / .09);
+  --e1:0 0 0 1px var(--rule);
+  --e2:0 1px 2px rgb(34 29 24 / .06),0 8px 24px rgb(34 29 24 / .08);
+  --e3:0 2px 6px rgb(34 29 24 / .08),0 24px 64px rgb(34 29 24 / .18);
+  /* scenery around the product (keyboard, browser, wallpaper) */
+  --kb-bg:#E8E4DE; --kb-key:#FCFBF8; --kb-key2:#D7D1C8; --kb-ink:#221D18;
+  --chrome:#E4DFD7; --chrome-pill:#F8F5F0; --hs-bg:rgb(255 255 255 / .86); --hs-ink:#3C3631;
+  --wall:radial-gradient(120% 70% at 15% 5%,#F0D2B0 0%,transparent 60%),radial-gradient(110% 70% at 95% 95%,#A9BBAE 0%,transparent 62%),linear-gradient(165deg,#DDB892 0%,#8E9E92 100%);
+  color-scheme:light;
+}
+[data-theme="dark"]{
+  --paper:#171412; --raised:#211D1A; --sunken:#100E0C;
+  --ink:#EAE5DD; --ink-2:#BDB6AE; --ink-3:#9D978F;
+  --rule:#2D2925; --rule-strong:#413C37; --field:#736E67;
+  --accent:#E7986F; --accent-strong:#F6B38B; --accent-soft:#3F271D; --on-accent:#24140C;
+  --highlight:#5F4A1A; --danger:#ED7473; --warn:#E1AD57;
+  --scrim:rgb(0 0 0 / .5);
+  --state-hover:rgb(234 229 221 / .06); --state-press:rgb(234 229 221 / .1);
+  --e1:0 0 0 1px var(--rule);
+  --e2:inset 0 1px 0 rgb(255 255 255 / .04),0 1px 2px rgb(0 0 0 / .4),0 8px 24px rgb(0 0 0 / .35);
+  --e3:inset 0 1px 0 rgb(255 255 255 / .04),0 2px 6px rgb(0 0 0 / .5),0 24px 64px rgb(0 0 0 / .55);
+  --kb-bg:#1B1917; --kb-key:#37332F; --kb-key2:#2A2724; --kb-ink:#EAE5DD;
+  --chrome:#0C0B0A; --chrome-pill:#1C1916; --hs-bg:rgb(58 53 48 / .88); --hs-ink:#E2DCD3;
+  --wall:radial-gradient(120% 70% at 15% 5%,#5B3E2A 0%,transparent 60%),radial-gradient(110% 70% at 95% 95%,#2E3D37 0%,transparent 62%),linear-gradient(165deg,#3A2A20 0%,#1A221F 100%);
+  color-scheme:dark;
+}
+
+/* Type tokens per platform (web px, Android sp drawn 1:1) */
+.desk{--fs-body:17px;--lh-body:27px;--fs-bsm:15px;--lh-bsm:23px;--fs-head:19px;--lh-head:27px;--fs-title:24px;--lh-title:31px;--fs-ui:14px;--fs-meta:12.5px;--fs-over:11.5px;--gutter:64px}
+.phone{--fs-body:16px;--lh-body:25px;--fs-bsm:15px;--lh-bsm:22px;--fs-head:18px;--lh-head:25px;--fs-title:22px;--lh-title:28px;--fs-ui:14px;--fs-meta:12px;--fs-over:11px}
+
+/* =====================================================================
+   2. Icons
+   ===================================================================== */
+.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.i.s16{width:16px;height:16px}.i.s14{width:14px;height:14px}.i.s18{width:18px;height:18px}.i.s24{width:24px;height:24px}
+
+/* =====================================================================
+   3. Shared product components
+   ===================================================================== */
+.ui{font-family:var(--f-sans)}
+.body{font-family:var(--f-serif);font-size:var(--fs-body);line-height:var(--lh-body);color:var(--ink);font-weight:400}
+.body p{margin:0}
+.body p+p,.body p+ul,.body ul+p,.body p+.tasks{margin-top:.6em}
+.body ul{margin:.5em 0 0;padding-left:1.15em}
+.body ul li{padding-left:.15em}
+.body ul li::marker{color:var(--ink-3)}
+.body h4{font:600 var(--fs-head)/var(--lh-head) var(--f-serif);margin:0 0 .3em;letter-spacing:-.003em}
+.body em{font-style:italic}
+.body a,.ln{color:inherit;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:3px;text-decoration-thickness:1px}
+.body.sm{font-size:var(--fs-bsm);line-height:var(--lh-bsm)}
+.lbl{color:var(--accent)}
+.lblrow{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:0;margin-top:6px;font:400 calc(var(--fs-body) - 2px)/22px var(--f-serif);color:var(--accent)}
+.over{font:500 var(--fs-over)/16px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font:400 var(--fs-meta)/16px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums;margin-top:8px}
+.meta .src{display:inline-flex;align-items:center;gap:3px}
+.agent{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 6px;border-radius:999px;background:var(--sunken);color:var(--ink-2);font:500 11.5px/1 var(--f-sans)}
+.ring{display:inline-block;width:7px;height:7px;border-radius:50%;box-shadow:inset 0 0 0 1.4px var(--ink-3)}
+.sugg{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.prop{display:inline-flex;align-items:center;gap:3px;height:26px;padding:0 11px 0 9px;border:1px dashed var(--accent);border-radius:999px;color:var(--accent);font:500 var(--fs-meta)/1 var(--f-sans);white-space:nowrap}
+.prop .new{font-weight:400;color:var(--ink-3);margin-left:5px}
+.prop .x{display:inline-grid;place-items:center;margin:0 -4px 0 4px;width:16px;height:16px;border-radius:50%;color:var(--ink-3)}
+.prop.hover{background:var(--state-hover)}
+.dismiss{font:400 var(--fs-meta)/1 var(--f-sans);color:var(--ink-3);padding:0 4px}
+mark{background:var(--highlight);color:var(--ink);border-radius:3px;padding:0 2px;margin:0 -1px}
+.tasks{list-style:none;margin:.5em 0 0;padding:0}
+.tasks li{display:flex;gap:11px;align-items:flex-start}
+.tasks li+li{margin-top:2px}
+.cb{flex:none;width:16px;height:16px;margin-top:calc((var(--lh-body) - 16px)/2);border:1.5px solid var(--ink-2);border-radius:4px;display:grid;place-items:center}
+.cb.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cb .i{width:12px;height:12px;stroke-width:2.4}
+.tasks li.done{color:var(--ink-3)}
+.caret{display:inline-block;width:2px;height:1.15em;margin:0 1px 0 1px;vertical-align:-.2em;border-radius:1px;background:var(--accent)}
+.ph{font-style:italic;color:var(--ink-3)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 15px;border-radius:999px;font:500 14px/1 var(--f-sans);white-space:nowrap}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.tonal{background:var(--accent-soft);color:var(--accent-strong)}
+.btn.outline{box-shadow:inset 0 0 0 1px var(--field);color:var(--ink)}
+.btn.ghost{color:var(--ink-2)}
+.btn.text{color:var(--accent);padding:0 8px}
+.btn.lg{height:40px;padding:0 20px}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:5px;background:var(--paper);box-shadow:inset 0 0 0 1px var(--rule-strong),inset 0 -1px 0 var(--rule-strong);font:500 11px/1 var(--f-sans);color:var(--ink-2)}
+.hint{display:inline-flex;align-items:center;gap:6px;font:400 12.5px/1 var(--f-sans);color:var(--ink-3)}
+.spacer{flex:1}
+.scrim{position:absolute;inset:0;background:var(--scrim)}
+.code{position:relative;margin:0;padding:14px 16px;border-radius:12px;background:var(--sunken);font:400 13px/21px var(--f-mono);color:var(--ink);white-space:pre;overflow:hidden}
+.code .ck{color:var(--ink)} .code .ca{color:var(--ink-2)} .code .cf{color:var(--ink-3)} .code .cv{color:var(--accent-strong)}
+.code .cp{position:absolute;top:10px;right:10px;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:999px;background:var(--raised);box-shadow:var(--e1);font:500 12px var(--f-sans);color:var(--ink-2)}
+
+/* =====================================================================
+   4. Android phone
+   ===================================================================== */
+.phone{zoom:var(--pz);width:380px;height:800px;flex:none;padding:10px;border-radius:44px;background:var(--pg-bezel);
+  box-shadow:0 0 0 1px rgb(0 0 0 / .25),0 30px 60px -20px rgb(0 0 0 / .35),0 12px 24px -12px rgb(0 0 0 / .25)}
+.scr{position:relative;width:360px;height:780px;border-radius:34px;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--f-sans);display:flex;flex-direction:column}
+.scr-body{position:absolute;inset:0;display:flex;flex-direction:column}
+.sb{flex:none;position:relative;height:34px;display:flex;align-items:center;justify-content:space-between;padding:2px 22px 0 26px;font:500 13px/1 var(--f-sans);color:var(--ink);font-variant-numeric:tabular-nums}
+.sb::before{content:"";position:absolute;left:50%;top:10px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#0A0908}
+.sb .ic{display:flex;gap:4px;align-items:center}
+.sb .ic .i{width:14px;height:14px}
+.appbar{flex:none;height:56px;display:flex;align-items:center;padding:0 4px 0 20px;gap:2px}
+.ab-title{display:flex;align-items:center;gap:4px;font:500 19px/1 var(--f-sans);letter-spacing:-.01em;color:var(--ink)}
+.ab-title .i{color:var(--ink-2)}
+.ib{width:48px;height:48px;display:grid;place-items:center;color:var(--ink-2);border-radius:50%}
+.ib .i{width:22px;height:22px}
+.p-comp{margin:4px 12px 6px;padding:14px 16px 16px;border-radius:16px;background:var(--raised);box-shadow:0 0 0 1px var(--rule-strong),var(--e2)}
+.p-comp.mini{padding:12px 16px;box-shadow:var(--e1)}
+.p-review{padding:6px 20px 2px;font:400 13px/20px var(--f-sans);color:var(--ink-2)}
+.p-review b{font-weight:500;color:var(--accent)}
+.p-day{padding:20px 20px 0}
+.p-entry{padding:12px 20px 16px}
+.p-entry+.p-entry{border-top:1px solid var(--rule)}
+.p-entry .meta{margin-top:8px}
+.fab{position:absolute;right:16px;bottom:40px;width:56px;height:56px;border-radius:16px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;box-shadow:var(--e2)}
+.fab .i{width:24px;height:24px}
+.gest{position:absolute;left:0;right:0;bottom:0;height:22px;display:grid;place-items:center;pointer-events:none}
+.gest::after{content:"";width:108px;height:4px;border-radius:2px;background:var(--ink);opacity:.38}
+.dock{position:absolute;left:0;right:0;bottom:0}
+.abar{height:52px;display:flex;align-items:center;gap:2px;padding:0 10px 0 6px;background:var(--raised);border-top:1px solid var(--rule)}
+.abar .ib{width:40px;height:40px}
+.abar .ib .i{width:20px;height:20px}
+.ac-strip{flex:1;min-width:0;display:flex;gap:6px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+.ac{display:inline-flex;align-items:center;flex:none;height:32px;padding:0 12px;border-radius:999px;background:var(--sunken);font:400 13.5px/1 var(--f-sans);color:var(--ink);white-space:nowrap}
+.ac .par{color:var(--ink-3)}
+.ac .n{margin-left:7px;font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ac.top{background:var(--accent-soft);color:var(--accent-strong)}
+.ac.top .par,.ac.top .n{color:var(--accent-strong);opacity:.75}
+.kb{background:var(--kb-bg);padding:2px 4px 26px}
+.kb-s{display:flex;align-items:center;height:42px;font:400 15px/1 var(--f-sans);color:var(--kb-ink)}
+.kb-s span{flex:1;text-align:center}
+.kb-s span+span{border-left:1px solid color-mix(in srgb,var(--kb-ink) 15%,transparent)}
+.kb-s span.b{font-weight:500}
+.kr{display:flex;justify-content:center;gap:5px;margin-bottom:9px}
+.k{flex:none;width:30px;height:44px;border-radius:7px;background:var(--kb-key);display:grid;place-items:center;font:400 19px/1 var(--f-sans);color:var(--kb-ink);box-shadow:0 1px 0 rgb(0 0 0 / .14)}
+.k.m{background:var(--kb-key2);font-size:14px;width:46px}
+.k.w{width:52px;background:var(--kb-key2);font-size:13px}
+.k.sp{flex:1;max-width:176px}
+.k .i{width:20px;height:20px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--raised);border-radius:28px 28px 0 0;box-shadow:var(--e3)}
+.handle{width:32px;height:4px;margin:10px auto 6px;border-radius:2px;background:var(--rule-strong)}
+.field{display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--field);font:400 15px var(--f-sans);color:var(--ink)}
+.toggle{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 13px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--field);font:400 calc(var(--fs-body) - 1.5px)/1 var(--f-serif);color:var(--accent)}
+.toggle.on{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent-strong)}
+.row{display:flex;align-items:center;gap:16px;height:48px;padding:0 24px;font:400 15px/1 var(--f-sans);color:var(--ink)}
+.row .i{color:var(--ink-2)}
+.row .n{margin-left:auto;font:400 13px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.row.on{margin:0 12px;padding:0 12px;border-radius:999px;background:var(--accent-soft);color:var(--accent-strong);font-weight:500}
+.row.on .i,.row.on .n{color:var(--accent-strong)}
+.row.l1{padding-left:66px}
+.row .chev{width:18px;height:18px;margin:0 -2px 0 -6px;color:var(--ink-3)}
+.row .nochev{width:18px;margin:0 -2px 0 -6px}
+/* Dictation (03-design.md A13): in-flight words, language switch, listening panel */
+.partial{color:var(--ink-3)}
+.lang{display:inline-flex;align-items:center;gap:2px;height:34px;padding:3px;margin-left:2px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--rule-strong)}
+.lang span{display:grid;place-items:center;height:28px;min-width:40px;padding:0 10px;border-radius:999px;font:500 13px/1 var(--f-sans);color:var(--ink-2)}
+.lang span.on{background:var(--accent-soft);color:var(--accent-strong)}
+.dict{height:280px;display:flex;flex-direction:column;align-items:center;padding:44px 24px 0;background:var(--raised)}
+.stopbtn{width:72px;height:72px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);
+  box-shadow:0 0 0 12px var(--accent-soft),0 0 0 24px color-mix(in srgb,var(--accent-soft) 50%,transparent)}
+.stopbtn .i{width:30px;height:30px}
+.dict-st{margin-top:44px;font:500 15px/20px var(--f-sans);color:var(--ink)}
+.dict-mt{display:flex;align-items:center;gap:5px;margin-top:6px;font:400 var(--fs-meta)/16px var(--f-sans);color:var(--ink-3)}
+
+/* =====================================================================
+   5. Desktop web
+   ===================================================================== */
+.desk{zoom:var(--dz);width:1200px;height:800px;flex:none;border-radius:12px;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--f-sans);
+  box-shadow:0 0 0 1px rgb(0 0 0 / .14),0 40px 80px -30px rgb(0 0 0 / .35),0 16px 32px -16px rgb(0 0 0 / .2);display:flex;flex-direction:column}
+.desk.short{height:620px}
+.chrome{flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--chrome)}
+.chrome .tl{width:12px;height:12px;border-radius:50%;background:color-mix(in srgb,var(--ink) 18%,transparent)}
+.chrome .url{margin:0 auto;display:flex;align-items:center;gap:8px;width:420px;height:26px;padding:0 12px;border-radius:8px;background:var(--chrome-pill);font:400 12.5px/1 var(--f-sans);color:var(--ink-2);justify-content:center}
+.chrome .url .i{width:12px;height:12px;color:var(--ink-3)}
+.app{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:248px minmax(0,1fr)}
+.rail{background:var(--sunken);padding:18px 12px 14px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.wm{font:600 22px/1 var(--f-serif);letter-spacing:-.015em;color:var(--ink);padding:6px 10px 18px}
+.wm .dot{color:var(--accent)}
+.sbtn{display:flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 10px;margin-bottom:14px;border-radius:10px;background:var(--paper);box-shadow:var(--e1);font:400 14px/1 var(--f-sans);color:var(--ink-3)}
+.sbtn .i{width:17px;height:17px}
+.ri{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:8px;font:400 14px/1 var(--f-sans);color:var(--ink-2)}
+.ri .i{width:18px;height:18px;color:var(--ink-3)}
+.ri .n{margin-left:auto;font:400 12.5px/1 var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ri.on{background:var(--accent-soft);color:var(--accent-strong);font-weight:500}
+.ri.on .i,.ri.on .n{color:var(--accent-strong)}
+.ri.l1{padding-left:34px}
+.ri .chev{width:14px;height:14px;margin:0 -2px 0 -2px;color:var(--ink-3)}
+.ri .nc{width:14px;margin:0 -2px}
+.rsec{display:flex;align-items:center;margin:20px 10px 6px}
+.rfoot{margin-top:auto;padding-top:12px;border-top:1px solid var(--rule)}
+.rstat{padding:8px 10px 0;font:400 12px/1 var(--f-sans);color:var(--ink-3)}
+.main{position:relative;min-height:0;overflow:hidden}
+.col{width:680px;margin:0 auto;padding:36px 0 0}
+.d-comp{margin-left:calc(var(--gutter) - 17px);width:calc(576px + 34px);padding:15px 16px 10px;border-radius:14px;background:var(--raised);box-shadow:0 0 0 1px var(--rule-strong),var(--e2)}
+.d-comp .body{min-height:54px}
+.tools{display:flex;align-items:center;gap:2px;margin:10px -6px 0}
+.tool{width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:var(--ink-2)}
+.tool .i{width:19px;height:19px}
+.d-review{padding:14px 0 0 var(--gutter);font:400 13px/20px var(--f-sans);color:var(--ink-2)}
+.d-review b{font-weight:500;color:var(--accent)}
+.slip{margin:22px 0 0 calc(var(--gutter) - 17px);width:calc(576px + 34px);padding:16px 16px 16px;border-radius:14px;background:var(--sunken)}
+.slip .acts{display:flex;gap:4px;margin:10px -8px 0}
+.day{padding:30px 0 2px var(--gutter)}
+.entry{display:grid;grid-template-columns:var(--gutter) minmax(0,1fr) 40px;padding:16px 0 18px}
+.entry+.entry{border-top:1px solid var(--rule)}
+.entry+.entry{background:linear-gradient(var(--rule),var(--rule)) no-repeat var(--gutter) 0/576px 1px;border-top:0}
+.entry .t{padding-top:5px;font:400 12.5px/16px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.entry .t .i{width:15px;height:15px;color:var(--ink-3);margin-top:-1px}
+.entry .acts{display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:1px;color:var(--ink-3);visibility:hidden}
+.entry.hov .acts{visibility:visible}
+.entry .acts .tool{width:28px;height:28px;color:var(--ink-3)}
+.entry .acts .tool .i{width:17px;height:17px}
+.entry.flash{background:linear-gradient(90deg,transparent var(--gutter),var(--accent-soft) var(--gutter))}
+.measure{max-width:576px}
+.pal{position:absolute;left:50%;top:64px;width:640px;margin-left:-320px;background:var(--raised);border-radius:20px;box-shadow:var(--e3);overflow:hidden}
+.pal.wide{width:720px;margin-left:-360px;top:48px}
+.pal-in{display:flex;align-items:center;gap:12px;height:58px;padding:0 18px;border-bottom:1px solid var(--rule);font:400 17px/1 var(--f-sans);color:var(--ink)}
+.pal-in .i{color:var(--ink-3)}
+.pal-sec{padding:14px 18px 6px}
+.pr{display:flex;gap:14px;align-items:flex-start;padding:10px 18px}
+.pr.sel{background:var(--state-hover);box-shadow:inset 2px 0 0 var(--accent)}
+.pr .ico{flex:none;width:28px;height:28px;margin-top:1px;border-radius:8px;display:grid;place-items:center;background:var(--sunken);color:var(--ink-2)}
+.pr .ico.ask{background:var(--accent-soft);color:var(--accent)}
+.pr .ico .i{width:17px;height:17px}
+.pr .first{font:600 15px/22px var(--f-serif);color:var(--ink)}
+.pr .snip{font:400 14px/21px var(--f-serif);color:var(--ink-2);margin-top:1px}
+.pr .meta{margin-top:5px}
+.pr .rk{margin-left:auto;align-self:center}
+.pal-foot{display:flex;align-items:center;gap:18px;padding:11px 18px;border-top:1px solid var(--rule);font:400 12px/1 var(--f-sans);color:var(--ink-3)}
+.pal-foot span{display:inline-flex;align-items:center;gap:6px}
+.answer{font:400 15.5px/25px var(--f-sans);color:var(--ink)}
+.answer p{margin:0}
+.answer p+p{margin-top:10px}
+.cite{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;margin:0 1px 0 2px;border-radius:5px;background:var(--accent-soft);color:var(--accent-strong);font:600 10.5px/1 var(--f-sans);vertical-align:2px}
+.dlg{position:absolute;left:50%;top:150px;width:460px;margin-left:-230px;padding:24px;border-radius:20px;background:var(--raised);box-shadow:var(--e3)}
+.dlg h4{margin:0 0 4px;font:500 17px/1.3 var(--f-sans)}
+.inp{display:flex;align-items:center;height:42px;padding:0 14px;border-radius:12px;box-shadow:inset 0 0 0 1.5px var(--accent),0 0 0 4px var(--accent-soft);font:400 15px var(--f-sans);color:var(--ink)}
+.set-nav .ri{height:34px}
+.tok{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 70px;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--rule);font:400 13.5px/1.3 var(--f-sans);color:var(--ink-2)}
+.tok b{font-weight:500;color:var(--ink)}
+.scope{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font:500 11.5px/1 var(--f-sans);width:max-content}
+.scope.rw{background:var(--accent-soft);color:var(--accent-strong)}
+.scope.ro{background:var(--sunken);color:var(--ink-2)}
+
+/* =====================================================================
+   6. Tokens specimen
+   ===================================================================== */
+.spec{width:100%;border-radius:16px;background:var(--paper);color:var(--ink);padding:28px;box-shadow:0 0 0 1px rgb(0 0 0 / .08)}
+.spec h4{margin:0 0 14px;font:500 11.5px/16px var(--f-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.spec-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:36px}
+@media (max-width:1100px){.spec-grid{grid-template-columns:1fr}}
+.ts{display:grid;grid-template-columns:96px minmax(0,1fr) 150px;gap:16px;align-items:baseline;padding:10px 0;border-top:1px solid var(--rule)}
+.ts .nm{font:500 12px var(--f-mono);color:var(--ink-2)}
+.ts .sp{font:400 11.5px/1.45 var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.swc{display:flex;gap:10px;align-items:center;padding:8px;border-radius:12px;background:var(--raised);box-shadow:var(--e1)}
+.swc .chip{flex:none;width:34px;height:34px;border-radius:9px;box-shadow:inset 0 0 0 1px rgb(127 127 127 / .25)}
+.swc .t1{font:500 12px/1.3 var(--f-mono);color:var(--ink)}
+.swc .t2{font:400 11px/1.3 var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums}
+.acc{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.acc .a{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:999px;background:var(--raised);box-shadow:var(--e1);font:400 13px var(--f-sans)}
+.acc .a i{width:22px;height:22px;border-radius:50%;display:block}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bars div{display:flex;align-items:center;gap:12px;font:400 11.5px var(--f-mono);color:var(--ink-2)}
+.bars span{height:10px;border-radius:2px;background:var(--accent);opacity:.75}
+.radii{display:flex;flex-wrap:wrap;gap:14px}
+.radii div{width:64px;height:64px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--rule-strong);display:grid;place-items:end center;padding-bottom:6px;font:400 11px var(--f-mono);color:var(--ink-3)}
+.elev{display:flex;flex-wrap:wrap;gap:18px}
+.elev div{width:120px;height:72px;border-radius:14px;background:var(--raised);display:grid;place-items:center;font:400 12px var(--f-mono);color:var(--ink-2)}
+.pg-foot{padding:40px 0 64px;color:var(--pg-ink3);font-size:13px;border-top:1px solid var(--pg-rule)}
+</style>
+</head>
+<body data-show="both">
+
+<!-- Icon sprite (stand-ins for Material Symbols Rounded, weight 300) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<defs>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.5 19.5h3.8L19 8.8a2 2 0 0 0 0-2.8l-1-1a2 2 0 0 0-2.8 0L4.5 15.7z"/><path d="M13.5 6.5l4 4"/></symbol>
+<symbol id="i-hash" viewBox="0 0 24 24"><path d="M9.8 4.5l-2 15M16.2 4.5l-2 15M5.5 9.3h14M4.5 14.7h14"/></symbol>
+<symbol id="i-cbox" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20 15.5l-4.5-4.5L7 19.5"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6M10 4v5.5L7 13.5h10L14 9.5V4M12 13.5V20"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="4" rx="1.2"/><path d="M5 8.5v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V8.5M10 12.5h4"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.9 12.5h9.2L17.5 7"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-more-v" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M19.5 12h-15M10.5 6l-6 6 6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5"/></symbol>
+<symbol id="i-tune" viewBox="0 0 24 24"><path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9"/><circle cx="15" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M7.5 10l2.5 2.2-2.5 2.3M12.5 15h4"/></symbol>
+<symbol id="i-out" viewBox="0 0 24 24"><path d="M8 16L16.5 7.5M9.5 7.5h7v7"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 4c.6 4.9 2.6 6.9 7.5 7.5-4.9.6-6.9 2.6-7.5 7.5-.6-4.9-2.6-6.9-7.5-7.5C9.4 10.9 11.4 8.9 12 4z"/></symbol>
+<symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 6.5h14M5 12h14M5 17.5h9"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13.5L6.6 6h10.8l2.6 7.5V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M4 13.5h4.5l1.2 2h4.6l1.2-2H20"/></symbol>
+<symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3.5" y="5" width="6" height="6" rx="1.6"/><rect x="3.5" y="13" width="6" height="6" rx="1.6"/><path d="M13 8h7.5M13 16h7.5M5.2 8.1l1.1 1.1 1.9-2.2"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.2h3.2M12 8v4.3l2.8 1.7"/></symbol>
+<symbol id="i-signal" viewBox="0 0 24 24"><path d="M20.5 3.5v17h-17z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20L2 8.5a15 15 0 0 1 20 0z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-batt" viewBox="0 0 24 24"><rect x="7" y="4.5" width="10" height="17" rx="2" fill="currentColor" stroke="none"/><rect x="10" y="2.5" width="4" height="2.5" rx=".6" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-shift" viewBox="0 0 24 24"><path d="M12 4.5l7.5 8H15V19H9v-6.5H4.5z"/></symbol>
+<symbol id="i-bksp" viewBox="0 0 24 24"><path d="M9 5.5h10.5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H9L3 12z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5"/></symbol>
+<symbol id="i-enter" viewBox="0 0 24 24"><path d="M19 5.5v6a2 2 0 0 1-2 2H5.5M9.5 9.5l-4 4 4 4"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.6 2.5 13.4 0 16M12 4c-2.5 2.6-2.5 13.4 0 16"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.7l1.5-2h4.6l1.5 2h2.7A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="13" r="3.2"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v8.3A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></symbol>
+<symbol id="i-kbd" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M10.3 10h.01M13.7 10h.01M17 10h.01M7.5 14h9"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-plane" viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="currentColor" stroke="none"/></symbol>
+</defs>
+</svg>
+
+<header class="pg-head">
+  <div class="pg-wrap">
+    <div class="pg-brand">
+      <span class="pg-mark">spunto<span class="dot">.</span></span>
+      <span class="pg-tag">Design mockups · v0.2 · 13 October 2026</span>
+    </div>
+    <p class="pg-lede">The core screens of the Android app (a 360 dp phone) and the web app (a 1200 px window), drawn only from the tokens in <code>docs/03-design.md</code> §11, in the default Carta theme. Sample notes are invented but realistic. The instance shown has a few plugins on, and frames show their output where it lands: label suggestions and the Review line, Related in the note panel, Ask, the From agents and Tasks views, and the daily slip. Every other plugin, the plugin manager and the three themes are in <code>redesign.html</code>.</p>
+    <div class="pg-bar">
+      <div class="seg" role="group" aria-label="Theme shown">
+        <button type="button" data-show="both" aria-pressed="true">Light and dark</button>
+        <button type="button" data-show="light" aria-pressed="false">Light</button>
+        <button type="button" data-show="dark" aria-pressed="false">Dark</button>
+      </div>
+      <nav class="pg-nav" aria-label="Sections"><a href="#android">Android</a><a href="#web">Web</a><a href="#tokens">Tokens</a></nav>
+    </div>
+    <ul class="pg-legend">
+      <li><span class="lg-dash">+ idea</span> dashed means proposed by a plugin, not yet yours</li>
+      <li><span class="lg-serif">Aa</span> serif is your words</li>
+      <li><span class="lg-sans">Aa</span> sans is the app talking</li>
+    </ul>
+  </div>
+</header>
+
+<main>
+<!-- =================================================================
+     ANDROID
+     ================================================================= -->
+<section class="pg-sec" id="android">
+ <div class="pg-wrap">
+  <h2>Android</h2>
+  <p class="pg-sub">Native Compose with Material 3 structure (sheets, springs, back gesture) dressed in the app's own paper, ink and type. One main screen; labels and search are sheets and modes of it.</p>
+  <div class="figs-phone">
+
+  <!-- A1 Capture -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb"><span>14:32</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div class="appbar"><div class="ab-title">All notes <svg class="i s18"><use href="#i-down"/></svg></div><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-search"/></svg></span></div>
+    <div class="p-comp">
+      <div class="body">Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app. <span class="lbl">#pro</span><span class="caret"></span></div>
+    </div>
+    <div class="p-day over">Today</div>
+    <div class="p-entry"><div class="body">Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed.</div><div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div><div class="meta">11:05 <span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div></div>
+    <div class="p-entry"><div class="body"><p>Saturday on theficos:</p></div></div>
+    <div class="dock">
+      <div class="abar">
+        <div class="ac-strip">
+          <span class="ac top"><span class="par">project/</span>spunto<span class="n">18</span></span>
+          <span class="ac"><span class="par">project/</span>quire<span class="n">14</span></span>
+          <span class="ac">project<span class="n">41</span></span>
+          <span class="ac"><span class="par">project/</span>galley<span class="n">9</span></span>
+        </div>
+        <span class="btn primary">Save</span>
+      </div>
+      <div class="kb">
+        <div class="kb-s"><span>project</span><span class="b">project/spunto</span><span>progress</span></div>
+        <div class="kr"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span></div>
+        <div class="kr"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span></div>
+        <div class="kr"><span class="k m"><svg class="i"><use href="#i-shift"/></svg></span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k m"><svg class="i"><use href="#i-bksp"/></svg></span></div>
+        <div class="kr"><span class="k w">?123</span><span class="k">,</span><span class="k w"><svg class="i"><use href="#i-globe"/></svg></span><span class="k sp"></span><span class="k">.</span><span class="k w"><svg class="i"><use href="#i-enter"/></svg></span></div>
+      </div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A1 · Capture</div><h3>Open and type</h3><p>Launch lands in the composer with the keyboard up. The text sits at the top, where the new entry will appear; Save is docked to the keyboard, under the thumb. Typing <span class="lbl" style="color:var(--pg-accent)">#pro</span> turns the tool row into label suggestions ranked by recent use.</p><div class="req">CAP-1 · CAP-3 · LAB-2</div></div>
+  </figure>
+
+  <!-- A2 Timeline -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr"><div class="scr-body" data-id="a2body">
+    <div class="sb"><span>14:33</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div class="appbar"><div class="ab-title">All notes <svg class="i s18"><use href="#i-down"/></svg></div><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-search"/></svg></span></div>
+    <div class="p-comp mini"><div class="body ph">What's on your mind?</div></div>
+    <div class="p-review">4 suggestions · <b>Review</b></div>
+    <div class="p-day over">Today</div>
+    <div class="p-entry">
+      <div class="body">Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app.</div>
+      <div class="meta">14:32</div>
+      <div class="sugg" style="margin-top:10px"><span class="prop">+ project/spunto</span><span class="prop">+ idea</span><span class="dismiss">Dismiss</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body">Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed.</div>
+      <div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div>
+      <div class="meta">11:05 <span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body"><p>Saturday on theficos:</p>
+        <ul class="tasks"><li class="done"><span class="cb on"><svg class="i"><use href="#i-check"/></svg></span>Postgres 17 for Blinko</li><li><span class="cb"></span>borg check on the Pi</li><li><span class="cb"></span>renew the dedyn token</li></ul></div>
+      <div class="lblrow"><span>#homelab</span></div>
+      <div class="meta">09:12 <span class="ring" title="Not synced yet"></span></div>
+    </div>
+    <div class="fab"><svg class="i"><use href="#i-edit"/></svg></div>
+    <div class="gest"></div>
+   </div></div></div></div></div>
+   <div class="cap"><div class="id">A2 · Timeline</div><h3>Entries, not cards</h3><p>Notes read like dated passages in a notebook. Label suggestions sit on the newest note's suggestion line as dashed pills: tap to accept, long-press to dismiss one. The Review line counts proposals from every plugin, and shows only from three up. The agent's note says who wrote it. The hollow ring means saved on the phone, not yet on the server.</p><div class="req">AI-3 · MCP-7 · AND-2 · CAP-8</div></div>
+  </figure>
+
+  <!-- A3 Share sheet -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb"><span>18:03</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <!-- source app: a generic browser -->
+    <div style="padding:6px 12px 0"><div style="height:40px;border-radius:999px;background:var(--sunken);display:flex;align-items:center;gap:8px;padding:0 16px;font:400 13.5px var(--f-sans);color:var(--ink-2)"><svg class="i s16"><use href="#i-lock"/></svg>inkandswitch.com/local-first</div></div>
+    <div style="padding:30px 24px 0">
+      <div style="font:600 27px/34px var(--f-serif);letter-spacing:-.01em">Local-first software</div>
+      <div style="font:italic 400 17px/26px var(--f-serif);color:var(--ink-2);margin-top:6px">You own your data, in spite of the cloud</div>
+      <div style="margin-top:22px;display:grid;gap:10px">
+        <i style="display:block;height:9px;border-radius:5px;background:var(--rule)"></i><i style="display:block;height:9px;border-radius:5px;background:var(--rule);width:92%"></i><i style="display:block;height:9px;border-radius:5px;background:var(--rule);width:96%"></i><i style="display:block;height:9px;border-radius:5px;background:var(--rule);width:70%"></i>
+      </div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet" style="padding-bottom:30px">
+      <div class="handle"></div>
+      <div style="display:flex;align-items:center;padding:6px 16px 12px 24px">
+        <div style="font:500 16px var(--f-sans)">Save to spunto</div><span class="spacer"></span><span class="btn primary lg">Save</span>
+      </div>
+      <div style="margin:0 16px;padding:14px 16px;border-radius:12px;background:var(--sunken)">
+        <div style="font:600 15px/22px var(--f-serif);color:var(--ink)">Local-first software: you own your data, in spite of the cloud</div>
+        <div class="meta" style="margin-top:6px"><span class="src"><svg class="i s14"><use href="#i-out"/></svg>inkandswitch.com</span><span>from Chrome</span></div>
+      </div>
+      <div style="margin:12px 16px 0;min-height:72px;padding:12px 16px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--field)"><div class="body ph" style="font-size:16px">Add a thought (optional)</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:14px 16px 0">
+        <span class="toggle on"><svg class="i s14"><use href="#i-check"/></svg>#reading/essays</span><span class="toggle">#project/spunto</span><span class="toggle">#idea</span>
+      </div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A3 · Share sheet</div><h3>One tap and back</h3><p>Opens over the source app with the comment field not focused, so a single tap on Save does the whole job and returns you to Chrome. The three most recent labels are optional toggles, never a required step. The origin becomes the note's source chip.</p><div class="req">AND-3 · CAP-6</div></div>
+  </figure>
+
+  <!-- A4 Note -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb"><span>22:16</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-back"/></svg></span><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-pin"/></svg></span><span class="ib"><svg class="i"><use href="#i-more-v"/></svg></span></div>
+    <div style="padding:4px 20px 0">
+      <div class="over">Saturday 11 October · 22:14</div>
+      <div style="font:600 22px/28px var(--f-serif);letter-spacing:-.01em;margin:10px 0 10px">Capture budget</div>
+      <div class="body">
+        <p>Every entry point has to reach typing in under two seconds on a warm phone. The tile is the slowest path because of the shade, so it opens straight into a sheet with the keyboard already requested.</p>
+        <ul><li>Tile: swipe, tap, type</li><li>Widget: tap, type</li><li>Share: tap Save, done</li></ul>
+        <p>Does the widget show the resurfaced note or the last one? Resurfaced feels like a <em>gift</em>.</p>
+      </div>
+      <div class="lblrow"><span>#project/spunto</span><span>#android</span></div>
+      <div class="sugg"><span class="prop">+ design</span><span class="prop">+ capture<span class="new">new</span></span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:22px 20px 0;padding:14px 0;border-top:1px solid var(--rule);font:400 13px/18px var(--f-sans);color:var(--ink-3)"><svg class="i s18"><use href="#i-info"/></svg><span><b style="font-weight:500;color:var(--ink-2)">About this note</b> · Related 4</span><span class="spacer"></span><svg class="i s16"><use href="#i-right"/></svg></div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A4 · Note</div><h3>Reading view that is also the editor</h3><p>Tap anywhere in the text to edit; it autosaves after a pause, with a version check. A leading heading becomes the title. The note ends with one line naming what plugins know about it; here only Related, which comes from vectors alone and needs no chat call. It opens the About this note sheet (R6 in <code>redesign.html</code>); no icon is added to the top bar.</p><div class="req">AND-7 · AI-6 · CAP-7</div></div>
+  </figure>
+
+  <!-- A5 Labels sheet -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div data-include="a2body"></div>
+    <div class="scrim"></div>
+    <div class="sheet" style="top:88px;padding-bottom:24px">
+      <div class="handle"></div>
+      <div style="padding:8px 16px 8px"><div class="field" style="background:var(--sunken);box-shadow:none;border-radius:999px;color:var(--ink-3)"><svg class="i s18"><use href="#i-search"/></svg>Find a label</div></div>
+      <div class="row on"><svg class="i"><use href="#i-notes"/></svg>All notes<span class="n">214</span></div>
+      <div class="row"><svg class="i"><use href="#i-archive"/></svg>Archive</div>
+      <div class="row"><svg class="i"><use href="#i-trash"/></svg>Trash</div>
+      <div style="display:flex;align-items:center;padding:16px 24px 4px;border-top:1px solid var(--rule);margin-top:8px"><span class="over">Views</span><span class="spacer"></span><span class="btn text" style="height:28px">Show more views</span></div>
+      <div class="row"><svg class="i"><use href="#i-term"/></svg>From agents<span class="n">9</span></div>
+      <div style="display:flex;align-items:center;padding:16px 24px 4px;border-top:1px solid var(--rule);margin-top:8px"><span class="over">Labels</span><span class="spacer"></span><span class="btn text" style="height:28px">Edit</span></div>
+      <div class="row"><svg class="i chev"><use href="#i-down"/></svg>project<span class="n">41</span></div>
+      <div class="row l1">spunto<span class="n">18</span></div>
+      <div class="row l1">quire<span class="n">14</span></div>
+      <div class="row l1">galley<span class="n">9</span></div>
+      <div class="row"><span class="nochev"></span>homelab<span class="n">27</span></div>
+      <div class="row"><span class="nochev"></span>idea<span class="n">23</span></div>
+      <div class="row"><svg class="i chev"><use href="#i-right"/></svg>reading<span class="n">19</span></div>
+      <div class="row"><span class="nochev"></span>quotes<span class="n">12</span></div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A5 · Labels sheet</div><h3>The title is the navigation</h3><p>Tapping "All notes" opens views and the label tree in one sheet, reachable with one thumb. Core views come first; the Views group exists only because a plugin brings one, here the Agent inbox's From agents. Unlabeled, from Label suggestions, came on by default, so it waits behind "Show more views" until pinned. Labels have no colours or icons; nesting and counts do the work. Settings lives at the bottom of the same sheet.</p><div class="req">LAB-3 · LAB-5 · MCP-10</div></div>
+  </figure>
+
+  <!-- A6 Search -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb"><span>09:40</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div style="display:flex;align-items:center;gap:4px;height:64px;padding:0 4px;border-bottom:1px solid var(--rule)">
+      <span class="ib"><svg class="i"><use href="#i-back"/></svg></span>
+      <div style="flex:1;font:400 17px var(--f-sans);color:var(--ink)">sync conflict<span class="caret" style="height:1.1em"></span></div>
+      <span class="ib"><svg class="i"><use href="#i-close"/></svg></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--rule)">
+      <span style="width:36px;height:36px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center"><svg class="i"><use href="#i-spark"/></svg></span>
+      <div><div style="font:500 14.5px/20px var(--f-sans)">Ask your notes</div><div style="font:400 13px/18px var(--f-sans);color:var(--ink-3)">"sync conflict"</div></div>
+    </div>
+    <div class="p-day over" style="padding-top:16px">Notes · 9</div>
+    <div class="p-entry">
+      <div class="body sm" style="font-weight:600">Sync conflicts: keep both versions, never pick a winner silently.</div>
+      <div class="body sm" style="color:var(--ink-2);margin-top:2px">…the <mark>conflicted copy</mark> pattern is ugly but nobody loses text. Agent appends never <mark>conflict</mark>.</div>
+      <div class="meta">3 Oct · <span class="lbl">#project/spunto</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body sm" style="font-weight:600">Last writer wins was fine in Quire until two phones edited the same book note on a train.</div>
+      <div class="meta">≈ similar meaning · 14 Aug · <span class="lbl">#project/quire</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body sm" style="font-weight:600">CRDTs are the right answer for collaborative editors and the wrong one for a one-person notebook.</div>
+      <div class="meta">≈ similar meaning · 2025 · <span class="lbl">#idea</span></div>
+    </div>
+    <div class="p-entry">
+      <div class="body sm" style="font-weight:600">Local-first software: the seven ideals.</div>
+      <div class="body sm" style="color:var(--ink-2);margin-top:2px">…<mark>sync</mark> with other devices, works offline, longevity…</div>
+      <div class="meta">Yesterday · <span class="lbl">#reading/essays</span></div>
+    </div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A6 · Search</div><h3>One box, two kinds of match</h3><p>Keyword and meaning results blend into one list; notes found by meaning say "≈ similar meaning" so the result makes sense. Ask your notes (the Ask plugin) is the first row, marked with the spark because a model will read the notes. Offline, the same screen searches the phone by keyword and says so in one line.</p><div class="req">SRC-1 · SRC-2 · SRC-4 · AI-8</div></div>
+  </figure>
+
+  <!-- A7 Review -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb"><span>08:52</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div class="appbar" style="padding-left:4px"><span class="ib"><svg class="i"><use href="#i-close"/></svg></span><div class="ab-title" style="margin-left:4px">Suggestions</div><span class="spacer"></span><span style="font:400 13px var(--f-sans);color:var(--ink-3);padding-right:16px;font-variant-numeric:tabular-nums">3 of 12</span></div>
+    <div style="height:2px;background:var(--rule);margin:0 20px"><div style="width:25%;height:2px;background:var(--accent)"></div></div>
+    <div style="margin:28px 16px 0;padding:20px 20px 22px;border-radius:20px;background:var(--raised);box-shadow:var(--e2)">
+      <div class="over">Sunday 12 October · 08:47</div>
+      <div class="body" style="margin-top:10px">Walking idea: a map of Rome's <em>nasoni</em> for long runs in August. The comune publishes the locations as open data, I think.</div>
+    </div>
+    <div style="padding:28px 20px 0">
+      <div class="over">Suggested labels</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">
+        <span class="toggle on" style="height:40px;padding:0 16px;font:500 14px var(--f-sans)"><svg class="i s16"><use href="#i-check"/></svg>running</span>
+        <span class="toggle on" style="height:40px;padding:0 16px;font:500 14px var(--f-sans)"><svg class="i s16"><use href="#i-check"/></svg>idea</span>
+        <span class="prop" style="height:40px;padding:0 16px;font-size:14px">+ roma<span class="new">new</span></span>
+      </div>
+      <div style="margin-top:14px;font:400 12.5px/18px var(--f-sans);color:var(--ink-3)">Labels you already use are pre-selected. New labels never are.</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:22px;display:flex;align-items:center;gap:8px;padding:12px 16px">
+      <span class="btn ghost lg">Skip</span><span class="spacer"></span><span class="btn ghost lg" style="color:var(--ink-3)">Dismiss</span><span class="btn primary lg">Apply 2 labels</span>
+    </div>
+    <div class="gest"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A7 · Review, one by one</div><h3>Clear the pile in a minute</h3><p>Review groups every plugin's proposals on one screen (R11 in <code>redesign.html</code>); "3 notes wait for labels · One by one" opens this mode. One note at a time. The owner adjusts the selection and applies; skipping leaves suggestions pending, and they expire quietly after 14 days. Swipes exist but the buttons are the main path, for TalkBack and for clarity.</p><div class="req">AI-3 · AI-10 · D6</div></div>
+  </figure>
+
+  <!-- A8 Home screen -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr" style="background:var(--wall)">
+    <div class="sb" style="color:#fff"><span>07:58</span><span class="ic"><svg class="i"><use href="#i-signal"/></svg><svg class="i"><use href="#i-wifi"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div style="padding:22px 24px 26px;color:#fff;text-shadow:0 1px 8px rgb(0 0 0 / .18)">
+      <div style="font:400 15px/1.2 var(--f-sans);opacity:.92">Monday 13 October</div>
+      <div style="font:300 54px/1.05 var(--f-sans);letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums">07:58</div>
+    </div>
+    <div style="margin:0 12px;padding:16px;border-radius:28px;background:var(--paper);box-shadow:0 10px 30px rgb(0 0 0 / .18)">
+      <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-radius:999px;background:var(--sunken)">
+        <svg class="i" style="color:var(--accent)"><use href="#i-edit"/></svg><span class="body ph" style="font-size:15.5px">Write a note</span><span class="spacer"></span><svg class="i" style="color:var(--ink-3)"><use href="#i-mic"/></svg>
+      </div>
+      <div style="padding:14px 6px 2px">
+        <div class="over">From your notes · March 2025</div>
+        <div class="body sm" style="margin-top:6px">Learn enough Compose to stop being afraid of it. Start with the share sheet.</div>
+      </div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:118px;display:grid;grid-template-columns:repeat(4,1fr);padding:0 14px;color:#fff;font:400 12px/1 var(--f-sans);text-align:center">
+      <div><div style="width:54px;height:54px;margin:0 auto 7px;border-radius:50%;background:var(--hs-bg);display:grid;place-items:center;color:var(--hs-ink)"><svg class="i s24"><use href="#i-clock"/></svg></div>Clock</div>
+      <div><div style="width:54px;height:54px;margin:0 auto 7px;border-radius:50%;background:var(--hs-bg);display:grid;place-items:center;color:var(--hs-ink)"><svg class="i s24"><use href="#i-camera"/></svg></div>Camera</div>
+      <div><div style="width:54px;height:54px;margin:0 auto 7px;border-radius:50%;background:var(--hs-bg);display:grid;place-items:center;color:var(--hs-ink)"><svg class="i s24"><use href="#i-folder"/></svg></div>Files</div>
+      <div style="position:relative">
+        <div style="position:absolute;bottom:80px;right:-2px;width:188px;padding:6px;border-radius:20px;background:var(--raised);box-shadow:var(--e3);text-align:left;color:var(--ink)">
+          <div style="display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;border-radius:14px;font:500 14px var(--f-sans)"><svg class="i" style="color:var(--accent)"><use href="#i-edit"/></svg>New note</div>
+          <div style="display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;border-radius:14px;font:500 14px var(--f-sans)"><svg class="i" style="color:var(--accent)"><use href="#i-mic"/></svg>Dictate a note</div>
+        </div>
+        <div style="width:54px;height:54px;margin:0 auto 7px;border-radius:50%;background:#F8F5F0;position:relative;box-shadow:0 0 0 3px rgb(255 255 255 / .55)"><i style="position:absolute;left:29px;top:19px;width:14px;height:14px;border-radius:50%;background:#9F4C2A"></i></div>spunto
+      </div>
+    </div>
+    <div style="position:absolute;left:16px;right:16px;bottom:40px;height:52px;border-radius:999px;background:var(--hs-bg);display:flex;align-items:center;gap:12px;padding:0 20px;color:var(--hs-ink);font:400 15px var(--f-sans)"><svg class="i"><use href="#i-search"/></svg>Search</div>
+    <div class="gest" style="--ink:#fff"></div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A8 · Widget, icon, shortcut</div><h3>Capture from the home screen</h3><p>The widget (Quick capture, a device plugin on by default) opens the quick-capture sheet; with Resurface on it also shows the day's slip. Its mic opens the sheet already listening. The icon is the mark alone: a terracotta point on paper, the <em>punto</em> in spunto. Long-press offers "New note" and "Dictate a note". The Quick Settings tile opens the same sheet.</p><div class="req">AND-5 · AND-9 · AND-10 · AND-15 · SRC-5</div></div>
+  </figure>
+
+  <!-- A9 Dictation -->
+  <figure class="fig">
+   <div class="pair"><div class="tw" data-theme="light"><div class="phone"><div class="scr">
+    <div class="sb"><span>07:46</span><span class="ic"><svg class="i"><use href="#i-plane"/></svg><svg class="i"><use href="#i-batt"/></svg></span></div>
+    <div class="appbar"><div class="ab-title">All notes <svg class="i s18"><use href="#i-down"/></svg></div><span class="spacer"></span><span class="ib"><svg class="i"><use href="#i-search"/></svg></span></div>
+    <div class="p-comp">
+      <div class="body">Idea per il weekend: mappa dei nasoni lungo il Tevere, da segnare mentre corro. <span class="partial">Magari con una foto per</span><span class="caret"></span></div>
+    </div>
+    <div class="p-day over">Today</div>
+    <div class="p-entry"><div class="body">Ask Marco whether the Sunday long run starts at seven or half past.</div><div class="meta">07:12 <span class="ring" title="Not synced yet"></span></div></div>
+    <div class="p-entry"><div class="body">Appia Antica loop on Sunday: water at Cecilia Metella, back before the heat.</div><div class="lblrow"><span>#running</span></div><div class="meta">06:58 <span class="ring" title="Not synced yet"></span></div></div>
+    <div class="dock">
+      <div class="abar">
+        <span class="ib" title="Back to the keyboard"><svg class="i"><use href="#i-kbd"/></svg></span>
+        <span class="lang" role="group" aria-label="Dictation language"><span class="on">IT</span><span>EN</span></span>
+        <span class="spacer"></span>
+        <span class="btn primary">Save</span>
+      </div>
+      <div class="dict">
+        <span class="stopbtn" title="Stop dictation"><svg class="i"><use href="#i-stop"/></svg></span>
+        <div class="dict-st">Listening in Italian</div>
+        <div class="dict-mt"><svg class="i s14"><use href="#i-lock"/></svg>On this phone · audio not kept</div>
+      </div>
+      <div class="gest"></div>
+    </div>
+   </div></div></div></div>
+   <div class="cap"><div class="id">A9 · Dictation</div><h3>Speak, and it lands at the cursor</h3><p>The mic swaps the keyboard for a listening panel of the same height, so nothing jumps. Words stream in at the cursor in the serif, because they are yours: grey while the phone is still deciding, ink once settled, never dashed. Recognition runs on the phone, so this works in airplane mode with AI off; the morning's note waits with its ring until there is signal. IT and EN switch with one tap, Save stops and saves in one gesture, and no audio is kept.</p><div class="req">AND-15 · AND-5 · CAP-4 · AI-2</div></div>
+  </figure>
+
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     WEB
+     ================================================================= -->
+<section class="pg-sec" id="web">
+ <div class="pg-wrap">
+  <h2>Web</h2>
+  <p class="pg-sub">A keyboard-first desktop tool: a collapsible label rail, one centred column at reading measure with hanging timestamps, and a single palette for search, labels, actions and asking.</p>
+  <div class="desk-figs">
+
+  <!-- W1 Home -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W1 · Home</div><h3>Composer first, then the day's notes</h3><p>Everything textual aligns on one left edge; times hang in the gutter like a journal. The daily slip (from Resurface) is the one boxed thing, a note from the past with Open, Archive and × for "not today". The rail's Views group holds the views of plugins the owner switched on: From agents and Tasks. Hovering an entry reveals its two actions; nothing else moves.</p><div class="req">WEB-1 · WEB-3 · AI-3 · SRC-5 · MCP-7 · MCP-10 · SRC-8</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org</div></div>
+    <div class="app" data-id="w1app">
+     <aside class="rail">
+      <div class="wm">spunto<span class="dot">.</span></div>
+      <div class="sbtn"><svg class="i"><use href="#i-search"/></svg>Search<span class="spacer"></span><span class="kbd">⌘K</span></div>
+      <div class="ri on"><svg class="i"><use href="#i-notes"/></svg>All notes<span class="n">214</span></div>
+      <div class="ri"><svg class="i"><use href="#i-archive"/></svg>Archive</div>
+      <div class="ri"><svg class="i"><use href="#i-trash"/></svg>Trash</div>
+      <div class="rsec"><span class="over">Views</span></div>
+      <div class="ri"><svg class="i"><use href="#i-term"/></svg>From agents<span class="n">9</span></div>
+      <div class="ri"><svg class="i"><use href="#i-tasks"/></svg>Tasks<span class="n">7</span></div>
+      <div class="rsec"><span class="over">Labels</span></div>
+      <div class="ri"><svg class="i chev"><use href="#i-down"/></svg>project<span class="n">41</span></div>
+      <div class="ri l1">spunto<span class="n">18</span></div>
+      <div class="ri l1">quire<span class="n">14</span></div>
+      <div class="ri l1">galley<span class="n">9</span></div>
+      <div class="ri"><span class="nc"></span>homelab<span class="n">27</span></div>
+      <div class="ri"><span class="nc"></span>idea<span class="n">23</span></div>
+      <div class="ri"><svg class="i chev"><use href="#i-right"/></svg>reading<span class="n">19</span></div>
+      <div class="ri"><span class="nc"></span>quotes<span class="n">12</span></div>
+      <div class="ri"><span class="nc"></span>cucina<span class="n">8</span></div>
+      <div class="rfoot"><div class="ri"><svg class="i"><use href="#i-tune"/></svg>Settings</div><div class="rstat">Synced · AI ready</div></div>
+     </aside>
+     <div class="main"><div class="col">
+      <div class="d-comp">
+        <div class="body"><span class="caret" style="margin-left:0"></span><span class="ph">What's on your mind?</span></div>
+        <div class="tools"><span class="tool"><svg class="i"><use href="#i-hash"/></svg></span><span class="tool"><svg class="i"><use href="#i-cbox"/></svg></span><span class="tool"><svg class="i"><use href="#i-image"/></svg></span><span class="spacer"></span><span class="hint"><span class="kbd">⌘</span><span class="kbd">↵</span></span><span class="btn primary" style="margin-left:10px;opacity:.45">Save</span></div>
+      </div>
+      <div class="d-review">4 suggestions · <b>Review</b></div>
+      <div class="slip">
+        <div style="display:flex;align-items:center;gap:2px;margin:-6px -8px 0 0"><span class="over">From your notes · 19 March 2025</span><span class="spacer"></span><span class="btn text" style="height:28px">Open</span><span class="btn ghost" style="height:28px;padding:0 8px">Archive</span><span class="tool" style="width:28px;height:28px" title="Not today"><svg class="i s16"><use href="#i-close"/></svg></span></div>
+        <div class="body" style="margin-top:6px">Learn enough Compose to stop being afraid of it. Start with the share sheet: it is the smallest screen that matters most.</div>
+      </div>
+      <div class="day over">Pinned</div>
+      <article class="entry">
+        <div class="t"><svg class="i"><use href="#i-pin"/></svg></div>
+        <div class="c"><div class="body"><p>Principles, short version: the text is the loudest thing on screen; capture asks nothing; dashed means proposed.</p></div><div class="lblrow"><span>#project/spunto</span></div></div><div class="acts"></div>
+      </article>
+      <div class="day over">Today · Monday 13 October</div>
+      <article class="entry">
+        <div class="t">14:32</div>
+        <div class="c"><div class="body"><p>Widget idea: show one old note a day instead of the clock. Resurfacing without opening the app, like a slip of paper left on the desk.</p></div>
+          <div class="sugg"><span class="prop">+ project/spunto</span><span class="prop hover">+ idea<span class="x"><svg class="i s14"><use href="#i-close"/></svg></span></span><span class="prop">+ design<span class="new">new</span></span><span class="dismiss">Dismiss</span></div></div>
+        <div class="acts"></div>
+      </article>
+      <article class="entry hov">
+        <div class="t">11:05</div>
+        <div class="c"><div class="body"><p>Move the LLM client out of Quire into its own package: validate against the schema, retry once with the error in the prompt, then fail closed. Spunto needs exactly the same thing.</p></div>
+          <div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div>
+          <div class="meta"><span class="agent"><svg class="i s14"><use href="#i-term"/></svg>via Claude Code</span></div></div>
+        <div class="acts"><span class="tool"><svg class="i"><use href="#i-pin"/></svg></span><span class="tool"><svg class="i"><use href="#i-more"/></svg></span></div>
+      </article>
+      <article class="entry">
+        <div class="t">09:12</div>
+        <div class="c"><div class="body"><p>Saturday on theficos:</p><ul class="tasks"><li class="done"><span class="cb on"><svg class="i"><use href="#i-check"/></svg></span>Postgres 17 for Blinko</li><li><span class="cb"></span>borg check on the Pi</li><li><span class="cb"></span>renew the dedyn token</li></ul></div><div class="lblrow"><span>#homelab</span></div></div><div class="acts"></div>
+      </article>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- W2 Note -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W2 · Note</div><h3>The margin is the note panel</h3><p>On wide screens the note panel sits in the right margin like notes in a printed book; narrower, it moves under the note. Each plugin gets one section that starts closed; this owner opened Related once and it stays open. The full panel, with Source and Backlinks, is R7 in <code>redesign.html</code>. Click into the text to edit; it saves itself and says "Saved" once, in grey, without a toast.</p><div class="req">AI-6 · CAP-7 · CAP-10</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org/n/01JA7Q3M</div></div>
+    <div class="app">
+     <aside class="rail">
+      <div class="wm">spunto<span class="dot">.</span></div>
+      <div class="sbtn"><svg class="i"><use href="#i-search"/></svg>Search<span class="spacer"></span><span class="kbd">⌘K</span></div>
+      <div class="ri"><svg class="i"><use href="#i-notes"/></svg>All notes<span class="n">214</span></div>
+      <div class="ri"><svg class="i"><use href="#i-archive"/></svg>Archive</div>
+      <div class="ri"><svg class="i"><use href="#i-trash"/></svg>Trash</div>
+      <div class="rsec"><span class="over">Views</span></div>
+      <div class="ri"><svg class="i"><use href="#i-term"/></svg>From agents<span class="n">9</span></div>
+      <div class="ri"><svg class="i"><use href="#i-tasks"/></svg>Tasks<span class="n">7</span></div>
+      <div class="rsec"><span class="over">Labels</span></div>
+      <div class="ri"><svg class="i chev"><use href="#i-down"/></svg>project<span class="n">41</span></div>
+      <div class="ri l1 on">spunto<span class="n">18</span></div>
+      <div class="ri l1">quire<span class="n">14</span></div>
+      <div class="ri l1">galley<span class="n">9</span></div>
+      <div class="ri"><span class="nc"></span>android<span class="n">6</span></div>
+      <div class="ri"><span class="nc"></span>homelab<span class="n">27</span></div>
+      <div class="ri"><span class="nc"></span>idea<span class="n">23</span></div>
+      <div class="ri"><svg class="i chev"><use href="#i-right"/></svg>reading<span class="n">19</span></div>
+      <div class="rfoot"><div class="ri"><svg class="i"><use href="#i-tune"/></svg>Settings</div><div class="rstat">Synced · AI ready</div></div>
+     </aside>
+     <div class="main">
+      <div style="display:grid;grid-template-columns:640px 220px;gap:44px;justify-content:center;padding-top:30px">
+       <div style="padding-left:64px">
+        <div class="hint" style="font-size:13px;color:var(--ink-2)"><svg class="i s16"><use href="#i-back"/></svg>#project/spunto</div>
+        <div class="over" style="margin-top:26px">Saturday 11 October · 22:14</div>
+        <div style="font:600 var(--fs-title)/var(--lh-title) var(--f-serif);letter-spacing:-.01em;margin:10px 0 12px">Capture budget</div>
+        <div class="body measure">
+          <p>Every entry point has to reach typing in under two seconds on a warm phone. The Quick Settings tile is the slowest path because of the shade animation, so it opens straight into a sheet with the keyboard already requested.</p>
+          <ul><li>Tile: swipe, tap, type. About 0.9 s.</li><li>Widget: tap, type. About 0.5 s.</li><li>Share: tap Save. Done, no keyboard at all.</li></ul>
+          <p>Open question: does the widget show the resurfaced note or the last one? Resurfaced feels more like a <em>gift</em>; the last note is just a mirror.</p>
+        </div>
+        <div class="lblrow"><span>#project/spunto</span><span>#android</span></div>
+        <div class="sugg"><span class="prop">+ design</span><span class="prop">+ capture<span class="new">new</span></span><span class="dismiss">Dismiss</span></div>
+        <div class="meta" style="margin-top:18px">Saved · <span class="src"><svg class="i s14"><use href="#i-history"/></svg>3 versions</span></div>
+       </div>
+       <aside style="padding-top:92px">
+        <div style="display:flex;align-items:center;gap:8px"><span class="over" style="color:var(--ink-2)">Related</span><span style="font:400 12.5px/1 var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums">4 notes</span><svg class="i s16" style="margin-left:auto;color:var(--ink-3)"><use href="#i-down"/></svg></div>
+        <div style="margin-top:10px;padding:12px 0;border-top:1px solid var(--rule)"><div class="body sm">Widget idea: show one old note a day instead of the clock.</div><div class="meta" style="margin-top:4px">Today · <span class="lbl">#project/spunto</span></div></div>
+        <div style="padding:12px 0;border-top:1px solid var(--rule)"><div class="body sm">Keep's lock-screen capture is the bar to beat: notes role, stylus button, no unlock.</div><div class="meta" style="margin-top:4px">2 Sep · <span class="lbl">#reading</span></div></div>
+        <div style="padding:12px 0;border-top:1px solid var(--rule)"><div class="body sm">Cold start must stay under a second. Quire hit 1.4 s because Room opened on the main thread.</div><div class="meta" style="margin-top:4px">June · <span class="lbl">#project/quire</span></div></div>
+        <div style="padding:12px 0;border-top:1px solid var(--rule)"><div class="body sm">Drafts opens to a blank page every single time. That is the whole product.</div><div class="meta" style="margin-top:4px">2024 · <span class="lbl">#quotes</span></div></div>
+       </aside>
+      </div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- W3 Palette -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W3 · Search palette</div><h3>One box for everything</h3><p><span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">⌘K</span> opens instantly. Keyword hits are highlighted; notes found by meaning say so. The highlighted row always shows what Enter will do: here the top note, while <span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">⌘↵</span> asks. A query ending in "?" highlights Ask instead.</p><div class="req">SRC-1 · SRC-2 · WEB-2 · AI-8</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org</div></div>
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column">
+     <div data-include="w1app" style="flex:1"></div>
+     <div class="scrim"></div>
+     <div class="pal">
+      <div class="pal-in"><svg class="i"><use href="#i-search"/></svg><span>sync conflict<span class="caret"></span></span><span class="spacer"></span><span class="kbd">esc</span></div>
+      <div class="pr"><span class="ico ask"><svg class="i"><use href="#i-spark"/></svg></span><div style="align-self:center"><span style="font:500 14px var(--f-sans)">Ask your notes</span> <span style="font:400 14px var(--f-sans);color:var(--ink-3)">"sync conflict"</span></div><span class="rk hint"><span class="kbd">⌘</span><span class="kbd">↵</span></span></div>
+      <div class="pal-sec over">Notes</div>
+      <div class="pr sel"><span class="ico"><svg class="i"><use href="#i-notes"/></svg></span><div><div class="first">Sync conflicts: keep both versions, never pick a winner silently.</div><div class="snip">…the <mark>conflicted copy</mark> pattern from Dropbox is ugly but nobody loses text. Agent appends never <mark>conflict</mark>.</div><div class="meta">3 Oct · <span class="lbl">#project/spunto</span></div></div><span class="rk hint"><span class="kbd">↵</span></span></div>
+      <div class="pr"><span class="ico"><svg class="i"><use href="#i-notes"/></svg></span><div><div class="first">Last writer wins was fine in Quire until two phones edited the same book note on a train.</div><div class="meta">≈ similar meaning · 14 Aug · <span class="lbl">#project/quire</span></div></div></div>
+      <div class="pr"><span class="ico"><svg class="i"><use href="#i-notes"/></svg></span><div><div class="first">CRDTs are the right answer for collaborative editors and the wrong one for a one-person notebook.</div><div class="meta">≈ similar meaning · 2025 · <span class="lbl">#idea</span></div></div></div>
+      <div class="pr"><span class="ico"><svg class="i"><use href="#i-notes"/></svg></span><div><div class="first">Local-first software: the seven ideals.</div><div class="snip">…<mark>sync</mark> with other devices, works offline, longevity, privacy…</div><div class="meta">Yesterday · <span class="lbl">#reading/essays</span></div></div></div>
+      <div class="pal-foot"><span><span class="kbd">↑</span><span class="kbd">↓</span> move</span><span><span class="kbd">↵</span> open</span><span><span class="kbd">⌘↵</span> ask</span><span class="spacer"></span><span style="color:var(--accent)">See all 9 results</span></div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- W4 Ask -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W4 · Ask your notes</div><h3>The machine speaks in the sans</h3><p>A command result from the Ask plugin. The answer is set in the UI sans, so it never looks like something the owner wrote. Every claim cites a note; the cited notes are listed in the serif, because they are the owner's words. Read-only, with the model and where it runs named. If nothing fits, it says so instead of guessing. Nothing is kept unless you save it as a note (<span class="kbd" style="--paper:var(--pg-panel);--rule-strong:var(--pg-rule);--ink-2:var(--pg-ink2)">⌘S</span>); R12 in <code>redesign.html</code> is the reference.</p><div class="req">AI-8 · AI-4</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org</div></div>
+    <div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column">
+     <div data-include="w1app" style="flex:1"></div>
+     <div class="scrim"></div>
+     <div class="pal wide">
+      <div class="pal-in"><svg class="i" style="color:var(--accent)"><use href="#i-spark"/></svg><span style="font:italic 400 16px var(--f-serif);color:var(--ink-2)">what did I decide about sync conflicts?</span><span class="spacer"></span><span class="kbd">esc</span></div>
+      <div style="padding:20px 18px 6px">
+        <div class="answer">
+          <p>You decided to keep both versions instead of picking a winner. When two devices edit the same note, the newer text stays on the note and the other edit becomes a linked conflicted copy that you merge by hand<span class="cite">1</span>. Flags such as pinned and archived simply take the last write<span class="cite">1</span>.</p>
+          <p>You ruled out CRDT libraries as too heavy for a one-person notebook<span class="cite">2</span>, after last-writer-wins lost an edit in Quire<span class="cite">3</span>.</p>
+        </div>
+      </div>
+      <div class="pal-sec over" style="padding-top:18px">Sources</div>
+      <div class="pr" style="padding-top:6px;padding-bottom:6px"><span class="cite" style="margin-top:3px">1</span><div><div class="body sm">Sync conflicts: keep both versions, never pick a winner silently.</div><div class="meta" style="margin-top:2px">3 Oct · <span class="lbl">#project/spunto</span></div></div></div>
+      <div class="pr" style="padding-top:6px;padding-bottom:6px"><span class="cite" style="margin-top:3px">2</span><div><div class="body sm">CRDTs are the right answer for collaborative editors and the wrong one for a one-person notebook.</div><div class="meta" style="margin-top:2px">2025 · <span class="lbl">#idea</span></div></div></div>
+      <div class="pr" style="padding-top:6px;padding-bottom:12px"><span class="cite" style="margin-top:3px">3</span><div><div class="body sm">Last writer wins was fine in Quire until two phones edited the same book note on a train.</div><div class="meta" style="margin-top:2px">14 Aug · <span class="lbl">#project/quire</span></div></div></div>
+      <div class="pal-foot"><span>From 3 notes · qwen3.5 at ollama.home.arpa · read-only</span><span class="spacer"></span><span class="btn ghost" style="height:28px"><svg class="i s16"><use href="#i-copy"/></svg>Copy</span><span class="btn tonal" style="height:28px">Save as note <span class="kbd" style="margin-left:4px;background:transparent">⌘S</span></span></div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- W5 Label view + rename -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W5 · Label view and rename</div><h3>Show the impact before anything changes</h3><p>A label view titles the column with the label in the owner's serif. Renaming states how many notes it rewrites, that children move along, and that only whole labels match. If the new name exists, the same dialog becomes a merge. Undo follows for ten seconds.</p><div class="req">LAB-3 · LAB-4</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk short">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org/l/project/spunto</div></div>
+    <div class="app">
+     <aside class="rail">
+      <div class="wm">spunto<span class="dot">.</span></div>
+      <div class="sbtn"><svg class="i"><use href="#i-search"/></svg>Search<span class="spacer"></span><span class="kbd">⌘K</span></div>
+      <div class="ri"><svg class="i"><use href="#i-notes"/></svg>All notes<span class="n">214</span></div>
+      <div class="ri"><svg class="i"><use href="#i-archive"/></svg>Archive</div>
+      <div class="rsec"><span class="over">Views</span></div>
+      <div class="ri"><svg class="i"><use href="#i-term"/></svg>From agents<span class="n">9</span></div>
+      <div class="rsec"><span class="over">Labels</span></div>
+      <div class="ri"><svg class="i chev"><use href="#i-down"/></svg>project<span class="n">41</span></div>
+      <div class="ri l1 on">spunto<span class="n">18</span></div>
+      <div class="ri l1">quire<span class="n">14</span></div>
+      <div class="ri l1">galley<span class="n">9</span></div>
+      <div class="ri"><span class="nc"></span>homelab<span class="n">27</span></div>
+      <div class="ri"><span class="nc"></span>idea<span class="n">23</span></div>
+      <div class="rfoot"><div class="ri"><svg class="i"><use href="#i-tune"/></svg>Settings</div></div>
+     </aside>
+     <div class="main"><div class="col">
+      <div style="padding-left:64px;display:flex;align-items:baseline;gap:14px">
+        <div style="font:600 28px/1.2 var(--f-serif);letter-spacing:-.015em"><span class="lbl">#</span>project/spunto</div>
+        <div style="font:400 13px var(--f-sans);color:var(--ink-3)">18 notes · 2 child labels</div><span class="spacer"></span><span class="tool"><svg class="i"><use href="#i-more"/></svg></span>
+      </div>
+      <div class="d-comp" style="margin-top:22px;padding-bottom:14px"><div class="body" style="min-height:0"><span class="ph">Write in #project/spunto…</span></div></div>
+      <div class="day over">Today</div>
+      <article class="entry"><div class="t">14:32</div><div class="c"><div class="body"><p>Widget idea: show one old note a day instead of the clock.</p></div><div class="lblrow"><span>#project/spunto</span><span>#idea</span></div></div><div class="acts"></div></article>
+      <article class="entry"><div class="t">11:05</div><div class="c"><div class="body"><p>Move the LLM client out of Quire into its own package.</p></div><div class="lblrow"><span>#project/quire</span><span>#project/spunto</span></div></div><div class="acts"></div></article>
+     </div></div>
+     <div class="scrim"></div>
+     <div class="dlg">
+      <h4>Rename label</h4>
+      <div style="font:400 13.5px/20px var(--f-sans);color:var(--ink-2);margin-bottom:16px">Currently <span class="lbl" style="font-family:var(--f-serif)">#project/spunto</span></div>
+      <div class="inp"><span style="color:var(--ink-3)">#</span>spunto<span class="caret"></span></div>
+      <div style="margin-top:16px;padding:12px 14px;border-radius:12px;background:var(--sunken);font:400 13.5px/21px var(--f-sans);color:var(--ink-2)">
+        Rewrites <b style="color:var(--ink);font-weight:500">18 notes</b>. Child labels move too: <span class="lbl" style="font-family:var(--f-serif)">#project/spunto/android</span>, <span class="lbl" style="font-family:var(--f-serif)">#project/spunto/design</span>.<br>Whole labels only: <span style="font-family:var(--f-serif)">#project/spuntino</span> is not touched.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><span class="btn ghost lg">Cancel</span><span class="btn primary lg">Rename in 18 notes</span></div>
+     </div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- W6 Settings Agents -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W6 · Settings · Agents</div><h3>Connect an agent by pasting one line</h3><p>The exact Claude Code command and Codex config for this instance, URL already filled in, each with Copy. Tokens are scoped read-only, read-write or status (monitoring only), shown once, revocable, with last use. Everything an agent writes carries a "via" chip.</p><div class="req">WEB-5 · MCP-2 · MCP-3 · MCP-7</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org/settings/agents</div></div>
+    <div class="app">
+     <aside class="rail set-nav">
+      <div class="wm">spunto<span class="dot">.</span></div>
+      <div class="ri" style="margin-bottom:12px"><svg class="i"><use href="#i-back"/></svg>Back to notes</div>
+      <div class="rsec" style="margin-top:4px"><span class="over">Settings</span></div>
+      <div class="ri">Appearance</div>
+      <div class="ri">Plugins</div>
+      <div class="ri">Devices<span class="n">3</span></div>
+      <div class="ri">Access tokens<span class="n">3</span></div>
+      <div class="ri on">Agents</div>
+      <div class="ri">AI</div>
+      <div class="ri">Data</div>
+      <div class="rfoot"><div class="ri">Status</div><div class="rstat">v0.1.0 · stable</div></div>
+     </aside>
+     <div class="main"><div style="width:640px;margin:0 auto;padding-top:38px">
+      <div style="font:600 28px/1.2 var(--f-serif);letter-spacing:-.015em">Agents</div>
+      <p style="margin:10px 0 0;font:400 14.5px/22px var(--f-sans);color:var(--ink-2);max-width:560px">Claude Code and Codex can search your notes and add to them through this server's MCP endpoint. Give each agent its own token; what it writes is marked with a <span class="agent" style="vertical-align:1px"><svg class="i s14"><use href="#i-term"/></svg>via</span> chip.</p>
+      <div style="display:flex;align-items:center;margin:26px 0 8px"><span style="font:500 14.5px var(--f-sans)">Claude Code</span><span class="spacer"></span><span class="hint">run once in a terminal</span></div>
+<pre class="code"><span class="ck">claude mcp add</span> <span class="cf">--transport</span> <span class="ca">http spunto</span> \
+  <span class="ca">https://spunto.example.org/mcp</span> \
+  <span class="cf">--header</span> <span class="ca">"Authorization: Bearer </span><span class="cv">$SPUNTO_TOKEN</span><span class="ca">"</span><span class="cp"><svg class="i s14"><use href="#i-copy"/></svg>Copy</span></pre>
+      <div style="display:flex;align-items:center;margin:20px 0 8px"><span style="font:500 14.5px var(--f-sans)">Codex</span><span class="spacer"></span><span class="hint">add to ~/.codex/config.toml</span></div>
+<pre class="code"><span class="ck">[mcp_servers.spunto]</span>
+<span class="ck">url</span> = <span class="ca">"https://spunto.example.org/mcp"</span>
+<span class="ck">bearer_token_env_var</span> = <span class="ca">"</span><span class="cv">SPUNTO_TOKEN</span><span class="ca">"</span><span class="cp"><svg class="i s14"><use href="#i-copy"/></svg>Copy</span></pre>
+      <div style="display:flex;align-items:center;margin:30px 0 4px"><span class="over">Access tokens</span><span class="spacer"></span><span class="btn outline"><svg class="i s16"><use href="#i-plus"/></svg>New token</span></div>
+      <div class="tok" style="border-top:0;font-size:11.5px;color:var(--ink-3);padding-bottom:6px"><span>Name</span><span>Scope</span><span>Created</span><span>Last used</span><span></span></div>
+      <div class="tok"><b>claude-code-laptop</b><span class="scope rw">Read and write</span><span>2 Oct</span><span>4 minutes ago</span><span class="btn ghost" style="height:26px;padding:0 6px">Revoke</span></div>
+      <div class="tok"><b>codex</b><span class="scope rw">Read and write</span><span>28 Sep</span><span>Yesterday</span><span class="btn ghost" style="height:26px;padding:0 6px">Revoke</span></div>
+      <div class="tok"><b>backup-script</b><span class="scope ro">Read only</span><span>14 Sep</span><span>Never</span><span class="btn ghost" style="height:26px;padding:0 6px">Revoke</span></div>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  <!-- W7 First run -->
+  <figure class="fig">
+   <div class="cap"><div class="id">W7 · First run</div><h3>The empty state teaches three moves</h3><p>No illustrations and no tour: one line in the display serif, then capture, labels and agents, each with its shortcut. The label rail explains itself instead of showing an empty box, and has no Views group until a plugin brings one. No plugin appears as a missing feature.</p><div class="req">WEB-1 · CAP-1</div></div>
+   <div class="pair stack"><div class="tw" data-theme="light"><div class="desk short">
+    <div class="chrome"><span class="tl"></span><span class="tl"></span><span class="tl"></span><div class="url"><svg class="i"><use href="#i-lock"/></svg>spunto.example.org</div></div>
+    <div class="app">
+     <aside class="rail">
+      <div class="wm">spunto<span class="dot">.</span></div>
+      <div class="sbtn"><svg class="i"><use href="#i-search"/></svg>Search<span class="spacer"></span><span class="kbd">⌘K</span></div>
+      <div class="ri on"><svg class="i"><use href="#i-notes"/></svg>All notes<span class="n">0</span></div>
+      <div class="ri"><svg class="i"><use href="#i-archive"/></svg>Archive</div>
+      <div class="ri"><svg class="i"><use href="#i-trash"/></svg>Trash</div>
+      <div class="rsec"><span class="over">Labels</span></div>
+      <div style="padding:2px 10px;font:400 13px/19px var(--f-sans);color:var(--ink-3)">Labels appear here as you type them, like <span class="lbl" style="font-family:var(--f-serif)">#idea</span> or <span class="lbl" style="font-family:var(--f-serif)">#project/spunto</span>.</div>
+      <div class="rfoot"><div class="ri"><svg class="i"><use href="#i-tune"/></svg>Settings</div></div>
+     </aside>
+     <div class="main"><div class="col">
+      <div class="d-comp">
+        <div class="body"><span class="caret" style="margin-left:0"></span><span class="ph">What's on your mind?</span></div>
+        <div class="tools"><span class="tool"><svg class="i"><use href="#i-hash"/></svg></span><span class="tool"><svg class="i"><use href="#i-cbox"/></svg></span><span class="tool"><svg class="i"><use href="#i-image"/></svg></span><span class="spacer"></span><span class="hint"><span class="kbd">⌘</span><span class="kbd">↵</span></span><span class="btn primary" style="margin-left:10px;opacity:.45">Save</span></div>
+      </div>
+      <div style="padding:72px 0 0 64px">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--accent);margin-bottom:22px"></div>
+        <div style="font:400 34px/40px var(--f-serif);letter-spacing:-.015em;color:var(--ink)">A quiet place for loose ideas.</div>
+        <div style="margin-top:22px;display:grid;gap:12px;font:400 14.5px/22px var(--f-sans);color:var(--ink-2);max-width:480px">
+          <div style="display:flex;gap:12px;align-items:baseline"><span style="color:var(--ink-3);font-variant-numeric:tabular-nums">1</span><span>Write anything above and press <span class="kbd">⌘</span> <span class="kbd">↵</span>. Press <span class="kbd">n</span> to come back here from anywhere.</span></div>
+          <div style="display:flex;gap:12px;align-items:baseline"><span style="color:var(--ink-3)">2</span><span>Add <span class="lbl" style="font-family:var(--f-serif)">#labels</span> anywhere in the text, or let them be suggested later.</span></div>
+          <div style="display:flex;gap:12px;align-items:baseline"><span style="color:var(--ink-3)">3</span><span>Connect Claude Code or Codex in <span style="color:var(--ink)">Settings → Agents</span>.</span></div>
+        </div>
+      </div>
+     </div></div>
+    </div>
+   </div></div></div>
+  </figure>
+
+  </div>
+ </div>
+</section>
+
+<!-- =================================================================
+     TOKENS
+     ================================================================= -->
+<section class="pg-sec" id="tokens">
+ <div class="pg-wrap">
+  <h2>Tokens</h2>
+  <p class="pg-sub">The same values as <code style="font:400 .9em var(--f-mono)">03-design.md</code> §11, in Carta, the default theme. Contrast figures are WCAG ratios against <code style="font:400 .9em var(--f-mono)">paper</code>; every text token clears 4.5:1 in light and dark. Ardesia and Salvia, with their full contrast tables, are in <code style="font:400 .9em var(--f-mono)">redesign.html</code>.</p>
+  <div class="pair stack">
+   <div class="tw" data-theme="light"><div class="spec">
+    <div class="spec-grid">
+     <div>
+      <h4>Type scale · Literata, Inter, JetBrains Mono (all SIL OFL 1.1)</h4>
+      <div class="ts"><span class="nm">display</span><span style="font:400 34px/40px var(--f-serif);letter-spacing:-.015em">A quiet place</span><span class="sp">34/40 px · 30/36 sp<br>Literata 400</span></div>
+      <div class="ts"><span class="nm">title</span><span style="font:600 24px/31px var(--f-serif);letter-spacing:-.01em">Capture budget</span><span class="sp">24/31 px · 22/28 sp<br>Literata 600</span></div>
+      <div class="ts"><span class="nm">heading</span><span style="font:600 19px/27px var(--f-serif)">Open questions</span><span class="sp">19/27 px · 18/25 sp<br>Literata 600</span></div>
+      <div class="ts"><span class="nm">body</span><span style="font:400 17px/27px var(--f-serif)">Pasta e ceci della nonna: rosmarino nel soffritto, non alla fine. <span class="lbl">#cucina</span></span><span class="sp">17/27 px · 16/25 sp<br>Literata 400</span></div>
+      <div class="ts"><span class="nm">body-sm</span><span style="font:400 15px/23px var(--f-serif)">Drafts opens to a blank page every single time.</span><span class="sp">15/23 px · 15/22 sp<br>Literata 400</span></div>
+      <div class="ts"><span class="nm">ui-lg</span><span style="font:400 16px/25px var(--f-sans)">You decided to keep both versions.</span><span class="sp">16/25 px · 16/24 sp<br>Inter 400</span></div>
+      <div class="ts"><span class="nm">ui</span><span style="font:500 14px/20px var(--f-sans)">Rename in 18 notes</span><span class="sp">14/20 px · 14/20 sp<br>Inter 400, 500</span></div>
+      <div class="ts"><span class="nm">meta</span><span style="font:400 12.5px/16px var(--f-sans);color:var(--ink-3);font-variant-numeric:tabular-nums">14:32 · ≈ similar meaning · 3 versions</span><span class="sp">12.5/16 px · 12/16 sp<br>Inter 400, tnum</span></div>
+      <div class="ts"><span class="nm">overline</span><span class="over" style="font-size:11.5px">Today · Monday 13 October</span><span class="sp">11.5/16 px · 11/16 sp<br>Inter 500, +0.08 em</span></div>
+      <div class="ts"><span class="nm">mono</span><span style="font:400 13.5px/21px var(--f-mono)">bearer_token_env_var = "SPUNTO_TOKEN"</span><span class="sp">13.5/21 px · 13/20 sp<br>JetBrains Mono 400</span></div>
+     </div>
+     <div>
+      <h4>Colour</h4>
+      <div class="sw" data-swatches></div>
+      <h4 style="margin-top:26px">Themes · one accent each</h4>
+      <div class="acc" data-accents></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:26px">
+       <div><h4>Spacing · 4 px base</h4><div class="bars" data-bars></div></div>
+       <div><h4>Radii</h4><div class="radii"><div style="border-radius:4px">4</div><div style="border-radius:8px">8</div><div style="border-radius:12px">12</div><div style="border-radius:14px">14</div><div style="border-radius:20px">20</div><div style="border-radius:28px">28</div></div></div>
+      </div>
+      <h4 style="margin-top:26px">Elevation</h4>
+      <div class="elev"><div style="box-shadow:var(--e1)">e-1</div><div style="box-shadow:var(--e2)">e-2</div><div style="box-shadow:var(--e3)">e-3</div></div>
+      <h4 style="margin-top:26px">Proposal versus yours</h4>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span class="prop" style="--fs-meta:12.5px">+ design<span class="new">new</span></span><span style="color:var(--ink-3)">→</span><span class="lblrow" style="--fs-body:17px;margin:0">#design</span></div>
+     </div>
+    </div>
+   </div></div>
+  </div>
+ </div>
+</section>
+</main>
+
+<footer class="pg-foot"><div class="pg-wrap">spunto design mockups v0.2 · 13 October 2026 · Plugins and themes: redesign.html · Fonts loaded from Google Fonts for this preview only; the product self-hosts them. Icons are hand-drawn stand-ins for Material Symbols Rounded (Apache 2.0).</div></footer>
+
+<script>
+(function(){
+  // 1. Reuse a screen as the background of another (overlays).
+  document.querySelectorAll('[data-include]').forEach(function(el){
+    var src=document.querySelector('[data-id="'+el.getAttribute('data-include')+'"]');
+    if(!src) return;
+    var c=src.cloneNode(true); c.removeAttribute('data-id');
+    if(el.getAttribute('style')) c.setAttribute('style',(c.getAttribute('style')||'')+';'+el.getAttribute('style'));
+    c.setAttribute('aria-hidden','true');
+    el.replaceWith(c);
+  });
+  // 2. Every frame is authored once in light; the dark twin is the same markup under dark tokens.
+  document.querySelectorAll('.tw[data-theme="light"]').forEach(function(l){
+    var d=l.cloneNode(true); d.setAttribute('data-theme','dark'); l.after(d);
+  });
+  // 3. Token specimen content, per theme.
+  var T={
+    light:[['paper','#F8F5F0','page'],['raised','#FEFDFA','composer, sheets'],['sunken','#F0EDE6','rail, quotes'],['ink','#221D18','15.4:1'],['ink-2','#5B544C','6.9:1'],['ink-3','#6E6860','5.1:1'],['rule','#E3DFD8','hairline'],['rule-strong','#CCC7BE','underline'],['field','#8A857E','3.4:1 border'],['accent','#9F4C2A','5.5:1'],['accent-strong','#883A1D','7.2:1'],['accent-soft','#FAE9DE','selected'],['on-accent','#FEF9F4','5.7 on accent'],['highlight','#F5E4B0','search match'],['danger','#AF2934','6.1:1'],['warn','#CD9130','with text only']],
+    dark:[['paper','#171412','page'],['raised','#211D1A','composer, sheets'],['sunken','#100E0C','rail, quotes'],['ink','#EAE5DD','14.6:1'],['ink-2','#BDB6AE','9.1:1'],['ink-3','#9D978F','6.3:1'],['rule','#2D2925','hairline'],['rule-strong','#413C37','underline'],['field','#736E67','3.6:1 border'],['accent','#E7986F','8.0:1'],['accent-strong','#F6B38B','10.3:1'],['accent-soft','#3F271D','selected'],['on-accent','#24140C','7.7 on accent'],['highlight','#5F4A1A','search match'],['danger','#ED7473','6.4:1'],['warn','#E1AD57','with text only']]
+  };
+  var A={light:[['Carta','#9F4C2A'],['Ardesia','#2F5E9E'],['Salvia','#2D6A4F']],
+         dark:[['Carta','#E7986F'],['Ardesia','#8DB2EE'],['Salvia','#7FC4A0']]};
+  document.querySelectorAll('.tw').forEach(function(tw){
+    var th=tw.getAttribute('data-theme');
+    var sw=tw.querySelector('[data-swatches]');
+    if(sw) T[th].forEach(function(r){
+      var d=document.createElement('div'); d.className='swc';
+      d.innerHTML='<span class="chip" style="background:'+r[1]+'"></span><span><div class="t1">'+r[0]+'</div><div class="t2">'+r[1]+' · '+r[2]+'</div></span>';
+      sw.appendChild(d);
+    });
+    var ac=tw.querySelector('[data-accents]');
+    if(ac) A[th].forEach(function(r,i){
+      var d=document.createElement('span'); d.className='a';
+      d.innerHTML='<i style="background:'+r[1]+'"></i>'+r[0]+(i===0?' <span style="color:var(--ink-3)">· default</span>':'');
+      ac.appendChild(d);
+    });
+    var bars=tw.querySelector('[data-bars]');
+    if(bars) [4,8,12,16,20,24,32,48,64,96].forEach(function(v){
+      var d=document.createElement('div'); d.innerHTML='<span style="width:'+v+'px"></span>s-'+v; bars.appendChild(d);
+    });
+  });
+  // 4. Theme switch.
+  var btns=document.querySelectorAll('.seg button');
+  btns.forEach(function(b){ b.addEventListener('click',function(){
+    document.body.setAttribute('data-show',b.getAttribute('data-show'));
+    btns.forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});
+    fit();
+  });});
+  // 5. Scale frames down to fit narrow windows (never up).
+  function fit(){
+    var wrap=document.querySelector('#web .pg-wrap');
+    var cs=getComputedStyle(wrap);
+    var avail=wrap.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+    document.documentElement.style.setProperty('--dz',Math.min(1,avail/1200).toFixed(4));
+    document.documentElement.style.setProperty('--pz',Math.min(1,avail/380).toFixed(4));
+  }
+  fit(); window.addEventListener('resize',fit);
+})();
+</script>
+</body>
+</html>

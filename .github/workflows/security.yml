@@ -1,0 +1,72 @@
+name: Security
+
+# Secrets in any commit, and known advisories against the locked Python
+# dependencies. Weekly as well, because advisories appear against an unchanged
+# lockfile. Each architecture's OS and Python image packages are also scanned
+# with Trivy in server.yml, on builds and weekly. CodeQL adds Python and web
+# analysis where GitHub code scanning is available.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every commit, not only the tip
+          persist-credentials: false
+      # The gitleaks the pre-commit hook pins, with the same .gitleaks.toml.
+      - run: >-
+          docker run --rm -v "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git --config /repo/.gitleaks.toml --redact --verbose /repo
+
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.13.0"
+      # Every locked package, dev tools included: they run in CI with its tokens.
+      - name: pip-audit uv.lock
+        run: |
+          uv export --locked --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit@2.10.1 --disable-pip --strict --requirement "$RUNNER_TEMP/requirements.txt"
+
+  web-dependencies:
+    name: Web dependency audit
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "26.9.0"
+      - run: npm install --global pnpm@12.11.2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high

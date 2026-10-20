@@ -1,101 +1,200 @@
 name: Release
 
-# Cut a release from main by hand (Actions, Release, Run workflow): the server
-# checks run first, then the image is pushed as ghcr.io/vitofico/spunto-server:<version>
-# and :stable, and only then are tags and GitHub releases created. Server
-# images use CalVer YYYY.MM.MICRO (02 §10.1). Android uses the checked-in
-# YYYY.MM.DD.<run> version (02 §11.7), under android/<version> tags.
+# Validate one versioned tree; promote main and tags only after assets verify.
 on:
+  push:
+    branches: [main]
+    paths: ["android/**", "server/**", "web/**", "spec/**", "scripts/**", "distribution/**", "fastlane/**", ".dockerignore", ".github/workflows/release.yml", ".github/workflows/server.yml", ".github/workflows/android.yml", ".github/workflows/server-recovery.yml", ".github/workflows/android-recovery.yml"]
   workflow_dispatch:
     inputs:
       publish_android:
-        description: "Also publish the checked-in Android CalVer (bump it first for a new APK)"
+        description: "Publish a new signed Android CalVer as well as the server"
         type: boolean
         default: true
-
 permissions:
   contents: read
-
+  actions: read
+# Shared with repair. Running jobs are never canceled; pending runs coalesce.
 concurrency:
-  # A literal name: the called server workflow groups by this workflow's name, and
-  # a shared group would make the two wait on each other.
   group: release
   cancel-in-progress: false
-
 env:
   IMAGE: ghcr.io/vitofico/spunto-server
-
 defaults:
   run:
-    # Adds pipefail: a failed tag lookup must stop the run, not restart MICRO at 0.
     shell: bash
-
 jobs:
-  checks:
+  plan:
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/server.yml
-
-  android-checks:
-    if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/android.yml
-
-  release:
-    needs: [checks, android-checks]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
-      contents: write # the tag and the release
-      packages: write # the image
+      contents: read
+      actions: write
+    outputs:
+      ready: ${{ steps.plan.outputs.ready }}
+      source: ${{ steps.plan.outputs.source }}
+      tree: ${{ steps.plan.outputs.tree }}
+      date: ${{ steps.plan.outputs.date }}
+      timestamp: ${{ steps.plan.outputs.timestamp }}
+      publish_android: ${{ steps.plan.outputs.publish_android }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Pick the version
-        id: version
+          fetch-tags: true
+      - name: Select and prepare the source for all checks
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_ANDROID: ${{ github.event_name == 'push' || inputs.publish_android }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SIGNING_READY: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != '' && secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD != '' }}
         run: |
-          month=$(date -u +%Y.%m)
-          micro=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$month." --jq '.[].ref' \
-            | sed -n "s|^refs/tags/$month\.\([0-9]*\)$|\1|p" | sort -n | tail -1)
-          # Reserve the October private release's version in the new public repository.
-          if [[ "$month" == "2026.10" && -z "$micro" ]]; then
-            micro=0
+          source=$(git rev-parse HEAD)
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [[ "$source" != "$tip" ]]; then
+            if (( RUN_ATTEMPT > 1 )); then
+              echo "::error::main advanced after this run. Use Repair Android/server release for existing tags, or start a new manual Release for a new version."
+              exit 1
+            fi
+            git fetch --quiet origin main
+            git merge-base --is-ancestor "$source" FETCH_HEAD || {
+              echo "::error::main was rewritten; refusing an unverified history."
+              exit 1
+            }
+            gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f "publish_android=$PUBLISH_ANDROID"
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer main was queued for validation; this run publishes nothing.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-          echo "version=$month.$((${micro:--1} + 1))" >> "$GITHUB_OUTPUT"
-      - name: Check Android CalVer before publication
-        if: inputs.publish_android
-        id: android_version
+          if [[ "$PUBLISH_ANDROID" == true ]]; then
+            [[ "$SIGNING_READY" == true ]] || {
+              echo "::error::Configure both Android release signing secrets before automatic APK publication."
+              exit 1
+            }
+          fi
+          timestamp=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          date=$(python3 -c 'import datetime,sys; print(datetime.datetime.fromisoformat(sys.argv[1]).astimezone(datetime.UTC).date())' "$timestamp")
+          android_date=
+          if [[ "$PUBLISH_ANDROID" == true ]]; then android_date=$date; fi
+          tree=$(bash scripts/release-source.sh "$android_date")
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          {
+            echo 'ready=true'
+            echo "source=$source"
+            echo "tree=$tree"
+            echo "date=$android_date"
+            echo "timestamp=$timestamp"
+            echo "publish_android=$PUBLISH_ANDROID"
+          } >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true'
+    uses: ./.github/workflows/server.yml
+    with:
+      release_source: ${{ needs.plan.outputs.source }}
+      release_date: ${{ needs.plan.outputs.date }}
+      release_tree: ${{ needs.plan.outputs.tree }}
+
+  android-checks:
+    needs: plan
+    if: needs.plan.outputs.ready == 'true'
+    uses: ./.github/workflows/android.yml
+    with:
+      release_source: ${{ needs.plan.outputs.source }}
+      release_date: ${{ needs.plan.outputs.date }}
+      release_tree: ${{ needs.plan.outputs.tree }}
+
+  release:
+    needs: [plan, checks, android-checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: write
+      packages: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.source }}
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Validate retry source before preparing a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE: ${{ needs.plan.outputs.source }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          python3 scripts/android-version.py --check-tags > "$RUNNER_TEMP/android-version.json"
+          if (( RUN_ATTEMPT > 1 )); then
+            tip=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+            if [[ "$RELEASE_SOURCE" != "$tip" ]]; then
+              echo "::error::main advanced after this run. Use Repair Android/server release for existing tags, or start a new manual Release for a new version."
+              exit 1
+            fi
+          fi
+      - name: Commit exactly the validated versioned tree
+        id: source
+        env:
+          RELEASE_DATE: ${{ needs.plan.outputs.date }}
+          RELEASE_TREE: ${{ needs.plan.outputs.tree }}
+          PUBLISH_ANDROID: ${{ needs.plan.outputs.publish_android }}
+          GIT_AUTHOR_DATE: ${{ needs.plan.outputs.timestamp }}
+          GIT_COMMITTER_DATE: ${{ needs.plan.outputs.timestamp }}
+        run: |
+          bash scripts/release-source.sh "$RELEASE_DATE" "$RELEASE_TREE"
+          if [[ "$PUBLISH_ANDROID" == true ]]; then
+            tag=$(python3 scripts/android-version.py | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag"])')
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m ":bookmark: chore: release $tag"
+          else
+            # A real main update is required for Git's expected-head lease;
+            # Git omits a no-op main refspec from an otherwise atomic push.
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit --allow-empty -m ':bookmark: chore: release server'
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          python3 scripts/android-version.py > "$RUNNER_TEMP/android-version.json"
           python3 - "$RUNNER_TEMP/android-version.json" >> "$GITHUB_OUTPUT" <<'PY'
           import json, sys
           version = json.load(open(sys.argv[1]))
           print(f"name={version['versionName']}")
           print(f"tag={version['tag']}")
           PY
-      - name: Refuse an existing Android tag
-        if: inputs.publish_android
+      - name: Allocate an unused immutable server version
+        id: version
         env:
           GH_TOKEN: ${{ github.token }}
-          ANDROID_TAG: ${{ steps.android_version.outputs.tag }}
+          RELEASE_TIMESTAMP: ${{ needs.plan.outputs.timestamp }}
         run: |
-          python3 scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$ANDROID_TAG" \
-            --require-absent-tag
+          date=$(printf '%s' "$RELEASE_TIMESTAMP" | cut -c1-10)
+          month=$(printf '%s' "$date" | cut -c1-7 | tr '-' '.')
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$month." > "$RUNNER_TEMP/git-tags.json"
+          gh api --paginate --slurp "users/$GITHUB_REPOSITORY_OWNER/packages/container/spunto-server/versions?per_page=100" > "$RUNNER_TEMP/image-tags.json"
+          version=$(python3 scripts/server-release.py pick --date "$date" --git-refs "$RUNNER_TEMP/git-tags.json" --package-versions "$RUNNER_TEMP/image-tags.json")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Refuse an existing Android tag
+        if: needs.plan.outputs.publish_android == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANDROID_TAG: ${{ steps.source.outputs.tag }}
+        run: python3 scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$ANDROID_TAG" --require-absent-tag
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        if: inputs.publish_android
+        if: needs.plan.outputs.publish_android == 'true'
         with:
           distribution: temurin
           java-version: "21"
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
-        if: inputs.publish_android
+        if: needs.plan.outputs.publish_android == 'true'
         with:
           packages: "platform-tools platforms;android-35 build-tools;34.0.0"
       - name: Build and sign Android APK before publishing
-        if: inputs.publish_android
+        if: needs.plan.outputs.publish_android == 'true'
         env:
-          ANDROID_VERSION: ${{ steps.android_version.outputs.name }}
+          ANDROID_VERSION: ${{ steps.source.outputs.name }}
+          RELEASE_SOURCE: ${{ steps.source.outputs.sha }}
           ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
           ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
         run: |
@@ -107,7 +206,7 @@ jobs:
           umask 077
           printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/spunto-release.p12"
           printf '%s\n' "$ANDROID_RELEASE_KEYSTORE_PASSWORD" > "$signing_dir/password.txt"
-          (cd android && ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleRelease)
+          (cd android && ./gradlew --no-daemon --no-build-cache :app:clean :app:lintRelease :app:assembleRelease)
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks "$signing_dir/spunto-release.p12" --ks-key-alias spunto \
             --ks-pass "file:$signing_dir/password.txt" \
@@ -115,17 +214,17 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "spunto-$ANDROID_VERSION.apk" > "$RUNNER_TEMP/android-verification.txt"
           python3 scripts/check-apk-size.py "spunto-$ANDROID_VERSION.apk"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "spunto-$ANDROID_VERSION.apk" > "$RUNNER_TEMP/android-badging.txt"
-          python3 scripts/android-release.py --source-sha "$GITHUB_SHA" \
+          python3 scripts/android-release.py --source-sha "$RELEASE_SOURCE" \
             --apk "spunto-$ANDROID_VERSION.apk" --badging "$RUNNER_TEMP/android-badging.txt" \
             --verification "$RUNNER_TEMP/android-verification.txt"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        if: inputs.publish_android
+        if: needs.plan.outputs.publish_android == 'true'
         with:
           version: "0.13.0"
       - name: Verify APK reproduction before publishing
-        if: inputs.publish_android
+        if: needs.plan.outputs.publish_android == 'true'
         env:
-          ANDROID_VERSION: ${{ steps.android_version.outputs.name }}
+          ANDROID_VERSION: ${{ steps.source.outputs.name }}
         run: |
           uv venv --python 3.12 "$RUNNER_TEMP/apk-reproduction"
           uv pip install --python "$RUNNER_TEMP/apk-reproduction/bin/python" -r scripts/reproducibility-requirements.txt
@@ -143,8 +242,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       # The image goes out before the tag exists, so a tag never names an image
-      # that was not pushed. If the push fails nothing is tagged, and a rerun
-      # picks the same version.
+      # that was not pushed. If promotion loses a race, no Git tags are created; the next
+      # run skips the occupied image version.
       - name: Build and push amd64 and arm64
         id: image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -152,66 +251,67 @@ jobs:
           context: .
           file: server/Dockerfile
           platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ steps.version.outputs.version }}
+          build-args: |
+            REVISION=${{ steps.source.outputs.sha }}
+            VERSION=${{ steps.version.outputs.version }}
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.IMAGE }}:stable
           cache-from: type=gha
           provenance: mode=max
           sbom: true
-      - name: Verify the published image index before creating release tags
+      - name: Verify the index and source on both platforms
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_SOURCE: ${{ steps.source.outputs.sha }}
         run: |
-          docker buildx imagetools inspect "$IMAGE@$IMAGE_DIGEST" --raw > "$RUNNER_TEMP/published-image.json"
-          python3 - "$RUNNER_TEMP/published-image.json" "$IMAGE_DIGEST" <<'PY'
-          import json, re, sys
-          from pathlib import Path
-          if re.fullmatch(r"sha256:[0-9a-f]{64}", sys.argv[2]) is None:
-              raise SystemExit("Published image must have a SHA-256 index digest.")
-          index = json.loads(Path(sys.argv[1]).read_text())
-          platforms = {
-              (entry.get("platform", {}).get("os"), entry.get("platform", {}).get("architecture"))
-              for entry in index.get("manifests", [])
-              if entry.get("annotations", {}).get("vnd.docker.reference.type") != "attestation-manifest"
-          }
-          if not {("linux", "amd64"), ("linux", "arm64")} <= platforms:
-              raise SystemExit("Published image index must contain linux/amd64 and linux/arm64.")
-          print(f"Verified linux/amd64 and linux/arm64 at {sys.argv[2]}.")
-          PY
-          printf 'Verified server image: `%s@%s` (linux/amd64 and linux/arm64).\n' \
-            "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
-      - name: Create the verified Android recovery tag
-        if: inputs.publish_android
+          docker buildx imagetools inspect "$IMAGE@$IMAGE_DIGEST" --format '{{json .Manifest}}' > "$RUNNER_TEMP/image-manifest.json"
+          docker buildx imagetools inspect "$IMAGE@$IMAGE_DIGEST" --format '{{json .Image}}' > "$RUNNER_TEMP/image-configs.json"
+          python3 scripts/server-release.py verify --version "$VERSION" --source "$RELEASE_SOURCE" --manifest "$RUNNER_TEMP/image-manifest.json" --configs "$RUNNER_TEMP/image-configs.json" --output server-release.json
+      - name: Preserve verified assets before promoting Git refs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            spunto-*.apk
+            spunto-*.apk.sha256
+            android-version.json
+            server-release.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Atomically promote the tested commit and release tags
+        id: promote
         env:
           GH_TOKEN: ${{ github.token }}
-          ANDROID_TAG: ${{ steps.android_version.outputs.tag }}
+          BASE_SOURCE: ${{ needs.plan.outputs.source }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ANDROID_TAG: ${{ steps.source.outputs.tag }}
+          PUBLISH_ANDROID: ${{ needs.plan.outputs.publish_android }}
         run: |
-          # The image already exists. Establish recovery before the server
-          # release can succeed, so Android can be repaired without a new version.
-          # A claimed ref fails instead of replacing another publisher's tag.
-          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f "ref=refs/tags/$ANDROID_TAG" -f "sha=$GITHUB_SHA"
-      - name: Tag and publish the server release
+          set -- --repo "$GITHUB_REPOSITORY" --base-source "$BASE_SOURCE" --server-tag "$VERSION" --publish-android "$PUBLISH_ANDROID"
+          if [[ "$PUBLISH_ANDROID" == true ]]; then set -- "$@" --android-tag "$ANDROID_TAG"; fi
+          python3 scripts/promote-release.py "$@" > "$RUNNER_TEMP/promotion.json"
+          python3 - "$RUNNER_TEMP/promotion.json" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          result = json.load(open(sys.argv[1]))
+          print(f"published={str(result['published']).lower()}")
+          PY
+      - name: Update stable and publish the server release
+        if: steps.promote.outputs.published == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          # Refuse a concurrently claimed tag instead of accepting another source commit.
-          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f "ref=refs/tags/$VERSION" -f "sha=$GITHUB_SHA" > /dev/null
-          gh release create "$VERSION" --verify-tag --title "$VERSION" \
-            --latest=false --generate-notes \
-            --notes "Image: \`$IMAGE:$VERSION\` (linux/amd64 and linux/arm64). Verified index: \`$IMAGE@$IMAGE_DIGEST\`."
-      - name: Publish the Android release
-        if: inputs.publish_android
+          docker buildx imagetools create --tag "$IMAGE:stable" "$IMAGE@$IMAGE_DIGEST"
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$VERSION" --latest=false --generate-notes --notes "Image: $IMAGE:$VERSION (linux/amd64 and linux/arm64). Verified index: $IMAGE@$IMAGE_DIGEST."
+          gh release upload "$VERSION" --repo "$GITHUB_REPOSITORY" server-release.json
+      - name: Publish immutable Android assets
+        if: steps.promote.outputs.published == 'true' && needs.plan.outputs.publish_android == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          ANDROID_VERSION: ${{ steps.android_version.outputs.name }}
-          ANDROID_TAG: ${{ steps.android_version.outputs.tag }}
+          ANDROID_VERSION: ${{ steps.source.outputs.name }}
+          ANDROID_TAG: ${{ steps.source.outputs.tag }}
         run: |
-          python3 scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$ANDROID_TAG" \
-            --title "$ANDROID_VERSION" --latest true \
-            --asset "spunto-$ANDROID_VERSION.apk" --asset "spunto-$ANDROID_VERSION.apk.sha256" --asset android-version.json
+          python3 scripts/publish-release.py --repo "$GITHUB_REPOSITORY" --tag "$ANDROID_TAG" --title "$ANDROID_VERSION" --latest true --asset "spunto-$ANDROID_VERSION.apk" --asset "spunto-$ANDROID_VERSION.apk.sha256" --asset android-version.json

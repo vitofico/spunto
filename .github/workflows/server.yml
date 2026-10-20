@@ -22,6 +22,16 @@ on:
       - "scripts/check-image-size.py"
       - ".github/workflows/server.yml"
   workflow_call:
+    inputs:
+      release_source:
+        type: string
+        default: ""
+      release_date:
+        type: string
+        default: ""
+      release_tree:
+        type: string
+        default: ""
   schedule:
     - cron: "37 6 * * 1" # rescan unchanged images when new advisories arrive
   workflow_dispatch:
@@ -46,6 +56,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_source }}
+      - name: Verify the planned release source
+        if: inputs.release_tree != ''
+        env:
+          RELEASE_DATE: ${{ inputs.release_date }}
+          RELEASE_TREE: ${{ inputs.release_tree }}
+        run: bash "$GITHUB_WORKSPACE/scripts/release-source.sh" "$RELEASE_DATE" "$RELEASE_TREE"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "26.9.0"
@@ -75,6 +92,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_source }}
+      - name: Verify the planned release source
+        if: inputs.release_tree != ''
+        env:
+          RELEASE_DATE: ${{ inputs.release_date }}
+          RELEASE_TREE: ${{ inputs.release_tree }}
+        run: bash "$GITHUB_WORKSPACE/scripts/release-source.sh" "$RELEASE_DATE" "$RELEASE_TREE"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.13.0" # the uv in server/Dockerfile
@@ -110,6 +134,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_source }}
+      - name: Verify the planned release source
+        if: inputs.release_tree != ''
+        env:
+          RELEASE_DATE: ${{ inputs.release_date }}
+          RELEASE_TREE: ${{ inputs.release_tree }}
+        run: bash "$GITHUB_WORKSPACE/scripts/release-source.sh" "$RELEASE_DATE" "$RELEASE_TREE"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.13.0"
@@ -118,7 +149,7 @@ jobs:
       - name: Create restricted fixture roles
         env:
           # Disposable fixture only. Requests use the two restricted roles.
-          SPUNTO_TEST_POSTGRES_ADMIN_URL: postgresql://spunto_admin:${{ github.run_id }}-${{ github.run_attempt }}-ci-postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/spunto_ci
+          SPUNTO_TEST_POSTGRES_ADMIN_URL: postgresql://spunto_admin:${{ github.run_id }}-${{ github.run_attempt }}-ci-postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/spunto_ci
         run: |
           uv run python - <<'PY'
           import os
@@ -182,6 +213,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_source }}
+      - name: Verify the planned release source
+        if: inputs.release_tree != ''
+        env:
+          RELEASE_DATE: ${{ inputs.release_date }}
+          RELEASE_TREE: ${{ inputs.release_tree }}
+        run: bash "$GITHUB_WORKSPACE/scripts/release-source.sh" "$RELEASE_DATE" "$RELEASE_TREE"
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64

@@ -33,11 +33,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM ${PYTHON}
 ARG VERSION=dev
+ARG REVISION=dev
 LABEL org.opencontainers.image.title="Spunto" \
       org.opencontainers.image.description="Self-hosted, AI-first notes" \
       org.opencontainers.image.source="https://github.com/vitofico/spunto" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
 ENV PATH=/app/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

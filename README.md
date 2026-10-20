@@ -112,7 +112,7 @@ Take your notes with you: download a Markdown ZIP from web **Settings → Data**
 
 | What you need | Where to get it |
 |---|---|
-| **Android** | [Download **2026.10.19.3**](https://github.com/vitofico/spunto/releases/tag/android/2026.10.19.3), with its signed APK and checksum. Android 8 or newer. |
+| **Android** | [Download the latest signed Android release](https://github.com/vitofico/spunto/releases/latest), with its APK and checksum. Android 8 or newer. |
 | **Android updates** | [Set up Obtainium](docs/android-distribution.md#obtainium) with the [import configuration](distribution/obtainium.json). It follows signed Android releases directly from GitHub. |
 | **Server and web app** | [Build from source](#get-started), or check the [container guide](docs/operations.md#published-container-images) for available prebuilt core images. |
 

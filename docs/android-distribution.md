@@ -1,6 +1,6 @@
 # Android builds and distribution
 
-The signed [Android release **2026.10.19.3**](https://github.com/vitofico/spunto/releases/tag/android/2026.10.19.3), version code **14**, is distributed through GitHub Releases. Obtainium can follow those stable Android releases directly; there is no separate Obtainium store. Server images have a separate [Packages page](https://github.com/vitofico/spunto/pkgs/container/spunto-server).
+Download the [latest signed Android release](https://github.com/vitofico/spunto/releases/latest) from GitHub Releases. Obtainium can follow those stable Android releases directly; there is no separate Obtainium store. Server images have a separate [Packages page](https://github.com/vitofico/spunto/pkgs/container/spunto-server).
 
 Spunto has been [submitted to F-Droid](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53280) and is awaiting review. It is not listed in F-Droid yet; use GitHub Releases or Obtainium for Android downloads.
 
@@ -27,27 +27,39 @@ The release APK remains unsigned until [owner signing](operations.md#android-sig
 
 ## CalVer and signing identity
 
-`android/gradle.properties` contains the Android CalVer `YYYY.MM.DD.<run>` and an independent increasing Android version code. Inspect the version with `python3 scripts/android-version.py`; advance it for an explicit release date with `python3 scripts/android-version.py --bump YYYY-MM-DD`. Historical local rebuilds retain their original version. Future publication must advance beyond every previous Android tag and the existing local delivery.
+`android/gradle.properties` contains the Android CalVer `YYYY.MM.DD.<run>` and an independent increasing Android version code. Inspect it with `python3 scripts/android-version.py`. Normal publication prepares the next identity automatically: the same UTC date increments the run, a new date resets it to 1, and the version code always increments independently. No version edit is needed before a normal push.
+
+For deliberate local preparation, run `python3 scripts/prepare-android-release.py --date YYYY-MM-DD` in a checkout with all Android release tags fetched. It validates those tags and advances the Gradle properties and the five matching version fields in the upstream F-Droid recipe together. Inconsistent metadata, a backdated version or a historical version/code conflict fails before writing. Historical rebuilds and repairs retain their original identity.
 
 The public owner certificate SHA-256 is pinned in `spec/android-release-certificate.sha256`. It is public verification material; the private key and passwords remain outside the repository. After SDK 34 `apksigner verify --verbose --print-certs` and `aapt dump badging` succeed, `scripts/android-release.py` checks the actual APK's package, CalVer, code, signer, non-debuggable state, baseline profile assets and size. It creates a deterministic checksum and `android-version.json`, including the tested source commit in CI. Existing sidecars with different bytes are refused.
 
 ## Normal publication and recovery
 
-The **Release** workflow checks the server and Android before publishing. Server images keep monthly CalVer `YYYY.MM.MICRO`. Android releases use separate `android/YYYY.MM.DD.<run>` tags with:
+Relevant pushes to `main` start the **Release** workflow for both Android and the server. App, server, web, shared-specification, release-tooling and distribution changes trigger it; README and documentation-only pushes do not. Manual **Actions → Release → Run workflow** also prepares a new Android CalVer by default. Set `publish_android=false` for a manual server-only release; that path keeps the Android identity unchanged and needs no Android signing secrets.
+
+Android releases use `android/YYYY.MM.DD.<run>` tags with:
 
 - `spunto-YYYY.MM.DD.<run>.apk`
 - the matching `.apk.sha256`
 - `android-version.json`
 
-Disable **Publish Android** for a server-only release. No Android bump is needed then. A locally signed Android release can be published separately without uploading the signing key or password to Actions. The APK must pass its metadata, pinned certificate, profile, size and clean-reproduction checks before the local publisher uploads it and the sidecars. Stable publication omits `--prerelease`; historical previews use `--prerelease --latest false`.
+The plan applies only the Gradle/F-Droid version patch when Android is selected and records the resulting Git tree. Server and Android checks reconstruct and verify that exact tree. Every release then prepares a deterministic bot commit as a single child of the checked base. Android publication changes only the two version files; server-only publication uses an empty commit with identical files, tree and Android identity. This branch advance keeps the expected-main check enforced in the atomic push.
 
-For combined server/Android publication through **Publish Android**, the workflow requires the named Android signing secrets, rejects a reused or non-increasing Android version, signs the APK and verifies independent reproduction before image publication. Enabling that path is a separate operator choice; signing secrets are not configured by a server-only release.
+The Android candidate passes `:app:lintRelease`, is signed with the pinned owner identity, and is checked for package, profiles and size. An independent clean rebuild must reproduce its exact bytes after signature copying. The bot commit reaches `main` only after all applicable checks and the server image verification succeed.
 
-After the image push, the workflow fetches the immutable image index and verifies Linux amd64 and arm64 before creating tags. Both tags name the frozen tested source commit. In the combined publication path, the verified Android tag is created before the server release, so it already anchors recovery if Android publication is interrupted.
+Server images keep monthly CalVer `YYYY.MM.MICRO`. Allocation checks both Git tags and the registry inventory, so an image tag left by an interrupted attempt is not reused. The workflow first pushes the immutable image tag and verifies its index, Linux amd64/arm64 platforms and source/version labels. Before promoting Git refs, it saves the verified APK and public sidecars, when included, plus `server-release.json` in the `release-candidate-<run-id>-<attempt>` Actions artifact for 30 days. Signing keys and passwords are not artifact contents.
+
+Promotion updates `main` and the selected release tags atomically, only if `main` still equals the checked base commit. It never rebases the candidate onto newer code. A verified newer `main` queues a fresh Release run; the stale candidate does not publish Git refs or advance `stable`. Only successful Git promotion is followed by the server's `stable` update and GitHub releases. Server releases do not take the Android release's Latest badge.
+
+Enabling automatic Android publication requires the owner's approval to configure both `ANDROID_RELEASE_KEYSTORE_BASE64` and `ANDROID_RELEASE_KEYSTORE_PASSWORD` with the existing owner identity. Planning receives only a signing-readiness boolean; the actual secret values are supplied to the build/sign step. Missing secrets stop combined publication; there is no debug-key fallback. Keep private signing material out of Git, logs and artifacts. Local signing and publication remain available without uploading that material to Actions; see [owner signing](operations.md#android-signing-and-future-distribution).
+
+If publication fails after Git promotion, repair the existing tag instead of rerunning **Release** and allocating another version. Use **Repair Android release** for `android/YYYY.MM.DD.<run>` or **Repair server release** for `YYYY.MM.MICRO`. Both share the normal release lock and preserve existing release metadata and Latest status.
 
 The **Repair Android release** workflow repairs stable Android tags. It verifies the peeled source commit and CalVer, without running the new-version check against itself, and loads current reviewed release tools separately for historical tags. If the APK already exists, it verifies those exact bytes before deriving missing sidecars. A missing APK is built, signed and independently reproduced before upload. Every existing asset is compared before any missing asset is uploaded; mismatches fail and bytes are never replaced.
 
-Recovery shares the normal publication lock, never creates a new version or server image, and never changes an existing release's Latest badge. A recreated historical release is not marked Latest. Tag-only, empty-release and missing-sidecar states are supported. Authentication and network errors are failures, not evidence that an asset is absent.
+Android recovery never creates a new version or server image. A recreated historical release is not marked Latest. Tag-only, empty-release and missing-sidecar states are supported. Authentication and network errors are failures, not evidence that an asset is absent.
+
+Server recovery verifies the existing source tag and immutable image index, including both platforms and their revision/version labels. It adds only missing release metadata or the matching receipt, preserves existing assets, and advances `stable` only when repairing the newest server tag. It does not rebuild or replace image bytes. The legacy `2026.10.1` image lacks the required revision label and fails this automatic check; use its recorded release instructions rather than bypassing verification.
 
 Preview repair uses the local publisher with explicit `--prerelease --latest false`; the stable recovery workflow refuses a preview rather than promoting it. Keep the original APK and tag, verify the actual bytes and source identity, and provide only the missing sidecars. Publication requires the owner's authorization.
 

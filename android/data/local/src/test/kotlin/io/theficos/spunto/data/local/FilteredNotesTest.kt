@@ -72,7 +72,14 @@ class FilteredNotesTest {
   val id=first.data.first().id;val spec=TimelineSpec(kind=TimelineKind.PLUGIN,pluginId="example",filter=buildJsonObject {put("member","reviewed")})
   val members=repository.dao.filteredPaging(timelineQuery(spec));val invalid=CompletableDeferred<Unit>();members.registerInvalidatedCallback { invalid.complete(Unit) }
   assertTrue((members.load(PagingSource.LoadParams.Refresh<Int>(null,40,false)) as PagingSource.LoadResult.Page<Int,NoteEntity>).data.isEmpty())
-  repository.dao.putOutput(PluginOutputEntity("annotation","member",id,"{\"plugin\":\"example\",\"kind\":\"member:reviewed\"}"));withTimeout(5000) {invalid.await()};assertEquals(id,rows(spec).single().id)
+  assertFalse(members.invalid)
+  repository.dao.putOutput(PluginOutputEntity("annotation","member",id,"{\"plugin\":\"example\",\"kind\":\"member:reviewed\"}"))
+  withTimeout(5000) {invalid.await()}
+  // Room holds its observer weakly; retain the source through the invalidation wait.
+  assertTrue(members.invalid)
+  val refreshed=repository.dao.filteredPaging(timelineQuery(spec))
+  assertEquals(listOf(id),(refreshed.load(PagingSource.LoadParams.Refresh<Int>(null,40,false)) as PagingSource.LoadResult.Page<Int,NoteEntity>).data.map {it.id})
+  assertEquals(id,rows(spec).single().id)
   repository.dao.putOutput(PluginOutputEntity("annotation","member",id,"{\"plugin\":\"example\",\"kind\":\"panel\"}"));assertTrue(rows(spec).isEmpty())
   repository.dao.putOutput(PluginOutputEntity("annotation","member",id,"{\"plugin\":\"example\",\"kind\":\"member:reviewed\"}"));repository.dao.removeOutput("annotation","member");assertTrue(rows(spec).isEmpty())
  }

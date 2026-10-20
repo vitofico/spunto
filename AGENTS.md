@@ -37,7 +37,7 @@ If a task is ambiguous, conflicts with an invariant below or with the spec, stop
 | `deploy/compose/minimal/` | The minimal Docker Compose setup (02 §10.4) |
 | `scripts/` | `smoke-selfhost.sh`: starts a built image hardened, then setup, login, backup and restore |
 | `web/` | React 19/Vite/strict TypeScript, TanStack Query, wouter, typed API, core screens and generated plugin UI. Vitest in `tests/`; three-engine Playwright in `e2e/`. |
-| `.github/workflows/` | `server.yml` (lint, tests, multi-arch image and the smoke test), `security.yml` (gitleaks, pip-audit), `release.yml` (by hand: CalVer image, then tag and release) |
+| `.github/workflows/` | `server.yml` (lint, tests, multi-arch image and smoke test), `security.yml` (gitleaks, pip-audit), `release.yml` (main pushes: checked CalVer APK/image, atomic source/tag promotion), Android/server recovery workflows (repair immutable releases) |
 | `docs/` | Requirements, spec, design, decision records; `docs/spikes/` keeps spike results |
 | `spikes/` | Throwaway spike code, gitignored; only results go into `docs/spikes/` |
 

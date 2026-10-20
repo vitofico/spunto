@@ -122,7 +122,8 @@ Found a bug or have an idea? [Open an issue](https://github.com/vitofico/spunto/
 
 ## License
 
-[GNU Affero General Public License v3.0 only](LICENSE).
+[GNU Affero General Public License v3.0 only](LICENSE). Contributions are
+accepted under the [contributor agreement](CLA.md).
 
 ## Support
 

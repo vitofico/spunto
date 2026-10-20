@@ -1,16 +1,23 @@
 """Real PostgreSQL contract tests; run against an operator-owned disposable database."""
 
 import asyncio
+import json
 import os
 import uuid
 from contextlib import asynccontextmanager
 
+import httpx
 import psycopg
 import pytest
 
+from spunto.ai.gateway import Gateway
+from spunto.ai.profiles import Profile
+from spunto.ai.vectors import VectorIndex
 from spunto.api.errors import Problem
 from spunto.auth.tokens import Principal
 from spunto.core.notes import Notes
+from spunto.core.plugin_notes import PluginNotes
+from spunto.host import Ctx, Host
 from spunto.store.db import now_ms
 from spunto.store.postgres import PostgresStore, _qmarks, _translate
 
@@ -160,6 +167,72 @@ async def test_notes_create_edit_list_search_revisions_flags_and_delete(pg):
     await domain.flags(created["id"], {"trashed": True})
     await domain.delete(created["id"])
     assert not (await domain.list(view="all"))["notes"]
+
+
+async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, settings):
+    _, bounds, users, _, _ = pg
+    domain = notes(bounds[0], users[0])
+    await domain.create("Synthetic project vocabulary #project/spunto")
+    target = await domain.create("Synthetic notes need useful labels")
+    await domain.create("Another synthetic note for clustering")
+    principal = Principal(users[0], "session", "Synthetic owner", "full", private_ok=True)
+    profile = Profile(
+        name="fixture",
+        base_url="http://provider.synthetic/v1",
+        chat_model="fixture-chat",
+        embed_model="fixture-embed",
+        rate_per_min=100000,
+    )
+    configured = settings.model_copy(
+        update={
+            "ai_profiles": {"fixture": profile},
+            "ai_chat_profile": "fixture",
+            "ai_embed_profile": "fixture",
+        }
+    )
+    purposes = []
+
+    def provider(request):
+        body = json.loads(request.content)
+        prompt = body["messages"][1]["content"]
+        if "Suggest up to three" in prompt:
+            purposes.append("labels")
+            answer = {"labels": [{"path": "project/spunto", "confidence": 0.95}]}
+        else:
+            purposes.append("gardener")
+            answer = {"proposals": []}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(answer)}}]
+            },
+        )
+
+    gateway = Gateway(bounds[0], configured, transport=httpx.MockTransport(provider))
+    host = Host(
+        bounds[0],
+        configured,
+        notes_factory=PluginNotes,
+        gateway=gateway,
+        vectors=VectorIndex(bounds[0], gateway),
+    )
+    try:
+        await host.discover()
+        for plugin in ("label-suggestions", "label-gardener"):
+            await host.enable(plugin, host.manifests[plugin]["permissions"])
+        vocabulary = await Ctx(host, "label-suggestions", principal=principal).notes.labels()
+        assert vocabulary["labels"] == [{"path": "project/spunto", "count": 1}]
+        result = await host.invoke_command(
+            "label-suggestions", "suggest-now", {"note_id": target["id"]}, principal=principal
+        )
+        assert "1 suggestions to review" in result["text"]
+        result = await host.invoke_command("label-gardener", "review-now", principal=principal)
+        assert "0 tag proposals added to Review" in result["text"]
+        assert purposes == ["labels", "gardener"]
+        assert (await domain.get(target["id"]))["labels"] == []
+    finally:
+        await host.close()
+        await gateway.close()
 
 
 async def test_workspace_isolation_connection_reuse_and_readonly(pg):

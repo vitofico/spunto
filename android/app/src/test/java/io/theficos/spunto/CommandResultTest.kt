@@ -23,4 +23,8 @@ class CommandResultTest {
   assertEquals("note-a",envelope["command_args"]!!.jsonObject["note_id"]!!.jsonPrimitive.content)
   assertEquals("translate",envelope["command_id"]!!.jsonPrimitive.content)
  }
+ @Test fun copiedFocusedDiffClearlyNamesBothSides() {
+  val diff=Json.parseToJsonElement("""{"type":"diff","base_version":3,"hunks":[{"old_start":4,"new_start":4,"lines":[" context","-Original words","+Proposed words"]}]}""")
+  assertEquals("Before:\ncontext\nOriginal words\n\nAfter:\ncontext\nProposed words",resultCopyText(diff))
+ }
 }

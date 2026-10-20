@@ -92,6 +92,50 @@ def test_vocabulary_rejects_unknown_fields_and_caps():
         validate_annotation("panel", [{"type": "markdown", "text": "é" * 3000}])
 
 
+def test_plugin_failure_logs_include_safe_diagnostics_without_error_messages(caplog):
+    from spunto.host.runtime import _log_failure
+
+    class SyntheticDatabaseError(Exception):
+        sqlstate = "42803"
+
+    _log_failure(
+        "label-suggestions",
+        "hook:note.saved",
+        SyntheticDatabaseError("synthetic private note and provider-key canary"),
+    )
+    assert "plugin=label-suggestions" in caplog.text
+    assert "error=SyntheticDatabaseError sqlstate=42803" in caplog.text
+    assert "synthetic private note" not in caplog.text
+    assert "provider-key canary" not in caplog.text
+
+
+@pytest.mark.anyio
+async def test_waiting_vector_index_pauses_plugin_jobs_without_spending_retry_budget(
+    tmp_path, settings, monkeypatch
+):
+    from spunto.ai.vectors import VectorUnavailable
+
+    plugin = Plugin("vector-example")
+
+    @plugin.job("compare")
+    async def compare(ctx):
+        raise VectorUnavailable()
+
+    value = bind(monkeypatch, plugin)
+    async with harness(tmp_path, settings, catalog=[value]) as host:
+        await host.enable(plugin.id, [])
+        await host._queue(plugin.id, "job:compare", {})
+        row = await host._claim()
+        await host._run(row)
+        async with host.store.read() as conn:
+            jobs = await conn.execute_fetchall(
+                "SELECT status,attempts,last_error FROM job WHERE plugin_id=?", (plugin.id,)
+            )
+        assert [tuple(row) for row in jobs] == [("queued", 0, "vectors_unavailable")]
+        assert host.states[plugin.id]["state"] == "enabled"
+        assert host.failures.get(plugin.id, 0) == 0
+
+
 @pytest.mark.anyio
 async def test_lifecycle_secrets_generation_and_isolated_storage(tmp_path, monkeypatch):
     settings = SimpleNamespace(data_dir=tmp_path, plugins="", tz="UTC")
@@ -116,6 +160,9 @@ async def test_lifecycle_secrets_generation_and_isolated_storage(tmp_path, monke
         ],
     ) as host:
         assert host.states["ai-wait"]["state"] == "waiting"
+        assert host.states["ai-wait"]["last_error"] == (
+            "Needs a chat model. Choose one in Settings → AI."
+        )
         assert host.manifest()["plugins"] == []
         await host.enable("example", [])
         await host.enable("second", [])

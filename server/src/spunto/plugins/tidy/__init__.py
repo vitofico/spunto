@@ -1,5 +1,7 @@
 """Explicit diff proposals; delayed automatic work applies only to dictation."""
 
+from difflib import SequenceMatcher
+
 from pydantic import Field, model_validator
 
 from spunto.ai.output import Output
@@ -65,16 +67,30 @@ async def tidy(ctx: Ctx, note_id: str):
     await unchanged(ctx, [note])
     if answer.body == note["body"]:
         return text("The text is already tidy.")
-    before, after = note["body"].splitlines(), answer.body.splitlines()
+    # Keep the last empty line so a final newline remains visible in the diff.
+    before, after = note["body"].split("\n"), answer.body.split("\n")
     if max(len(before), len(after)) > 4000 or any(len(line) > 4000 for line in before + after):
         preview = text(
             "Open Review to compare the full original and proposed text before accepting."
         )
     else:
+        groups = list(SequenceMatcher(a=before, b=after, autojunk=False).get_grouped_opcodes(2))
+        # Native vocabulary budgets cap hunks at 100. Retain an honest bounded
+        # comparison for heavily changed notes rather than dropping the preview.
+        if len(groups) > 100:
+            groups = [[("replace", 0, len(before), 0, len(after))]]
         preview = {
             "type": "diff",
             "base_version": note["version"],
-            "hunks": [{"old_start": 1, "new_start": 1, "old_lines": before, "new_lines": after}],
+            "hunks": [
+                {
+                    "old_start": group[0][1] + 1,
+                    "new_start": group[0][3] + 1,
+                    "old_lines": before[group[0][1] : group[-1][2]],
+                    "new_lines": after[group[0][3] : group[-1][4]],
+                }
+                for group in groups
+            ],
         }
     result = {
         "ui": 1,
@@ -83,7 +99,7 @@ async def tidy(ctx: Ctx, note_id: str):
             {
                 "type": "pill",
                 "action": "accept",
-                "label": "Tidy text",
+                "label": "Apply changes",
                 "suggestion_id": "pending",
             },
         ],

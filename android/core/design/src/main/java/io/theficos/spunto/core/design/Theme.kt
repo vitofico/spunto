@@ -78,22 +78,22 @@ fun applyDeviceTheme(preferences:SharedPreferences,theme:String?,accent:String?,
   putString("theme-snapshot",raw)
  }.apply()
 }
-@Composable private fun cachedDevicePalette(context:Context,preferences:SharedPreferences):ThemePalette {
- val manifestPreferences=remember(context) { context.getSharedPreferences("plugin-manifest",Context.MODE_PRIVATE) }
+@Composable private fun cachedDevicePalette(context:Context,preferences:SharedPreferences,namespace:String):ThemePalette {
+ val manifestPreferences=remember(context,namespace) { context.getSharedPreferences(if(namespace.isEmpty()) "plugin-manifest" else "plugin-manifest-$namespace",Context.MODE_PRIVATE) }
  var revision by remember { mutableIntStateOf(0) }
  DisposableEffect(preferences,manifestPreferences) {
   val listener=SharedPreferences.OnSharedPreferenceChangeListener { _,_ -> revision++ }
   preferences.registerOnSharedPreferenceChangeListener(listener);manifestPreferences.registerOnSharedPreferenceChangeListener(listener)
   onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener);manifestPreferences.unregisterOnSharedPreferenceChangeListener(listener) }
  }
- val raw=remember(revision) { manifestPreferences.getString("manifest","{}").orEmpty() }
+ val raw=remember(manifestPreferences,revision) { manifestPreferences.getString("manifest","{}").orEmpty() }
  val fingerprint=remember(raw) { themeManifestFingerprint(raw) }
  val theme=preferences.getString("theme",null)
  val accent=preferences.getString("theme-accent",null)
  val key=Triple(fingerprint,theme,accent)
- var resolved by remember { mutableStateOf<Pair<Triple<String,String?,String?>,ThemePalette>?>(null) }
- val snapshot=remember(revision,fingerprint) { readSelectedThemeSnapshot(preferences,fingerprint) }
- LaunchedEffect(key) {
+ var resolved by remember(preferences,manifestPreferences) { mutableStateOf<Pair<Triple<String,String?,String?>,ThemePalette>?>(null) }
+ val snapshot=remember(preferences,revision,fingerprint) { readSelectedThemeSnapshot(preferences,fingerprint) }
+ LaunchedEffect(preferences,manifestPreferences,key) {
   val manifest=withContext(Dispatchers.Default) { decodeThemeManifest(raw) }
   val palette=if(theme!=null) resolveThemeSelection(theme,accent,manifest.catalog) else manifest.instance
   resolved=key to palette
@@ -125,10 +125,10 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
   surfaceContainer=c("raised"),surfaceContainerLow=c("raised"),surfaceContainerLowest=c("raised"),surfaceContainerHigh=c("sunken"),surfaceContainerHighest=c("sunken"),surfaceBright=c("raised"),surfaceDim=c("sunken"),scrim=if(dark) Color.Black.copy(alpha=.5f) else c("ink").copy(alpha=.32f)
  )
 }
-@Composable fun SpuntoTheme(theme: String = "", mode: String = "", pureBlack: Boolean = false, wallpaper: Boolean = false, pack: Map<String,String>? = null, readingFace:String="", readingSize:String="", content: @Composable () -> Unit) {
+@Composable fun SpuntoTheme(theme: String = "", mode: String = "", pureBlack: Boolean = false, wallpaper: Boolean = false, pack: Map<String,String>? = null, readingFace:String="", readingSize:String="", namespace:String="", content: @Composable () -> Unit) {
  val context=LocalContext.current
- val preferences=remember(context) { context.getSharedPreferences("appearance",Context.MODE_PRIVATE) }
- val cached=if(theme.isEmpty()) cachedDevicePalette(context,preferences) else null
+ val preferences=remember(context,namespace) { context.getSharedPreferences(if(namespace.isEmpty()) "appearance" else "appearance-$namespace",Context.MODE_PRIVATE) }
+ val cached=if(theme.isEmpty()) cachedDevicePalette(context,preferences,namespace) else null
  val selected=theme.ifEmpty { cached?.id ?: "carta" }
  val selectedMode=mode.ifEmpty { preferences.getString("mode","system").orEmpty() }
  val dark=selectedMode == "dark" || selectedMode == "system" && isSystemInDarkTheme()

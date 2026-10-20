@@ -124,6 +124,18 @@ async def test_invalid_answer_retries_once_and_counts_fail_closed(fixture_gatewa
     assert (await gateway.status())["stats"][0]["outcome"] == "invalid"
 
 
+async def test_validation_diagnostics_never_log_model_values(fixture_gateway, caplog):
+    gateway, fake = fixture_gateway
+    fake.output = {"ok": "synthetic private model-output canary"}
+    with pytest.raises(AIError, match="ai_invalid_output"):
+        await gateway.chat(Probe, "Check synthetic content only.", plugin_id="label-gardener")
+    assert "validation=wrong_types" in caplog.text
+    assert "synthetic private model-output canary" not in caplog.text
+    assert "Check synthetic content only" not in caplog.text
+    assert len(fake.requests) == 2
+    assert "Required schema" in fake.requests[1]["body"]["messages"][0]["content"]
+
+
 class References(Output):
     note_ids: list[str] = field.note_ids(max_count=2)
     labels: list[str] = field.labels(max_count=2)

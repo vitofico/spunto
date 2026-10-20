@@ -56,6 +56,22 @@ At most four past usage examples and six past notes in total enter a call. The g
 
 Use **Suggest labels** in a note's actions to run labeling now, including when the text has not changed. It retains the owner's confidence setting, existing-label-only automatic acceptance and remembered refusals. Saved labels remain ordinary note text and history; there is no separate tag-training database.
 
+Neighbour lookup is optional: while an embedding index is preparing or its provider is unavailable, label suggestions can still use the current vocabulary and tagged examples through the chat model. Invalid vector output and privacy refusals still fail closed. An outage on a profile shared by chat and embeddings may pause both capabilities until its backoff expires.
+
+## Link notes and review text changes
+
+**Link to note** starts with recent note titles and a search field. Choose a matching title, then review and apply the proposed link. Numbered captions distinguish matching titles; note identifiers and revision mappings stay internal to the form. Searching does not edit either note. A changed source or selected destination asks you to reopen the chooser, and an existing link is not proposed again. Direct API callers may continue supplying `target_id`.
+
+**Tidy text** returns a comparison focused on changed lines with a small amount of surrounding context. **Apply changes** accepts the full proposed body at its original note version. Long-line results direct you to Review for the full comparison. Labels, links and meaning remain guarded; running Tidy never silently edits the note.
+
+## Model choices, waiting states and recovery
+
+The space owner can choose chat, embedding, vision and transcription models in the server's web **Settings → AI**. Provider URLs, credentials and request limits remain environment settings. Saved space choices override environment defaults; **Use environment defaults**, followed by **Save models**, resets them. A plugin's explicit profile route still takes priority over the default binding, so check that route when a plugin appears to use another profile. See [AI operations](operations.md#ai-profiles-and-index-recovery).
+
+A Waiting plugin names the missing capability, attachment support or setup requirement. A failed connection check includes its safe operator hint. Command failures distinguish invalid model answers, unavailable indexes, credentials, missing models, timeouts and provider limits while retaining stable API error codes. Server plugin warnings include the plugin, operation, exception class and a database SQLSTATE when available; exception messages, note text, provider response bodies and credentials are omitted.
+
+After repairing a provider or upgrading the server, use the failed plugin card's **Retry** action to re-enable it. The supported API equivalent is `POST /api/v1/plugins/{id}/enable` with the exact current manifest `permissions` array, authenticated as an owner session or device; cookie requests also need the matching Origin. This resets the circuit counter and retries retained dead work without deleting plugin data or suggestions. A restart alone preserves a Failed state. Do not edit lifecycle rows directly.
+
 ## Periodic tag curation
 
 Enable **Label gardener** with chat and embedding profiles available. Its settings choose the weekly day and time, initially Sunday at `18:00` in the instance's time zone. **Review tags now** in the web palette or the `/` menu starts an immediate pass. Scheduled and manual runs share the same limit: at most three pending proposals and three proposals created per week. Dismissing a proposal does not grant another weekly slot, and a refused change is not offered again.

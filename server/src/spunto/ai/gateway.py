@@ -4,6 +4,7 @@ import base64
 import hashlib
 import html
 import json
+import logging
 import math
 from datetime import UTC, datetime
 from pathlib import Path
@@ -256,6 +257,7 @@ class Gateway:
             model = getattr(p, capability + "_model")
             quirk = await self._quirk(p, model)
             fallback = False
+            invalid = set()
             for attempt in range(2):
                 while True:
                     if check:
@@ -291,7 +293,7 @@ class Gateway:
                             output,
                             purpose=purpose,
                             mode=quirk.get("mode", "json_schema"),
-                            schema_prompt=bool(quirk),
+                            schema_prompt=bool(quirk) or attempt > 0,
                             retry=attempt > 0,
                             image=image,
                             mime=mime,
@@ -312,12 +314,35 @@ class Gateway:
                             continue
                         if exc.category != "validation":
                             raise
+                        invalid.add("provider_response")
                     except (ValidationError, ValueError, TypeError) as exc:
-                        if isinstance(exc, ValidationError) and any(
-                            e["type"] == "missing" for e in exc.errors()
-                        ):
+                        if isinstance(exc, ValidationError):
+                            types = {
+                                error["type"]
+                                for error in exc.errors(
+                                    include_input=False, include_context=False, include_url=False
+                                )
+                            }
+                            invalid.update(
+                                {
+                                    "json_invalid": "json",
+                                    "missing": "missing_fields",
+                                    "extra_forbidden": "extra_fields",
+                                    "value_error": "meaning",
+                                }.get(kind, "wrong_types" if kind.endswith("_type") else "schema")
+                                for kind in types
+                            )
+                        else:
+                            invalid.add("meaning")
+                        if isinstance(exc, ValidationError) and "missing" in types:
                             quirk = await self._quirk(p, model, {**quirk, "schema_prompt": True})
                     break
+            logging.getLogger("spunto.ai").warning(
+                "plugin=%s capability=%s code=ai_invalid_output validation=%s",
+                plugin_id,
+                capability,
+                ",".join(sorted(invalid)),
+            )
             raise AIError("validation", "ai_invalid_output")
 
         return await self._call(

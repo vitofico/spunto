@@ -8,6 +8,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -26,6 +27,22 @@ from spunto.host.vocabulary import render_output, validate_output
 from spunto.store.db import now_ms
 
 _PG_LEASE_POLL_SECONDS = 30
+
+
+def _log_failure(plugin_id, operation, error):
+    # Messages/tracebacks can contain SQL parameters, provider bodies or notes.
+    sqlstate = getattr(error, "sqlstate", None)
+    sqlstate = (
+        sqlstate if isinstance(sqlstate, str) and re.fullmatch(r"[0-9A-Z]{5}", sqlstate) else "-"
+    )
+    logging.getLogger("spunto.plugin").warning(
+        "plugin=%s operation=%s code=plugin_call_failed error=%s sqlstate=%s",
+        plugin_id,
+        operation,
+        type(error).__name__,
+        sqlstate,
+    )
+
 
 CATALOG_FIELDS = {
     "id",
@@ -734,25 +751,35 @@ class Host:
         return self.catalog()
 
     def _requirements_met(self, manifest):
+        return self._requirements_reason(manifest) is None
+
+    def _requirements_reason(self, manifest):
         if manifest.get("needs"):
             try:
                 configured = self.context_settings(manifest["id"])
             except ContextError:
-                return False
-            if _needs_reason(manifest, configured):
-                return False
+                return "Plugin secrets are unavailable; check the environment."
+            if reason := _needs_reason(manifest, configured):
+                return reason
         for requirement in manifest.get("requires", []):
             if requirement == "attachments" and self.attachments_factory is None:
-                return False
+                return "Needs attachment storage."
             if requirement.startswith("ai."):
+                capability = requirement[3:]
+                title = {
+                    "chat": "a chat model",
+                    "embed": "an embedding model",
+                    "transcribe": "a transcription model",
+                    "vision": "a vision model",
+                }[capability]
                 if self.gateway is None:
-                    return False
+                    return f"Needs {title}. Choose one in Settings → AI."
                 try:
                     profile = self.gateway.profile_for(
                         requirement, self.states[manifest["id"]].get("ai_route")
                     )
-                except Exception:
-                    return False
+                except AIError:
+                    return f"Needs {title}. Choose one in Settings → AI."
                 checked = [
                     row
                     for row in self.gateway.health
@@ -761,12 +788,15 @@ class Host:
                     and row.get("model") == getattr(profile, requirement[3:] + "_model")
                 ]
                 if checked and not checked[-1]["ok"]:
-                    return False
+                    hint = (
+                        checked[-1].get("fix_hint") or "Run the connection check in Settings → AI."
+                    )
+                    return f"The {capability} model failed its connection check. {hint}"
                 if requirement == "ai.embed" and (
                     self.vectors is None or not self.store.vector_available
                 ):
-                    return False
-        return True
+                    return "Needs the note search index. Check indexing in Settings → AI."
+        return None
 
     async def _state(
         self, plugin_id, state, error=None, *, generation=None, run=None, failures=None
@@ -883,14 +913,10 @@ class Host:
     async def _activate(self, plugin_id):
         manifest, state = self.manifests[plugin_id], self.states[plugin_id]
         generation = self.generations[plugin_id]
-        if not set(manifest["permissions"]) <= set(state["granted"]) or not self._requirements_met(
-            manifest
-        ):
-            try:
-                configured = self.context_settings(plugin_id)
-                reason = _needs_reason(manifest, configured)
-            except ContextError:
-                reason = "Plugin secrets are unavailable; check the environment."
+        reason = self._requirements_reason(manifest)
+        if not set(manifest["permissions"]) <= set(state["granted"]):
+            reason = "Review and accept this plugin's permissions to enable it."
+        if reason:
             await self._state(plugin_id, "waiting", reason, generation=generation)
             return
         try:
@@ -1380,7 +1406,11 @@ class Host:
         handler = self.plugins.get(plugin_id)
         if handler is None or key not in handler.handlers[kind]:
             raise KeyError("handler_not_found")
-        result = await self._call_handler(handler.handlers[kind][key], ctx, args or {})
+        try:
+            result = await self._call_handler(handler.handlers[kind][key], ctx, args or {})
+        except Exception as error:
+            _log_failure(plugin_id, kind, error)
+            raise
         ctx.check()
         if vocabulary and result is not None:
             validate_output(result)
@@ -1507,6 +1537,7 @@ class Host:
             from spunto.ai.errors import AIError
             from spunto.ai.vectors import VectorUnavailable
 
+            _log_failure("core", "embed", error)
             eligibility_changed = isinstance(error, AIError) and error.code == "ai_note_refused"
             if (
                 isinstance(error, VectorUnavailable)
@@ -1677,18 +1708,23 @@ class Host:
                 from spunto.ai.errors import AIError
                 from spunto.ai.vectors import VectorUnavailable
 
+                _log_failure(plugin_id, row["kind"], error)
                 eligibility_changed = (
                     isinstance(error, AIError)
                     and error.category == "refused"
                     and error.code == "ai_note_refused"
                     and row["kind"].startswith("hook:")
                 )
-                if eligibility_changed or (
-                    isinstance(error, AIError) and error.category in {"provider", "unavailable"}
+                if (
+                    eligibility_changed
+                    or isinstance(error, VectorUnavailable)
+                    or (
+                        isinstance(error, AIError) and error.category in {"provider", "unavailable"}
+                    )
                 ):
                     if not await self._pause(row):
                         return
-                    delay = 1 if eligibility_changed else error.retry_after or 30
+                    delay = 1 if eligibility_changed else getattr(error, "retry_after", None) or 30
                     async with self.store.write() as conn:
                         if ctx:
                             ctx.check()
@@ -1711,9 +1747,9 @@ class Host:
                             ctx.check()
                         self._check_run(row)
                     return
-                validation = isinstance(
-                    error, (ManifestError, ValueError, ContextError, VectorUnavailable)
-                ) or (isinstance(error, AIError) and error.category in {"validation", "refused"})
+                validation = isinstance(error, (ManifestError, ValueError, ContextError)) or (
+                    isinstance(error, AIError) and error.category in {"validation", "refused"}
+                )
                 attempts = row["attempts"] + 1
                 dead = validation or attempts >= 5 or row["kind"] == "migrate"
                 async with self.store.write() as conn:

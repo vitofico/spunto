@@ -70,6 +70,7 @@ abstract class LockedActivity: FragmentActivity() {
    if(state.unlocked && resumed && lastUnlockedRevision != state.revision) { lastUnlockedRevision = state.revision; onUnlocked() }
   }}
   setContent {
+   val replica by (application as SpuntoApplication).container.replicas.collectAsState()
    val state by appLock.state.collectAsState()
    var mounted by remember { mutableStateOf(false) }
    if(state.unlocked) mounted = true
@@ -81,11 +82,15 @@ abstract class LockedActivity: FragmentActivity() {
     // A modal secure window owns input, while this tree draws no private pixels
     // and publishes no accessibility descendants during a lock.
     if(mounted) Box(if(state.unlocked) Modifier.fillMaxSize() else Modifier.fillMaxSize().graphicsLayer { alpha = 0f }.clearAndSetSemantics {}) { screen() }
-    if(!state.unlocked) SpuntoTheme {
+    if(!state.unlocked) SpuntoTheme(namespace=replica.replicaId.takeUnless {it=="legacy"}.orEmpty()) {
      Surface(Modifier.fillMaxSize()) {}
      Dialog(onDismissRequest = {}, properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
       val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
-      SideEffect { dialogWindow?.addFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+      val darkIcons=io.theficos.spunto.core.design.useDarkSystemBarIcons(MaterialTheme.colorScheme.background)
+      SideEffect { dialogWindow?.let {dialog ->
+       dialog.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+       androidx.core.view.WindowCompat.getInsetsController(dialog,dialog.decorView).apply {isAppearanceLightStatusBars=darkIcons;isAppearanceLightNavigationBars=darkIcons}
+      } }
       Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
        Text("Spunto is locked", style = MaterialTheme.typography.headlineLarge)
        Spacer(Modifier.height(16.dp)); Text("Unlock with a strong biometric or this phone's PIN, pattern or password.")

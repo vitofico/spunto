@@ -38,7 +38,7 @@ class CaptureActivity:LockedActivity() {
     if(selection.isBlank()) { finish();return@launch }
     val body=selection.lines().joinToString("\n") { "> $it" }
     if(!launchState.selectionStarted) {launchState.selectionStarted=true;model.task {try {launchState.selectionId=model.repository.create(body,sourceKind="selection",sourceRef=referrer?.host)} catch(error:Exception) {launchState.selectionError="Couldn't save this selection. Your existing notes and drafts are kept.";throw error}}}
-    setProtectedContent { SpuntoTheme { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(shape=MaterialTheme.shapes.large) {
+    setProtectedContent { SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(shape=MaterialTheme.shapes.large) {
      val id=launchState.selectionId
      if(id==null) Column(Modifier.padding(20.dp)) {Text(launchState.selectionError.ifEmpty {"Saving selection…"});if(launchState.selectionError.isNotEmpty()) TextButton(onClick={finish()}) {Text("Close")}}
      else if(!launchState.opened) TextButton(onClick={launchState.opened=true}) {Text("Saved to spunto · Add a thought")}
@@ -56,7 +56,7 @@ class CaptureActivity:LockedActivity() {
   val source=shared.takeIf { it.startsWith("https://") || it.startsWith("http://") }
   setProtectedContent {
    val error by model.message.collectAsState()
-   SpuntoTheme {
+   SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) {
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(Modifier.fillMaxWidth().wrapContentHeight(),shape=MaterialTheme.shapes.extraLarge,color=MaterialTheme.colorScheme.background) {
      Column(Modifier.padding(20.dp).imePadding(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
       Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text("Close") } }

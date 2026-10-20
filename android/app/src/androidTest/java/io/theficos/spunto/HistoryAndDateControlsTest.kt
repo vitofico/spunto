@@ -30,13 +30,17 @@ class HistoryAndDateControlsTest {
   compose.onNodeWithText("Restore this revision").assertIsNotEnabled();compose.runOnIdle {editing=false}
   compose.onNodeWithText("Restore this revision").performClick();compose.runOnIdle {assertEquals(revision,restored)}
  }
- @Test fun dateControlsKeepBothValuesVisibleAndClearOnlyTheirFilter() {
-  var from by mutableStateOf("2026-10-15");var to by mutableStateOf("2026-10-14");var expanded by mutableStateOf(true)
-  compose.setContent { SpuntoTheme("carta","light") { CreatedDateControls(from,to,expanded,{from=it},{to=it},{expanded=!expanded},from>to && to.isNotEmpty()) } }
-  compose.onNodeWithText("Use dates in YYYY-MM-DD, with From on or before To.").assertIsDisplayed()
-  compose.onNode(hasSetTextAction() and hasText("Created from · YYYY-MM-DD")).assertTextContains("2026-10-15")
-  compose.onNodeWithText("Clear dates").performClick();compose.runOnIdle {assertEquals("",from);assertEquals("",to)}
-  compose.onNodeWithText("Dates",useUnmergedTree=true).assertExists()
+ @Test fun dateFilterSheetPreventsReversedRangesAndKeepsClearExplicit() {
+  var from by mutableStateOf("2026-10-15");var to by mutableStateOf("2026-10-14")
+  compose.setContent {SpuntoTheme("carta","light") {NoteFilterContent(from,to,java.time.LocalDate.of(2026,10,20),{from=it},{to=it},{},{},{})}}
+  compose.onNodeWithText("Choose an end date on or after the start date.").assertIsDisplayed()
+  compose.onNodeWithText("Apply filters").assertIsNotEnabled()
+  compose.onNodeWithContentDescription("Choose start date").assertTextContains("15 Oct 2026")
+  compose.onNodeWithText("Clear dates").performClick()
+  compose.runOnIdle {assertEquals("",from);assertEquals("",to)}
+  compose.onNodeWithText("Apply filters").assertIsEnabled()
+  compose.onNodeWithText("Last 7 days").performClick()
+  compose.runOnIdle {assertEquals("2026-10-14",from);assertEquals("2026-10-20",to)}
  }
  @Test fun editReadRestoreEditLoadsRestoredWordsAndKeepsSubsequentTyping() {
   val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
@@ -50,18 +54,20 @@ class HistoryAndDateControlsTest {
    compose.onNodeWithText("Edit").performClick()
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Note text").performTextReplacement(b)
-   compose.onNodeWithText("Read").performClick()
+   compose.onNodeWithText("Done").performClick()
    compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==b} && compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithContentDescription("More note actions").performClick()
    compose.onNodeWithText("History").performClick()
    compose.onNodeWithText("Restore this revision").performScrollTo().performClick()
    compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==a}}
-   compose.onNodeWithText("Edit").performScrollTo().performClick()
+   compose.onNodeWithText("Close history").performScrollTo().performClick()
+   compose.onNodeWithText("Edit").performClick()
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Note text").assertTextEquals(a)
    compose.mainClock.advanceTimeBy(5500);compose.waitForIdle()
    assertEquals(a,runBlocking {repository.dao.get(id)!!.body})
    compose.onNodeWithContentDescription("Note text").performTextReplacement(d)
-   compose.onNodeWithText("Read").performScrollTo().performClick()
+   compose.onNodeWithText("Done").performClick()
    compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==d}}
    assertTrue(runBlocking {repository.history(id).first().any {it.body==b && it.changeKind=="restore"}})
   } finally {

@@ -20,14 +20,14 @@ internal fun recordingActive(phase:RecordingPhase)=phase in setOf(RecordingPhase
  TextButton(onClick={if(!startingVoice) onTap()},enabled=enabled && !startingVoice,modifier=Modifier.semantics {contentDescription=if(listening) "Stop dictation" else "Dictate"}) {Text(if(listening) "■ Stop" else "Dictate")}
 }
 
-@Composable fun VoiceControls(state:RecordingState,transcriptionActive:Boolean,pending:RecordingDraftEntity?,recoveries:List<RecordingDraftEntity>,enabled:Boolean,onStop:()->Unit,onDiscard:(String)->Unit,onRecover:(String)->Unit) {
+@Composable fun VoiceControls(state:RecordingState,transcriptionActive:Boolean,pending:RecordingDraftEntity?,recoveries:List<RecordingDraftEntity>,enabled:Boolean,onStop:()->Unit,onDiscard:(String)->Unit,onRecover:(String)->Unit,saveAction:String="Save") {
  val active=recordingActive(state.phase)
  if(active || pending!=null || state.phase==RecordingPhase.Failed) Surface(color=MaterialTheme.colorScheme.surfaceContainer,shape=MaterialTheme.shapes.medium) {
   Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
    val elapsed=recordingTime(if(active) state.durationMs else pending?.durationMs?:state.durationMs)
    Text(if(active) "Recording · $elapsed" else "Recording kept on this phone · $elapsed",Modifier.semantics {contentDescription=if(active) "Recording elapsed $elapsed" else "Recording duration $elapsed"})
    if(active) LinearProgressIndicator(progress={state.level.coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth().semantics {contentDescription="Microphone level";stateDescription="${(state.level*100).toInt().coerceIn(0,100)} percent"})
-   Text(if(active) state.message else if(state.phase==RecordingPhase.Failed && pending==null) state.message else "Save to attach this clip. Discard keeps your text.",style=MaterialTheme.typography.bodySmall)
+   Text(if(active) state.message else if(state.phase==RecordingPhase.Failed && pending==null) state.message else "$saveAction to attach this clip. Discard keeps your text.",style=MaterialTheme.typography.bodySmall)
    if(!transcriptionActive) Text("Live text unavailable. Server transcription needs a transcription model; your recording is kept.",style=MaterialTheme.typography.bodySmall)
    FlowRow(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
     if(active) TextButton(onClick=onStop,enabled=enabled && state.phase!=RecordingPhase.Stopping) {Text("Stop recording")}
@@ -39,7 +39,7 @@ internal fun recordingActive(phase:RecordingPhase)=phase in setOf(RecordingPhase
  recoveries.forEach {row -> Surface(color=MaterialTheme.colorScheme.surfaceContainer,shape=MaterialTheme.shapes.medium) {
   Column(Modifier.fillMaxWidth().padding(12.dp)) {
    Text("Unfinished recording kept on this phone",style=MaterialTheme.typography.labelLarge)
-   Text(if(row.state=="interrupted") "This clip could not be recovered. Your draft text is kept." else "Recover this clip to attach it with Save, or discard it.",style=MaterialTheme.typography.bodySmall)
+   Text(if(row.state=="interrupted") "This clip could not be recovered. Your draft text is kept." else "Recover this clip to attach it with $saveAction, or discard it.",style=MaterialTheme.typography.bodySmall)
    FlowRow(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
     if(row.state in setOf("ready","recoverable")) TextButton(onClick={onRecover(row.id)},enabled=enabled) {Text("Recover recording")}
     TextButton(onClick={onDiscard(row.id)},enabled=enabled) {Text("Discard recording")}

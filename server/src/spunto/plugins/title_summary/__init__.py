@@ -24,7 +24,9 @@ class Summary(Output):
 @plugin.job("summarize")
 async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
     note = await eligible(ctx, note_id, maximum=1_000_000)
-    if not note or len(note["body"].split()) < 300:
+    if note is None:
+        return text("This note is unavailable for Title and summary.")
+    if len(note["body"].split()) < 300:
         await ctx.notes.annotate(note_id, "panel", None)
         return text("Title and summary need a note of at least 300 words.")
     if note_version is not None and note["version"] != note_version:

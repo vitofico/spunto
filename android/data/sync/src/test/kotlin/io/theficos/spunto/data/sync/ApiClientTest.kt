@@ -50,14 +50,17 @@ class ApiClientTest {
     Triple("POST","/api/v1/plugins/ask/commands/ask/",false),
     Triple("POST","/api/v1/plugins/label-suggestions/commands/suggest-now/",false),
     Triple("POST","/api/v1/plugins/label-gardener/commands/review-now/",false),
-    Triple("POST","/api/v1/plugins/label-suggestions/commands/suggest-now-extra",false),
-    Triple("POST","/api/v1/plugins/label-gardener/commands/review-now-extra",false),
+    Triple("POST","/api/v1/plugins/label-suggestions/commands/suggest-now-extra",true),
+    Triple("POST","/api/v1/plugins/label-gardener/commands/review-now-extra",true),
     Triple("POST","/api/v1/sync/push",false),
     Triple("GET","/api/v1/changes/wait",false),
-    Triple("POST","/api/v1/plugins/other/commands/ask",false),
-    Triple("POST","/api/v1/plugins/other/commands/suggest-now",false),
-    Triple("POST","/api/v1/plugins/other/commands/review-now",false),
-    Triple("POST","/api/v1/plugins/tidy/commands/tidy",false),
+    Triple("POST","/api/v1/plugins/other/commands/ask",true),
+    Triple("POST","/api/v1/plugins/other/commands/suggest-now",true),
+    Triple("POST","/api/v1/plugins/other/commands/review-now",true),
+    Triple("POST","/api/v1/plugins/tidy/commands/tidy",true),
+    Triple("POST","/api/v1/plugins/translate/commands/translate",true),
+    Triple("POST","/api/v1/plugins/develop/commands/develop",true),
+    Triple("POST","/api/v1/ai/check",true),
    )
    cases.forEach { (method,path,_) ->
     server.enqueue(MockResponse().setBody("{}"));api.request(path,method)

@@ -138,14 +138,3 @@ import kotlinx.coroutines.flow.first
  }
  if(signout) AlertDialog(onDismissRequest={signout=false},title={Text("Sign out?")},text={Text(if(pending>0) "$pending changes have not synced. They stay on this phone and will sync after you sign in again." else "Your local notes stay on this phone.")},confirmButton={TextButton(onClick={model.signOut();signout=false}) { Text("Sign out") }},dismissButton={TextButton(onClick={signout=false}) { Text("Cancel") }})
 }
-@Composable fun StatusScreen(model:SpuntoViewModel) {
- val status by model.status.collectAsState(); val notes by model.notes.collectAsState(); val labels by model.labels.collectAsState(); val pending by model.pending.collectAsState()
- val data by model.remote.collectAsState(); val logs by model.repository.dao.logs().collectAsState(emptyList()); val auth by model.auth.collectAsState()
- LaunchedEffect(auth) { if(auth!=null) model.fetch("/api/v1/ai") }
- LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-  item { Text("Status",style=MaterialTheme.typography.titleLarge); Text(status.toString()); Text("${notes.size} notes · ${labels.size} labels · ${pending} changes waiting to sync"); TextButton(onClick={model.synchronize();model.fetch("/api/v1/ai")}) { Text("Sync and refresh") } }
-  items(data.entries.toList()) { (key,value) -> Column { Text(key.replace('_',' ').replaceFirstChar { it.uppercase() },style=MaterialTheme.typography.titleSmall); Text(value.toString().take(3000)) } }
-  item { Text("Sync log",style=MaterialTheme.typography.titleLarge); TextButton(onClick={val manager=model.container.context.getSystemService(ClipboardManager::class.java);manager.setPrimaryClip(ClipData.newPlainText("Spunto sync log",logs.joinToString("\n") { "${noteTime(it.at)} ${it.outcome} ${it.reason.orEmpty()}" }))}) { Text("Copy log") } }
-  items(logs) { log -> Text("${noteTime(log.at)} · ${log.outcome} · ${log.reason.orEmpty()}",style=MaterialTheme.typography.bodySmall) }
- }
-}

@@ -382,7 +382,11 @@ async def test_health_revocation_fences_shared_profile_before_waiting_for_vector
             rows = await conn.execute_fetchall(
                 "SELECT state,last_error FROM plugin WHERE id IN ('semantic-search','related')"
             )
-            assert [tuple(row) for row in rows] == [("waiting", None), ("waiting", None)]
+            reason = (
+                "The embed model failed its connection check. "
+                "Run the connection check in Settings → AI."
+            )
+            assert [tuple(row) for row in rows] == [("waiting", reason), ("waiting", reason)]
     finally:
         release.set()
         await asyncio.gather(operation, return_exceptions=True)

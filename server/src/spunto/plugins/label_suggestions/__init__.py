@@ -7,7 +7,9 @@ import unicodedata
 
 from pydantic import Field
 
+from spunto.ai.errors import AIError
 from spunto.ai.output import Output, field
+from spunto.ai.vectors import VectorUnavailable
 from spunto.core.text import label_key
 from spunto.host import ContextError, Ctx, Plugin
 
@@ -158,10 +160,18 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None, *, forc
     vocabulary.sort(key=lambda item: (-item["count"], item["path"]))
     selected = vocabulary[:150]
     neighbor_notes = []
-    # Embeddings are optional for this plugin. A configured but failed embedding
-    # call is allowed to fail the whole job, so a provider failure never writes.
+    # Neighbour examples improve labels but are optional while an index is
+    # preparing or its provider is down. Invalid vectors and privacy failures
+    # still fail closed; vocabulary examples remain freshly permission-checked.
     if ctx.ai.available("embed"):
-        neighbors = await ctx.vectors.nearest(note_id=note_id, k=10)
+        try:
+            neighbors = await ctx.vectors.nearest(note_id=note_id, k=10)
+        except VectorUnavailable:
+            neighbors = []
+        except AIError as error:
+            if error.category not in {"provider", "unavailable"}:
+                raise
+            neighbors = []
         selected_keys = {label_key(item["path"]) for item in selected}
         known = {label_key(item["path"]): item for item in vocabulary}
         for neighbor in neighbors:

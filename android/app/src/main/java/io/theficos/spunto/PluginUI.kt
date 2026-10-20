@@ -22,11 +22,14 @@ import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.Markdown
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.ApiClient
+import io.theficos.spunto.data.sync.ApiException
 import io.theficos.spunto.data.local.PluginOutputEntity
 import io.theficos.spunto.core.model.Note
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.serialization.json.*
@@ -38,19 +41,39 @@ internal fun resultCopyText(data:JsonElement):String=outputComponents(data).mapN
  when(component.string("type")) {
   "text" -> component.string("text")
   "markdown" -> component.string("text").ifEmpty { component.string("markdown") }
-  "diff" -> component.objects("hunks").joinToString("\n") { hunk -> ((hunk["new_lines"] ?: hunk["lines"]) as? JsonArray)?.joinToString("\n") { it.jsonPrimitive.content }.orEmpty() }
+  "diff" -> component.objects("hunks").joinToString("\n\n") {hunk ->val (before,after)=diffHunkTexts(hunk);"Before:\n$before\n\nAfter:\n$after"}
   else -> null
  }
 }.joinToString("\n\n")
 
-internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonObject,onResult:(JsonObject)->Unit,onComplete:()->Unit={},scope:CoroutineScope=model.viewModelScope)=model.task(scope) {
+internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonObject,onResult:(JsonObject)->Unit,onComplete:()->Unit={},scope:CoroutineScope=model.viewModelScope,onError:(String)->Unit={model.message.value=it})=model.task(scope) {
+ val auth=model.auth.value
+ val epoch=model.pluginReplicaEpoch
+ fun current()=auth!=null && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(plugin)
  try {
   require(Regex("[a-z][a-z0-9-]{1,23}").matches(plugin) && Regex("[a-z][a-z0-9-]{0,127}").matches(id)) { "This command is unavailable." }
-  if(!model.container.manifest.enabled(plugin)) return@task
-  val auth=model.auth.value ?: return@task
-  val result=ApiClient(auth).request("/api/v1/plugins/$plugin/commands/$id","POST",args)
-  if(model.container.manifest.enabled(plugin)) onResult(commandEnvelope(plugin,id,args,result))
-  model.synchronize()
+  if(!current()) return@task
+  require(model.online.value) {"Connect to the server to use this tool."}
+  args.string("note_id").takeIf(String::isNotBlank)?.let {noteId ->
+   val note=model.repository.observe(noteId).first()
+   require(note!=null && !note.trashed) {"This note is no longer available."}
+   if(note.pending || note.serverRev==0) {
+    model.synchronize().join()
+    if(!current()) return@task
+    val synced=model.repository.observe(noteId).first()
+    require(synced!=null && !synced.trashed && !synced.pending && synced.serverRev>0) {"This note has changes waiting to sync. Sync it before running a tool so it uses your latest text."}
+   }
+  }
+  val result=ApiClient(auth!!).guarded {current()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
+  if(!current()) return@task
+  model.synchronize().join()
+  if(current()) onResult(commandEnvelope(plugin,id,args,result))
+ } catch(error:CancellationException) {throw error}
+ catch(error:Exception) {
+  if(current()) {
+   if(error is ApiException && error.status==401) model.reauthenticate.value=true
+   onError(when(error) {is ApiException -> pluginCommandErrorMessage(error.status,error.code);is IllegalArgumentException -> error.message ?: "Check the tool inputs.";is java.net.SocketTimeoutException -> "The tool took too long. Try again, or choose a faster model in Settings → AI.";else -> "Couldn't reach the server. Check your connection, then retry."})
+  }
  } finally { onComplete() }
 }
 
@@ -69,23 +92,35 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
   if(live && (!online || note.privateNote) || !live && components.isEmpty()) return@forEach
   var expanded by remember(note.id,id) { mutableStateOf(model.container.preferences.getBoolean("panel-open:$id",false)) }
   var result by remember(note.id,id,note.serverRev) { mutableStateOf<JsonElement?>(null) }
-  var unavailable by remember(note.id,id,note.serverRev,online) { mutableStateOf(false) }
-  LaunchedEffect(online,note.id,note.serverRev,note.privateNote) {
-   if(live && online && !note.privateNote) {
+  var error by remember(note.id,id,note.serverRev,online) {mutableStateOf("")}
+  var loading by remember(note.id,id) {mutableStateOf(false)}
+  var retry by remember(note.id,id) {mutableIntStateOf(0)}
+  LaunchedEffect(online,note.id,note.serverRev,note.privateNote,expanded,retry) {
+   if(live && online && !note.privateNote && expanded) {
+    val auth=model.auth.value ?: return@LaunchedEffect
+    val epoch=model.pluginReplicaEpoch
+    fun current()=model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(id)
+    loading=true;error=""
     try {
-     val auth=model.auth.value ?: return@LaunchedEffect
-     val response=ApiClient(auth).request("/api/v1/plugins/$id/panel",query=mapOf("note_id" to note.id))
-     result=response;unavailable=outputComponents(response).isEmpty()
-    } catch(error:CancellationException) { throw error }
-    catch(error:Exception) { unavailable=true;if(error is io.theficos.spunto.data.sync.ApiException && error.status==401) model.reauthenticate.value=true }
+     val response=ApiClient(auth).guarded {current()}.request("/api/v1/plugins/$id/panel",query=mapOf("note_id" to note.id))
+     if(current()) result=response
+    } catch(cancelled:CancellationException) {throw cancelled}
+    catch(failure:Exception) {if(current()) {
+     error=if(failure is ApiException) pluginCommandErrorMessage(failure.status,failure.code) else "Couldn't load this panel. Check your connection and retry."
+     if(failure is ApiException && failure.status==401) model.reauthenticate.value=true
+    }} finally {loading=false}
    }
   }
-  if(unavailable || live && outputComponents(result).isEmpty()) return@forEach
   Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
    TextButton(onClick={expanded=!expanded;model.container.preferences.edit().putBoolean("panel-open:$id",expanded).apply()}) { Text(panel.string("title").ifBlank { plugin.string("name") }+if(expanded) " −" else " +") }
    if(expanded) {
     val content=if(live) result else JsonArray(components)
-    if(content!=null) RenderOutput(model,buildJsonObject { put("plugin_id",id);put("payload",content) },onNote)
+    when {
+     loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
+     error.isNotBlank() -> {Text(error,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall);TextButton(onClick={retry++}) {Text("Retry")}}
+     content!=null && outputComponents(content).isNotEmpty() -> RenderOutput(model,buildJsonObject {put("plugin_id",id);put("payload",content)},onNote)
+     else -> Text("Nothing to show yet.",style=MaterialTheme.typography.bodySmall)
+    }
    }
   }
  }
@@ -200,17 +235,21 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  val ownScope=rememberCoroutineScope()
  val scope=commandScope ?: ownScope
  var running by remember(data) { mutableStateOf(false) }
- val run:(String,JsonObject)->Unit={ id,args -> if(!running && online && plugin.isNotBlank()) { running=true;runCommand(model,plugin,id,args,deliver,{running=false},scope) } }
+ var error by remember(data) {mutableStateOf("")}
+ val run:(String,JsonObject)->Unit={ id,args -> if(!running && online && plugin.isNotBlank()) { running=true;error="";runCommand(model,plugin,id,args,deliver,{running=false},scope,onError={error=it}) } }
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value="Sync to review this suggestion." }
  Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-  outputComponents(data).forEach { component ->
+  val components=outputComponents(data)
+  if(components.isEmpty() && command.isNotBlank()) Text("This result has no preview in this app. Check Review for suggestions or open the web app.",style=MaterialTheme.typography.bodySmall)
+  components.forEach { component ->
    Vocabulary(component,onNote,review,run,online=online && !running,
     onForm=if(command.isNotBlank()) { args -> run(command,JsonObject(initial+args)) } else null,formInitial=initial,formHidden=initial.keys.filter { it=="note_id" }.toSet(),noteReference={id,reason -> RoomReference(model,id,reason,onNote)},proposalPill={ pill ->
      val id=pill.string("suggestion_id");val proposal=outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let(::proposalData)
      ProposedPill(pill.string("label"),model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.string("name") ?: plugin,proposal?.string("action") in setOf("replace_body","merge_notes"),{review(id)},{model.decide(id,"dismiss")})
     })
   }
-  if(running) Text("Waiting for the command…",style=MaterialTheme.typography.bodySmall)
+  if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
+  if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text("Working… This can take a moment with AI.",style=MaterialTheme.typography.bodySmall)}
  }
 }
 
@@ -223,11 +262,13 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  val close={active=false;sheetScope.cancel();onClose()}
  ModalBottomSheet(onDismissRequest=close,scrimColor=MaterialTheme.colorScheme.scrim) {
   Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+   val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
+   Text(command?.string("title")?.takeIf(String::isNotBlank) ?: plugin?.string("name")?.takeIf(String::isNotBlank) ?: "Tool result",style=MaterialTheme.typography.titleLarge)
    RenderOutput(model,result,{id -> close();onNote(id)},{if(active) onResult(it)},commandScope=sheetScope,onProposalOpen=close)
    (plugin?.get("ai_destinations") as? JsonObject)?.forEach { (_,raw) -> (raw as? JsonObject)?.let { destination -> Text("${destination.string("model")} at ${destination.string("host")} · ${if(destination.bool("leaves_network")) "outside your network" else "on your network"}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
    val copied=resultCopyText(result)
    Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-    if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied))}) { Text("Copy") }
+    if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied))}) {Text(if(outputComponents(result).any {it.string("type")=="diff"}) "Copy changes" else "Copy")}
     TextButton(onClick=close) { Text("Close") }
    }
    Spacer(Modifier.height(24.dp))
@@ -243,7 +284,7 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  when(action) {
   "add_label" -> Text("Add #${proposed.string("path")}")
   "append_text" -> { Text("Append this text:");Markdown(proposed.string("text"),machine=true) }
-  "replace_body" -> { Text("Based on version ${data["note_version"] ?: "unknown"}",style=MaterialTheme.typography.bodySmall);Text("Before",style=MaterialTheme.typography.titleSmall);Text(target?.body ?: "Note unavailable",fontFamily=FontFamily.Monospace);Text("After",style=MaterialTheme.typography.titleSmall);Text(proposed.string("body"),fontFamily=FontFamily.Monospace) }
+  "replace_body" -> { Text("Based on version ${data["note_version"] ?: "unknown"}",style=MaterialTheme.typography.bodySmall);if(target==null) Text("Note unavailable") else TextChangePreview(target!!.body,proposed.string("body")) }
   "set_title" -> Text("Title: ${proposed.string("title")}")
   "label_change" -> { Text(labelChangeSummary(proposed));Text("Review the affected notes in the web app before applying.",style=MaterialTheme.typography.bodySmall) }
   "merge_notes" -> { val source by remember(proposed.string("source_id")) { model.repository.observe(proposed.string("source_id")) }.collectAsState(null);Text("Compare",style=MaterialTheme.typography.titleLarge);Text("The source will be appended to the destination and moved to Trash.");Text("Destination",style=MaterialTheme.typography.titleSmall);Text(target?.body ?: "Note unavailable",fontFamily=FontFamily.Monospace);Text("Source",style=MaterialTheme.typography.titleSmall);Text(source?.body ?: "Note unavailable",fontFamily=FontFamily.Monospace) }
@@ -275,8 +316,8 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
   if(data.string("status")!="pending") Text("This suggestion is ${data.string("status").ifEmpty { "unavailable" }}.",style=MaterialTheme.typography.bodySmall)
  }},confirmButton={
   if(action=="label_change") TextButton(enabled=online,onClick={model.auth.value?.let { runCatching { uri.openUri(it.serverUrl.trimEnd('/')+"/review") } };onClose()}) { Text(if(online) "Open web Review" else "Needs a connection") }
-  else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);model.decide(data.string("id"),"accept");onClose()}) { Text("Apply") }
- },dismissButton={TextButton(enabled=action!="label_change" || online,onClick={model.decide(data.string("id"),"dismiss");onClose()}) { Text("Keep mine") }})
+  else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);model.decide(data.string("id"),"accept");onClose()}) { Text(if(action=="replace_body") "Apply changes" else "Apply") }
+ },dismissButton={TextButton(enabled=action!="label_change" || online,onClick={model.decide(data.string("id"),"dismiss");onClose()}) { Text(if(action=="replace_body") "Keep original" else "Dismiss") }})
 }
 
 @Composable fun NoteCommands(model:SpuntoViewModel,noteId:String,onResult:(JsonObject)->Unit) {
@@ -284,11 +325,32 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  val online by model.online.collectAsState()
  var expanded by remember(noteId) { mutableStateOf(false) }
  var running by remember(noteId) { mutableStateOf(false) }
+ var query by remember(noteId) {mutableStateOf("")}
+ var error by remember(noteId) {mutableStateOf("")}
+ var attempt by remember(noteId) {mutableStateOf<Job?>(null)}
  val scope=rememberCoroutineScope()
- val commands=remember(manifest) { model.container.manifest.plugins().filter { model.container.manifest.enabled(it.string("id")) }.flatMap { plugin -> (plugin["contributes"] as? JsonObject ?: JsonObject(emptyMap())).objects("commands").take(3).filter { (it["where"] as? JsonArray)?.any { place -> place.jsonPrimitive.content=="note-actions" } == true }.map { plugin to it } } }
- Column {
-  (if(expanded) commands else commands.take(6)).forEach { (plugin,command) -> TextButton(enabled=online && !running,onClick={running=true;runCommand(model,plugin.string("id"),command.string("id"),buildJsonObject { put("note_id",noteId) },onResult,{running=false},scope)}) { Text(command.string("title")+" · "+plugin.string("name")) } }
-  if(commands.size>6) TextButton(onClick={expanded=!expanded}) { Text(if(expanded) "Fewer commands" else "More commands (${commands.size-6})") }
-  if(running) Text("Waiting for the command…",style=MaterialTheme.typography.bodySmall)
+ val commands=remember(manifest) {noteTools(model.container.manifest.plugins())}
+ if(commands.isEmpty()) return
+ TextButton(onClick={expanded=true;query="";error=""}) {Text("Tools")}
+ if(expanded) ModalBottomSheet(onDismissRequest={attempt?.cancel();expanded=false}) {
+  Column(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+   Text("Note tools",style=MaterialTheme.typography.titleLarge)
+   if(!online) Text("Connect to the server to use tools.",style=MaterialTheme.typography.bodySmall)
+   if(commands.size>5) OutlinedTextField(value=query,onValueChange={query=it},label={Text("Find a tool")},singleLine=true,modifier=Modifier.fillMaxWidth())
+   if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
+   if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text("Working… This can take a moment with AI.",style=MaterialTheme.typography.bodySmall)}
+   val visible=commands.filter {it.title.contains(query,true) || it.pluginName.contains(query,true)}
+   if(visible.isEmpty()) Text("No tools match your search.")
+   LazyColumn(Modifier.weight(1f,false),contentPadding=PaddingValues(bottom=24.dp)) {
+    items(visible,key={it.pluginId+"/"+it.id}) {tool ->
+     ListItem(headlineContent={Text(tool.title)},supportingContent=if(commands.count {it.title==tool.title}>1) {{Text(tool.pluginName)}} else null,modifier=Modifier.clickable(enabled=online && !running) {
+      running=true;error=""
+      attempt=runCommand(model,tool.pluginId,tool.id,buildJsonObject {put("note_id",noteId)},{expanded=false;onResult(it)},{running=false},scope,onError={error=it})
+     })
+    }
+   }
+   TextButton(onClick={attempt?.cancel();expanded=false}) {Text(if(running) "Cancel" else "Close")}
+   Spacer(Modifier.height(12.dp))
+  }
  }
 }

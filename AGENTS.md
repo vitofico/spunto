@@ -1,5 +1,13 @@
 # AGENTS.md: working on Spunto
 
+## Approved contributor agreement (2026-10-20)
+
+Spunto stays AGPL-3.0-only (D11). Outside pull requests need a signature of the
+[Spunto CLA](CLA.md) before merge, which also lets the owner license
+contributions under other terms for a hosted service. Keep `spunto-cloud`
+private. A same-day draft that switched the licence to Apache-2.0 was not
+adopted.
+
 ## Approved public distribution revision (2026-10-19)
 
 The owner authorizes making `vitofico/spunto` public, publishing a stable signed

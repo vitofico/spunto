@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.first
  val auth by model.auth.collectAsState();val online by model.online.collectAsState()
  val actions=model.pluginManager;val busy by actions.busy.collectAsState();val undo by actions.undo.collectAsState();val page by actions.page.collectAsState()
  val projection=nativePluginCatalog(catalog,manifest)
- var onlyOn by remember {mutableStateOf(false)};var enableId by remember(auth) {mutableStateOf<String?>(null)};var enableError by remember {mutableStateOf("")}
+ var enableId by remember(auth) {mutableStateOf<String?>(null)};var enableError by remember {mutableStateOf("")}
  var selectedId by remember(auth) {mutableStateOf<String?>(null)}
  val epoch by model.pluginReplicaEpochState.collectAsState()
  val commandScope=rememberCoroutineScope()
@@ -57,25 +57,7 @@ import kotlinx.coroutines.flow.first
   if(selectedId!=null) actions.select(selectedId!!) else actions.closePage()
  }
  DisposableEffect(actions) {onDispose {commandOwner.reset();actions.closePage()}}
- LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-  item {
-   Text("Everything beyond notes, labels and search. Switch one on and it takes its place; switch it off and it leaves the screen, while its data and any notes it wrote stay.")
-   Text("New plugins are added by whoever runs the server.",style=MaterialTheme.typography.bodySmall)
-   if(ai.isNotEmpty()) pluginAiSummary(ai).forEach {Text(it,style=MaterialTheme.typography.bodySmall)} else Text("AI model summary unavailable.",style=MaterialTheme.typography.bodySmall)
-   TextButton(onClick={model.pluginWeb("/settings/ai")},enabled=online) {Text("AI settings in the web app · owner sign-in")}
-   FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {FilterChip(!onlyOn,{onlyOn=false},label={Text("All ${projection.rows.size}")});FilterChip(onlyOn,{onlyOn=true},label={Text("On ${projection.onCount}")})}
-   if(!online) Text("Changes need a connection.")
-   if(!projection.valid) Text("Plugin catalog unavailable. Connect to refresh it.")
-   NativePluginUndo(undo,online,busy) {actions.undo(::review)}
-  }
-  pluginGroups.forEach {group ->
-   val total=projection.rows.filter {it.category==group};val entries=total.filter {!onlyOn || it.wantedOn}
-   if(entries.isNotEmpty()) {
-    item {Text("${group.replaceFirstChar {it.uppercase()}} · ${total.count {it.wantedOn}} of ${total.size} on",style=MaterialTheme.typography.labelSmall)}
-    items(entries,key={it.id}) {plugin -> NativePluginRow(plugin,online,busy,{toggle(plugin,it)},{open(plugin.id)},{review(plugin.id)},model::pluginWeb)}
-   }
-  }
- }
+ NativePluginCatalogList(projection,ai,online,busy,undo,::toggle,::open,::review,{actions.undo(::review)},model::pluginWeb)
  val enable=projection.rows.firstOrNull {it.id==enableId}
  if(enable!=null && !enable.removed) NativePluginPermissionDialog(enable,online,busy,enableError,{enableId=null},{
   model.pluginToggle(enable,true,enable.permissions) {result -> when(result) {
@@ -103,6 +85,28 @@ import kotlinx.coroutines.flow.first
    },{model.remote.value=it})
   },model::pluginWeb)}
  }},confirmButton={TextButton(onClick=::close) {Text("Done")}})}
+}
+@Composable internal fun NativePluginCatalogList(projection:NativePluginCatalog,ai:JsonObject,online:Boolean,busy:Boolean,undo:PluginUndo?,onToggle:(NativePluginFacts,Boolean)->Unit,onSettings:(String)->Unit,onReview:(String)->Unit,onUndo:()->Unit,onWeb:(String)->Unit) {
+ var onlyOn by remember {mutableStateOf(false)}
+ LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+  item {
+   Text("Everything beyond notes, labels and search. Switch one on and it takes its place; switch it off and it leaves the screen, while its data and any notes it wrote stay.")
+   Text("New plugins are added by whoever runs the server.",style=MaterialTheme.typography.bodySmall)
+   if(ai.isNotEmpty()) pluginAiSummary(ai).forEach {Text(it,style=MaterialTheme.typography.bodySmall)} else Text("AI model summary unavailable.",style=MaterialTheme.typography.bodySmall)
+   TextButton(onClick={onWeb("/settings/ai")},enabled=online) {Text("AI settings in the web app · owner sign-in")}
+   FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {FilterChip(!onlyOn,{onlyOn=false},label={Text("All ${projection.rows.size}")});FilterChip(onlyOn,{onlyOn=true},label={Text("On ${projection.onCount}")})}
+   if(!online) Text("Changes need a connection.")
+   if(!projection.valid) Text("Plugin catalog unavailable. Connect to refresh it.")
+   NativePluginUndo(undo,online,busy,onUndo)
+  }
+  pluginGroups.forEach {group ->
+   val total=projection.rows.filter {it.category==group};val entries=total.filter {!onlyOn || it.wantedOn}
+   if(entries.isNotEmpty()) {
+    item {Text("${group.replaceFirstChar {it.uppercase()}} · ${total.count {it.wantedOn}} of ${total.size} on",style=MaterialTheme.typography.labelSmall)}
+    items(entries,key={it.id}) {plugin -> NativePluginRow(plugin,online,busy,{onToggle(plugin,it)},{onSettings(plugin.id)},{onReview(plugin.id)},onWeb)}
+   }
+  }
+ }
 }
 @Composable fun DictationSettings(model:SpuntoViewModel,readOnly:Boolean=false) {
  val context=model.container.context; val scope=rememberCoroutineScope()

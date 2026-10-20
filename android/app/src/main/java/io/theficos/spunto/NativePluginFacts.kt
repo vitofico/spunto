@@ -81,7 +81,7 @@ internal fun pluginDestinationFacts(plugin:NativePluginFacts):List<String> {
 }
 internal fun pluginScheduleFacts(plugin:NativePluginFacts):List<String> {
  val settings=plugin.raw["settings"] as? JsonObject ?: JsonObject(emptyMap())
- fun resolve(value:String?):String?=value?.let { if(Regex("\\{[a-z][a-z0-9_]*}").matches(it)) settings.pluginText(it.substring(1,it.length-1)) else it }
+ fun resolve(value:String?):String?=value?.let { if(Regex("\\{[a-z][a-z0-9_]*\\}").matches(it)) settings.pluginText(it.substring(1,it.length-1)) else it }
  return (plugin.contribution["schedules"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.map {schedule ->
   val day=resolve(schedule.pluginText("weekday"));val time=resolve(schedule.pluginText("time"))
   if(day in setOf("monday","tuesday","wednesday","thursday","friday","saturday","sunday") && time!=null && Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(time)) "${day!!.replaceFirstChar {it.uppercase()}} $time (server time) · pauses while off or waiting" else "Schedule details unavailable"

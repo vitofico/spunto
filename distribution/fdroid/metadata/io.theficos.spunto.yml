@@ -13,9 +13,9 @@ Repo: https://github.com/vitofico/spunto.git
 Binaries: https://github.com/vitofico/spunto/releases/download/android%2F%v/spunto-%v.apk
 
 Builds:
-  - versionName: 2026.10.20.2
-    versionCode: 16
-    commit: android/2026.10.20.2
+  - versionName: 2026.10.20.3
+    versionCode: 17
+    commit: android/2026.10.20.3
     subdir: android/app
     sudo:
       - apt-get update
@@ -37,5 +37,5 @@ MaintainerNotes: |-
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^android/[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[1-9][0-9]*$
 UpdateCheckData: android/gradle.properties|spuntoVersionCode=(\d+)|android/gradle.properties|spuntoVersionName=([\d.]+)
-CurrentVersion: 2026.10.20.2
-CurrentVersionCode: 16
+CurrentVersion: 2026.10.20.3
+CurrentVersionCode: 17

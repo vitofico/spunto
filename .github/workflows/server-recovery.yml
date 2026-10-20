@@ -1,0 +1,98 @@
+name: Repair server release
+
+# Reuse a verified published image and existing tag; never build or bump a version.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing YYYY.MM.MICRO tag to repair"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/vitofico/spunto-server
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  repair:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: scripts
+      - name: Require an existing monthly tag at the checked-out source
+        id: source
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          python3 - "$TAG" <<'PY'
+          import re, sys
+          if not re.fullmatch(r"[0-9]{4}\.(?:0[1-9]|1[0-2])\.(?:0|[1-9][0-9]*)", sys.argv[1]):
+              raise SystemExit("Use an existing server CalVer tag.")
+          PY
+          source=$(git rev-parse "refs/tags/$TAG^{commit}")
+          test "$source" = "$(git rev-parse HEAD)"
+          echo "sha=$source" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Verify the existing image against the immutable source tag
+        id: image
+        env:
+          TAG: ${{ inputs.tag }}
+          RELEASE_SOURCE: ${{ steps.source.outputs.sha }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{json .Manifest}}' > "$RUNNER_TEMP/image-manifest.json"
+          digest=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/image-manifest.json")
+          docker buildx imagetools inspect "$IMAGE@$digest" --format '{{json .Image}}' > "$RUNNER_TEMP/image-configs.json"
+          python3 .release-tools/scripts/server-release.py verify --version "$TAG" --source "$RELEASE_SOURCE" \
+            --manifest "$RUNNER_TEMP/image-manifest.json" --configs "$RUNNER_TEMP/image-configs.json" --output server-release.json
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Check existing immutable receipt and recover missing release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          # Compare existing bytes before any stable-tag update. Recovery keeps
+          # existing release metadata and never changes GitHub's Latest badge.
+          python3 .release-tools/scripts/publish-release.py --repo "$GITHUB_REPOSITORY" \
+            --tag "$TAG" --title "$TAG" --latest false --asset server-release.json
+      - name: Restore stable only for the newest published server tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/" > "$RUNNER_TEMP/server-tags.json"
+          newest=$(python3 .release-tools/scripts/server-release.py newest --git-refs "$RUNNER_TEMP/server-tags.json")
+          if [[ "$newest" == "$TAG" ]]; then
+            docker buildx imagetools create --tag "$IMAGE:stable" "$IMAGE@$IMAGE_DIGEST"
+          fi
+          printf 'Recovered server release %s from verified image %s@%s.\n' "$TAG" "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"

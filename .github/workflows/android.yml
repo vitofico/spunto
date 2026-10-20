@@ -8,6 +8,16 @@ on:
     paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   workflow_dispatch:
   workflow_call:
+    inputs:
+      release_source:
+        type: string
+        default: ""
+      release_date:
+        type: string
+        default: ""
+      release_tree:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -27,6 +37,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_source }}
+      - name: Verify the planned release source
+        if: inputs.release_tree != ''
+        env:
+          RELEASE_DATE: ${{ inputs.release_date }}
+          RELEASE_TREE: ${{ inputs.release_tree }}
+        run: bash "$GITHUB_WORKSPACE/scripts/release-source.sh" "$RELEASE_DATE" "$RELEASE_TREE"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -83,6 +100,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_source }}
+      - name: Verify the planned release source
+        if: inputs.release_tree != ''
+        env:
+          RELEASE_DATE: ${{ inputs.release_date }}
+          RELEASE_TREE: ${{ inputs.release_tree }}
+        run: bash "$GITHUB_WORKSPACE/scripts/release-source.sh" "$RELEASE_DATE" "$RELEASE_TREE"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin

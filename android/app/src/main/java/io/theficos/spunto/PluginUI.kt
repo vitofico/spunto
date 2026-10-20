@@ -320,7 +320,7 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  },dismissButton={TextButton(enabled=action!="label_change" || online,onClick={model.decide(data.string("id"),"dismiss");onClose()}) { Text(if(action=="replace_body") "Keep original" else "Dismiss") }})
 }
 
-@Composable fun NoteCommands(model:SpuntoViewModel,noteId:String,onResult:(JsonObject)->Unit) {
+@Composable fun NoteCommands(model:SpuntoViewModel,noteId:String,privateNote:Boolean=false,onResult:(JsonObject)->Unit) {
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
  var expanded by remember(noteId) { mutableStateOf(false) }
@@ -329,7 +329,7 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  var error by remember(noteId) {mutableStateOf("")}
  var attempt by remember(noteId) {mutableStateOf<Job?>(null)}
  val scope=rememberCoroutineScope()
- val commands=remember(manifest) {noteTools(model.container.manifest.plugins())}
+ val commands=remember(manifest,privateNote) {noteTools(model.container.manifest.plugins(),privateNote)}
  if(commands.isEmpty()) return
  TextButton(onClick={expanded=true;query="";error=""}) {Text("Tools")}
  if(expanded) ModalBottomSheet(onDismissRequest={attempt?.cancel();expanded=false}) {

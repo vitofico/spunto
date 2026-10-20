@@ -6,8 +6,12 @@ import kotlinx.serialization.json.*
 internal data class NoteTool(val pluginId:String,val pluginName:String,val id:String,val title:String,val description:String)
 
 /** A command is listed once, even if the manifest repeats a surface contribution. */
-internal fun noteTools(plugins:List<JsonObject>):List<NoteTool> = plugins.filter {
+internal fun noteTools(plugins:List<JsonObject>,privateNote:Boolean=false):List<NoteTool> = plugins.filter {
  it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed","waiting","removed")
+ && (!privateNote || (it["permissions"] as? JsonArray)?.all {permission ->
+  val name=(permission as? JsonPrimitive)?.takeIf {value ->value.isString}?.content
+  name!=null && !name.startsWith("ai.") && !name.startsWith("net.")
+ }==true)
 }.sortedBy {(it["position"] as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE}.flatMap {plugin ->
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().take(3).filter {command ->
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true

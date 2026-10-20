@@ -164,8 +164,10 @@ an optional full comparison. Live panels load on expansion and expose retryable
 errors. Status uses sync/model/index summaries, with diagnostics behind a separate
 control. Settings now exposes AI models directly. Protected/capture surfaces use
 the active replica's cached palette, appearance mode and system-bar contrast.
+Private notes retain local tools such as Links while tools with AI/network
+permissions stay hidden, matching the server's existing egress policy.
 
-- 303 Android unit tests pass across model, Room, sync, plugin, dictation and app
+- 304 Android unit tests pass across model, Room, sync, plugin, dictation and app
   modules. Debug/release lint and clean app/test/release assembly pass.
 - 32 targeted emulator tests pass for reader editing and Back, date filters,
   navigation, Ask, plugin vocabulary/rendering, theme cache/replica switching and
@@ -180,11 +182,12 @@ the active replica's cached palette, appearance mode and system-bar contrast.
 
 Android **2026.10.20.4**, code **18**, retains AGPL-3.0-only at the owner's explicit
 choice. The local signed APK is 4,639,979 bytes, SHA-256
-`4ef26a8f7aa8090aef6350920e23c26457e9c921138f3b014866f4e57f53cd48`.
+`834763729d53721c437bcf7cb28ae4b6aa4537ff139a8da35263da44da9e4ae2`.
 Package, version, owner certificate, non-debuggable state, baseline profiles and
-size pass verification. The exact signed binary launches and saves/opens a
-synthetic note. GitHub APK publication and physical-phone acceptance are separate;
-the local artifact is not a newly published Obtainium release.
+size pass verification. The signed release launches and opens a synthetic note;
+capture and saving also pass the native acceptance checks. GitHub APK publication
+and physical-phone acceptance are separate; the local artifact is not a newly
+published Obtainium release.
 
 ## Hosted recovery
 

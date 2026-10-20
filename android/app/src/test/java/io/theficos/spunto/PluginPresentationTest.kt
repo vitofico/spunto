@@ -22,4 +22,13 @@ class PluginPresentationTest {
   assertTrue(pluginCommandErrorMessage(409,"stale_note").contains("Sync"))
   assertTrue(pluginCommandErrorMessage(401,"session_expired").contains("Sign in"))
  }
+ @Test fun privateNotesKeepLocalToolsAndExcludePluginsWithEgress() {
+  val plugins=Json.parseToJsonElement("""[
+   {"id":"links","permissions":["notes.read","suggest"],"contributes":{"commands":[{"id":"link","title":"Link to note","where":["note-actions"]}]}},
+   {"id":"tidy","permissions":["notes.read","ai.chat"],"contributes":{"commands":[{"id":"tidy","title":"Tidy text","where":["note-actions"]}]}},
+   {"id":"network","permissions":["notes.read","net.fetch"],"contributes":{"commands":[{"id":"fetch","title":"Fetch","where":["note-actions"]}]}},
+   {"id":"unknown","contributes":{"commands":[{"id":"unknown","title":"Unknown","where":["note-actions"]}]}}
+  ]""").jsonArray.map {it.jsonObject}
+  assertEquals(listOf("Link to note"),noteTools(plugins,privateNote=true).map {it.title})
+ }
 }

@@ -280,15 +280,15 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  if(actions) ModalBottomSheet(onDismissRequest={actions=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
   Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal=20.dp).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
    Text("Note actions",style=MaterialTheme.typography.headlineSmall)
-   if(online && !value.privateNote && !value.trashed) NoteCommands(model,id) {actions=false;commandResult=it}
-   if(value.privateNote) Text("Tools are unavailable for private notes.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   if(online && !value.trashed) NoteCommands(model,id,privateNote=value.privateNote) {actions=false;commandResult=it}
+   if(value.privateNote) Text("AI and network tools are unavailable for private notes.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    NoteAction("About this note") {actions=false;about=true}
    NoteAction("History") {actions=false;history=true}
    HorizontalDivider()
    NoteAction(if(value.pinned) "Unpin" else "Pin") {model.flags(id,pinned=!value.pinned);actions=false}
    NoteAction(if(value.archived) "Unarchive" else "Archive") {model.flags(id,archived=!value.archived);actions=false}
    Row(Modifier.fillMaxWidth().padding(vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-    Column(Modifier.weight(1f)) {Text("Private note",style=MaterialTheme.typography.bodyLarge);Text("Plugins never read this note",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+    Column(Modifier.weight(1f)) {Text("Private note",style=MaterialTheme.typography.bodyLarge);Text("Excluded from AI and network plugins",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
     Switch(checked=value.privateNote,onCheckedChange={model.flags(id,privateNote=it)},modifier=Modifier.semantics {contentDescription="Private note"})
    }
    HorizontalDivider()

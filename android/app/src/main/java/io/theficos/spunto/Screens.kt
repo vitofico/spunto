@@ -76,7 +76,13 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
   manager.dynamicShortcuts=listOf(share)+if(dictate) listOf(ShortcutInfo.Builder(model.container.context,"dictate").setShortLabel("Dictate a note").setIntent(CaptureSurfaces.intent(model.container.context,true).setAction(Intent.ACTION_VIEW)).build()) else emptyList()
   }
  }
- BackHandler(route!="timeline" && !navigationOpen) { route="timeline" }
+ fun navigateBack() {
+  route=when(route) {
+   "appearance","plugins","devices","status","labels","data","profile" -> "settings"
+   else -> "timeline"
+  }
+ }
+ BackHandler(route!="timeline" && !navigationOpen) { navigateBack() }
  BackHandler(navigationOpen) { navigationOpen=false }
  val management=sharedManagementTarget(auth,replicaState?.serverUrl,online,needsSignIn=reauth || sync==SyncStatus.NeedsSignIn)
  fun openManagement(labelPath:String?=null) {
@@ -108,7 +114,7 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
   Scaffold(topBar={TopAppBar(title={
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=Modifier.semantics {contentDescription="Choose labels and views"}) {Text("${navigationTitle(route,navigationLabels,manifest)} ▾",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
    else Text(if(route.startsWith("note:")) "Note" else route.substringBefore(':').replaceFirstChar {it.uppercase()})
-  },navigationIcon={if(!isLabelsNavigationRoute(route)) TextButton(onClick={route="timeline"}) {Text("Back")}},actions={
+  },navigationIcon={if(!isLabelsNavigationRoute(route)) TextButton(onClick=::navigateBack) {Text("Back")}},actions={
    TextButton(onClick={route="search"}) {Text("Search")}
    if(route=="timeline") IconButton(onClick={route="settings"},modifier=Modifier.size(48.dp)) {
     Icon(painterResource(R.drawable.ic_settings),contentDescription="Settings",modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)

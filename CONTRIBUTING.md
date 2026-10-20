@@ -28,5 +28,30 @@ contracts live in `spec/`.
 Keep changes focused, add tests for meaningful behavior changes, and explain the
 problem, resulting behavior and validation in your pull request. Preserve
 existing release tags and never commit signing keys, local databases, private
-backups or credentials. Contributions are licensed under the project's
-[AGPL-3.0-only license](LICENSE).
+backups or credentials.
+
+## Contributor License Agreement
+
+Before a pull request from anyone other than the maintainer can be merged, each
+contributor on it must sign the [Spunto Contributor License Agreement](CLA.md)
+by posting a new comment on the pull request containing **exactly**:
+
+```
+I have read the Spunto Contributor License Agreement and I hereby sign the CLA
+```
+
+The maintainer reviews pull request comments before merge and will not merge
+until every required signer has commented the phrase above. Automation bots that
+do not author copyrightable changes (`dependabot[bot]`, `github-actions[bot]`,
+`renovate[bot]`) are exempt.
+
+The CLA does **not** change Spunto's license. What it does is let the maintainer
+also license accepted contributions under other terms, including proprietary
+ones for a hosted Spunto service, without re-collecting permission from every
+past contributor. See [`CLA.md`](CLA.md) section 4.
+
+## License
+
+Spunto is licensed under [AGPL-3.0-only](LICENSE). By submitting a contribution
+you agree it is provided under AGPL-3.0-only and under the terms of the
+[Spunto CLA](CLA.md).

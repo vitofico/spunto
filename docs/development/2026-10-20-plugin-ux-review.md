@@ -176,6 +176,9 @@ permissions stay hidden, matching the server's existing egress policy.
   title, hides identifiers, preserves the source until review and then applies it.
 - The original emulator remains intact. Tests used a separate task-owned emulator
   because the existing debug app's signing key differed from the local build key.
+  A later rerun was interrupted by another app taking foreground focus; all three
+  navigation cases pass on a fresh headless emulator. Bounded harness waits handle
+  cold-start and sheet registration without relaxing visibility or draft checks.
 - 224 web tests, web type/format/build checks, 98 release-tooling tests and the
   repository hooks pass. Independent implementation and follow-up reviews have no
   open findings. Historical documents 01–05 remain unchanged.
@@ -184,16 +187,23 @@ Android **2026.10.20.4**, code **18**, retains AGPL-3.0-only at the owner's expl
 choice. The local signed APK is 4,639,979 bytes, SHA-256
 `834763729d53721c437bcf7cb28ae4b6aa4537ff139a8da35263da44da9e4ae2`.
 Package, version, owner certificate, non-debuggable state, baseline profiles and
-size pass verification. The signed release launches and opens a synthetic note;
-capture and saving also pass the native acceptance checks. GitHub APK publication
+size pass verification. The exact signed release launches, saves and opens a
+synthetic note; capture also passes the native acceptance checks. GitHub APK publication
 and physical-phone acceptance are separate; the local artifact is not a newly
 published Obtainium release.
 
 ## Hosted recovery
 
-The final image is `spunto-hosted:2026.10.20-ux-e5d556af44af`. Hardened synthetic
+The final image is `spunto-hosted:2026.10.20-ux-2cf70832b3d3`. Hardened synthetic
 startup, backup and restore smoke checks pass. The existing hosted deployment was
 updated after an on-node PostgreSQL backup; public HTTPS readiness is HTTP 200.
+The final image incorporates the concurrent main release's certifi update; the
+locked server suite (1,132 tests), 98 release-tooling tests, repository hooks and
+hardened backup/restore smoke checks were repeated after integration. The updated
+CA bundle also parses with TLS certificate verification enabled. The amd64 image
+passes the compressed image budget at 70,097,530 bytes. An initial ARM dependency
+rebuild was rolled back; the final amd64 image passed a disposable on-node
+preflight before rollout, without credentials, data mounts or external calls.
 The previous image and backup remain available for rollback. No production note
 bodies or provider answers were inspected or copied into this record.
 

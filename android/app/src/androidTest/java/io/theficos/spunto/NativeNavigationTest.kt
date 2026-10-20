@@ -21,10 +21,11 @@ class NativeNavigationTest {
  private val container get()=(compose.activity.application as SpuntoApplication).container
  private fun waitForCapture(text:String?=null) {
   val editable=hasContentDescription("Note text") and isEnabled()
-  compose.waitUntil(10_000) {compose.onAllNodes(if(text==null) editable else editable and hasText(text)).fetchSemanticsNodes().isNotEmpty()}
+  compose.waitUntil(10_000) {compose.onAllNodes(if(text==null) editable else editable and hasText(text)).fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
  }
  private fun openSheet() {
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
+  compose.waitUntil(10_000) {compose.onAllNodesWithText("Labels and views").fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
   compose.onNodeWithText("Labels and views").assertIsDisplayed()
  }
  private fun labelFilterMatcher()=hasSetTextAction() and hasText("Find a label") and hasAnyAncestor(isDialog())

@@ -40,10 +40,10 @@ class FirstRunGuideIntegrationTest {
     compose.onAllNodes(hasScrollAction()).fetchSemanticsNodes().size==1
   }
   compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
-  val entry=compose.onNodeWithText("Show guide")
+  val entry=compose.onNodeWithText("Show the guide")
   // Lazy discovery can compose the row just outside the viewport; then reveal its text.
   if(!entry.isDisplayed()) {
-   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Show guide"))
+   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Show the guide"))
    if(!entry.isDisplayed()) entry.performScrollTo()
   }
   compose.waitUntil(10_000) {entry.isDisplayed()}

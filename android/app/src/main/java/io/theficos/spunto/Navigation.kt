@@ -35,10 +35,9 @@ import androidx.compose.ui.Alignment
 }
 val LocalNavigator=staticCompositionLocalOf<Navigator> { error("Navigator is provided by SpuntoApp.") }
 
-/** Top bar title of a page; null for pages that show none (a note, search) and for the filter routes, whose title is the labels switcher. */
+/** Top bar title of a page; null for pages that show none (a note, search, a plugin page, which heads itself) and for the filter routes, whose title is the labels switcher. */
 fun routeTitle(route:String):String?=when(route) {
- "settings" -> "Settings"; "appearance" -> "Appearance"; "plugins" -> "Plugins"; "ai" -> "AI"; "devices" -> "Devices"; "status" -> "Status"
- "labels" -> "Labels"; "data" -> "Export"; "profile" -> "Profile"; "ask" -> "Ask your notes"
+ "settings" -> "Settings"; "appearance" -> "Appearance"; "plugins" -> "Plugins"; "ask" -> "Ask your notes"
  else -> null
 }
 

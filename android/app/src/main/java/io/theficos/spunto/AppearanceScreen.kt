@@ -1,86 +1,107 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class,androidx.compose.material3.ExperimentalMaterial3Api::class)
 package io.theficos.spunto
 
-import android.content.*
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.BorderStroke
+import android.app.UiModeManager
+import android.content.Context
+import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.*
-import io.theficos.spunto.core.model.*
-import io.theficos.spunto.core.plugins.*
-import io.theficos.spunto.data.sync.*
-import io.theficos.spunto.data.local.*
-import kotlinx.coroutines.flow.*
-import kotlinx.serialization.json.*
 
+/** "Carta · System mode · Serif text, size M"; a theme chosen only for this phone says so. */
+internal fun appearanceSummary(theme:String,catalog:ThemeCatalog?,phoneOnly:Boolean,mode:String,face:String,size:String):String {
+ val name=(catalog?.cards ?: builtInThemeCards).firstOrNull {it.id==theme}?.name ?: "Carta"
+ return listOf(name+if(phoneOnly) " on this phone" else "","${mode.replaceFirstChar {it.uppercase()}} mode","${if(normalizedReadingFace(face)=="sans") "Sans" else "Serif"} text, size ${normalizedReadingSize(size)}").joinToString(" · ")
+}
+/** Android 12+ draws the starting window in the app's own night mode, so an in-app Light or Dark choice reaches the cold-start window too. */
+internal fun applyWindowNightMode(context:Context,mode:String) {
+ if(Build.VERSION.SDK_INT<31) return
+ context.getSystemService(UiModeManager::class.java)?.setApplicationNightMode(when(mode) {"dark" -> UiModeManager.MODE_NIGHT_YES;"light" -> UiModeManager.MODE_NIGHT_NO;else -> UiModeManager.MODE_NIGHT_AUTO})
+}
+
+/** 05 §8.4 (R24): compact theme cards and "Only on this phone"; mode, pure black and wallpaper colours; the reading face and size. */
 @Composable fun AppearanceScreen(theme:String,mode:String,black:Boolean,wallpaper:Boolean,onTheme:(String)->Unit,onMode:(String)->Unit,onBlack:(Boolean)->Unit,onWallpaper:(Boolean)->Unit,themeOverride:Boolean=true,onUseInstance:(()->Unit)?=null,catalog:ThemeCatalog=ThemeCatalog(builtInThemeCards,false),accent:String?=null,onAccent:((String?)->Unit)?=null,instanceName:String="Carta",readingFace:String="serif",readingSize:String="M",onReadingFace:(String)->Unit={},onReadingSize:(String)->Unit={}) {
  val dark=mode=="dark" || mode=="system" && isSystemInDarkTheme()
  val selectedCard=catalog.cards.firstOrNull { it.id==theme && it.available }
  val selectedAccent=selectedCard?.accents?.firstOrNull { it.id==accent }?.id
  val accentChoices=themeAccentChoices(selectedCard)
- LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+ val instance=boundedThemeText(instanceName,80)
+ LazyColumn(contentPadding=PaddingValues(bottom=24.dp)) {
   item {
-   Text(if(themeOverride) "Theme on this phone" else "Using the instance theme",style=MaterialTheme.typography.bodyMedium)
-   if(themeOverride) Text("Other devices use ${boundedThemeText(instanceName,80)}.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-   if(onUseInstance!=null) Row(verticalAlignment=Alignment.CenterVertically) {
-    Text("Use a different theme on this phone",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
-    Switch(checked=themeOverride,onCheckedChange={if(it) onTheme(theme) else onUseInstance()},modifier=Modifier.semantics { contentDescription="Use a different theme on this phone" })
-   }
-  }
-  items(catalog.cards,key={it.id}) { choice ->
-   if(choice.available) {
-    val chosen=theme==choice.id
-    val palette=resolveThemeSelection(choice.id,if(chosen) accent else null,catalog).mode(dark)
-    SpuntoTheme(choice.id,mode,pack=palette,readingFace=readingFace,readingSize=readingSize) {
-     Surface(Modifier.fillMaxWidth().clickable(role=Role.RadioButton) { onTheme(choice.id) }.semantics { selected=chosen },shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer,border=if(chosen) BorderStroke(2.dp,MaterialTheme.colorScheme.primary) else null) {
-      Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-       Text(choice.name+if(chosen) " ✓" else "",style=MaterialTheme.typography.titleLarge)
-       if(choice.description.isNotBlank()) Text(choice.description,style=MaterialTheme.typography.bodyMedium)
-       Text("14:32 · Today",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-       Text("A quiet place for loose ideas.",style=SpuntoType.reading)
-       FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        Surface(shape=MaterialTheme.shapes.small,color=MaterialTheme.colorScheme.primaryContainer) { Text("idea",Modifier.padding(horizontal=8.dp,vertical=4.dp),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onPrimaryContainer) }
-        val proposalColour=MaterialTheme.colorScheme.onSurfaceVariant
-        Box(Modifier.drawBehind { drawRoundRect(proposalColour,cornerRadius=androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),style=Stroke(width=1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(),3.dp.toPx())))) }.padding(horizontal=8.dp,vertical=4.dp)) { Text("Suggested label",style=MaterialTheme.typography.bodyMedium,color=proposalColour) }
-       }
-       Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("paper","ink","accent","accent-soft","highlight").forEach { role -> Box(Modifier.size(20.dp).background(tokenColor(palette.getValue(role)),CircleShape).semantics { contentDescription="${choice.name} $role swatch" }) } }
-      }
-     }
+   SettingsSection("Theme")
+   BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp)) {
+    // A hair under the exact share, so rounding never pushes the last card of a row onto the next.
+    val gap=12.dp;val columns=if(maxWidth<300.dp) 2 else 3;val width=(maxWidth-gap*(columns-1))/columns-1.dp
+    FlowRow(Modifier.selectableGroup(),horizontalArrangement=Arrangement.spacedBy(gap),verticalArrangement=Arrangement.spacedBy(gap),maxItemsInEachRow=columns) {
+     catalog.cards.forEach { card -> ThemeChoiceCard(card,theme==card.id && card.available,if(card.available) resolveThemeSelection(card.id,if(theme==card.id) accent else null,catalog).mode(dark) else null,Modifier.width(width)) { onTheme(card.id) } }
     }
-   } else Surface(Modifier.fillMaxWidth().semantics(mergeDescendants=true) { disabled() },shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer) {
-    Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) { Text(choice.name,style=MaterialTheme.typography.titleLarge);Text("Unavailable · ${boundedThemeText(choice.reason ?: "Colour pack is unavailable.")}",style=MaterialTheme.typography.bodyMedium) }
    }
-  }
-  if(accentChoices.isNotEmpty() && onAccent!=null) item {
-   Text("Accent",style=MaterialTheme.typography.bodyMedium)
-   FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-    accentChoices.forEach { choice -> FilterChip(selected=selectedAccent==choice.id,onClick={onAccent(choice.id)},label={Text(choice.name)}) }
+   if(onUseInstance!=null) SettingsSwitchRow("Only on this phone",if(themeOverride) "Other devices use $instance." else "Every device uses $instance. Change it for all devices in the web app.",themeOverride) { if(it) onTheme(theme) else onUseInstance() }
+   else if(themeOverride) Text("Other devices use $instance.",Modifier.padding(horizontal=20.dp,vertical=8.dp),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   if(accentChoices.isNotEmpty() && onAccent!=null) {
+    Text("Accent",Modifier.padding(start=20.dp,end=20.dp,top=8.dp),style=MaterialTheme.typography.bodyLarge)
+    FlowRow(Modifier.padding(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) { accentChoices.forEach { choice -> FilterChip(selected=selectedAccent==choice.id,onClick={onAccent(choice.id)},label={Text(choice.name)}) } }
    }
   }
   item {
-   Text("Mode",style=MaterialTheme.typography.bodyMedium)
-   FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("system","light","dark").forEach { choice -> FilterChip(selected=mode==choice,onClick={onMode(choice)},label={Text(choice.replaceFirstChar { it.uppercase() })}) } }
+   SettingsSection("Mode")
+   Segmented(listOf("system" to "System","light" to "Light","dark" to "Dark"),mode,onMode)
+   SettingsSwitchRow("Pure black",if(dark) "A black background in dark mode" else "Only in dark mode",black,enabled=dark,onChange=onBlack)
+   if(Build.VERSION.SDK_INT>=31) SettingsSwitchRow("Wallpaper colours","Take the accent from your wallpaper",wallpaper,onChange=onWallpaper)
   }
   item {
-   Text("Reading face",style=MaterialTheme.typography.bodyMedium)
-   FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("serif" to "Serif","sans" to "Sans").forEach { (value,label) -> FilterChip(selected=normalizedReadingFace(readingFace)==value,onClick={onReadingFace(value)},label={Text(label)}) } }
-   Text("Text size",style=MaterialTheme.typography.bodyMedium)
-   FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("S","M","L").forEach { value -> FilterChip(selected=normalizedReadingSize(readingSize)==value,onClick={onReadingSize(value)},label={Text(value)}) } }
-   Text("A thought worth keeping, in your own words.",Modifier.padding(vertical=12.dp),style=spuntoType(readingFace,readingSize).reading)
+   SettingsSection("Reading")
+   Text("Face",Modifier.padding(start=20.dp,end=20.dp,top=8.dp),style=MaterialTheme.typography.bodyLarge)
+   Segmented(listOf("serif" to "Serif","sans" to "Sans"),normalizedReadingFace(readingFace),onReadingFace)
+   Text("Text size",Modifier.padding(start=20.dp,end=20.dp,top=8.dp),style=MaterialTheme.typography.bodyLarge)
+   Segmented(listOf("S" to "S","M" to "M","L" to "L"),normalizedReadingSize(readingSize),onReadingSize)
+   Text("A thought worth keeping, in your own words.",Modifier.padding(horizontal=20.dp,vertical=16.dp),style=spuntoType(readingFace,readingSize).reading)
   }
-  item { Row(horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) { Text("Pure black",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium);Switch(black,onBlack,modifier=Modifier.semantics {contentDescription="Pure black"}) };Row(horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) { Text("Wallpaper colours",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium);Switch(wallpaper,onWallpaper,modifier=Modifier.semantics {contentDescription="Wallpaper colours"}) } }
+ }
+}
+@Composable private fun Segmented(choices:List<Pair<String,String>>,selected:String,onSelect:(String)->Unit) {
+ SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp)) {
+  choices.forEachIndexed { index,(value,label) -> SegmentedButton(selected=selected==value,onClick={onSelect(value)},shape=SegmentedButtonDefaults.itemShape(index,choices.size)) { Text(label) } }
+ }
+}
+/** A small page in the theme's own colours: a time, a line of reading text, a label, a dashed proposal and five swatches; a failed pack shows its reason and cannot be chosen. */
+@Composable private fun ThemeChoiceCard(card:ThemeCard,chosen:Boolean,palette:Map<String,String>?,modifier:Modifier,onClick:()->Unit) {
+ val shape=RoundedCornerShape(12.dp)
+ val choice=if(card.available) Modifier.selectable(chosen,role=Role.RadioButton,onClick=onClick) else Modifier.semantics(mergeDescendants=true) { disabled() }
+ Column(modifier.then(choice),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+  if(palette!=null) {
+   fun c(role:String)=tokenColor(palette.getValue(role))
+   val dashed=c("ink-2")
+   Column(Modifier.fillMaxWidth().clip(shape).background(c("paper")).border(if(chosen) 2.dp else 1.dp,if(chosen) MaterialTheme.colorScheme.primary else c("rule"),shape).padding(10.dp).clearAndSetSemantics {},verticalArrangement=Arrangement.spacedBy(4.dp)) {
+    Text("14:32",style=MaterialTheme.typography.labelSmall,color=c("ink-3"))
+    Text("A loose idea",style=SpuntoType.readingSmall,color=c("ink"),maxLines=1,overflow=TextOverflow.Ellipsis)
+    FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+     Text("#idea",style=SpuntoType.readingSmall,color=c("accent"))
+     Text("#later",Modifier.drawBehind { drawRoundRect(dashed,cornerRadius=CornerRadius(4.dp.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),2.dp.toPx())))) }.padding(horizontal=4.dp),style=SpuntoType.readingSmall,color=dashed)
+    }
+    Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) { listOf("paper","ink","accent","accent-soft","highlight").forEach { role -> Box(Modifier.size(10.dp).background(c(role),CircleShape).border(1.dp,c("rule"),CircleShape)) } }
+   }
+  } else Box(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceVariant).padding(10.dp)) {
+   Text("Unavailable · ${boundedThemeText(card.reason ?: "Colour pack is unavailable.")}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=4,overflow=TextOverflow.Ellipsis)
+  }
+  Text(card.name+if(chosen) " ✓" else "",style=MaterialTheme.typography.bodyMedium,color=if(card.available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
  }
 }

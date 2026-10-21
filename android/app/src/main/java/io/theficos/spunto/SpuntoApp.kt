@@ -81,6 +81,7 @@ import kotlinx.serialization.json.*
   } catch(_:ActivityNotFoundException) {model.message.value="No browser is available to open shared settings."}
   catch(_:SecurityException) {model.message.value="Couldn't open shared settings in your browser."}
  }
+ LaunchedEffect(mode) { applyWindowNightMode(model.container.context,mode) }
  val dark=mode=="dark" || mode=="system" && isSystemInDarkTheme()
  val instance=manifest["theme"] as? JsonObject
  val requestedTheme=if(themeOverride) theme else appearanceManifest?.instance?.id ?: instance?.string("id")?.takeIf { it.isNotBlank() } ?: "carta"
@@ -130,8 +131,7 @@ import kotlinx.serialization.json.*
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="ask" -> AskScreen(model,onNote=openNote)
-     route=="labels" -> LabelsScreen(model) { nav.open("label:$it") }
-     route=="settings" -> SettingsLanding(onRoute={nav.open(it)},onConnect={nav.open("login")},isConnected=auth!=null)
+     route=="settings" -> SettingsScreen(model,appearanceSummary(activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote=openNote)
      route=="review" -> ReviewScreen(model,openNote)
      route=="appearance" -> AppearanceScreen(requestedTheme,mode,black,wallpaper,{ choice ->
@@ -144,11 +144,8 @@ import kotlinx.serialization.json.*
       val selected=resolveThemeSelection(requestedTheme,choice,appearanceManifest?.catalog)
       applyDeviceTheme(model.container.preferences,requestedTheme,choice,selected,manifestFingerprint);theme=requestedTheme;accent=choice;themeOverride=true
      },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()})
-     route=="plugins" -> PluginsScreen(model)
-     route=="devices" -> DevicesScreen(model,onLogin={nav.open("login")})
-     route=="data" || route=="profile" -> OwnerWebSettingsScreen(model,route)
-     route=="status" -> StatusScreen(model)
-     route=="ai" -> AISettingsScreen(model)
+     route=="plugins" -> PluginsScreen(model) { nav.open("plugin:$it") }
+     route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))
     }
     val remote by model.remote.collectAsState()
     if(online && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})

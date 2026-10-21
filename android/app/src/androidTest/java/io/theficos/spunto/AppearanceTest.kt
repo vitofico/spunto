@@ -16,14 +16,15 @@ class AppearanceTest {
  @Test fun vividThemeSelectionAndInstanceResetKeepDeviceMode() {
   val theme=mutableStateOf("corallo");val override=mutableStateOf(false);val mode=mutableStateOf("dark")
   compose.setContent { SpuntoTheme(theme.value,mode.value) { AppearanceScreen(theme.value,mode.value,false,false,{theme.value=it;override.value=true},{mode.value=it},{},{},themeOverride=override.value,onUseInstance={theme.value="corallo";override.value=false}) } }
-  compose.onNodeWithText("Using the instance theme").assertIsDisplayed()
+  compose.onNodeWithText("Only on this phone").assertIsOff()
+  compose.onNodeWithText("Every device uses Carta. Change it for all devices in the web app.").assertIsDisplayed()
   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Elettrica",substring=true))
   compose.onNodeWithText("Elettrica",substring=true).performClick()
   compose.runOnIdle { assertEquals("elettrica",theme.value);assertTrue(override.value);assertEquals("dark",mode.value) }
-  compose.onNode(hasScrollAction()).performScrollToNode(hasText("Use a different theme on this phone"))
-  compose.onNodeWithContentDescription("Use a different theme on this phone").performClick()
+  compose.onNode(hasScrollAction()).performScrollToNode(hasText("Only on this phone"))
+  compose.onNodeWithText("Only on this phone").assertIsOn().performClick()
   compose.runOnIdle { assertEquals("corallo",theme.value);assertFalse(override.value);assertEquals("dark",mode.value) }
-  compose.onNodeWithText("Using the instance theme").assertIsDisplayed()
+  compose.onNodeWithText("Only on this phone").assertIsOff()
  }
  @Test fun installedPackAccentAndReadingChoicesStayLocalAndFailedCardIsDisabled() {
   val carta=builtInTokens.getValue("carta");val slate=builtInTokens.getValue("ardesia")

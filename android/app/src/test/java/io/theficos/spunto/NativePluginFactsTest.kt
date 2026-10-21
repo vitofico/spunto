@@ -84,4 +84,8 @@ class NativePluginFactsTest {
   assertEquals("data",nativePluginCatalog(pluginCatalogFixture(row),pluginCatalogFixture()).rows.single().category)
   listOf(JsonPrimitive("nonsense"),JsonPrimitive(""),JsonNull,JsonPrimitive(1)).forEach {assertFalse(NativePluginFacts(JsonObject(row+("category" to it))).valid)}
  }
+ @Test fun permissionSentencesReadAfterItWill() {
+  assertEquals(listOf("Read attachments","Fetch the linked page","Use the vision model","Never read private notes","Process audio","Add labels"),
+   listOf("Reads attachments","Fetches the linked page","Uses the vision model","Never reads private notes","Process audio","Adds labels").map(::pluginWillSentence))
+ }
 }

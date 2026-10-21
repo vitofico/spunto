@@ -37,7 +37,9 @@ class NavigatorTest {
   assertEquals("timeline",nav.route);assertEquals(listOf("2:appearance","1:settings"),forgotten)
  }
  @Test fun everyPageHasOneTitleAndNotesShowNone() {
-  assertEquals("AI",routeTitle("ai"));assertEquals("Settings",routeTitle("settings"));assertEquals("Export",routeTitle("data"))
+  assertEquals("Settings",routeTitle("settings"));assertEquals("Appearance",routeTitle("appearance"));assertEquals("Plugins",routeTitle("plugins"))
+  // A plugin page heads itself with the plugin's name.
+  assertNull(routeTitle("plugin:dictation"))
   assertNull(routeTitle("note:a"));assertNull(routeTitle("search"));assertNull(routeTitle("timeline"))
  }
 }

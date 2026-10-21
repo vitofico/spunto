@@ -61,6 +61,25 @@ internal fun pluginPermissionSentence(permission:String):String=when(permission)
  permission.startsWith("ai.") -> "Uses ${permission.removePrefix("ai.")} AI"; permission.startsWith("net.out:") -> "Talks to ${permission.removePrefix("net.out:")}"; else -> permission
  }
 }
+/** Permission sentences read as what the plugin "will" do: "Reads your notes" becomes "Read your notes", "Never reads" becomes "Never read". */
+internal fun pluginWillSentence(sentence:String):String {
+ if(sentence.startsWith("Never ")) return "Never "+pluginWillSentence(sentence.removePrefix("Never "))
+ val verb=sentence.substringBefore(' ');val rest=sentence.substring(verb.length)
+ val base=when {
+  verb.length<4 || !verb.endsWith("s") || verb.endsWith("ss") -> verb
+  Regex("(ch|sh|x|ss)es$").containsMatchIn(verb) -> verb.dropLast(2)
+  else -> verb.dropLast(1)
+ }
+ return base+rest
+}
+/** The AI capability a waiting plugin is missing a model for, from the host's destinations; null when nothing is missing. */
+internal fun pluginMissingModel(plugin:NativePluginFacts):String? {
+ val destinations=plugin.raw["ai_destinations"] as? JsonObject
+ return plugin.permissions.orEmpty().filter {it.startsWith("ai.")}.map {it.removePrefix("ai.")}.firstOrNull {(destinations?.get(it) as? JsonObject)?.pluginText("model").isNullOrBlank()}
+}
+internal fun aiModelName(capability:String)=when(capability) { "chat" -> "a chat model"; "embed" -> "an embedding model"; "vision" -> "a vision model"; "transcribe" -> "a transcription model"; else -> "an AI model" }
+/** The waiting line in the switch's place (03 §6.4): "Needs a chat model". */
+internal fun pluginWaitingLine(plugin:NativePluginFacts):String = pluginMissingModel(plugin)?.let {"Needs ${aiModelName(it)}"} ?: "Waiting for a requirement"
 internal fun pluginDestinationFacts(plugin:NativePluginFacts):List<String> {
  if(plugin.removed) return listOf("Removed · retained access history only")
  val result=mutableListOf<String>()
@@ -126,7 +145,7 @@ internal fun pluginPageCacheKey(server:String,plugin:NativePluginFacts):String {
 internal fun pluginWebUrl(server:String,httpConsent:Boolean,path:String):String?=runCatching {
  val root=URI(server);require(root.scheme in setOf("http","https") && root.host!=null && root.rawUserInfo==null && root.rawQuery==null && root.rawFragment==null && root.rawPath in setOf("","/"))
  require(root.scheme=="https" || httpConsent)
- require(path in setOf("/settings/plugins","/settings/ai","/status") || path.startsWith("/settings/plugins/") && pluginIdPattern.matches(path.removePrefix("/settings/plugins/")))
+ require(path in setOf("/settings/plugins","/settings/ai","/settings/devices","/status") || path.startsWith("/settings/plugins/") && pluginIdPattern.matches(path.removePrefix("/settings/plugins/")))
  server.trimEnd('/')+path
 }.getOrNull()
 internal data class PluginUndo(val pluginId:String,val server:String,val permissions:List<String>,val grants:Set<String>,val expiresAt:Long)

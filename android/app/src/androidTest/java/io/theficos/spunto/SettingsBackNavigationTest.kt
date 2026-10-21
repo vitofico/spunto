@@ -30,7 +30,8 @@ class SettingsBackNavigationTest {
    compose.waitUntil(10_000) {compose.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Settings").performClick()
    settingsVisible()
-   listOf("Appearance","Plugins","Devices","Status","Labels","Export","Profile").forEach {section ->
+   // Devices, Profile and Export open the web app; only these two are pages on the phone.
+   listOf("Appearance","Plugins").forEach {section ->
     compose.onNode(hasScrollAction()).performScrollToNode(hasText(section) and hasClickAction())
     compose.onNodeWithText(section).performClick()
     compose.onNodeWithContentDescription("Back").assertIsDisplayed()

@@ -610,6 +610,50 @@ describe("review and result safety", () => {
     expect(create.mock.calls[0][1]).toBe(create.mock.calls[1][1]);
     expect(create.mock.calls[0][0]).toBe("Keep this result");
   });
+  it("names devices by browser, marks this one active and revokes through a confirm", async () => {
+    const agent =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+    const session = {
+      id: "this",
+      kind: "session",
+      name: agent,
+      client: null,
+      scope: "notes",
+      private_ok: true,
+      external_ok: true,
+      created_at: "2026-10-21T08:00:00Z",
+      last_used_at: null,
+      expires_at: null,
+      current: true,
+    };
+    vi.spyOn(api, "credentials").mockResolvedValue([
+      session,
+      {
+        ...session,
+        id: "other",
+        name: "Firefox/140.0 (X11; Linux x86_64)",
+        current: false,
+      },
+    ]);
+    const revoke = vi.spyOn(api, "revokeCredential").mockResolvedValue();
+    wrap(<SettingsPage section="devices" />);
+    const name = await screen.findByText("Chrome on macOS");
+    expect(name.getAttribute("title")).toBe(agent);
+    expect(screen.getByText("This browser · Active now")).toBeTruthy();
+    expect(screen.queryByText(/private notes/)).toBeNull();
+    expect(screen.getByText(/^Signed in /)).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Revoke Firefox on Linux" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Revoke Firefox on Linux?",
+    });
+    expect(revoke).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Revoke access" }),
+    );
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith("other"));
+  });
   it("holds the one-time token outside QueryClient mutation data", async () => {
     vi.spyOn(api, "credentials").mockResolvedValue([]);
     vi.spyOn(api, "createToken").mockResolvedValue({

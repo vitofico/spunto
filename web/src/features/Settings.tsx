@@ -849,13 +849,22 @@ function PluginPage({ id }: { id: string }) {
           remain.
         </p>
       )}
-      {plugin.state === "waiting" && (
-        <p className="notice">
-          {pluginFacts(plugin)}. Your switch stays on and it resumes when the
-          requirement is available.{" "}
-          {aiOff ? <AIOffHint /> : <Link href="/settings/ai">AI settings</Link>}
-        </p>
-      )}
+      {plugin.state === "waiting" &&
+        (aiCapabilities(plugin).length ? (
+          <p className="notice">
+            {pluginFacts(plugin)}. It stays on and starts working once that is
+            set up.{" "}
+            {aiOff ? (
+              <>
+                AI is off. <AIOffHint />
+              </>
+            ) : (
+              <Link href="/settings/ai">AI settings</Link>
+            )}
+          </p>
+        ) : (
+          plugin.last_error && <p className="notice">{plugin.last_error}</p>
+        ))}
       {!removed && query.data && (
         <SchemaForm
           key={`${id}-${JSON.stringify(query.data.values)}`}
@@ -906,7 +915,11 @@ function PluginPage({ id }: { id: string }) {
         {data.last_run_at
           ? `Last run ${formatWhen(data.last_run_at)}`
           : "No runs yet."}
-        {data.last_error ? ` · ${data.last_error}` : " · No failures"}
+        {data.state === "waiting"
+          ? ""
+          : data.last_error
+            ? ` · ${data.last_error}`
+            : " · No failures"}
       </p>
       <h2>Access</h2>
       <ul>
@@ -1086,11 +1099,11 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
                     <strong title={c.kind === "session" ? c.name : undefined}>
                       {credentialName(c)}
                     </strong>
-                    {c.current && (
-                      <small className={styles.facts}> · This browser</small>
-                    )}
                     {facts && <p>{facts}</p>}
-                    <small className={styles.facts}>{credentialUse(c)}</small>
+                    <div className={styles.facts}>
+                      {c.current && "This browser · "}
+                      {credentialUse(c)}
+                    </div>
                   </div>
                   <div className={styles.actions}>
                     <button

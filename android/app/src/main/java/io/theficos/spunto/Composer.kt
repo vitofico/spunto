@@ -316,9 +316,19 @@ import kotlinx.coroutines.*
  }}
  Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
   Surface(shape=MaterialTheme.shapes.medium,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent) {
-   Box(Modifier.fillMaxWidth().padding(if(boxed) 16.dp else 0.dp).heightIn(min=if(boxed) 96.dp else 48.dp)) {
-    if(value.text.isEmpty()) Text(placeholder,color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
-    BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+   Column(Modifier.fillMaxWidth().padding(if(boxed) 16.dp else 0.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    Box(Modifier.fillMaxWidth().heightIn(min=if(boxed) 96.dp else 48.dp)) {
+     if(value.text.isEmpty()) Text(placeholder,color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
+     BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+    }
+    fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}
+    // One message and one way forward per state, inside the card (03 A13).
+    if(recordingNeedsPermission) DictationNotice(if(permanent) "Microphone access is off for spunto." else "Recording needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {permissionAction="recording";if(permanent) openSettings() else permission.launch(Manifest.permission.RECORD_AUDIO)}
+    if(dictationEnabled && !voice.hasSession) when {
+     dictation.phase==DictationPhase.NeedsPermission -> DictationNotice(if(permanent) "Microphone access is off for spunto." else "Dictation needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {if(permanent) openSettings() else {permissionAction="dictation";permission.launch(Manifest.permission.RECORD_AUDIO)}}
+     dictation.phase==DictationPhase.NeedsLanguage -> DictationNotice(dictation.message,"Download") {scope.launch {PlatformSpeechEngine.download(context,language)}}
+     listening || dictation.message.isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.message.startsWith("Didn't catch")) -> DictationNotice(dictation.message)
+    }
    }
   }
   if(images.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
@@ -328,14 +338,6 @@ import kotlinx.coroutines.*
   if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT<33) Text("Voice recording needs Android 13 or newer. You can still type, or use dictation when available.",style=MaterialTheme.typography.bodySmall)
   VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't discard this clip. It is kept on this phone."}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't recover this clip. Your recording and text are kept."}}},saveAction=if(showSaveAction) "Save" else "Done")
   pendingRecording?.let {row ->AttachmentPlayer(model,row.id,"Recording ${recordingTime(row.durationMs)}",AttachmentEntity(row.id,row.noteId.orEmpty(),row.finalPath,"audio/ogg",kind="recording",durationMs=row.durationMs,byteSize=row.byteSize,sha256=row.sha256,serverUrl=row.serverUrl,status="local-only"))}
-  fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}
-  // One message and one way forward per state (03 A13).
-  if(recordingNeedsPermission) DictationNotice(if(permanent) "Microphone access is off for spunto." else "Recording needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {permissionAction="recording";if(permanent) openSettings() else permission.launch(Manifest.permission.RECORD_AUDIO)}
-  if(dictationEnabled && !voice.hasSession) when {
-   dictation.phase==DictationPhase.NeedsPermission -> DictationNotice(if(permanent) "Microphone access is off for spunto." else "Dictation needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {if(permanent) openSettings() else {permissionAction="dictation";permission.launch(Manifest.permission.RECORD_AUDIO)}}
-   dictation.phase==DictationPhase.NeedsLanguage -> DictationNotice(dictation.message,"Download") {scope.launch {PlatformSpeechEngine.download(context,language)}}
-   listening || dictation.message.isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.message.startsWith("Didn't catch")) -> DictationNotice(dictation.message)
-  }
  }
  // Hiding the keyboard ends typing in the capture composer: focus goes, so its bar undocks and the list
  // stops holding the composer in place (a focused item stays composed, which kept day headers from sticking).

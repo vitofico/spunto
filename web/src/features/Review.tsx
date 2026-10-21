@@ -1,18 +1,24 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { api } from "../lib/api";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import type { Suggestion } from "../lib/types";
 import { Dialog } from "./Dialog";
 import { NoteReference } from "./Vocabulary";
 import styles from "./Feature.module.css";
 import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
 import { labelChangeImpact } from "./labelChange";
+import { activePlugins, usePlugins } from "./Slots";
 export function ReviewPage() {
+  useDocumentTitle("Review");
+  const [, navigate] = useLocation();
   const query = useQuery({
     queryKey: ["suggestions", "review"],
     queryFn: () => api.suggestions("review"),
   });
-  const manifest = useQuery({ queryKey: ["manifest"], queryFn: api.manifest });
+  const manifest = usePlugins();
+  const plugins = activePlugins(manifest.data?.plugins);
   const client = useQueryClient();
   const [preview, setPreview] = useState<Suggestion | null>(null);
   const [one, setOne] = useState(false);
@@ -49,10 +55,9 @@ export function ReviewPage() {
           };
         }
       )?.result?.open;
-      if (open?.note_id)
-        location.assign(`/n/${encodeURIComponent(open.note_id)}`);
+      if (open?.note_id) navigate(`/n/${encodeURIComponent(open.note_id)}`);
       else if (open?.plugin_id && open.view)
-        location.assign(
+        navigate(
           `/v/${encodeURIComponent(open.plugin_id)}/${encodeURIComponent(open.view)}`,
         );
       setPreview(null);
@@ -64,9 +69,7 @@ export function ReviewPage() {
   });
   const suggestions =
     query.data?.suggestions.filter(
-      (s) =>
-        manifest.data?.plugins.some((p) => p.id === s.plugin) &&
-        !skip.includes(s.id),
+      (s) => plugins.some((p) => p.id === s.plugin) && !skip.includes(s.id),
     ) ?? [];
   const apply = (s: Suggestion) =>
     ["replace_body", "merge_notes", "label_change"].includes(s.action)
@@ -107,9 +110,11 @@ export function ReviewPage() {
         : "Notes";
   return (
     <div className={styles.review}>
-      <div className={styles.between}>
+      <div className={styles.reviewHeader}>
         <h1 className="page-title">Review</h1>
-        <span className={styles.facts}>{suggestions.length} waiting</span>
+        {suggestions.length > 0 && (
+          <span className={styles.facts}>{suggestions.length} waiting</span>
+        )}
       </div>
       {query.isPending ? (
         <p>Loading suggestions…</p>
@@ -118,14 +123,14 @@ export function ReviewPage() {
           {query.error.message}
         </p>
       ) : !suggestions.length ? (
-        <>
-          <p>All caught up.</p>
+        <div className="empty">
+          <h2>All caught up.</h2>
           {skip.length > 0 && (
             <button onClick={() => setSkip([])}>
               Return to skipped suggestions
             </button>
           )}
-        </>
+        </div>
       ) : (
         <>
           <div className={styles.row}>
@@ -158,8 +163,7 @@ export function ReviewPage() {
                     <div className={styles.between}>
                       <strong>{suggestionTitle(s)}</strong>
                       <span className={styles.facts}>
-                        {manifest.data?.plugins.find((p) => p.id === s.plugin)
-                          ?.name ?? s.plugin}
+                        {plugins.find((p) => p.id === s.plugin)?.name}
                       </span>
                     </div>
                     {s.note_id && <NoteReference id={s.note_id} />}

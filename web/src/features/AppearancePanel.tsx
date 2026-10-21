@@ -130,6 +130,8 @@ export function AppearancePanel() {
             <button
               className={styles.theme}
               key={card.id}
+              aria-label={card.name}
+              aria-describedby={`theme-${card.id}-about`}
               aria-pressed={selected.theme === card.id}
               disabled={save.isPending || card.status !== "available"}
               onClick={() =>
@@ -146,6 +148,7 @@ export function AppearancePanel() {
                 className={styles.preview}
                 data-theme-preview={card.id}
                 style={colors}
+                aria-hidden="true"
               >
                 <small>Today · 09:41</small>
                 <p>Leave room for the next thought.</p>
@@ -163,7 +166,7 @@ export function AppearancePanel() {
               <span className={styles.themeName}>
                 {card.name}
                 {selected.theme === card.id ? " ✓" : ""}
-                <small>
+                <small id={`theme-${card.id}-about`}>
                   {card.status === "failed"
                     ? (card.reason ?? "This pack is unavailable.")
                     : (card.description ?? "Installed colour pack")}

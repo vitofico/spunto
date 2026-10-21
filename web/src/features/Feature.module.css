@@ -15,8 +15,10 @@
   min-width: 0;
 }
 .nav a {
+  display: flex;
+  align-items: center;
   min-height: 40px;
-  padding: 10px var(--s-12);
+  padding: var(--s-8) var(--s-12);
   border-radius: var(--r-8);
   color: var(--ink-2);
   text-decoration: none;
@@ -770,7 +772,7 @@
     white-space: nowrap;
     min-height: 44px;
     min-width: 44px;
-    text-align: center;
+    justify-content: center;
   }
   .themes {
     --theme-gap: var(--s-8);

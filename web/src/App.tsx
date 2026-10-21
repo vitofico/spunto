@@ -230,7 +230,7 @@ function Rail({
                 }
                 style={{
                   paddingLeft:
-                    10 + Math.min(label.path.split("/").length - 1, 4) * 12,
+                    12 + Math.min(label.path.split("/").length - 1, 4) * 12,
                 }}
               >
                 <span>#</span>

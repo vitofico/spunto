@@ -267,10 +267,10 @@ kbd {
   flex-direction: column;
   gap: var(--s-2);
 }
-/* 10px matches the label tree's inline indent in App.tsx. */
+/* The inline padding matches the label tree's base indent in App.tsx. */
 .rail nav a {
   color: var(--ink-2);
-  padding: var(--s-8) 10px;
+  padding: var(--s-8) var(--s-12);
   border-radius: var(--r-8);
   display: flex;
   gap: var(--s-8);
@@ -324,7 +324,7 @@ kbd {
   margin-top: auto;
 }
 .rail-foot p {
-  margin: var(--s-12) 10px 0;
+  margin: var(--s-12) var(--s-12) 0;
   font-size: var(--t-meta-size);
   color: var(--ink-3);
 }

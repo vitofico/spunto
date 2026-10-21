@@ -2,5 +2,5 @@
   display: block;
   width: min(100%, 280px);
   aspect-ratio: 1;
-  margin: 1rem auto;
+  margin: var(--s-16) auto;
 }

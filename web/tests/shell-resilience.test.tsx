@@ -113,3 +113,18 @@ it("reports an unreachable server instead of waiting on a wordmark forever", asy
   result.current.reconnect();
   await waitFor(() => expect(result.current.status).toBe("setup"));
 });
+
+it("sends an expired hosted cookie to sign-in, not to an unreachable screen", async () => {
+  // Hosted servers answer /meta with 401 when the browser still holds an expired cookie.
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ code: "unauthenticated" }), {
+      status: 401,
+      headers: { "Content-Type": "application/problem+json" },
+    }),
+  );
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  const { result } = renderHook(useAuth, { wrapper });
+  await waitFor(() => expect(result.current.status).toBe("anonymous"));
+});

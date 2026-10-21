@@ -447,7 +447,11 @@ export function useAuth() {
       ? "loading"
       : meta.data?.setup_pending
         ? "setup"
-        : meta.isError && !meta.data && !session.data
+        : meta.isError &&
+            !meta.data &&
+            !session.data &&
+            // A refusal such as a 401 is an answer: the sign-in screen handles it.
+            !(meta.error instanceof ApiError && !meta.error.retryable)
           ? "unreachable"
           : signedOut
             ? "anonymous"

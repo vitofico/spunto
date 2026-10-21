@@ -23,6 +23,8 @@ import {
   useNoteFlag,
 } from "../components/core/NoteCard";
 import { Icon } from "../components/core/Icon";
+import { NotFound } from "../components/core/NotFound";
+import { ApiError } from "../lib/errors";
 import { MoreMenu } from "../components/core/Menu";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
@@ -593,6 +595,8 @@ export default function NotePage({ id }: { id: string }) {
     <p className="page-status" role="status">
       Opening note…
     </p>
+  ) : note.error instanceof ApiError && note.error.status === 404 ? (
+    <NotFound title="This note isn’t here." />
   ) : note.isError ? (
     <p className="error" role="alert">
       {note.error.message} <Link href="/">All notes</Link>

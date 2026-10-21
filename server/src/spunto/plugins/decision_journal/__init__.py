@@ -54,7 +54,9 @@ def review_date(value):
 
 
 def stamp(milliseconds):
-    return datetime.fromtimestamp(milliseconds / 1000, UTC).isoformat(timespec="seconds")
+    """A date people read in a note: "21 October 2026, 14:32 UTC"."""
+    moment = datetime.fromtimestamp(milliseconds / 1000, UTC)
+    return f"{moment.day} {moment:%B %Y, %H:%M} UTC"
 
 
 def field(title, limit, default=None, **extra):

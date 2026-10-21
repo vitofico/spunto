@@ -430,3 +430,9 @@ async def test_rest_owner_auth_origin_and_commands(server):
     assert response.json()["code"] == "decision_conflict"
     note = await Notes(host.store, OWNER).get(note_id)
     assert note["body"].startswith("# Choose local SQLite") and note["origin"] == "owner"
+
+
+def test_decision_notes_date_entries_in_words():
+    from spunto.plugins.decision_journal import stamp
+
+    assert stamp(1_792_600_320_000) == "21 October 2026, 16:32 UTC"

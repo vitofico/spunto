@@ -325,3 +325,26 @@ async def test_oversized_attachment_filename_rejected_before_any_note_write(targ
         await importer.run_import(target, source, dry_run=False)
     async with target._host.store.read() as conn:
         assert (await conn.execute_fetchall("SELECT count(*) FROM note"))[0][0] == 0
+
+
+def test_report_reads_as_counts_and_sizes():
+    report = {
+        "notes": 1,
+        "attachments": 2,
+        "attachment_bytes": 2_400_000,
+        "created": 1,
+        "updated": 0,
+        "unchanged": 0,
+        "skipped_owner_edits": 1,
+        "missing_links": 0,
+    }
+    assert importer.report_output(report)[0]["text"] == (
+        "1 note and 2 attachments (2.4 MB). Created 1, updated 0, unchanged 0. "
+        "Kept 1 note you had edited."
+    )
+    assert [importer.size(value) for value in (1, 999, 1000, 12_000_000)] == [
+        "1 byte",
+        "999 bytes",
+        "1 KB",
+        "12 MB",
+    ]

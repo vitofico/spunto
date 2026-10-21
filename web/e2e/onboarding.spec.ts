@@ -72,6 +72,7 @@ async function fixture(
 
 test("first entry gates capture; keyboard navigation and Skip persist on reload", async ({
   page,
+  browserName,
 }) => {
   const requests = await fixture(page);
   await page.goto("/");
@@ -92,7 +93,8 @@ test("first entry gates capture; keyboard navigation and Skip persist on reload"
       new CustomEvent("spunto:command-result", { detail: "Synthetic result" }),
     ),
   );
-  await page.keyboard.press("Tab");
+  // Safari's default Tab skips buttons; Option+Tab reaches them.
+  await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
   await expect(
     page.getByRole("button", { name: "Next", exact: true }),
   ).toBeFocused();

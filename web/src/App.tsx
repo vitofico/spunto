@@ -440,7 +440,9 @@ export default function App() {
         tabIndex={-1}
         inert={modalOpen}
         className={
-          "column" + (location.startsWith("/n/") ? " note-column" : "")
+          "column" +
+          (location.startsWith("/n/") ? " note-column" : "") +
+          (location.startsWith("/settings") ? " wide-column" : "")
         }
       >
         {workspaceIssue && (

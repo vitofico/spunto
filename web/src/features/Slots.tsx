@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
@@ -65,6 +65,7 @@ export function SuggestionLine({
   const client = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<Suggestion | null>(null);
+  const describe = useId();
   const impact = useQuery({
     queryKey: [
       "label-impact",
@@ -139,21 +140,22 @@ export function SuggestionLine({
     >
       {(expanded ? suggestions : suggestions.slice(0, 3)).map((s) => {
         const by = manifest.data?.plugins.find((p) => p.id === s.plugin)?.name;
+        const provenance = `Suggested by ${by}${s.reason ? `: ${s.reason}` : ""}`;
         return (
           <span className={styles.suggestionGroup} key={s.id}>
             <button
               className={styles.pill}
               disabled={decision.isPending}
-              title={`Suggested by ${by}: ${s.reason}`}
+              title={provenance}
+              aria-describedby={`${describe}-${s.id}`}
               onClick={() => apply(s)}
             >
               {suggestionTitle(s)}
               {s.payload.is_new === true && <small>new</small>}
-              <span className="sr-only">
-                , suggested by {by}
-                {s.reason ? `: ${s.reason}` : ""}
-              </span>
             </button>
+            <span id={`${describe}-${s.id}`} hidden>
+              {provenance}
+            </span>
             <button
               className={styles.dismiss}
               aria-label={`Dismiss ${suggestionTitle(s)}`}

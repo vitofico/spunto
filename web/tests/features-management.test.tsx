@@ -465,11 +465,11 @@ describe("quiet slots", () => {
     }));
     const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
     wrap(<SuggestionLine note={note} />);
+    const pill = screen.getByRole("button", { name: "#label0" });
     expect(
-      screen.getByRole("button", {
-        name: /^#label0.*suggested by Tasks: Seen in similar notes$/,
-      }),
-    ).toBeTruthy();
+      document.getElementById(pill.getAttribute("aria-describedby")!)
+        ?.textContent,
+    ).toBe("Suggested by Tasks: Seen in similar notes");
     expect(
       screen.getByRole("button", { name: "Dismiss #label1" }),
     ).toBeTruthy();

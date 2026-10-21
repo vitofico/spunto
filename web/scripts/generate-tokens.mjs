@@ -42,6 +42,34 @@ const rules = Object.entries(tokens.themes).flatMap(([theme, modes]) =>
                 .join("")}color-scheme:${mode};}`,
     ),
 );
+const rem = (px) => `${px / 16}rem`;
+// Unitless line heights keep their ratio in descendants with another font size.
+const ratio = (line, size) => Number((line / size).toFixed(4));
+const fixed = [
+    ...["serif", "sans", "mono"].map(
+        (face) => `--f-${face}:${tokens.type[face]};`,
+    ),
+    `--measure:${tokens.type.measure};`,
+    ...Object.entries(tokens.type.scale).flatMap(
+        ([role, { size, line, weight, tracking }]) => [
+            `--t-${role}:${weight} ${rem(size)}/${ratio(line, size)};`,
+            `--t-${role}-size:${rem(size)};`,
+            `--t-${role}-line:${ratio(line, size)};`,
+            `--t-${role}-weight:${weight};`,
+            ...(tracking ? [`--t-${role}-tracking:${tracking};`] : []),
+        ],
+    ),
+    ...tokens.spacing.map((px) => `--s-${px}:${px}px;`),
+    ...Object.entries(tokens.radius).map(([key, px]) => `--r-${key}:${px}px;`),
+    ...Object.entries(tokens.motion).map(
+        ([key, value]) =>
+            `--${key}:${typeof value === "number" ? `${value}ms` : value};`,
+    ),
+].join("");
+const depth = (mode) =>
+    Object.entries(tokens.elevation[mode])
+        .map(([key, value]) => `--${key}:${value};`)
+        .join("");
 const systemRules = rules
     .filter((r) => r.includes('data-mode=\"light\"'))
     .map((r) => r.replace('data-mode=\"light\"', 'data-mode=\"system\"'));
@@ -51,11 +79,14 @@ const darkRules = rules
 writeFileSync(
     "src/styles/tokens.css",
     "/* Generated from web/tokens.json; run node scripts/generate-tokens.mjs. */\n" +
+        `:root{${fixed}${depth("light")}}\n` +
+        `:root[data-mode="dark"]{${depth("dark")}}\n` +
         rules.join("\n") +
         "\n" +
         systemRules.join("\n") +
         "\n@media(prefers-color-scheme:dark){" +
         darkRules.join("\n") +
+        `\n:root[data-mode="system"]{${depth("dark")}}` +
         "}\n",
 );
 const previews = Object.entries(tokens.themes).flatMap(([theme, modes]) =>

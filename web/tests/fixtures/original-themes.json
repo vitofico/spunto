@@ -17,7 +17,7 @@
       "raised": "#1C2026",
       "rule": "#272C33",
       "rule-strong": "#3A4049",
-      "sh": "228 232 238",
+      "sh": "0 0 0",
       "sunken": "#0D0F12",
       "warn": "#E0AE55"
     },
@@ -61,7 +61,7 @@
       "raised": "#211D1A",
       "rule": "#2D2925",
       "rule-strong": "#413C37",
-      "sh": "234 229 221",
+      "sh": "0 0 0",
       "sunken": "#100E0C",
       "warn": "#E1AD57"
     },
@@ -105,7 +105,7 @@
       "raised": "#1B201D",
       "rule": "#262C28",
       "rule-strong": "#39413B",
-      "sh": "226 232 226",
+      "sh": "0 0 0",
       "sunken": "#0C0F0D",
       "warn": "#DDB05A"
     },

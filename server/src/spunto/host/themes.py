@@ -103,7 +103,9 @@ def _derived(modes):
     for mode, values in result.items():
         ink = [int(values["ink"][i : i + 2], 16) for i in (1, 3, 5)]
         paper = [int(values["paper"][i : i + 2], 16) for i in (1, 3, 5)]
-        values["sh"] = " ".join(map(str, ink))
+        # Shadows and the scrim must darken the page: ink in light mode, black in dark
+        # mode, where ink is a light colour.
+        values["sh"] = " ".join(map(str, ink)) if mode == "light" else "0 0 0"
         values["chrome"] = "#" + "".join(
             f"{round(p * 0.94 + i * 0.06):02X}" for p, i in zip(paper, ink, strict=True)
         )

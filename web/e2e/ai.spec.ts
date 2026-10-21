@@ -282,6 +282,7 @@ async function fixture(page: Page, withModels = false) {
               ...note,
               id: "neighbor",
               body: "Coffee neighbor",
+              title: "Coffee neighbor",
               html: "<p>Coffee neighbor</p>",
             }
           : note,
@@ -440,7 +441,7 @@ test("live related panel and Ask form preserve the save-answer action", async ({
     .poll(() => state.commands.at(-1))
     .toEqual({ id: "save-answer", args: { answer_id: "fixture-receipt" } });
   await expect(page.locator('a[href="/n/saved-answer"]')).toHaveText(
-    "Coffee in Rome",
+    note.title,
   );
 });
 

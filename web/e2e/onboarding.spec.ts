@@ -160,7 +160,7 @@ test("Settings replay returns to its trigger on Skip and can finish at All notes
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Skip", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page).toHaveURL(/\/settings\/profile$/);
   await expect(replay).toBeFocused();
   expect(await page.evaluate((key) => localStorage.getItem(key), marker)).toBe(
     "complete",

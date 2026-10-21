@@ -3,6 +3,7 @@ package io.theficos.spunto
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -42,8 +43,8 @@ private data class GuideStep(val title:String,val body:String,val example:String
 private val guideSteps=listOf(
  GuideStep("Catch a thought.","Write a quick note, then tap Save. It is kept on this phone, even without a connection.","Ask about the little bookshop.","A note can be a sentence, a list or a longer thought."),
  GuideStep("Labels live in your words.","Type # in a note to add a label. Use / for a nested label. Open All notes to browse them.","A thought for the weekend #ideas\n\nA place to try #life/food","Labels stay in the note text. One note can have several."),
- GuideStep("Find it when you need it.","Search works by keyword on this phone. With a configured provider and semantic search enabled, your server can also find similar meaning while connected.","Search: little bookshop","Keyword search works offline. Meaning search is optional."),
- GuideStep("Connect when you are ready.","Keep writing offline, or sync with your own server using its HTTPS address. Hosted accounts sign in in the browser, then create a pairing QR in Settings → Devices.","This phone → your own server","A server is optional for local notes. Plain HTTP needs an explicit warning."),
+ GuideStep("Find it when you need it.","Search finds your words on this phone. If your server has AI search on, it can also find notes with a similar meaning while you're connected.","little bookshop","Word search works offline. AI search is optional."),
+ GuideStep("Sync when you're ready.","Keep writing offline, or sync with your own server at its HTTPS address. On a hosted account, sign in on the web, then scan the pairing code from Settings → Devices.","https://spunto.example.org","Your notes stay on this phone until you connect. A plain HTTP address asks you to confirm first."),
 )
 
 @Composable internal fun FirstRunGuide(onSkip:()->Unit,onStart:()->Unit,onConnect:(()->Unit)?=null) {
@@ -60,9 +61,10 @@ private val guideSteps=listOf(
   BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
    val compact=maxHeight<600.dp || LocalDensity.current.fontScale>1.3f
    Column(Modifier.widthIn(max=560.dp).fillMaxWidth().fillMaxHeight().padding(horizontal=24.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-     Text("Getting started",Modifier.weight(1f),style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
-     TextButton(onClick={leave(onSkip)},modifier=Modifier.heightIn(min=48.dp)) {Text("Skip")}
+    // The one progress indicator; the last step offers no Skip, only its own actions.
+    Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+     Text("Getting started · ${step+1} of ${guideSteps.size}",Modifier.weight(1f).semantics {contentDescription="Getting started, step ${step+1} of ${guideSteps.size}";liveRegion=LiveRegionMode.Polite},style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
+     if(step<guideSteps.lastIndex) TextButton(onClick={leave(onSkip)},modifier=Modifier.heightIn(min=48.dp)) {Text("Skip")}
     }
     val actions:@Composable ()->Unit={
      GuideActions(step,compact,onBack={step--},onNext={if(step==guideSteps.lastIndex) leave(onStart) else step++},onConnect=if(onConnect!=null) ({leave(onConnect)}) else null)
@@ -80,13 +82,12 @@ private val guideSteps=listOf(
 
 @Composable private fun GuideContent(step:Int,current:GuideStep) {
  Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-  Text("Step ${step+1} of ${guideSteps.size}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
-  LinearProgressIndicator(progress={(step+1).toFloat()/guideSteps.size},modifier=Modifier.fillMaxWidth().semantics {contentDescription="Guide progress"})
   Text(current.title,style=MaterialTheme.typography.titleLarge,modifier=Modifier.semantics {heading()})
   Text(current.body,style=MaterialTheme.typography.bodyMedium)
-  Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer) {
-   Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-    Text("Example · not a saved note",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  // A light quote, not a card: the example reads like note text and the caption says what it shows.
+  Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+   Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+   Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
     Text(current.example,style=SpuntoType.reading)
     Text(current.caption,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    }

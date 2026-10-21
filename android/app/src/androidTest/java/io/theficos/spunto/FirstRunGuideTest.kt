@@ -32,8 +32,8 @@ class FirstRunGuideTest {
  }
  private fun nextStep(number:Int) {
   reachableAction("Next").performClick()
-  compose.waitUntil(10_000) {compose.onAllNodesWithText("Step $number of 4").fetchSemanticsNodes().size==1}
-  compose.onNodeWithText("Step $number of 4").assertIsDisplayed()
+  compose.waitUntil(10_000) {compose.onAllNodesWithText("Getting started · $number of 4").fetchSemanticsNodes().size==1}
+  compose.onNodeWithText("Getting started · $number of 4").assertIsDisplayed()
  }
 
  @Test fun skipPersistsAndANewGateDoesNotShowAgain() {
@@ -41,13 +41,13 @@ class FirstRunGuideTest {
   compose.setContent {SpuntoTheme {key(generation.intValue) {
    FirstRunGuideGate(FirstRunGuideStore(preferences),true,onStartWriting={}) {Text("Main screen")}
   }}}
-  compose.onNodeWithText("Step 1 of 4").assertIsDisplayed()
+  compose.onNodeWithText("Getting started · 1 of 4").assertIsDisplayed()
   compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
   compose.onNodeWithText("Skip").performClick()
   compose.onNodeWithText("Main screen").assertIsDisplayed()
   assertTrue(FirstRunGuideStore(preferences).completed)
   compose.runOnIdle {generation.intValue++}
-  compose.onNodeWithText("Getting started").assertDoesNotExist()
+  compose.onNodeWithText("Getting started",substring=true).assertDoesNotExist()
   compose.onNodeWithText("Main screen").assertIsDisplayed()
  }
  @Test fun finishPersistsAndReplaySkipReturnsWithoutClearingCompletion() {
@@ -58,7 +58,7 @@ class FirstRunGuideTest {
   repeat(3) {nextStep(it+2)}
   reachableAction("Start writing").performClick()
   compose.runOnIdle {assertEquals(1,starts);assertTrue(FirstRunGuideStore(preferences).completed);replay.value=true}
-  compose.onNodeWithText("Step 1 of 4").assertIsDisplayed()
+  compose.onNodeWithText("Getting started · 1 of 4").assertIsDisplayed()
   compose.onNodeWithText("Skip").performClick()
   compose.onNodeWithText("Settings screen").assertIsDisplayed()
   assertTrue(FirstRunGuideStore(preferences).completed)
@@ -73,8 +73,8 @@ class FirstRunGuideTest {
   }
   compose.onNodeWithText("Back").assertIsNotEnabled()
   fun assertStepStart(number:Int,title:String) {
-   compose.onNodeWithText("Skip").assertIsDisplayed()
-   compose.onNodeWithText("Step $number of 4").assertIsDisplayed()
+   if(number<4) compose.onNodeWithText("Skip").assertIsDisplayed() else compose.onNodeWithText("Skip").assertDoesNotExist()
+   compose.onNodeWithText("Getting started · $number of 4").assertIsDisplayed()
    compose.onNodeWithText(title).assertIsDisplayed()
    compose.onNode(hasScrollAction()).assertHeightIsAtLeast(180.dp).assert(SemanticsMatcher("step starts at the top") {
     it.config[SemanticsProperties.VerticalScrollAxisRange].value()==0f
@@ -88,15 +88,15 @@ class FirstRunGuideTest {
   assertStepStart(2,"Labels live in your words.")
   compose.onNodeWithText("Back").performScrollTo().assertIsDisplayed().performClick()
   assertStepStart(1,"Catch a thought.")
-  listOf("Labels live in your words.","Find it when you need it.","Connect when you are ready.").forEachIndexed {index,title->
+  listOf("Labels live in your words.","Find it when you need it.","Sync when you're ready.").forEachIndexed {index,title->
    compose.onNodeWithText("Next").performScrollTo().assertIsDisplayed().performClick()
    assertStepStart(index+2,title)
   }
-  compose.onNodeWithText("Connect when you are ready.").performScrollTo().assertIsDisplayed()
+  compose.onNodeWithText("Sync when you're ready.").performScrollTo().assertIsDisplayed()
   compose.onNodeWithText("Keep writing offline",substring=true).performScrollTo().assertIsDisplayed()
-  compose.onNodeWithText("A server is optional",substring=true).performScrollTo().assertIsDisplayed()
+  compose.onNodeWithText("Your notes stay on this phone",substring=true).performScrollTo().assertIsDisplayed()
   compose.onNodeWithText("Connect to a server").performScrollTo().assertIsDisplayed().performClick()
-  compose.onNodeWithText("Skip").assertIsDisplayed()
+  compose.onNodeWithText("Skip").assertDoesNotExist()
   compose.onNodeWithText("Start writing").performScrollTo().assertIsDisplayed().performClick()
   compose.runOnIdle {assertEquals(1,connects);assertEquals(1,starts)}
  }

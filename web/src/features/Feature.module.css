@@ -292,9 +292,12 @@
   gap: var(--theme-gap);
 }
 .theme {
+  display: block;
+  max-width: none;
   border: 1px solid var(--field);
   border-radius: var(--r-12);
   padding: 0;
+  font-weight: 400;
   text-align: left;
   overflow: hidden;
   background: var(--raised);
@@ -323,6 +326,10 @@
 .previewLabel {
   color: var(--accent);
   font: var(--t-body-sm) var(--f-serif);
+}
+.preview .pill {
+  padding: var(--s-2) var(--s-8);
+  white-space: nowrap;
 }
 .themeName {
   display: block;

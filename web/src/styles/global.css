@@ -746,7 +746,7 @@ mark[data-match] {
   border-bottom: 1px solid var(--rule);
   padding-right: var(--s-12);
 }
-.palette input {
+.palette-head input {
   width: 100%;
   min-width: 0;
   border: 0;
@@ -756,7 +756,7 @@ mark[data-match] {
   border-radius: var(--r-20) var(--r-20) 0 0;
 }
 /* The palette is the field: its caret marks focus, no ring inside it. */
-.palette input:focus {
+.palette-head input:focus {
   outline: none;
 }
 .palette-group {

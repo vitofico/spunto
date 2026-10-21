@@ -65,6 +65,7 @@ export function SuggestionLine({
   const client = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<Suggestion | null>(null);
+  const opener = useRef<HTMLElement>(null);
   const describe = useId();
   const impact = useQuery({
     queryKey: [
@@ -102,7 +103,8 @@ export function SuggestionLine({
   }, [note.id]);
   const suggestions = visibleSuggestions(note, manifest.data?.plugins ?? []);
   if (editing || !suggestions.length) return null;
-  const apply = (s: Suggestion) => {
+  const apply = (s: Suggestion, trigger: HTMLElement) => {
+    opener.current = trigger;
     if (["replace_body", "merge_notes", "label_change"].includes(s.action))
       setPreview(s);
     else decision.mutate({ id: s.id, action: "accept" });
@@ -130,9 +132,10 @@ export function SuggestionLine({
                 s.action,
               ),
             )
-          )
+          ) {
+            opener.current = null;
             onReview ? onReview() : setPreview(suggestions[0]);
-          else
+          } else
             for (const s of suggestions)
               decision.mutate({ id: s.id, action: "accept" });
         }
@@ -148,7 +151,7 @@ export function SuggestionLine({
               disabled={decision.isPending}
               title={provenance}
               aria-describedby={`${describe}-${s.id}`}
-              onClick={() => apply(s)}
+              onClick={(e) => apply(s, e.currentTarget)}
             >
               {suggestionTitle(s)}
               {s.payload.is_new === true && <small>new</small>}
@@ -191,6 +194,7 @@ export function SuggestionLine({
       {preview && (
         <Dialog
           title={suggestionTitle(preview)}
+          opener={opener.current}
           onClose={() => setPreview(null)}
           footer={
             <>

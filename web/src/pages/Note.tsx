@@ -172,9 +172,10 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
             {revision.version !== note.version && (
               <button
                 className="button"
-                onClick={async () => {
+                onClick={async (e) => {
                   if (
                     !(await confirm({
+                      opener: e.currentTarget,
                       title: "Restore this version?",
                       body: "The current text stays in history.",
                       confirmLabel: "Restore",

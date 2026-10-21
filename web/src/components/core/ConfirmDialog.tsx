@@ -6,6 +6,8 @@ export type ConfirmOptions = {
   body?: string;
   confirmLabel: string;
   danger?: boolean;
+  /** The clicked control that asked; focus returns there. */
+  opener?: HTMLElement | null;
 };
 
 /** A themed replacement for window.confirm; Cancel comes first and takes focus. */
@@ -14,11 +16,13 @@ export function ConfirmDialog({
   body,
   confirmLabel,
   danger,
+  opener,
   onClose,
 }: ConfirmOptions & { onClose: (confirmed: boolean) => void }) {
   return (
     <Dialog
       title={title}
+      opener={opener}
       onClose={() => onClose(false)}
       footer={
         <>

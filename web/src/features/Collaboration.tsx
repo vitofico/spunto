@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
@@ -245,18 +245,33 @@ function HostedSpaces() {
 }
 export function ShareNote({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const hosted = useHosted();
   const role = useWorkspaceRole();
   return hosted && role === "owner" ? (
     <>
-      <button className="button" onClick={() => setOpen(true)}>
+      <button ref={trigger} className="button" onClick={() => setOpen(true)}>
         Share
       </button>
-      {open && <NoteShareDialog id={id} close={() => setOpen(false)} />}
+      {open && (
+        <NoteShareDialog
+          id={id}
+          opener={trigger.current}
+          close={() => setOpen(false)}
+        />
+      )}
     </>
   ) : null;
 }
-function NoteShareDialog({ id, close }: { id: string; close: () => void }) {
+function NoteShareDialog({
+  id,
+  opener,
+  close,
+}: {
+  id: string;
+  opener: HTMLElement | null;
+  close: () => void;
+}) {
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["note-shares", id],
@@ -281,6 +296,7 @@ function NoteShareDialog({ id, close }: { id: string; close: () => void }) {
   return (
     <Dialog
       title="Share this note"
+      opener={opener}
       onClose={close}
       footer={<button onClick={close}>Done</button>}
     >

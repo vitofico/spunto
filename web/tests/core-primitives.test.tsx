@@ -92,9 +92,10 @@ function Remove({ onResult }: { onResult: (confirmed: boolean) => void }) {
   return (
     <>
       <button
-        onClick={async () =>
+        onClick={async (event) =>
           onResult(
             await confirm({
+              opener: event.currentTarget,
               title: "Delete this note forever?",
               body: "This cannot be undone.",
               confirmLabel: "Delete forever",
@@ -113,6 +114,8 @@ function Remove({ onResult }: { onResult: (confirmed: boolean) => void }) {
 it("confirms in a themed dialog and resolves false on Cancel or Escape", async () => {
   const result = vi.fn();
   render(<Remove onResult={result} />);
+  // fireEvent.click leaves focus on <body>, as a click in WebKit does.
+  const opener = screen.getByRole("button", { name: "Delete" });
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
   const dialog = screen.getByRole("dialog", {
     name: "Delete this note forever?",
@@ -131,11 +134,14 @@ it("confirms in a themed dialog and resolves false on Cancel or Escape", async (
     fireEvent.click(screen.getByRole("button", { name: "Cancel" })),
   );
   expect(result).toHaveBeenLastCalledWith(false);
-  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect(document.activeElement).toBe(opener);
+  opener.blur();
+  fireEvent.click(opener);
   await act(async () =>
     fireEvent(screen.getByRole("dialog"), new Event("cancel")),
   );
   expect(result).toHaveBeenLastCalledWith(false);
+  expect(document.activeElement).toBe(opener);
   expect(result).toHaveBeenCalledTimes(3);
 });
 

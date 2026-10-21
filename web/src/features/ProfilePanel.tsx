@@ -213,11 +213,12 @@ function SignOut() {
   const [, navigate] = useLocation();
   const [confirm, dialog] = useConfirm();
   const [pending, setPending] = useState(false);
-  const signOut = async () => {
+  const signOut = async (opener: HTMLElement) => {
     const unsent = unsentNotes();
     if (
       unsent &&
       !(await confirm({
+        opener,
         title: "Sign out?",
         body: `${plural(unsent, "unsent note")} on this browser will be erased.`,
         confirmLabel: "Sign out and erase",
@@ -239,7 +240,7 @@ function SignOut() {
       <p className="muted">
         Signs this browser out. Other devices stay signed in.
       </p>
-      <button disabled={pending} onClick={() => void signOut()}>
+      <button disabled={pending} onClick={(e) => void signOut(e.currentTarget)}>
         {pending ? "Signing out…" : "Sign out"}
       </button>
       {dialog}

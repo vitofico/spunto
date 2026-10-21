@@ -335,16 +335,19 @@ function PermissionDialog({
   onEnable,
   busy,
   error,
+  opener,
 }: {
   plugin: Plugin;
   onClose: () => void;
   onEnable: () => void;
   busy: boolean;
   error: Error | null;
+  opener: HTMLElement | null;
 }) {
   return (
     <Dialog
       title={`Turn on ${plugin.name}?`}
+      opener={opener}
       onClose={onClose}
       footer={
         <>
@@ -429,6 +432,7 @@ function PluginManager() {
   const query = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
   const [onlyOn, setOnlyOn] = useState(false);
   const [enable, setEnable] = useState<Plugin | null>(null);
+  const opener = useRef<HTMLElement>(null);
   const [action, switchOff] = useSwitchOff();
   const plugins =
     query.data?.plugins.filter(
@@ -555,6 +559,7 @@ function PluginManager() {
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   action.reset();
+                                  opener.current = e.currentTarget;
                                   setEnable(p);
                                 } else switchOff(p);
                               }}
@@ -574,6 +579,7 @@ function PluginManager() {
       {canConfirmEnable && pendingEnable && (
         <PermissionDialog
           plugin={pendingEnable}
+          opener={opener.current}
           onClose={() => setEnable(null)}
           busy={action.isPending}
           error={action.error}
@@ -714,6 +720,8 @@ function PluginPage({ id }: { id: string }) {
   const client = useQueryClient();
   const [enable, setEnable] = useState(false);
   const [remove, setRemove] = useState(false);
+  const enabler = useRef<HTMLInputElement>(null);
+  const remover = useRef<HTMLButtonElement>(null);
   const [result, setResult] = useState<unknown>(null);
   const [commandOrigin, setCommandOrigin] = useState<CommandOrigin>();
   const [deviceValues, setDeviceValues] = useState<Args>(() => {
@@ -818,6 +826,7 @@ function PluginPage({ id }: { id: string }) {
           <span className={styles.facts}>Removed · Off</span>
         ) : (
           <input
+            ref={enabler}
             className={styles.switch}
             type="checkbox"
             role="switch"
@@ -954,7 +963,11 @@ function PluginPage({ id }: { id: string }) {
         notes.
       </p>
       {canDelete && (
-        <button className="danger" onClick={() => setRemove(true)}>
+        <button
+          ref={remover}
+          className="danger"
+          onClick={() => setRemove(true)}
+        >
           Delete this plugin’s data…
         </button>
       )}
@@ -962,6 +975,7 @@ function PluginPage({ id }: { id: string }) {
       {enable && !plugin.pinned_by_env && pluginCanEnable(plugin) && (
         <PermissionDialog
           plugin={plugin}
+          opener={enabler.current}
           onClose={() => setEnable(false)}
           busy={action.isPending}
           error={action.error}
@@ -976,6 +990,7 @@ function PluginPage({ id }: { id: string }) {
       {remove && canDelete && (
         <Dialog
           title={`Delete ${plugin.name}’s data?`}
+          opener={remover.current}
           onClose={() => setRemove(false)}
           footer={
             <>
@@ -1073,9 +1088,10 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
         ? c.kind === "pat"
         : ["session", "device"].includes(c.kind),
     ) ?? [];
-  const revoke = async (c: Credential) => {
+  const revoke = async (c: Credential, opener: HTMLElement) => {
     if (
       await confirm({
+        opener,
         title: `Revoke ${credentialName(c)}?`,
         body: `This ${c.kind === "pat" ? "token" : "device or session"} will lose access immediately.${c.current ? " You will be signed out." : ""}`,
         confirmLabel: "Revoke access",
@@ -1109,7 +1125,7 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
                     <button
                       aria-label={`Revoke ${credentialName(c)}`}
                       disabled={mutation.isPending}
-                      onClick={() => void revoke(c)}
+                      onClick={(e) => void revoke(c, e.currentTarget)}
                     >
                       Revoke
                     </button>
@@ -1144,6 +1160,7 @@ function Devices() {
 function Tokens() {
   const formId = useId();
   const [open, setOpen] = useState(false);
+  const creator = useRef<HTMLButtonElement>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [name, setName] = useState("");
@@ -1183,6 +1200,7 @@ function Tokens() {
         notes without changing them.
       </p>
       <button
+        ref={creator}
         className="primary"
         onClick={() => {
           create.reset();
@@ -1195,6 +1213,7 @@ function Tokens() {
       {open && (
         <Dialog
           title="Create an access token"
+          opener={creator.current}
           onClose={() => setOpen(false)}
           footer={
             <>
@@ -1402,6 +1421,7 @@ function Data() {
   const toast = useToast();
   const [confirm, dialog] = useConfirm();
   const [enable, setEnable] = useState(false);
+  const enabler = useRef<HTMLButtonElement>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const action = usePluginActions();
@@ -1471,6 +1491,7 @@ function Data() {
             <p className={styles.facts}>Set in the environment · Off</p>
           ) : (
             <button
+              ref={enabler}
               disabled={!pluginCanEnable(importer)}
               onClick={() => {
                 action.reset();
@@ -1497,9 +1518,10 @@ function Data() {
           <button
             className="danger"
             disabled={deletion.isPending}
-            onClick={async () => {
+            onClick={async (e) => {
               if (
                 await confirm({
+                  opener: e.currentTarget,
                   title: `Delete ${plural(count, "note")} for good?`,
                   body: `This permanently deletes ${plural(count, "trashed note")} and their attachments. This cannot be undone.`,
                   confirmLabel: `Delete ${plural(count, "note")}`,
@@ -1518,6 +1540,7 @@ function Data() {
       {enable && importer && pluginCanEnable(importer) && (
         <PermissionDialog
           plugin={importer}
+          opener={enabler.current}
           onClose={() => setEnable(false)}
           busy={action.isPending}
           error={action.error}

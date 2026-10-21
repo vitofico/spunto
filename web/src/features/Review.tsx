@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { api } from "../lib/api";
@@ -21,6 +21,7 @@ export function ReviewPage() {
   const plugins = activePlugins(manifest.data?.plugins);
   const client = useQueryClient();
   const [preview, setPreview] = useState<Suggestion | null>(null);
+  const opener = useRef<HTMLElement>(null);
   const [one, setOne] = useState(false);
   const [skip, setSkip] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string[]>([]);
@@ -71,10 +72,12 @@ export function ReviewPage() {
     query.data?.suggestions.filter(
       (s) => plugins.some((p) => p.id === s.plugin) && !skip.includes(s.id),
     ) ?? [];
-  const apply = (s: Suggestion) =>
-    ["replace_body", "merge_notes", "label_change"].includes(s.action)
-      ? setPreview(s)
-      : decide.mutate({ s, action: "accept" });
+  const apply = (s: Suggestion, trigger?: HTMLElement) => {
+    opener.current = trigger ?? null;
+    if (["replace_body", "merge_notes", "label_change"].includes(s.action))
+      setPreview(s);
+    else decide.mutate({ s, action: "accept" });
+  };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (
@@ -172,7 +175,7 @@ export function ReviewPage() {
                       <button
                         className="primary"
                         disabled={decide.isPending || !navigator.onLine}
-                        onClick={() => apply(s)}
+                        onClick={(e) => apply(s, e.currentTarget)}
                       >
                         {!navigator.onLine
                           ? "Needs a connection"
@@ -216,6 +219,7 @@ export function ReviewPage() {
       {preview && (
         <Dialog
           title={suggestionTitle(preview)}
+          opener={opener.current}
           onClose={() => setPreview(null)}
           footer={
             <>

@@ -459,7 +459,7 @@ export default function Timeline({
           {label && addLabel && (
             <p className="composer-label">
               <span className="chip">
-                #{label}
+                <span>#{label}</span>
                 <button
                   aria-label={`Don’t add #${label} to this note`}
                   onClick={() => {

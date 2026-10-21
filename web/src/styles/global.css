@@ -1175,6 +1175,10 @@ mark[data-match] {
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+/* WebKit keeps a bare text run in a flex box as wide as its longest word. */
+.chip > span {
+  min-width: 0;
+}
 .chip button {
   flex-shrink: 0;
   display: inline-flex;

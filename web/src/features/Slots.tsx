@@ -68,6 +68,18 @@ export function SuggestionLine({
   const [preview, setPreview] = useState<Suggestion | null>(null);
   const opener = useRef<HTMLElement>(null);
   const describe = useId();
+  const toast = useToast();
+  // A touch long-press shows the provenance a mouse gets from the tooltip.
+  const press = useRef<{ timer?: number; shown?: boolean }>({});
+  const release = () => {
+    window.clearTimeout(press.current.timer);
+    press.current.timer = undefined;
+  };
+  const reveal = (provenance: string) => {
+    release();
+    press.current.shown = true;
+    toast.show({ message: provenance });
+  };
   const impact = useQuery({
     queryKey: [
       "label-impact",
@@ -152,7 +164,27 @@ export function SuggestionLine({
               disabled={decision.isPending}
               title={provenance}
               aria-describedby={`${describe}-${s.id}`}
-              onClick={(e) => apply(s, e.currentTarget)}
+              onPointerDown={(e) => {
+                press.current =
+                  e.pointerType === "mouse"
+                    ? {}
+                    : {
+                        timer: window.setTimeout(() => reveal(provenance), 500),
+                      };
+              }}
+              onPointerUp={release}
+              onPointerCancel={release}
+              onPointerLeave={release}
+              onContextMenu={(e) => {
+                if (press.current.timer === undefined) return;
+                e.preventDefault();
+                reveal(provenance);
+              }}
+              onClick={(e) => {
+                const held = press.current.shown;
+                press.current = {};
+                if (!held) apply(s, e.currentTarget);
+              }}
             >
               {suggestionTitle(s)}
               {s.payload.is_new === true && <small>new</small>}

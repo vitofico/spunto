@@ -396,6 +396,9 @@
   background: transparent;
   color: var(--accent);
   font: var(--t-meta) var(--f-sans);
+  /* A long-press shows who suggested it, not a text selection. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 .suggestions {
   display: flex;

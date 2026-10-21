@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -479,6 +480,48 @@ describe("quiet slots", () => {
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
     expect(decide).toHaveBeenCalledWith("s0", "dismiss");
     expect(decide).toHaveBeenCalledWith("s1", "dismiss");
+  });
+  it("shows a pill's provenance on a touch long-press without accepting it", async () => {
+    const manifest = {
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [{ ...plugin, state: undefined }],
+    };
+    client.setQueryData(["manifest"], manifest);
+    vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+    const decide = vi
+      .spyOn(api, "decideSuggestion")
+      .mockResolvedValue({} as never);
+    const suggestions = [
+      {
+        id: "s0",
+        plugin: "tasks",
+        status: "pending",
+        action: "add_label",
+        payload: { path: "garden" },
+        reason: "Seen in similar notes",
+      },
+    ];
+    const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
+    wrap(
+      <ToastProvider>
+        <SuggestionLine note={note} />
+      </ToastProvider>,
+    );
+    const pill = screen.getByRole("button", { name: "#garden" });
+    fireEvent.pointerDown(pill, { pointerType: "touch" });
+    await act(() => new Promise((done) => setTimeout(done, 550)));
+    expect(screen.getByRole("status").textContent).toContain(
+      "Suggested by Tasks: Seen in similar notes",
+    );
+    fireEvent.pointerUp(pill, { pointerType: "touch" });
+    fireEvent.click(pill);
+    await act(() => new Promise((done) => setTimeout(done, 50)));
+    expect(decide).not.toHaveBeenCalled();
+    fireEvent.pointerDown(pill, { pointerType: "touch" });
+    fireEvent.pointerUp(pill, { pointerType: "touch" });
+    fireEvent.click(pill);
+    await waitFor(() => expect(decide).toHaveBeenCalledWith("s0", "accept"));
   });
   it("draws the daily slip's note rendered, archives it with feedback and refreshes the slip", async () => {
     const manifest = {

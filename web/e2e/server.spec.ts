@@ -81,12 +81,16 @@ test("real server capture, image, checkbox, edit history, search and label rewri
     .getByRole("link", { name: "#" + label, exact: true })
     .click();
   await expect(page).toHaveURL(new RegExp("/l/" + label));
-  await page.getByLabel("Label actions").selectOption("rename");
-  await page.getByLabel("New label path").fill(label + "renamed");
+  await page.getByLabel("Label actions").click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await page.getByLabel("New name").fill(label + "renamed");
   await expect(
-    page.getByText("Rewrites 1 notes.", { exact: false }),
+    page.getByText("Renames #" + label + " in 1 note.", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Rename", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Rename", exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(label + "renamed"));
   await expect(
     page.locator("article.entry").filter({ hasText: title }),

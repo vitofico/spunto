@@ -167,10 +167,10 @@ test("empty long labels wrap without overlapping their compact actions", async (
   const label = "layout/" + "x".repeat(110);
   await page.goto("/l/" + label);
   await expect(
-    page.getByRole("heading", { name: "No notes with this label yet." }),
+    page.getByRole("heading", { name: "Nothing under #" + label + " yet." }),
   ).toBeVisible();
   await expect(page.locator(".empty p")).toHaveText(
-    "Notes with #" + label + " will appear here.",
+    "Notes you write here get #" + label + " automatically.",
   );
   await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
   const heading = await page.locator(".label-title h1").boundingBox();

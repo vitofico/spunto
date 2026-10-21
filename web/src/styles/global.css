@@ -590,9 +590,10 @@ kbd {
   padding: var(--s-4) var(--s-8);
   min-height: 28px;
 }
+/* The one empty state: a serif headline, one sans line, at most one action. */
 .empty {
-  margin: var(--s-64) auto var(--s-48);
-  max-width: 420px;
+  margin: var(--s-64) 0 var(--s-48);
+  max-width: 28rem;
   overflow-wrap: anywhere;
 }
 .empty :is(h1, h2) {
@@ -602,6 +603,7 @@ kbd {
 }
 .empty p {
   color: var(--ink-2);
+  margin: 0 0 var(--s-16);
 }
 .empty ol {
   padding-left: var(--s-20);
@@ -839,8 +841,79 @@ mark[data-match] {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.label-title select {
+.label-title h1:focus {
+  outline: none;
+}
+.icon-button {
+  min-width: 36px;
+  padding: var(--s-8);
+}
+.menu-anchor {
+  position: relative;
   flex-shrink: 0;
+}
+/* A small themed menu, drawn like the label autocomplete. */
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-4));
+  min-width: 180px;
+  padding: var(--s-8);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-14);
+  background: var(--raised);
+  box-shadow: var(--e2);
+  z-index: 10;
+  animation: fade-in var(--dur-1) var(--ease-out);
+}
+.menu button {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-8);
+  text-align: left;
+  color: var(--ink-2);
+}
+.menu button.danger {
+  color: var(--danger);
+}
+.menu button:focus-visible {
+  outline-offset: -2px;
+}
+.menu button:focus,
+.menu button:hover {
+  background: var(--sunken);
+}
+.composer-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+  margin: 0 0 var(--s-8);
+  font-size: var(--t-meta-size);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) 0 var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.chip button {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: var(--s-2);
+  border-radius: var(--r-full);
+  color: var(--ink-2);
+}
+.chip .icon {
+  width: 14px;
+  height: 14px;
 }
 .load-more {
   display: block;
@@ -1016,7 +1089,16 @@ mark[data-match] {
     align-items: flex-start;
   }
   .label-title h1 {
-    flex-basis: 100%;
+    flex: 1 1 0;
+  }
+  .icon-button,
+  .menu button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .chip button {
+    padding: var(--s-12);
+    margin: calc(-1 * var(--s-8)) 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

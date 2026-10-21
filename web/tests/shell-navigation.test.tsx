@@ -102,6 +102,47 @@ it("plugin commands that load after the palette opens are options too", async ()
   ).toBeTruthy();
 });
 
+it("the highlighted row stays highlighted when plugin rows arrive above it", async () => {
+  let load!: () => void;
+  vi.spyOn(api, "manifest").mockReturnValue(
+    new Promise((resolve) => {
+      load = () =>
+        resolve({
+          ui: 1,
+          plugins_rev: 1,
+          plugins: [
+            {
+              id: "ask",
+              name: "Ask your notes",
+              state: "enabled",
+              switch: "on",
+              contributes: {
+                commands: [
+                  { id: "ask", title: "Ask your notes", where: ["palette"] },
+                ],
+              },
+            },
+          ],
+        } as unknown as Awaited<ReturnType<typeof api.manifest>>);
+    }),
+  );
+  const close = vi.fn();
+  wrap(<Palette onClose={close} />);
+  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  await act(() => new Promise((settle) => setTimeout(settle, 50)));
+  fireEvent.keyDown(input, { key: "ArrowDown" });
+  fireEvent.keyDown(input, { key: "ArrowDown" });
+  const highlighted = () =>
+    screen.getByRole("option", { selected: true }).textContent;
+  expect(highlighted()).toBe("Go to Archive");
+  await act(async () => load());
+  await screen.findByRole("option", { name: /^Ask your notes/ });
+  expect(highlighted()).toBe("Go to Archive");
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(close).toHaveBeenCalled();
+  expect(window.location.pathname).toBe("/archive");
+});
+
 it("palette leaves out groups with nothing to offer", async () => {
   wrap(<Palette onClose={() => {}} />);
   fireEvent.change(screen.getByRole("textbox"), {

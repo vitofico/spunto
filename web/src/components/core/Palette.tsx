@@ -30,8 +30,8 @@ export function Palette({
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<unknown>(initialResult ?? null);
   const [origin, setOrigin] = useState(initialOrigin);
-  // Index into the rows below; the first row is "Search for …" whenever there is a query.
-  const [active, setActive] = useState(-1);
+  // The highlighted row itself, not its place, so it stays highlighted when rows arrive above it.
+  const [active, setActive] = useState<HTMLElement | null>(null);
   const [location, navigate] = useLocation();
   // Any navigation closes the palette, including links inside plugin results.
   const openedAt = useRef(location);
@@ -54,15 +54,15 @@ export function Palette({
     ...(list.current?.querySelectorAll<HTMLElement>("button:not(:disabled)") ??
       []),
   ];
-  function paint(index: number) {
+  function paint(highlighted: HTMLElement | null) {
     const all = rows();
     all.forEach((row, at) => {
       row.id = "palette-option-" + at;
       row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", String(at === index));
+      row.setAttribute("aria-selected", String(row === highlighted));
       row.tabIndex = -1;
     });
-    const current = all[index];
+    const current = all.find((row) => row === highlighted);
     current?.scrollIntoView?.({ block: "nearest" });
     if (current)
       input.current?.setAttribute("aria-activedescendant", current.id);
@@ -76,7 +76,11 @@ export function Palette({
       observer.observe(list.current, { childList: true, subtree: true });
     return () => observer.disconnect();
   });
-  useEffect(() => setActive(query.trim() ? 0 : -1), [query]);
+  // The first row is "Search for …" whenever there is a query.
+  useEffect(
+    () => setActive(query.trim() ? (rows()[0] ?? null) : null),
+    [query],
+  );
   useEffect(() => {
     const previous = restoreFocus ?? (document.activeElement as HTMLElement);
     input.current?.focus();
@@ -172,19 +176,23 @@ export function Palette({
             placeholder="Search notes, labels and actions…"
             onKeyDown={(e) => {
               if (result) return;
-              const count = rows().length;
+              const all = rows();
+              const count = all.length;
+              const index = active ? all.indexOf(active) : -1;
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
                 if (!count) return;
                 const step = e.key === "ArrowDown" ? 1 : -1;
-                setActive((index) =>
-                  index < 0 && step < 0
-                    ? count - 1
-                    : (index + step + count) % count,
+                setActive(
+                  all[
+                    index < 0 && step < 0
+                      ? count - 1
+                      : (index + step + count) % count
+                  ],
                 );
               } else if (e.key === "Enter") {
                 e.preventDefault();
-                rows()[active]?.click();
+                all[index]?.click();
               }
             }}
           />
@@ -212,8 +220,7 @@ export function Palette({
             aria-label="Results"
             onMouseMove={(e) => {
               const row = (e.target as HTMLElement).closest("button");
-              const index = row ? rows().indexOf(row) : -1;
-              if (index >= 0 && index !== active) setActive(index);
+              if (row && row !== active && rows().includes(row)) setActive(row);
             }}
           >
             {query.trim() && (

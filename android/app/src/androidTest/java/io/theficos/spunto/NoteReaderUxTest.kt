@@ -1,6 +1,7 @@
 package io.theficos.spunto
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -30,35 +31,32 @@ class NoteReaderUxTest {
   runBlocking {authority.requireCurrent();repository.putNote(Note(id,original,privateNote=true))}
   try {
    compose.setContent {if(mounted) SpuntoApp(model,initialNoteId=id)}
-   compose.waitUntil(10_000) {compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
-   compose.onNodeWithText("Edit").assertIsDisplayed()
+   compose.waitUntil(10_000) {compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("More note actions").assertIsDisplayed()
-   listOf("About this note","History","Share","Save Markdown","Pin","Archive","Move to trash").forEach {compose.onNodeWithText(it).assertDoesNotExist()}
-   compose.onNodeWithContentDescription("Private note").assertDoesNotExist()
+   listOf("History","Share","Save as Markdown","Pin","Archive","Move to trash").forEach {compose.onNodeWithText(it).assertDoesNotExist()}
    compose.onNode(hasScrollAction()).performTouchInput {swipeUp()}
-   compose.onNodeWithText("Edit").assertIsDisplayed().performClick()
+   // The text itself is the way in, wherever the reader has scrolled to.
+   compose.onNode(editableNote).performSemanticsAction(SemanticsActions.OnClick)
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithText("Done").assertIsDisplayed()
    compose.onNodeWithText("Save",useUnmergedTree=true).assertDoesNotExist()
    compose.onNodeWithContentDescription("More note actions").assertDoesNotExist()
    compose.onNodeWithContentDescription("Note text").performTextReplacement(changed)
    compose.onNodeWithText("Done").performClick()
-   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==changed} && compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
+   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==changed} && compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("More note actions").performClick()
-   compose.onNodeWithText("Note actions").assertIsDisplayed()
-   compose.onNodeWithText("About this note").assertIsDisplayed()
    compose.onNodeWithText("History").assertIsDisplayed()
-   compose.onNodeWithContentDescription("Private note").assertIsOn()
+   compose.onNodeWithText("Move to trash").assertIsDisplayed()
+   compose.onNode(isToggleable() and hasText("Private")).assertIsOn()
    compose.onNodeWithText("Pin").performClick()
    compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.pinned==true}}
-   compose.onNodeWithText("Note actions").assertDoesNotExist()
-   compose.onNodeWithText("Edit").assertIsDisplayed()
-   compose.onNodeWithText("Edit").performClick()
+   compose.onNodeWithText("Move to trash").assertDoesNotExist()
+   compose.onNode(editableNote).performSemanticsAction(SemanticsActions.OnClick)
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    val backEdit=changed+" saved through the visible Back button"
    compose.onNodeWithContentDescription("Note text").performTextReplacement(backEdit)
    compose.onNodeWithContentDescription("Back").performClick()
-   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==backEdit} && compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
+   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==backEdit} && compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("More note actions").assertIsDisplayed()
    assertEquals(capture,runBlocking {repository.dao.draftSnapshot("capture")})
   } finally {

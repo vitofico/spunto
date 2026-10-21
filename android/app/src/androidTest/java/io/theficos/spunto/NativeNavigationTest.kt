@@ -25,8 +25,8 @@ class NativeNavigationTest {
  }
  private fun openSheet() {
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
-  compose.waitUntil(10_000) {compose.onAllNodesWithText("Labels and views").fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
-  compose.onNodeWithText("Labels and views").assertIsDisplayed()
+  compose.waitUntil(10_000) {compose.onAllNodes(labelFilterMatcher()).fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
+  compose.onNode(labelFilterMatcher()).assertIsDisplayed()
  }
  private fun labelFilterMatcher()=hasSetTextAction() and hasText("Find a label") and hasAnyAncestor(isDialog())
  private fun filterLabels(query:String) {
@@ -75,8 +75,8 @@ class NativeNavigationTest {
    filterLabels("Synthetic_no_matching_label_${System.nanoTime()}")
    compose.onNodeWithText("All notes").assertIsSelected()
    assertDraft(body)
-   compose.onNodeWithText("Close").performClick()
-   compose.onNodeWithText("Labels and views").assertDoesNotExist()
+   compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+   compose.onNode(labelFilterMatcher()).assertDoesNotExist()
    compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
    waitForCapture(body);compose.onNodeWithContentDescription("Note text").assertTextEquals(body)
    assertDraft(body)
@@ -105,7 +105,7 @@ class NativeNavigationTest {
    compose.onNodeWithTag("label:$key").assertIsNotSelected()
    compose.waitForIdle()
    compose.onNodeWithTag("label:$key").performClick()
-   compose.onNodeWithText("Labels and views").assertDoesNotExist()
+   compose.onNode(labelFilterMatcher()).assertDoesNotExist()
    compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("#$path ▾")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
    compose.waitUntil(10_000) {compose.onAllNodesWithText(noteBody,substring=true).fetchSemanticsNodes().isNotEmpty()}
@@ -114,7 +114,7 @@ class NativeNavigationTest {
    filterLabels(unique)
    sheetList().performScrollToNode(hasTestTag("label:$key"))
    compose.onNodeWithTag("label:$key").assertIsSelected()
-   compose.onNodeWithText("Close").performClick()
+   compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
    compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("#$path ▾")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist();assertDraft(draftBody)
    openSheet()

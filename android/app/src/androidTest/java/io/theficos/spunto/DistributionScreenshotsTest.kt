@@ -96,20 +96,19 @@ class DistributionScreenshotsTest {
   compose.onNode(search).performClick()
   compose.waitUntil(10_000) {compose.onAllNodes(search and isFocused()).fetchSemanticsNodes().size==1}
   compose.onNode(search and isFocused()).performTextInput("#imperial")
-  compose.waitUntil(10_000) {compose.onAllNodesWithContentDescription("Note,",substring=true).fetchSemanticsNodes().size==2}
+  val result={title:String ->hasClickAction() and hasText(title,substring=true)}
+  compose.waitUntil(10_000) {listOf("Death Star inspection","Luke: a quieter follow-up").all {compose.onAllNodes(result(it)).fetchSemanticsNodes().size==1}}
   hideKeyboard(awaitVisible=true)
   capture("2.png")
-  compose.onNode(hasText("Open") and hasClickAction() and hasAnyAncestor(hasContentDescription("Death Star inspection",substring=true))).performClick()
+  compose.onNode(result("Death Star inspection")).performClick()
   waitForDisplayed(hasContentDescription("More note actions"))
-  waitForDisplayed(hasText("Edit"))
+  waitForDisplayed(editableNote)
   compose.onNodeWithContentDescription("More note actions").assertIsDisplayed()
-  compose.onNodeWithText("Edit").assertIsDisplayed()
   capture("3.png")
   compose.onNodeWithContentDescription("Back",useUnmergedTree=true).performClick()
   hideKeyboard(awaitVisible=true)
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
-  waitForDisplayed(hasText("Labels and views"))
-  compose.onNodeWithText("Labels and views").assertIsDisplayed()
+  waitForDisplayed(hasSetTextAction() and hasText("Find a label"))
   waitForDisplayed(hasContentDescription("Drag handle"))
   val sheetDragDistance=compose.activity.window.decorView.height*0.45f
   compose.onNodeWithContentDescription("Drag handle").performTouchInput {

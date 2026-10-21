@@ -27,7 +27,7 @@ class PluginRenderingTest {
   val selected=mutableListOf<String>()
   compose.setContent { SpuntoTheme { ProposalLine(proposals,mapOf("tidy" to "Tidy text"),{selected+=it["id"]!!.jsonPrimitive.content},{}) } }
   compose.onNodeWithText("Proposal 4").assertDoesNotExist()
-  compose.onNodeWithText("+1").performScrollTo().assertIsDisplayed().performClick()
+  compose.onNodeWithText("+1").assertIsDisplayed().performClick()
   compose.runOnIdle { assertTrue(selected.isEmpty()) }
   compose.onNodeWithContentDescription("Proposal 4 · Tidy text · proposed wording change").assertIsDisplayed().performClick()
   compose.runOnIdle { assertEquals(listOf("p4"),selected) }

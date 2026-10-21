@@ -77,7 +77,7 @@ class FirstRunGuideIntegrationTest {
  }
  @Test fun incomingNoteDefersGuideAndItsMarkerUntilANormalLauncherEntry() {
   ActivityScenario.launch<MainActivity>(launcher().putExtra("noteId","synthetic-guide-deferred-missing-note")).use {
-   waitFor("Note unavailable.")
+   waitFor("This note isn't on this phone.")
    compose.onNodeWithText("Getting started",substring=true).assertDoesNotExist()
    assertFalse(store.completed)
   }

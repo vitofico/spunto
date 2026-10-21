@@ -46,15 +46,15 @@ class ComposerDoneRecordingTest {
     authority.requireCurrent()
     repository.dao.putRecording(RecordingDraftEntity(clip,id,id,file.absolutePath+".partial",file.absolutePath,repository.dao.state()?.serverUrl.orEmpty(),"ready",System.currentTimeMillis(),durationMs=metadata.durationMs,byteSize=metadata.byteSize,sha256=metadata.sha256))
    }
-   compose.setContent {SpuntoTheme("carta","light") {if(mounted) NoteScreen(model,id,onClose={},onNote={})}}
-   compose.waitUntil(10_000) {compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
-   compose.onNodeWithText("Edit").performClick()
+   compose.setContent {SpuntoTheme("carta","light") {if(mounted) ShellLocals {NoteScreen(model,id,onClose={},onNote={})}}}
+   compose.waitUntil(10_000) {compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
+   compose.onNode(editableNote).performClick()
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithText("Save").assertDoesNotExist()
    compose.onNodeWithText("Recover recording").performScrollTo().performClick()
    compose.waitUntil(10_000) {compose.onAllNodesWithText("Done to attach this clip. Discard keeps your text.").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithText("Done").performClick()
-   compose.waitUntil(10_000) {runBlocking {repository.dao.attachment(clip)!=null} && compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
+   compose.waitUntil(10_000) {runBlocking {repository.dao.attachment(clip)!=null} && compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
    runBlocking {
     assertEquals("retained",repository.dao.recording(clip)?.state)
     assertTrue(repository.dao.get(id)!!.privateNote)

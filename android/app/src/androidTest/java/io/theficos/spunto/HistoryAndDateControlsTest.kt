@@ -14,7 +14,9 @@ import io.theficos.spunto.core.model.uuidV7
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import io.theficos.spunto.core.design.SpuntoTheme
+import io.theficos.spunto.data.local.NotesRepository
 import io.theficos.spunto.data.local.RevisionEntity
+import androidx.room.withTransaction
 import io.theficos.spunto.data.sync.HistoryRefreshResult
 import org.junit.*
 import org.junit.Assert.*
@@ -26,6 +28,8 @@ import org.junit.runner.RunWith
  val nav=remember { Navigator(mutableStateListOf("timeline")) {} };val feedback=remember { Feedback(SnackbarHostState(),scope) }
  CompositionLocalProvider(LocalNavigator provides nav,LocalFeedback provides feedback,content=content)
 }
+/** A private synthetic note made the way the app makes one, a create with the Private flag, so its later edits sync instead of being refused. */
+internal suspend fun NotesRepository.privateSyntheticNote(id:String,body:String)=db.withTransaction {save(body,id);setFlags(id,privateNote=true)}
 /** The note text, which edits in place when tapped. */
 internal val editableNote=SemanticsMatcher("taps to edit the note") { it.config.getOrNull(SemanticsActions.OnClick)?.label=="Edit note" }
 
@@ -60,7 +64,7 @@ class HistoryAndDateControlsTest {
   val model=SpuntoViewModel(app);val repository=model.repository;val id=uuidV7()
   val a="Synthetic history A "+System.nanoTime();val b="Synthetic history B "+System.nanoTime();val d="Synthetic history D "+System.nanoTime()
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
-  runBlocking {repository.putNote(Note(id,a,privateNote=true))}
+  runBlocking {repository.privateSyntheticNote(id,a)}
   try {
    compose.setContent {SpuntoTheme("carta","light") {ShellLocals {NoteScreen(model,id,onClose={},onNote={})}}}
    compose.waitUntil(10_000) {compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
@@ -99,7 +103,7 @@ class HistoryAndDateControlsTest {
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
   runBlocking {
    authority.requireCurrent()
-   repository.putNote(Note(id,a,privateNote=true))
+   repository.privateSyntheticNote(id,a)
    val editor=repository.beginEditor(id)
    assertTrue(repository.finishEditor(repository.editorWrite(editor,b)))
    val original=repository.history(id).first().first {it.body==a}
@@ -131,7 +135,7 @@ class HistoryAndDateControlsTest {
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
   runBlocking {
    authority.requireCurrent()
-   repository.putNote(Note(id,quote,privateNote=true));repository.putNote(Note(resumed,"> Synthetic resumed quote",privateNote=true))
+   repository.privateSyntheticNote(id,quote);repository.privateSyntheticNote(resumed,"> Synthetic resumed quote")
    repository.saveDraft(resumed,retained)
   }
   val selected=mutableStateOf(id)
@@ -170,12 +174,11 @@ class HistoryAndDateControlsTest {
   val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
   val model=SpuntoViewModel(app);val repository=model.repository;val id=uuidV7()
   val original="Synthetic tombstoned committed "+System.nanoTime();val typed="Synthetic tombstoned visible words "+System.nanoTime()
-  runBlocking {repository.putNote(Note(id,original,privateNote=true));repository.update(id,original)}
+  runBlocking {repository.privateSyntheticNote(id,original)}
   compose.setContent {SpuntoTheme("carta","light") {Composer(model,id,original,autoFocus=false,onSave={})}}
   compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
   compose.onNodeWithContentDescription("Note text").performTextReplacement(typed)
   compose.waitUntil(10_000) {runBlocking {repository.dao.draftSnapshot(id)?.body==typed}}
-  val queued=runBlocking {repository.dao.outbox().filter {it.noteId==id}.map {it.opId to it.payload}}
   assertEquals(original,runBlocking {repository.dao.get(id)!!.body})
   runBlocking {
    repository.dao.putTombstone(io.theficos.spunto.data.local.TombstoneEntity(id,System.currentTimeMillis()))
@@ -187,7 +190,8 @@ class HistoryAndDateControlsTest {
   compose.onNodeWithContentDescription("Note text").assertIsEnabled().assertTextEquals(typed)
   assertEquals(typed,runBlocking {repository.dao.draftSnapshot(id)!!.body})
   assertEquals(original,runBlocking {repository.dao.get(id)!!.body});assertTrue(runBlocking {repository.dao.get(id)!!.trashed})
-  assertEquals(queued,runBlocking {repository.dao.outbox().filter {it.noteId==id}.map {it.opId to it.payload}})
+  // Sync may finish the create meanwhile; what matters is that the typed words were never queued.
+  assertTrue(runBlocking {repository.dao.outbox().none {it.noteId==id && typed in it.payload}})
  }
 
 }

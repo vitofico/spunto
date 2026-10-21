@@ -11,7 +11,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
-import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.core.model.uuidV7
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -32,7 +31,7 @@ class NoteReaderUxTest {
   val original=(1..60).joinToString("\n\n") {"Synthetic long reader paragraph $it with enough words to fill the screen."}
   var mounted by mutableStateOf(true)
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
-  runBlocking {authority.requireCurrent();repository.putNote(Note(id,original,privateNote=true))}
+  runBlocking {authority.requireCurrent();repository.privateSyntheticNote(id,original)}
   try {
    compose.setContent {if(mounted) SpuntoApp(model,initialNoteId=id)}
    compose.waitUntil(10_000) {compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}

@@ -5,7 +5,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
-import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.core.model.uuidV7
 import io.theficos.spunto.data.local.RecordingDraftEntity
 import io.theficos.spunto.data.local.inspectRecording
@@ -30,7 +29,7 @@ class ComposerDoneRecordingTest {
   val id=uuidV7();val clip=uuidV7();val body="Synthetic note with recovered recording"
   val file=File(model.container.recordingDirectory,"$clip.ogg")
   var mounted by mutableStateOf(true)
-  runBlocking {model.container.recordingRecovery.await();authority.requireCurrent();repository.putNote(Note(id,body,privateNote=true))}
+  runBlocking {model.container.recordingRecovery.await();authority.requireCurrent();repository.privateSyntheticNote(id,body)}
   try {
    runBlocking {
     val encoder=AndroidOggEncoder()

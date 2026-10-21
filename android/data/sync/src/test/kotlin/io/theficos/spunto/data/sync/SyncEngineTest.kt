@@ -214,4 +214,44 @@ class SyncEngineTest {
   }
  }
 
+ private fun refusingServer(pushed:MutableList<JsonObject>,pull:JsonArray=JsonArray(emptyList()),notes:Map<String,JsonObject> =emptyMap(),result:(JsonObject)->JsonObject)=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(val path=request.requestUrl!!.encodedPath){
+  "/api/v1/meta"->response("""{"sync_epoch":"e"}""")
+  "/api/v1/sync/push"->{val ops=Json.parseToJsonElement(request.body.readUtf8()).jsonObject["ops"]!!.jsonArray.map {it.jsonObject};synchronized(pushed) {pushed+=ops};response(buildJsonObject {put("epoch","e");put("results",JsonArray(ops.map {op ->JsonObject(result(op)+("op_id" to op["op_id"]!!))}))}.toString())}
+  "/api/v1/sync/pull"->response(buildJsonObject {put("epoch","e");put("cursor","e.2");put("has_more",false);put("plugins_rev",0);put("items",pull)}.toString())
+  "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+  else->notes[path.removePrefix("/api/v1/notes/")]?.let {response(it.toString())} ?: response("{}",404)
+ }}
+ private fun applied(op:JsonObject,version:Int=(op["base_version"]?.jsonPrimitive?.int ?: 0)+1)=buildJsonObject {put("status","applied");put("version",version);put("note",note(op["note_id"]!!.jsonPrimitive.content,op["body"]!!.jsonPrimitive.content,version))}
+ @Test fun refusedChangeLeavesTheWaitingCountKeepsItsWordsAndSettlesAsANewNote()=runBlocking {
+  // Edited on this phone while another device deleted it: the server refuses the edit, and nothing can retry it.
+  val id=uuidV7();repo.putNote(Note(id,"Server words",serverRev=1));repo.update(id,"Phone words");val pushed=mutableListOf<JsonObject>()
+  val newer=note(id,"Newer server words",2)
+  server.dispatcher=refusingServer(pushed,buildJsonArray {add(buildJsonObject {put("kind","note");put("change_seq",2);put("data",newer)})},mapOf(id to newer)) {op ->if(op["note_id"]!!.jsonPrimitive.content==id) buildJsonObject {put("status","rejected");put("code","not_found")} else applied(op)}
+  assertEquals(SyncStatus.Complete(0),engine().sync());assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(1,pushed.size);assertEquals(0,repo.pendingCount.first());assertEquals(mapOf(id to "not_found"),repo.refused.first())
+  assertEquals("Phone words",repo.dao.get(id)!!.body)
+  val copy=repo.keepRefusedAsNewNote(id)
+  assertEquals(emptyMap<String,String>(),repo.refused.first());assertEquals("Phone words",repo.dao.get(copy)!!.body);assertEquals(1,repo.pendingCount.first())
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals("Newer server words",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending);assertFalse(repo.dao.get(copy)!!.pending);assertTrue(repo.dao.outbox().isEmpty())
+ }
+ @Test fun shortenedNotesSyncAfterTheServerRefusedThemAsTooLong()=runBlocking {
+  val fresh=repo.create("x".repeat(100_001));val known=uuidV7();repo.putNote(Note(known,"Server words",serverRev=1));repo.update(known,"y".repeat(100_001));val pushed=mutableListOf<JsonObject>()
+  server.dispatcher=refusingServer(pushed) {op ->if(op["body"]!!.jsonPrimitive.content.length>100_000) buildJsonObject {put("status","rejected");put("code","too_large")} else applied(op)}
+  assertEquals(SyncStatus.Complete(0),engine().sync());assertEquals(mapOf(fresh to "too_large",known to "too_large"),repo.refused.first())
+  repo.update(fresh,"Short now");repo.update(known,"Short too")
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(listOf("note.create","note.update","note.create","note.update"),pushed.map {it["type"]!!.jsonPrimitive.content})
+  assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
+  assertEquals("Short now",repo.dao.get(fresh)!!.body);assertEquals("Short too",repo.dao.get(known)!!.body);assertFalse(repo.dao.get(fresh)!!.pending);assertFalse(repo.dao.get(known)!!.pending)
+ }
+ @Test fun refusedDecisionLetsTheServerCopyWin()=runBlocking {
+  val id=uuidV7();val proposal=uuidV7();repo.putNote(Note(id,"Owner words",serverRev=1));val pushed=mutableListOf<JsonObject>()
+  repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {put("action","append_text");put("payload",buildJsonObject {put("text","Machine words")});put("status","pending")}.toString()))
+  repo.decideSuggestion(proposal,"accept");assertTrue(repo.dao.get(id)!!.body.endsWith("Machine words"))
+  server.dispatcher=refusingServer(pushed,notes=mapOf(id to note(id,"Owner words\n\nDecided on the web",2))) {buildJsonObject {put("status","rejected");put("code","suggestion_decided")}}
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
+  assertEquals("Owner words\n\nDecided on the web",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending)
+ }
 }

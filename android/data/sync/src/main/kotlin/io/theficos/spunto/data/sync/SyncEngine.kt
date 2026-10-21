@@ -89,7 +89,7 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
    val manifest=api.manifest()
    val catalog=api.get("/api/v1/plugins")
    persistPluginSnapshot(repository,config,epoch,manifest,catalog,configProvider=configProvider)
-   val pending=dao.outbox().size
+   val pending=dao.outbox().count { it.error==null }
    repository.record("complete")
    SyncStatus.Complete(pending).also { mutableState.value=it }
   } catch(cancelled:CancellationException) { throw cancelled }
@@ -129,11 +129,19 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
  private suspend fun acknowledge(result:PushResult,batch:List<OutboxEntity>) = ownedTransaction {
   val dao=repository.dao; val sent=batch.firstOrNull { it.opId==result.opId }?:return@ownedTransaction
   val effective=if(result.status=="duplicate") result.original?:result else result
-  if(effective.status=="rejected") { dao.reject(sent.opId,effective.code?:"rejected"); sent.noteId?.let { dao.get(it)?.note()?.let { note -> repository.putNote(note.copy(syncError=effective.code?:"rejected",pending=true)) } }; return@ownedTransaction }
+  val sentOperation=Json.decodeFromString<OutboxOperation>(sent.payload)
+  if(effective.status=="rejected") {
+   // A refused decision (decided elsewhere first) leaves the server's copies in charge. A refused note change keeps
+   // its row, so pulls never overwrite the words, but leaves the waiting count until the owner settles it on the note.
+   if(sentOperation.type=="suggestion.decide") { dao.removeOutbox(sent.opId);(listOfNotNull(sent.noteId)+sentOperation.affectedNoteIds).distinct().forEach { dao.putRefresh(RefreshNoteEntity(it)) } }
+   else { dao.reject(sent.opId,effective.code?:"rejected"); sent.noteId?.let { dao.get(it)?.note()?.let { note -> repository.putNote(note.copy(syncError=effective.code?:"rejected",pending=true)) } } }
+   return@ownedTransaction
+  }
   if(effective.status !in listOf("applied","merged","conflict","duplicate")) return@ownedTransaction
   dao.removeOutbox(sent.opId)
-  val sentOperation=Json.decodeFromString<OutboxOperation>(sent.payload)
   if(sentOperation.type=="note.restore") sentOperation.supersededOpIds.forEach { dao.removeOutbox(it) }
+  // The server holds this note's latest words now, so changes it refused earlier are settled.
+  if(sentOperation.type in listOf("note.create","note.update","note.restore")) dao.outbox().filter { it.noteId==sent.noteId && it.error!=null }.forEach { dao.removeOutbox(it.opId) }
   val id=sent.noteId?:return@ownedTransaction
   val note=dao.get(id)?.note()?:return@ownedTransaction
   val remaining=dao.outbox().filter { it.noteId==id }

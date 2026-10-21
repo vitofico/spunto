@@ -77,6 +77,17 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  }
  val notes = dao.notes().map { rows -> rows.map { it.note() } }
  val pendingCount = dao.pendingCount()
+ /** Notes with a change the server refused, and its reason: kept here, out of the waiting count, until the owner settles them. */
+ val refused = dao.refusedOutbox().map { rows -> rows.filter { it.noteId!=null }.associate { it.noteId!! to it.error!! } }
+ /** The way out of a refused change that never loses words: the text becomes a new note, and the original follows the server again. */
+ suspend fun keepRefusedAsNewNote(id:String):String = db.withTransaction {
+  val note=dao.get(id)?.note(); require(note!=null) { "This note is no longer available." }
+  val copy=save(note.body)
+  if(note.pinned || note.privateNote) setFlags(copy,pinned=note.pinned.takeIf { it },privateNote=note.privateNote.takeIf { it })
+  dao.outbox().filter { it.noteId==id }.forEach { dao.removeOutbox(it.opId) }
+  if(note.serverRev==0 || dao.tombstone(id)!=null) { dao.remove(id);dao.clearLabels(id) } else dao.putRefresh(RefreshNoteEntity(id))
+  copy
+ }
  fun timeline() = notes
  fun observe(id: String) = dao.observe(id).map { it?.note() }
  fun paging(spec:TimelineSpec=TimelineSpec()) = Pager(PagingConfig(pageSize=40,enablePlaceholders=false)) { dao.filteredPaging(timelineQuery(spec)) }.flow
@@ -124,9 +135,11 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   val noteId = id ?: uuidV7()
   db.withTransaction {
    val old = dao.get(noteId); val now = System.currentTimeMillis()
+   // A note whose creation the server refused (too long, say) is created again by its next save.
+   val refusedCreate=dao.outbox().filter { it.noteId==noteId && it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="note.create" }.onEach { dao.removeOutbox(it.opId) }
    val note = old?.note()?.copy(body=body,title=titleOf(body),updatedAt=now,pending=true,syncError=null,machine=old.machine && old.body==body,updatedViaAgent=false) ?: Note(noteId,body,sourceUrl=sourceUrl,sourceKind=sourceKind,sourceRef=sourceRef,pending=true)
    putNote(note,localEdit=true,historyKind=historyKind)
-   enqueue(OutboxOperation(type=if(old==null) "note.create" else "note.update",noteId=noteId,body=body,baseVersion=old?.serverRev,createdAt=note.createdAt,sourceUrl=note.sourceUrl,sourceKind=note.sourceKind,sourceRef=note.sourceRef))
+   enqueue(OutboxOperation(type=if(old==null || refusedCreate.isNotEmpty()) "note.create" else "note.update",noteId=noteId,body=body,baseVersion=old?.serverRev,createdAt=note.createdAt,sourceUrl=note.sourceUrl,sourceKind=note.sourceKind,sourceRef=note.sourceRef))
   }; onChange(); return noteId
  }
  suspend fun setFlags(id: String,pinned: Boolean?=null,archived: Boolean?=null,trashed: Boolean?=null,privateNote: Boolean?=null) {

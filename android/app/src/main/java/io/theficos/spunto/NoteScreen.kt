@@ -63,6 +63,7 @@ import kotlinx.serialization.json.*
  LaunchedEffect(id) { if(model.historyFor.value==id) model.historyFor.value=null }
  val value=note?.takeIf {it.id==id} ?: run { if(loaded.second) Text("This note isn't on this phone.",Modifier.padding(20.dp),color=MaterialTheme.colorScheme.onSurfaceVariant);return }
  val online by model.online.collectAsState()
+ val refused by model.repository.refused.collectAsState(emptyMap())
  fun finishEditing() {
   if(finishing || restoring) return
   val finish=finishEditor ?: return
@@ -90,6 +91,7 @@ import kotlinx.serialization.json.*
    Text(meta.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {contentDescription=meta})
   }
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
+  refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code)}}
   item {
    if(editing) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,trailing={
     Button(enabled=!finishing && !restoring && finishEditor!=null,onClick={finishEditing()},modifier=Modifier.heightIn(min=48.dp)) {Text(if(finishing) "Saving…" else "Done")}

@@ -75,7 +75,8 @@ interface SpuntoDao {
  @Query("DELETE FROM outbox WHERE opId=:id") suspend fun removeOutbox(id: String)
  @Query("UPDATE outbox SET sent=1 WHERE opId IN (:ids)") suspend fun markSent(ids: List<String>)
  @Query("UPDATE outbox SET error=:error WHERE opId=:id") suspend fun reject(id: String,error: String)
- @Query("SELECT COUNT(*) FROM outbox") fun pendingCount(): Flow<Int>
+ @Query("SELECT COUNT(*) FROM outbox WHERE error IS NULL") fun pendingCount(): Flow<Int>
+ @Query("SELECT * FROM outbox WHERE error IS NOT NULL ORDER BY createdAt,rowid") fun refusedOutbox():Flow<List<OutboxEntity>>
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putDraft(draft: DraftEntity)
  @Query("SELECT * FROM drafts WHERE id=:id") fun draft(id: String): Flow<DraftEntity?>
  @Query("SELECT * FROM drafts WHERE id=:id") suspend fun draftSnapshot(id:String):DraftEntity?

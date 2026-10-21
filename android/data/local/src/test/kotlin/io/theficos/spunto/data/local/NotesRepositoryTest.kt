@@ -47,7 +47,13 @@ class NotesRepositoryTest {
   val ops=repo.dao.outbox();assertEquals(2,ops.size);assertEquals(sent.payload,ops.first().payload);assertEquals("second",repo.dao.get(id)!!.body)
  }
  @Test fun draftAcknowledgementPreservesTyping() = runBlocking { repo.saveDraft(body="old");repo.saveDraft(body="new");repo.clearDraft("capture","old");assertEquals("new",repo.draft().first()!!.body) }
- @Test fun rejectedOperationStaysLocal() = runBlocking { val id=repo.create("local");val op=repo.dao.outbox().single();repo.dao.reject(op.opId,"not_found");repo.update(id,"new words");assertEquals(2,repo.dao.outbox().size);assertEquals("new words",repo.dao.get(id)!!.body) }
+ @Test fun refusedChangeStaysLocalOutsideTheWaitingCountAndARefusedCreateIsMadeAgainByTheNextSave() = runBlocking {
+  val id=repo.create("local");val created=repo.dao.outbox().single();repo.dao.reject(created.opId,"too_large")
+  assertEquals(0,repo.pendingCount.first());assertEquals(mapOf(id to "too_large"),repo.refused.first());assertEquals("local",repo.dao.get(id)!!.body)
+  repo.update(id,"new words")
+  val again=repo.dao.outbox().single();assertNull(again.error);assertEquals("note.create",Json.decodeFromString<OutboxOperation>(again.payload).type)
+  assertEquals(1,repo.pendingCount.first());assertEquals(emptyMap<String,String>(),repo.refused.first());assertEquals("new words",repo.dao.get(id)!!.body)
+ }
  @Test fun localEditBurstKeepsItsFirstAncestorAndBreaksAfterTimeoutOrRemoteChange()=runBlocking {
   val id=repo.create("Initial owner words")
   repo.update(id,"First edit");repo.update(id,"Second edit")

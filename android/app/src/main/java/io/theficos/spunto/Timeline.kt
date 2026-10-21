@@ -10,7 +10,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.zIndex
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
@@ -169,7 +178,7 @@ internal fun entryDescription(note:Note,time:String):String {
     Text(listOfNotNull(time,meta.takeIf(String::isNotEmpty)).joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
     if(note.pending) Text("◯",style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
    }
-   Markdown(note.body.take(1200),note.machine,onLink={ if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(it.startsWith("/a/")) onNote(note.id) },onLabel={ nav.filter("label:$it") }) { model.toggleTask(note,it) }
+   FoldedBody(note.body) { text -> Markdown(text,note.machine,onLink={ if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(it.startsWith("/a/")) onNote(note.id) },onLabel={ nav.filter("label:$it") }) { model.toggleTask(note,it) } }
    val provenance=buildList {
     if(note.privateNote) add("Private")
     if(note.updatedViaAgent && note.sourceKind!="agent") add("Edited via agent")
@@ -193,6 +202,19 @@ internal fun entryDescription(note:Note,time:String):String {
    Icon(painterResource(R.drawable.ic_archive),contentDescription=null,tint=MaterialTheme.colorScheme.onPrimaryContainer);Text("Archive",color=MaterialTheme.colorScheme.onPrimaryContainer)
   }
  }) { entry() }
+}
+
+/** 03 §5.1: a long note folds after 8 lines, fading out, and "Show more" in ink-3 unfolds it in place (the note page never folds). Folded, only the first 1,200 characters are laid out. */
+@Composable internal fun FoldedBody(body:String,content:@Composable (String)->Unit) {
+ var expanded by rememberSaveable { mutableStateOf(false) };var overflows by remember { mutableStateOf(false) }
+ val line=with(LocalDensity.current) { SpuntoType.reading.lineHeight.toPx() };val paper=MaterialTheme.colorScheme.background
+ // Clip and fade outside the height cut, so they see the folded size.
+ Box(Modifier.clipToBounds().drawWithContent { drawContent();if(overflows && !expanded) drawRect(Brush.verticalGradient(listOf(Color.Transparent,paper),startY=size.height-2*line,endY=size.height)) }.layout { measurable,constraints ->
+  val full=measurable.measure(constraints.copy(maxHeight=Constraints.Infinity));val limit=(8*line).roundToInt()
+  overflows=body.length>1200 || full.height>limit
+  layout(full.width,if(expanded) full.height else minOf(full.height,limit)) { full.place(0,0) }
+ }) { content(if(expanded) body else body.take(1200)) }
+ if(overflows) TextButton(onClick={ expanded=!expanded },contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) { Text(if(expanded) "Show less" else "Show more",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
 }
 
 @Composable fun FilteredTimeline(model:SpuntoViewModel,route:String,from:String="",to:String="",onNote:(String)->Unit) {

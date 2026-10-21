@@ -25,6 +25,14 @@ class LayoutPolishTest {
   }
  }
 
+ @Test fun longNotesFoldAfterEightLinesAndShowMoreUnfoldsInPlace() {
+  val long=(1..40).joinToString("\n\n") { "Synthetic paragraph $it" }+"\n\nSynthetic tail line"
+  compose.setContent {SpuntoTheme("carta","light") {Column {FoldedBody(long) {io.theficos.spunto.core.design.Markdown(it)};FoldedBody("Synthetic short note") {io.theficos.spunto.core.design.Markdown(it)}}}}
+  compose.onAllNodesWithText("Show more").assertCountEquals(1)
+  compose.onNodeWithText("Synthetic paragraph 1").assertIsDisplayed();compose.onNodeWithText("Synthetic paragraph 12").assertIsNotDisplayed()
+  compose.onNodeWithText("Show more").assertHasClickAction().performClick()
+  compose.onNodeWithText("Synthetic tail line").assertExists();compose.onNodeWithText("Show less").assertExists()
+ }
  @Test fun saveStaysVisibleBesideScrollingToolsAtTwoHundredPercent() {
   var saves=0
   val saving=mutableStateOf(false)

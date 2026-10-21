@@ -7,6 +7,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -63,6 +64,7 @@ abstract class LockedActivity: FragmentActivity() {
  }
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
+  enableEdgeToEdge() // Android 15+ forces it at targetSdk 35; doing it everywhere keeps older phones the same.
   promptState = ViewModelProvider(this)[LockPromptState::class.java]
   prompt = buildPrompt(promptState.token)
   lifecycleScope.launch { appLock.state.collect { state ->

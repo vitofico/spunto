@@ -117,8 +117,9 @@ import kotlinx.serialization.json.*
     Icon(painterResource(R.drawable.ic_settings),contentDescription="Settings",modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    topBar.actions?.invoke(this)
-  })}) { padding ->
-   Column(Modifier.fillMaxSize().padding(padding)) {
+  },windowInsets=WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal+WindowInsetsSides.Top))},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
+   // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
+   Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
     if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message)
     StatusLines(model)
@@ -154,7 +155,7 @@ import kotlinx.serialization.json.*
      val outputs by model.outputs.collectAsState()
      outputs.firstOrNull { it.id==remote.string("suggestion_preview") && it.kind=="suggestion" && model.container.manifest.enabled(payload(it.payload).string("plugin")) }?.let { item -> SuggestionDecisionDialog(model,proposalData(item),openNote,{model.remote.value=JsonObject(emptyMap())}) }
     }
-   }
+   } }
   }
   } }
   })

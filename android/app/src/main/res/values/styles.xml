@@ -1,1 +1,6 @@
-<resources><style name="Theme.Spunto" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">#F8F5F0</item><item name="android:navigationBarColor">#F8F5F0</item></style><style name="Theme.Spunto.Capture" parent="Theme.Spunto"><item name="android:windowIsTranslucent">true</item><item name="android:windowBackground">@android:color/transparent</item><item name="android:backgroundDimEnabled">true</item></style></resources>
+<resources>
+ <!-- The window shows before the first Compose frame (and behind the Android 12+ splash), so it matches Carta's paper. -->
+ <color name="window_paper">#F8F5F0</color>
+ <style name="Theme.Spunto" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowBackground">@color/window_paper</item><item name="android:windowLightStatusBar">true</item></style>
+ <style name="Theme.Spunto.Capture" parent="Theme.Spunto"><item name="android:windowIsTranslucent">true</item><item name="android:windowBackground">@android:color/transparent</item><item name="android:backgroundDimEnabled">true</item></style>
+</resources>

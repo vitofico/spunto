@@ -1,0 +1,5 @@
+<resources>
+ <!-- Dark mode starts on Carta's dark paper instead of a white window. -->
+ <color name="window_paper">#171412</color>
+ <style name="Theme.Spunto" parent="android:style/Theme.Material.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowBackground">@color/window_paper</item><item name="android:windowLightStatusBar">false</item></style>
+</resources>

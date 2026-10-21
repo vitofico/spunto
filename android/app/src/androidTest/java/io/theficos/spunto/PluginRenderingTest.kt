@@ -32,6 +32,15 @@ class PluginRenderingTest {
   compose.onNodeWithContentDescription("Proposal 4 · Tidy text · proposed wording change").assertIsDisplayed().performClick()
   compose.runOnIdle { assertEquals(listOf("p4"),selected) }
  }
+ @Test fun dismissEndsTheRowAndDismissesEverySuggestionInIt() {
+  val proposals=(1..4).map { index -> buildJsonObject { put("id","p$index");put("plugin","label-suggestions");put("title","Add #idea$index");put("action","add_label") } }
+  val dismissed=mutableListOf<String>()
+  compose.setContent { SpuntoTheme { ProposalLine(proposals,mapOf("label-suggestions" to "Label suggestions"),{},{dismissed+=it}) } }
+  compose.onNodeWithContentDescription("Add #idea2 · Label suggestions · proposed addition").performTouchInput { longClick() }
+  compose.runOnIdle { assertEquals(listOf("p2"),dismissed);dismissed.clear() }
+  compose.onNodeWithContentDescription("Dismiss 4 suggestions").assertIsDisplayed().assertHasClickAction().performClick()
+  compose.runOnIdle { assertEquals(listOf("p1","p2","p3","p4"),dismissed) }
+ }
  @Test fun precomputedCombinedDiffLinesHighlightBothSidesWithoutRawMarkers() {
   val diff=Json.parseToJsonElement("""{"type":"diff","base_version":3,"hunks":[{"old_start":1,"new_start":1,"lines":["-Original words","+Proposed words"]}]}""").jsonObject
   compose.setContent { SpuntoTheme { Vocabulary(diff) } }

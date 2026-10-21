@@ -149,17 +149,18 @@ internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugin
  }
 }
 
-/** 03 §5.1: one line of dashed pills; what does not fit folds into "+N", which unfolds the rest for this note only. Each pill dismisses on × or long-press. */
+/** 03 §5.1: one line of dashed pills; what does not fit folds into "+N", which unfolds the rest for this note only. Each pill dismisses on × or long-press; the grey "Dismiss" ending the row dismisses them all. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable fun ProposalLine(proposals:List<JsonObject>,pluginNames:Map<String,String>,onSelect:(JsonObject)->Unit,onDismiss:(String)->Unit) {
  var expanded by remember { mutableStateOf(false) }
- FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+ FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(6.dp),itemVerticalAlignment=Alignment.CenterVertically) {
   (if(expanded) proposals else proposals.take(3)).forEach { data ->
    ProposedPill(data.string("title").ifEmpty { (data["payload"] as? JsonObject)?.string("path")?.takeIf(String::isNotBlank)?.let { "Add #$it" } ?: "Review change" },pluginNames[data.string("plugin")] ?: data.string("plugin"),data.string("action") in setOf("replace_body","merge_notes"),{onSelect(data)},{onDismiss(data.string("id"))})
   }
   if(proposals.size>3 && !expanded) Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,modifier=Modifier.heightIn(min=40.dp).clickable(onClickLabel="Show ${proposals.size-3} more suggestions") {expanded=true}) {
    Box(Modifier.padding(horizontal=12.dp,vertical=8.dp)) {Text("+${proposals.size-3}",style=MaterialTheme.typography.labelLarge)}
   }
+  TextButton(onClick={proposals.forEach {onDismiss(it.string("id"))}},modifier=Modifier.semantics {contentDescription="Dismiss ${if(proposals.size==1) "1 suggestion" else "${proposals.size} suggestions"}"}) {Text("Dismiss",style=MaterialTheme.typography.labelLarge,color=SpuntoColors.ink3)}
  }
 }
 

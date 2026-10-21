@@ -26,10 +26,12 @@ time = "{time}"
 [settings]
 type = "object"
 [settings.properties.weekday]
+title = "Day"
 type = "string"
 enum = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 default = "sunday"
 [settings.properties.time]
+title = "Time"
 type = "string"
 format = "time"
 default = "18:00"

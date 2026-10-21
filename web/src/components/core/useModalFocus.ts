@@ -35,27 +35,16 @@ export function useModalFocus(
         event.stopPropagation();
         close.current();
       } else if (event.key === "Tab") {
+        // Every Tab moves here: WebKit skips links on its own and would leave the dialog.
+        event.preventDefault();
         const items = controls();
-        const first = items[0],
-          last = items.at(-1);
-        if (!first) {
-          event.preventDefault();
-          dialog.focus();
-        } else if (
-          event.shiftKey &&
-          (document.activeElement === first ||
-            !dialog.contains(document.activeElement))
-        ) {
-          event.preventDefault();
-          last?.focus();
-        } else if (
-          !event.shiftKey &&
-          (document.activeElement === last ||
-            !dialog.contains(document.activeElement))
-        ) {
-          event.preventDefault();
-          first.focus();
-        }
+        const at = items.indexOf(document.activeElement as HTMLElement);
+        const step = event.shiftKey ? -1 : 1;
+        const next =
+          at < 0
+            ? items.at(event.shiftKey ? -1 : 0)
+            : items[(at + step + items.length) % items.length];
+        (next ?? dialog).focus();
       }
     };
     document.addEventListener("keydown", key);

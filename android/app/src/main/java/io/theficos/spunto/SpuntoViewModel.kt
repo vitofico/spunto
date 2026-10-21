@@ -3,8 +3,12 @@ package io.theficos.spunto
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import io.theficos.spunto.core.model.*
+import io.theficos.spunto.data.local.NoteEntity
 import io.theficos.spunto.data.local.RevisionEntity
+import io.theficos.spunto.data.local.TimelineSpec
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.*
 import kotlinx.coroutines.*
@@ -17,8 +21,23 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  private val historyRepository by lazy { HistoryRepository(repository,container.auth) }
  val notes=repository.notes.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val labels=repository.labels().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val noteCount=repository.dao.noteCount().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),null)
  val outputs=repository.outputs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val pending=repository.pendingCount.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),0)
+ private val keptConflicts=MutableStateFlow(container.preferences.getStringSet("conflicts-kept",null).orEmpty().toSet())
+ /** Conflicted copies still waiting for a decision on this phone; "Keep both" settles one here only. */
+ val conflicts=combine(repository.conflicts,keptConflicts) { rows,kept -> rows.filter { it.id !in kept } }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** A timeline long-press asked for this note's history; the note page opens it once. */
+ val historyFor=MutableStateFlow<String?>(null)
+ fun keepBothConflict(id:String) { keptConflicts.value+=id;container.preferences.edit().putStringSet("conflicts-kept",keptConflicts.value).apply() }
+ private val pages=object:LinkedHashMap<TimelineSpec,Pair<Job,Flow<PagingData<NoteEntity>>>>(8,.75f,true) {
+  override fun removeEldestEntry(eldest:MutableMap.MutableEntry<TimelineSpec,Pair<Job,Flow<PagingData<NoteEntity>>>>)=(size>4).also { if(it) eldest.value.first.cancel() }
+ }
+ /** Lists reopen at their scroll position after a note or a rotation because loaded pages outlive the screen; the four latest filters stay cached. */
+ fun paging(spec:TimelineSpec):Flow<PagingData<NoteEntity>> {
+  val day=spec.copy(now=spec.now-Math.floorMod(spec.now,86_400_000L)) // filters resolve "days" against UTC midnight only
+  return pages.getOrPut(day) { val job=Job(viewModelScope.coroutineContext[Job]);job to repository.paging(day).cachedIn(viewModelScope+job) }.second
+ }
  val auth=container.auth.config.map {it?.takeIf {config ->config.replicaId==container.replicaId}}.stateIn(viewModelScope,SharingStarted.Eagerly,null)
  val status=container.sync.state
  val online=combine(auth,status,container.connected) { auth,status,connected -> auth!=null && connected && status !is SyncStatus.Waiting && status!=SyncStatus.NeedsSignIn }.stateIn(viewModelScope,SharingStarted.Eagerly,false)
@@ -110,7 +129,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   val url=pluginWebUrl(config.serverUrl,config.httpConsent,path) ?: return
   container.context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
  }
- fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException && (e.code.startsWith("ai_") || e.code.startsWith("plugin_")) -> pluginCommandErrorMessage(e.status,e.code); e is ApiException -> "Request failed · ${e.code}"; e is IllegalArgumentException -> e.message.orEmpty(); else -> "Server unreachable. Your notes stay on this phone." } } }
+ fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException -> apiErrorMessage(e); e is IllegalArgumentException -> e.message.orEmpty(); else -> "Server unreachable. Your notes stay on this phone." } } }
  fun synchronize()=task { val result=container.sync.sync(); if(result==SyncStatus.NeedsSignIn) reauthenticate.value=true; refreshPluginManager()?.join() }
  suspend fun saveLocal(body:String,id:String?=null):String { android.os.Trace.beginSection("spunto.local-save");return try { repository.save(body,id) } finally { android.os.Trace.endSection() } }
  fun save(body:String,id:String?=null,done:(String)->Unit={})=task { val noteId=saveLocal(body,id);repository.clearDraft(id?:"capture",body);done(noteId) }
@@ -119,7 +138,10 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  fun flags(id:String,pinned:Boolean?=null,archived:Boolean?=null,trashed:Boolean?=null,privateNote:Boolean?=null)=task { repository.setFlags(id,pinned,archived,trashed,privateNote) }
  fun toggleTask(note:Note,line:Int)=task { val lines=note.body.lines().toMutableList(); lines[line]=lines[line].replaceFirst(Regex("\\[[ xX]]"),if(lines[line].contains("[ ]")) "[x]" else "[ ]"); repository.update(note.id,lines.joinToString("\n")) }
  fun decide(id:String,decision:String)=task { repository.decideSuggestion(id,decision) }
- fun login(server:String,password:String,code:String,name:String,consent:Boolean)=task {
+ /** The sign-in form's problem; sign-in failures never reach [message] or [reauthenticate]. */
+ internal val signInProblem=MutableStateFlow<SignInProblem?>(null)
+ fun login(server:String,password:String,code:String,name:String,consent:Boolean)=viewModelScope.launch { signInProblem.value=null; try { signIn(server,password,code,name,consent);message.value="" } catch(e:CancellationException) { throw e } catch(e:Exception) { signInProblem.value=signInProblem(e,code.isNotBlank()) } }
+ private suspend fun signIn(server:String,password:String,code:String,name:String,consent:Boolean) {
   val previous=container.auth.config.first()
   require(previous==null || previous.replicaId==container.replicaId) {"The account changed. Continue from the current account."}
   if(reauthenticate.value && notes.value.isNotEmpty()) require(previous?.serverUrl?.trimEnd('/')==server.trimEnd('/')) {"Sign in again to the same server. Sign out before connecting another instance."}
@@ -132,7 +154,12 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   if(accepted.replicaId==container.replicaId) synchronize()
  }
  internal fun retire() {viewModelScope.cancel()}
- fun signOut()=task {if(container.auth.config.first()?.replicaId==container.replicaId) container.auth.clear();reauthenticate.value=false}
+ /** Signs out at once; online, the server then revokes this phone's credential too, and offline it stays listed under Devices. */
+ fun signOut()=task {
+  val config=container.auth.config.first()?.takeIf {it.replicaId==container.replicaId};val reachable=online.value
+  config?.let {container.auth.clear()};reauthenticate.value=false
+  if(config!=null && reachable && !ApiClient(config).signOut()) message.value="Signed out. This phone stays listed under Devices in the web app until you remove it there."
+ }
  fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(ApiClient(config).request(path,method,body)) }
  fun ask(question:String,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
   completeAskRequest(request={ auth.value?.let { config -> ApiClient(config).request("/api/v1/plugins/ask/commands/ask","POST",buildJsonObject { put("question",question) }) } },onComplete=onComplete,onResult=onResult)

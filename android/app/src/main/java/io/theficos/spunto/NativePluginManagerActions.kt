@@ -141,5 +141,5 @@ internal class NativePluginManagerActions(
   }
  }
  fun closePage() {pageGeneration++;pageJob?.cancel();pageJob=null;page.value=PluginPageState()}
- private fun errorCode(error:Exception)=if(error is ApiException) "Request failed · ${error.code}" else "Server unreachable. Cached plugin facts stay on this phone."
+ private fun errorCode(error:Exception)=if(error is ApiException) error.detail.ifBlank {"The server couldn't update plugins. Try again."} else "Couldn't reach your server. Cached plugin facts stay on this phone."
 }

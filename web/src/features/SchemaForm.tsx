@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { Args, Json, Schema } from "../lib/types";
+import { choiceLabel, humanize } from "./format";
 import styles from "./Feature.module.css";
 const keys = new Set([
   "type",
@@ -100,7 +101,7 @@ export function validateSettings(schema: Schema, values: Args): string | null {
     const value = values[key];
     if (value === undefined) {
       if (schema.required?.includes(key))
-        return `${prop.title ?? key} is required.`;
+        return `${prop.title ?? humanize(key)} is required.`;
       continue;
     }
     const type = prop.type;
@@ -115,25 +116,25 @@ export function validateSettings(schema: Schema, values: Args): string | null {
               Number.isFinite(value) &&
               (type !== "integer" || Number.isInteger(value));
     if (!valid || (prop.enum && !prop.enum.includes(value)))
-      return `${prop.title ?? key} has an invalid value.`;
+      return `${prop.title ?? humanize(key)} has an invalid value.`;
     if (
       typeof value === "number" &&
       (value < (prop.minimum ?? -Infinity) ||
         value > (prop.maximum ?? Infinity))
     )
-      return `${prop.title ?? key} is outside its range.`;
+      return `${prop.title ?? humanize(key)} is outside its range.`;
     if (
       typeof value === "string" &&
       ([...value].length < (prop.minLength ?? 0) ||
         [...value].length > (prop.maxLength ?? 100000))
     )
-      return `${prop.title ?? key} has an invalid length.`;
+      return `${prop.title ?? humanize(key)} has an invalid length.`;
     if (
       typeof value === "string" &&
       (prop as Record<string, unknown>).format === "time" &&
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)
     )
-      return `${prop.title ?? key} must be a time.`;
+      return `${prop.title ?? humanize(key)} must be a time.`;
   }
   return null;
 }
@@ -183,6 +184,7 @@ function StringList({
       )}
       <div className={styles.row}>
         <input
+          className="field"
           aria-label={`Add ${label}`}
           list={labels ? listId : undefined}
           value={entry}
@@ -256,7 +258,7 @@ export function SchemaForm({
   const [error, setError] = useState<string | null>(null);
   if (!validSchema(schema))
     return (
-      <p className={styles.error} role="alert">
+      <p className="error" role="alert">
         This settings schema is unavailable.
       </p>
     );
@@ -271,7 +273,7 @@ export function SchemaForm({
     >
       {Object.entries(schema.properties ?? {}).map(([key, prop]) => {
         if (hiddenFields.includes(key)) return null;
-        const label = prop.title ?? key.replaceAll("_", " ");
+        const label = prop.title ?? humanize(key);
         const fieldId = `${id}-${key}`;
         const value = values[key];
         const extra = prop as Record<string, unknown>;
@@ -279,7 +281,7 @@ export function SchemaForm({
           setValues((prior) => ({ ...prior, [key]: next }));
         if (prop["x-secret"])
           return (
-            <div className={styles.field} key={key}>
+            <div className={styles.formField} key={key}>
               <span>{label}</span>
               <span className={styles.secret}>
                 Set in the environment · {secrets[key]?.set ? "Set" : "Not set"}
@@ -293,7 +295,7 @@ export function SchemaForm({
             </div>
           );
         return (
-          <div className={styles.field} key={key}>
+          <div className={styles.formField} key={key}>
             <label htmlFor={fieldId}>{label}</label>
             {prop.enum ? (
               prop.enum.length <= 3 ? (
@@ -310,12 +312,13 @@ export function SchemaForm({
                       aria-pressed={value === choice}
                       onClick={() => update(choice)}
                     >
-                      {String(choice)}
+                      {choiceLabel(choice)}
                     </button>
                   ))}
                 </div>
               ) : (
                 <select
+                  className="field"
                   id={fieldId}
                   value={prop.enum.findIndex((x) => x === value)}
                   disabled={disabled || busy}
@@ -323,7 +326,7 @@ export function SchemaForm({
                 >
                   {prop.enum.map((choice, i) => (
                     <option key={i} value={i}>
-                      {String(choice)}
+                      {choiceLabel(choice)}
                     </option>
                   ))}
                 </select>
@@ -357,6 +360,7 @@ export function SchemaForm({
               (prop.maxLength ?? 0) > 280 &&
               !prop.format ? (
               <textarea
+                className="field"
                 id={fieldId}
                 value={typeof value === "string" ? value : ""}
                 rows={4}
@@ -366,6 +370,7 @@ export function SchemaForm({
               />
             ) : (
               <input
+                className="field"
                 id={fieldId}
                 type={
                   extra.format === "time"
@@ -399,7 +404,7 @@ export function SchemaForm({
         );
       })}
       {error && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {error}
         </p>
       )}

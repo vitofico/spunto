@@ -58,7 +58,7 @@ object ProductScaleCorrectness {
   require(all.associate {it.id to it.note()}==fixture.notes.associateBy {it.id}) {"Stored product Note payload differs from deterministic fixture."}
   onProgress(ScaleCorrectnessPhase.PAYLOAD,10_000,10_000)
   val expectedLabels=mutableMapOf<String,MutableSet<String>>()
-  fixture.notes.filter {!it.trashed}.forEach {note ->labels(note.body).forEach {label ->val parts=label.key.split('/');parts.indices.forEach {depth ->expectedLabels.getOrPut(parts.take(depth+1).joinToString("/")) {mutableSetOf()}.add(note.id)}}}
+  fixture.notes.filter {!it.trashed && !it.archived}.forEach {note ->labels(note.body).forEach {label ->val parts=label.key.split('/');parts.indices.forEach {depth ->expectedLabels.getOrPut(parts.take(depth+1).joinToString("/")) {mutableSetOf()}.add(note.id)}}}
   require(repository.dao.labels().first().associate {it.key to it.count}==expectedLabels.mapValues {it.value.size}) {"Hierarchy must count distinct note IDs."}
   onProgress(ScaleCorrectnessPhase.HIERARCHY,expectedLabels.size,expectedLabels.size)
   val probes=listOf("perche" to 1,"citta" to 2,"augustarello" to 3,"strasse" to 4,"finestra" to 5,"CAFFÈ" to 6,"cafe" to 6)
@@ -81,7 +81,7 @@ object ProductScaleCorrectness {
   fun expectedRows(spec:TimelineSpec):List<Note> {
    val rows=fixture.notes.filter {note ->
     (if(spec.kind==TimelineKind.TRASH) note.trashed else !note.trashed) &&
-    (spec.kind!=TimelineKind.HOME || !note.archived) && (spec.kind!=TimelineKind.ARCHIVE || note.archived) &&
+    (spec.kind!=TimelineKind.HOME && spec.kind!=TimelineKind.LABEL || !note.archived) && (spec.kind!=TimelineKind.ARCHIVE || note.archived) &&
     (spec.kind!=TimelineKind.LABEL || labels(note.body).any {it.key==spec.label || it.key.startsWith(spec.label+"/")}) &&
     (spec.created.fromInclusive==null || note.createdAt>=spec.created.fromInclusive!!) && (spec.created.beforeExclusive==null || note.createdAt<spec.created.beforeExclusive!!)
    }

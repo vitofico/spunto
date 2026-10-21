@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -11,11 +12,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
 import { SettingsPage } from "../src/features/Settings";
 import {
+  DailySlip,
   EntryMeta,
   NotePanel,
   ReviewLine,
   SuggestionLine,
 } from "../src/features/Slots";
+import { ToastProvider } from "../src/components/core/Toast";
 import type { Note, Plugin } from "../src/lib/types";
 const plugin = {
   id: "tasks",
@@ -122,7 +125,7 @@ describe("plugin lifecycle controls", () => {
       .spyOn(api, "exportNotes")
       .mockRejectedValue(new Error("Synthetic export failure"));
     wrap(<SettingsPage section="data" />);
-    expect(await screen.findByLabelText("Markdown ZIP")).toBeTruthy();
+    expect(await screen.findByLabelText("Choose a Markdown ZIP")).toBeTruthy();
     expect(screen.queryByText(/Blinko/)).toBeNull();
     expect(document.querySelector('a[href*="blinko-import"]')).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Export notes" }));
@@ -147,10 +150,9 @@ describe("plugin lifecycle controls", () => {
       state: "enabled",
     });
     wrap(<SettingsPage section="plugins" />);
-    expect(await screen.findByText(visionFact)).toBeTruthy();
     expect(
-      screen.getByText("Origin unknown · 1.0.0").parentElement?.textContent,
-    ).toContain(`Origin unknown · 1.0.0 ${visionFact}`);
+      await screen.findByText(`Origin unknown · ${visionFact}`),
+    ).toBeTruthy();
     const control = screen.getByRole("switch", {
       name: "Enable Text in images",
     });
@@ -256,33 +258,49 @@ describe("plugin lifecycle controls", () => {
             },
           },
         },
+        {
+          ...plugin,
+          id: "describe",
+          name: "Describe",
+          permissions: ["ai.chat", "ai.vision"],
+          ai_destinations: {
+            chat: {
+              profile: "chat",
+              model: "fixture-chat",
+              host: "chat.synthetic.test",
+              leaves_network: false,
+            },
+          },
+        },
       ],
       plugins_rev: 1,
     });
     wrap(<SettingsPage section="plugins" />);
     expect(
-      await screen.findByText("Vision: no model is configured for this plugin"),
+      await screen.findByText("Origin unknown · Needs a vision model"),
     ).toBeTruthy();
     expect(
-      screen.getByText("Transcription: no model is configured for this plugin"),
+      screen.getByText("Origin unknown · Needs a transcription model"),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Chat: fixture-chat at chat.synthetic.test · On your network",
+        "Origin unknown · Chat: fixture-chat at chat.synthetic.test · On your network",
       ),
     ).toBeTruthy();
-    expect(screen.queryByText(/AI is not configured/)).toBeNull();
+    expect(
+      screen.getByText(
+        "Chat: fixture-chat at chat.synthetic.test · On your network; Vision: no vision model is set up",
+        { exact: false },
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/AI is off/)).toBeNull();
     fireEvent.click(
       screen.getByRole("switch", { name: "Enable Text in images" }),
     );
     const dialog = await screen.findByRole("dialog", {
       name: "Turn on Text in images?",
     });
-    expect(
-      within(dialog).getByText(
-        "Vision: no model is configured for this plugin",
-      ),
-    ).toBeTruthy();
+    expect(within(dialog).getByText("Needs a vision model")).toBeTruthy();
   });
   it("uses neutral model requirements when a legacy catalog omits destinations", async () => {
     vi.mocked(api.catalog).mockResolvedValue({
@@ -292,7 +310,7 @@ describe("plugin lifecycle controls", () => {
     wrap(<SettingsPage section="plugins" />);
     expect(
       await screen.findByText(
-        "Requires a chat model; Requires an embedding model",
+        "Origin unknown · Needs a chat model and an embedding model",
       ),
     ).toBeTruthy();
     expect(
@@ -318,7 +336,7 @@ describe("plugin lifecycle controls", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Connects to the configured server · Never reads private notes",
+        "Origin unknown · Connects to the configured server · Never reads private notes",
       ),
     ).toBeTruthy();
   });
@@ -334,7 +352,7 @@ describe("plugin lifecycle controls", () => {
     expect(
       await screen.findByRole("dialog", { name: "Turn on Tasks?" }),
     ).toBeTruthy();
-    expect(screen.getByText("Reads your notes")).toBeTruthy();
+    expect(screen.getByText("Read your notes")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     await waitFor(() =>
       expect(enable).toHaveBeenCalledWith("tasks", ["notes.read", "annotate"]),
@@ -427,6 +445,136 @@ describe("quiet slots", () => {
     fireEvent.click(screen.getByRole("button", { name: "+3" }));
     expect(screen.getAllByRole("button", { name: /^#label/ })).toHaveLength(6);
   });
+  it("names each pill's plugin for assistive tech and dismisses the whole row", async () => {
+    const manifest = {
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [{ ...plugin, state: undefined }],
+    };
+    client.setQueryData(["manifest"], manifest);
+    vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+    const decide = vi
+      .spyOn(api, "decideSuggestion")
+      .mockResolvedValue({} as never);
+    const suggestions = [0, 1].map((i) => ({
+      id: `s${i}`,
+      plugin: "tasks",
+      status: "pending",
+      action: "add_label",
+      payload: { path: `label${i}` },
+      reason: "Seen in similar notes",
+    }));
+    const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
+    wrap(<SuggestionLine note={note} />);
+    const pill = screen.getByRole("button", { name: "#label0" });
+    expect(
+      document.getElementById(pill.getAttribute("aria-describedby")!)
+        ?.textContent,
+    ).toBe("Suggested by Tasks: Seen in similar notes");
+    expect(
+      screen.getByRole("button", { name: "Dismiss #label1" }),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss 2 suggestions" }),
+    );
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+    expect(decide).toHaveBeenCalledWith("s0", "dismiss");
+    expect(decide).toHaveBeenCalledWith("s1", "dismiss");
+  });
+  it("shows a pill's provenance on a touch long-press without accepting it", async () => {
+    const manifest = {
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [{ ...plugin, state: undefined }],
+    };
+    client.setQueryData(["manifest"], manifest);
+    vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+    const decide = vi
+      .spyOn(api, "decideSuggestion")
+      .mockResolvedValue({} as never);
+    const suggestions = [
+      {
+        id: "s0",
+        plugin: "tasks",
+        status: "pending",
+        action: "add_label",
+        payload: { path: "garden" },
+        reason: "Seen in similar notes",
+      },
+    ];
+    const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
+    wrap(
+      <ToastProvider>
+        <SuggestionLine note={note} />
+      </ToastProvider>,
+    );
+    const pill = screen.getByRole("button", { name: "#garden" });
+    fireEvent.pointerDown(pill, { pointerType: "touch" });
+    await act(() => new Promise((done) => setTimeout(done, 550)));
+    expect(screen.getByRole("status").textContent).toContain(
+      "Suggested by Tasks: Seen in similar notes",
+    );
+    fireEvent.pointerUp(pill, { pointerType: "touch" });
+    fireEvent.click(pill);
+    await act(() => new Promise((done) => setTimeout(done, 50)));
+    expect(decide).not.toHaveBeenCalled();
+    fireEvent.pointerDown(pill, { pointerType: "touch" });
+    fireEvent.pointerUp(pill, { pointerType: "touch" });
+    fireEvent.click(pill);
+    await waitFor(() => expect(decide).toHaveBeenCalledWith("s0", "accept"));
+  });
+  it("draws the daily slip's note rendered, archives it with feedback and refreshes the slip", async () => {
+    const manifest = {
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [
+        { ...plugin, state: undefined, contributes: { slip: { title: "" } } },
+      ],
+    };
+    client.setQueryData(["manifest"], manifest);
+    vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+    const created = "2025-10-21T08:00:00Z";
+    vi.spyOn(api, "request")
+      .mockResolvedValueOnce({
+        slip: {
+          plugin_id: "tasks",
+          note_id: "old",
+          payload: null,
+          note: {
+            id: "old",
+            body: "An *old* thought",
+            html: "<p>An <em>old</em> thought</p>",
+            created_at: created,
+          },
+          updated_at: created,
+        },
+      })
+      .mockResolvedValue({ slip: null });
+    const flags = vi.spyOn(api, "flags").mockResolvedValue({} as never);
+    wrap(
+      <ToastProvider>
+        <DailySlip />
+      </ToastProvider>,
+    );
+    expect((await screen.findByText("old")).tagName).toBe("EM");
+    expect(screen.queryByText(/\*old\*/)).toBeNull();
+    expect(
+      screen.getByText(
+        `From your notes · ${new Date(created).toLocaleDateString(undefined, {
+          dateStyle: "long",
+        })}`,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Open" }).getAttribute("href"),
+    ).toBe("/n/old");
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await waitFor(() =>
+      expect(flags).toHaveBeenCalledWith("old", { archived: true }),
+    );
+    expect(await screen.findByText("Archived")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("old")).toBeNull());
+  });
 });
 
 describe("review and result safety", () => {
@@ -485,14 +633,73 @@ describe("review and result safety", () => {
       .spyOn(api, "createNote")
       .mockRejectedValueOnce(new Error("Connection interrupted"))
       .mockResolvedValueOnce({ id: "new" } as Note);
-    wrap(<CommandResult value={{ type: "text", text: "Keep this result" }} />);
-    fireEvent.click(screen.getByRole("button", { name: "Save as note" }));
+    vi.spyOn(api, "manifest").mockResolvedValue({
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [{ ...plugin, state: "enabled", switch: "on" }],
+    });
+    wrap(
+      <CommandResult
+        value={{ type: "text", text: "Keep this result" }}
+        origin={{ plugin: plugin.id, command: "show" }}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Save as note" }),
+    );
     await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "Save as note" }));
     await screen.findByRole("button", { name: "Saved as note" });
+    expect(
+      screen.getByRole("link", { name: "Open note" }).getAttribute("href"),
+    ).toBe("/n/new");
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[0][1]).toBe(create.mock.calls[1][1]);
     expect(create.mock.calls[0][0]).toBe("Keep this result");
+  });
+  it("names devices by browser, marks this one active and revokes through a confirm", async () => {
+    const agent =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+    const session = {
+      id: "this",
+      kind: "session",
+      name: agent,
+      client: null,
+      scope: "notes",
+      private_ok: true,
+      external_ok: true,
+      created_at: "2026-10-21T08:00:00Z",
+      last_used_at: null,
+      expires_at: null,
+      current: true,
+    };
+    vi.spyOn(api, "credentials").mockResolvedValue([
+      session,
+      {
+        ...session,
+        id: "other",
+        name: "Firefox/140.0 (X11; Linux x86_64)",
+        current: false,
+      },
+    ]);
+    const revoke = vi.spyOn(api, "revokeCredential").mockResolvedValue();
+    wrap(<SettingsPage section="devices" />);
+    const name = await screen.findByText("Chrome on macOS");
+    expect(name.getAttribute("title")).toBe(agent);
+    expect(screen.getByText("This browser · Active now")).toBeTruthy();
+    expect(screen.queryByText(/private notes/)).toBeNull();
+    expect(screen.getByText(/^Signed in /)).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Revoke Firefox on Linux" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Revoke Firefox on Linux?",
+    });
+    expect(revoke).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Revoke access" }),
+    );
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith("other"));
   });
   it("holds the one-time token outside QueryClient mutation data", async () => {
     vi.spyOn(api, "credentials").mockResolvedValue([]);

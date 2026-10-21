@@ -47,7 +47,13 @@ class NotesRepositoryTest {
   val ops=repo.dao.outbox();assertEquals(2,ops.size);assertEquals(sent.payload,ops.first().payload);assertEquals("second",repo.dao.get(id)!!.body)
  }
  @Test fun draftAcknowledgementPreservesTyping() = runBlocking { repo.saveDraft(body="old");repo.saveDraft(body="new");repo.clearDraft("capture","old");assertEquals("new",repo.draft().first()!!.body) }
- @Test fun rejectedOperationStaysLocal() = runBlocking { val id=repo.create("local");val op=repo.dao.outbox().single();repo.dao.reject(op.opId,"not_found");repo.update(id,"new words");assertEquals(2,repo.dao.outbox().size);assertEquals("new words",repo.dao.get(id)!!.body) }
+ @Test fun refusedChangeStaysLocalOutsideTheWaitingCountAndARefusedCreateIsMadeAgainByTheNextSave() = runBlocking {
+  val id=repo.create("local");val created=repo.dao.outbox().single();repo.dao.reject(created.opId,"too_large")
+  assertEquals(0,repo.pendingCount.first());assertEquals(mapOf(id to "too_large"),repo.refused.first());assertEquals("local",repo.dao.get(id)!!.body)
+  repo.update(id,"new words")
+  val again=repo.dao.outbox().single();assertNull(again.error);assertEquals("note.create",Json.decodeFromString<OutboxOperation>(again.payload).type)
+  assertEquals(1,repo.pendingCount.first());assertEquals(emptyMap<String,String>(),repo.refused.first());assertEquals("new words",repo.dao.get(id)!!.body)
+ }
  @Test fun localEditBurstKeepsItsFirstAncestorAndBreaksAfterTimeoutOrRemoteChange()=runBlocking {
   val id=repo.create("Initial owner words")
   repo.update(id,"First edit");repo.update(id,"Second edit")
@@ -111,8 +117,22 @@ class NotesRepositoryTest {
   assertNull(repo.dao.draftSnapshot(id));assertEquals("A",repo.dao.get(id)!!.body)
   val newEditor=repo.beginEditor(id);assertTrue(repo.persistEditor(repo.editorWrite(newEditor,"D"),commit=true))
   val before=repo.dao.outbox();gate.complete(Unit);assertFalse(delayed.await())
-  assertEquals(before,repo.dao.outbox());assertEquals("D",repo.dao.get(id)!!.body);assertEquals("D",repo.dao.draftSnapshot(id)!!.body)
+  assertEquals(before,repo.dao.outbox());assertEquals("D",repo.dao.get(id)!!.body);assertNull(repo.dao.draftSnapshot(id))
   assertTrue(repo.dao.get(id)!!.privateNote)
+ }
+ @Test fun committedEditorLeavesNoDraftToReopenOverASyncedEdit()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  val editor=repo.beginEditor(id);assertTrue(repo.persistEditor(repo.editorWrite(editor,"Phone words, edited")))
+  assertEquals("Phone words, edited",repo.dao.draftSnapshot(id)!!.body)
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, edited")));assertNull(repo.dao.draftSnapshot(id))
+  // A draft an older build left behind loses to the web edit a later sync brought in, whatever the clocks say.
+  repo.dao.putDraft(DraftEntity(id,"Phone words, edited",Long.MAX_VALUE))
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Edited on the web",serverRev=3,pending=false))
+  assertNull(repo.dao.unsavedDraft(id))
+  // Words typed but never saved (the app was killed first) still win, even when older than the note.
+  repo.dao.putDraft(DraftEntity(id,"Edited on the web, then typed",0));assertEquals("Edited on the web, then typed",repo.dao.unsavedDraft(id)!!.body)
+  repo.dao.putDraft(DraftEntity("capture","Unsent capture",1));assertEquals("Unsent capture",repo.dao.unsavedDraft("capture")!!.body)
+  repo.dao.putDraft(DraftEntity("capture","",1));assertNull(repo.dao.unsavedDraft("capture"))
  }
  @Test fun readAwaitsCommitAndOldEditorCallbacksAreFenced()=runBlocking {
   val id=uuidV7();repo.putNote(Note(id,"A",serverRev=1))

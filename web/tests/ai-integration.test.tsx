@@ -80,6 +80,7 @@ const ask: Plugin = {
   category: "recall",
   kind: "server",
   permissions: ["notes.read", "notes.create", "ai.chat", "ai.embed"],
+  creates: "machine",
   position: 0,
   switch: "on",
   state: "enabled",
@@ -162,6 +163,10 @@ it("routes only declared capabilities and restores defaults with an empty map", 
   fireEvent.click(screen.getByRole("button", { name: "Save AI routes" }));
   await waitFor(() => expect(save).toHaveBeenCalledWith("ask", {}));
 });
+// Search marks the matched word, which splits the paragraph's text.
+const body = (text: string) => (_content: string, element: Element | null) =>
+  !!element?.classList.contains("note-body") &&
+  element.textContent?.trim() === text;
 it("shows keyword hits while hybrid is pending and then swaps one list", async () => {
   window.history.replaceState(null, "", "/search?q=coffee");
   const blended = pending<SearchPage>();
@@ -171,7 +176,10 @@ it("shows keyword hits while hybrid is pending and then swaps one list", async (
       : Promise.resolve({ hits: [note], semantic: "off", next_cursor: null }),
   );
   wrap(<Search />);
-  expect(await screen.findByText("Coffee in Rome")).toBeTruthy();
+  expect(await screen.findByText(body("Coffee in Rome"))).toBeTruthy();
+  expect(document.querySelector("mark[data-match]")?.textContent).toBe(
+    "Coffee",
+  );
   await waitFor(() =>
     expect(api.search).toHaveBeenCalledWith(
       "coffee",
@@ -192,7 +200,7 @@ it("shows keyword hits while hybrid is pending and then swaps one list", async (
     next_cursor: null,
   });
   expect(await screen.findByText("A caffè in Milan")).toBeTruthy();
-  expect(screen.queryByText("Coffee in Rome")).toBeNull();
+  expect(screen.queryByText(body("Coffee in Rome"))).toBeNull();
   expect(screen.getByText("≈ similar meaning")).toBeTruthy();
 });
 it("keeps keyword search when semantic service is unavailable", async () => {
@@ -210,7 +218,7 @@ it("keeps keyword search when semantic service is unavailable", async () => {
       "Similar meaning is unavailable. Showing keyword matches.",
     ),
   ).toBeTruthy();
-  expect(screen.getByText("Coffee in Rome")).toBeTruthy();
+  expect(screen.getByText(body("Coffee in Rome"))).toBeTruthy();
 });
 it("loads live related output through the core panel endpoint", async () => {
   const related: Plugin = {
@@ -286,14 +294,15 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
     });
   wrap(<Palette onClose={() => {}} />);
   fireEvent.click(
-    await screen.findByRole("button", {
+    await screen.findByRole("option", {
       name: /Ask your notes/,
     }),
   );
   fireEvent.change(await screen.findByLabelText("Question"), {
     target: { value: "Where is coffee?" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+  // The form submits with the command's own title, not a generic "Run".
+  fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
   expect(await screen.findByText("Coffee answer")).toBeTruthy();
   expect(command).toHaveBeenCalledWith("ask", "ask", {
     question: "Where is coffee?",
@@ -325,7 +334,7 @@ it("reports enabled AI on server status rather than the M3 off placeholder", asy
     },
   });
   wrap(<StatusPage />);
-  expect(await screen.findByText("chat · embed")).toBeTruthy();
+  expect(await screen.findByText("Chat · Embeddings")).toBeTruthy();
   expect(screen.getByText("4 embedding chunks · Indexing on")).toBeTruthy();
   expect(screen.queryByText("Off.")).toBeNull();
 });

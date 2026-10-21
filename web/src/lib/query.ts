@@ -10,9 +10,9 @@ import {
   useMutation,
   useQuery,
 } from "@tanstack/react-query";
-import { api, onUnauthorized } from "./api";
+import { api, onRequestSettled, onUnauthorized } from "./api";
 import { ApiError } from "./errors";
-import { carryRotatedDrafts, eraseOwnerDrafts } from "./drafts";
+import { carryRotatedDrafts, eraseOwnerDrafts, keptDrafts } from "./drafts";
 import type {
   Flags,
   NoteFilters,
@@ -441,18 +441,25 @@ export function useAuth() {
       }
     },
   });
-  const status: "loading" | "authenticated" | "anonymous" | "setup" =
+  const status:
+    "loading" | "authenticated" | "anonymous" | "setup" | "unreachable" =
     (refreshingAuthentication && !authenticationAction) || switchingWorkspace
       ? "loading"
       : meta.data?.setup_pending
         ? "setup"
-        : signedOut || (meta.isError && !session.data)
-          ? "anonymous"
-          : meta.isPending || session.isPending
-            ? "loading"
-            : session.data
-              ? "authenticated"
-              : "anonymous";
+        : meta.isError &&
+            !meta.data &&
+            !session.data &&
+            // A refusal such as a 401 is an answer: the sign-in screen handles it.
+            !(meta.error instanceof ApiError && !meta.error.retryable)
+          ? "unreachable"
+          : signedOut
+            ? "anonymous"
+            : meta.isPending || session.isPending
+              ? "loading"
+              : session.data
+                ? "authenticated"
+                : "anonymous";
   return {
     status,
     session: session.data,
@@ -461,6 +468,8 @@ export function useAuth() {
     register: (username: string, password: string) =>
       register.mutateAsync({ username, password }),
     refresh: () => refreshAuthentication(),
+    reconnect: () => void meta.refetch(),
+    reconnecting: meta.isFetching,
     setup: (code: string, password: string) =>
       setup.mutateAsync({ code, password }),
     logout: () => logout.mutateAsync(),
@@ -586,6 +595,49 @@ export const useRestoreRevision = () =>
   useApiMutation(({ id, version }: { id: string; version: number }) =>
     api.restoreRevision(id, version),
   );
+let feedFailing = false;
+const syncListeners = new Set<() => void>();
+function setFeedFailing(value: boolean) {
+  if (feedFailing === value) return;
+  feedFailing = value;
+  for (const listener of syncListeners) listener();
+}
+function subscribeSync(listener: () => void) {
+  syncListeners.add(listener);
+  const stop = onRequestSettled(listener);
+  for (const event of ["online", "offline", "storage"])
+    window.addEventListener(event, listener);
+  return () => {
+    syncListeners.delete(listener);
+    stop();
+    for (const event of ["online", "offline", "storage"])
+      window.removeEventListener(event, listener);
+  };
+}
+/**
+ * One sync state for the rail and the banner: offline when the browser says so or
+ * the change feed keeps failing, plus the saves still waiting on this device.
+ */
+export function useSyncState() {
+  const owner = useOwner();
+  const online = useSyncExternalStore(
+    subscribeSync,
+    () => navigator.onLine && !feedFailing,
+    () => true,
+  );
+  const waiting = useSyncExternalStore(
+    subscribeSync,
+    () => {
+      try {
+        return owner ? keptDrafts(localStorage, owner).waiting : 0;
+      } catch {
+        return 0;
+      }
+    },
+    () => 0,
+  );
+  return { online, waiting };
+}
 /** A single app-level watcher; hidden tabs abort the poll and focus starts a fresh one. */
 export function useLiveChanges(enabled: boolean) {
   const owner = useOwner();
@@ -607,6 +659,7 @@ export function useLiveChanges(enabled: boolean) {
           requestController.signal,
         );
         if (stopped) return;
+        setFeedFailing(false);
         const pluginsChanged = result.plugins_rev !== last.current.rev;
         last.current = { cursor: result.cursor, rev: result.plugins_rev };
         if (result.changed) {
@@ -624,6 +677,7 @@ export function useLiveChanges(enabled: boolean) {
       } catch (error) {
         if (stopped || requestController.signal.aborted) return;
         if (error instanceof ApiError && !error.retryable) return;
+        setFeedFailing(true);
         retry = setTimeout(() => {
           void poll();
         }, 5000);
@@ -635,12 +689,16 @@ export function useLiveChanges(enabled: boolean) {
       if (document.visibilityState === "visible") void poll();
     };
     document.addEventListener("visibilitychange", visibility);
+    // Back online: ask again now instead of waiting for the retry timer.
+    window.addEventListener("online", visibility);
     void poll();
     return () => {
       stopped = true;
       controller?.abort();
       clearTimeout(retry);
+      setFeedFailing(false);
       document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("online", visibility);
     };
   }, [enabled, owner]);
 }

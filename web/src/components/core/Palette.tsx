@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { api, useLabels, useSearch, useWorkspaceRole } from "../../lib";
 import { Icon } from "./Icon";
@@ -9,24 +9,37 @@ import {
 } from "../../features/Slots";
 export function Palette({
   onClose,
+  onHelp,
   noteId,
   initialResult,
   initialOrigin,
   restoreFocus,
+  instant = false,
 }: {
   onClose: () => void;
+  onHelp?: () => void;
   noteId?: string;
   initialResult?: unknown;
   initialOrigin?: CommandOrigin;
   restoreFocus?: HTMLElement | null;
+  /** Opened from the keyboard: no entrance motion (03 §9.1). */
+  instant?: boolean;
 }) {
   const canEdit = useWorkspaceRole() !== "viewer";
   const [exportError, setExportError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<unknown>(initialResult ?? null);
   const [origin, setOrigin] = useState(initialOrigin);
-  const [, navigate] = useLocation();
+  // The highlighted row itself, not its place, so it stays highlighted when rows arrive above it.
+  const [active, setActive] = useState<HTMLElement | null>(null);
+  const [location, navigate] = useLocation();
+  // Any navigation closes the palette, including links inside plugin results.
+  const openedAt = useRef(location);
+  useEffect(() => {
+    if (location !== openedAt.current) onClose();
+  }, [location]);
   const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const labels = useLabels();
   const results = useSearch(query, { mode: "keyword", limit: 6 });
   const notes =
@@ -34,6 +47,40 @@ export function Palette({
   const matchingLabels = (labels.data?.labels ?? [])
     .filter((label) => label.path.includes(query.replace(/^#/, "")))
     .slice(0, 4);
+  const matches = (label: string) =>
+    label.toLowerCase().includes(query.trim().toLowerCase());
+  // Rows come from this file and from plugin commands, so selection works on the DOM.
+  const rows = () => [
+    ...(list.current?.querySelectorAll<HTMLElement>("button:not(:disabled)") ??
+      []),
+  ];
+  function paint(highlighted: HTMLElement | null) {
+    const all = rows();
+    all.forEach((row, at) => {
+      row.id = "palette-option-" + at;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(row === highlighted));
+      row.tabIndex = -1;
+    });
+    const current = all.find((row) => row === highlighted);
+    current?.scrollIntoView?.({ block: "nearest" });
+    if (current)
+      input.current?.setAttribute("aria-activedescendant", current.id);
+    else input.current?.removeAttribute("aria-activedescendant");
+  }
+  useLayoutEffect(() => {
+    paint(active);
+    // Plugin rows can arrive after this render; they are options too.
+    const observer = new MutationObserver(() => paint(active));
+    if (list.current)
+      observer.observe(list.current, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  });
+  // The first row is "Search for …" whenever there is a query.
+  useEffect(
+    () => setActive(query.trim() ? (rows()[0] ?? null) : null),
+    [query],
+  );
   useEffect(() => {
     const previous = restoreFocus ?? (document.activeElement as HTMLElement);
     input.current?.focus();
@@ -51,7 +98,7 @@ export function Palette({
         const dialog = input.current?.closest("[role=dialog]");
         const controls = [
           ...(dialog?.querySelectorAll<HTMLElement>(
-            'input:not([type="hidden"]):enabled,button:enabled,a[href],select:enabled,textarea:enabled',
+            'input:not([type="hidden"]):enabled,button:enabled:not([tabindex="-1"]),a[href],select:enabled,textarea:enabled',
           ) ?? []),
         ];
         const first = controls[0],
@@ -74,17 +121,38 @@ export function Palette({
     onClose();
     navigate(path);
   }
-  const actions = [
-    ["New note", "/"],
-    ["Go to Archive", "/archive"],
-    ["Go to Trash", "/trash"],
-    ["Settings", "/settings/appearance"],
-    ["Export notes", "/api/v1/export"],
-  ].filter(
-    ([label]) =>
-      (canEdit || label !== "New note") &&
-      label.toLowerCase().includes(query.toLowerCase()),
-  );
+  async function exportNotes() {
+    try {
+      const url = URL.createObjectURL(await api.exportNotes());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "spunto-export.zip";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      onClose();
+    } catch {
+      setExportError("Could not export this space. Try again.");
+    }
+  }
+  const actions: { label: string; keys?: string; run: () => void }[] = [
+    ...(canEdit ? [{ label: "New note", keys: "n", run: () => go("/") }] : []),
+    { label: "Go to Archive", run: () => go("/archive") },
+    { label: "Go to Trash", keys: "g t", run: () => go("/trash") },
+    { label: "Settings", keys: "g s", run: () => go("/settings/appearance") },
+    { label: "Export notes", run: () => void exportNotes() },
+    ...(onHelp
+      ? [
+          {
+            label: "Keyboard shortcuts",
+            keys: "?",
+            run: () => {
+              onClose();
+              onHelp();
+            },
+          },
+        ]
+      : []),
+  ].filter((action) => matches(action.label));
   return (
     <div
       className="overlay"
@@ -93,7 +161,7 @@ export function Palette({
       }}
     >
       <section
-        className="palette"
+        className={"palette" + (instant ? "" : " enter")}
         role="dialog"
         aria-modal="true"
         aria-label="Search and commands"
@@ -102,13 +170,29 @@ export function Palette({
           <input
             ref={input}
             aria-label="Search and commands"
+            aria-controls="palette-options"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search notes, labels and actions…"
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (result) return;
+              const all = rows();
+              const count = all.length;
+              const index = active ? all.indexOf(active) : -1;
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
-                go("/search?q=" + encodeURIComponent(query));
+                if (!count) return;
+                const step = e.key === "ArrowDown" ? 1 : -1;
+                setActive(
+                  all[
+                    index < 0 && step < 0
+                      ? count - 1
+                      : (index + step + count) % count
+                  ],
+                );
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                all[index]?.click();
               }
             }}
           />
@@ -129,7 +213,28 @@ export function Palette({
             />
           </div>
         ) : (
-          <>
+          <div
+            ref={list}
+            id="palette-options"
+            role="listbox"
+            aria-label="Results"
+            onMouseMove={(e) => {
+              const row = (e.target as HTMLElement).closest("button");
+              if (row && row !== active && rows().includes(row)) setActive(row);
+            }}
+          >
+            {query.trim() && (
+              <div className="palette-group">
+                <button
+                  className="palette-row"
+                  onClick={() => go("/search?q=" + encodeURIComponent(query))}
+                >
+                  <span>
+                    Search for <q>{query.trim()}</q>
+                  </span>
+                </button>
+              </div>
+            )}
             {canEdit && (
               <PaletteCommands
                 query={query}
@@ -140,9 +245,15 @@ export function Palette({
                 }}
               />
             )}
-            {canEdit && noteId && (
-              <div className="palette-group">
-                <div className="overline">This note</div>
+            {canEdit && noteId && matches("Edit note") && (
+              <div
+                className="palette-group"
+                role="group"
+                aria-label="This note"
+              >
+                <div className="overline" aria-hidden="true">
+                  This note
+                </div>
                 <button
                   className="palette-row"
                   onClick={() => {
@@ -158,9 +269,11 @@ export function Palette({
                 </button>
               </div>
             )}
-            {query && (
-              <div className="palette-group">
-                <div className="overline">Notes</div>
+            {query.trim() && (
+              <div className="palette-group" role="group" aria-label="Notes">
+                <div className="overline" aria-hidden="true">
+                  Notes
+                </div>
                 {results.isPending && (
                   <p className="palette-status" role="status">
                     Searching your notes…
@@ -183,17 +296,13 @@ export function Palette({
                     {note.title || note.body.slice(0, 80)}
                   </button>
                 ))}
-                <button
-                  className="palette-row"
-                  onClick={() => go("/search?q=" + encodeURIComponent(query))}
-                >
-                  See all results →
-                </button>
               </div>
             )}
             {matchingLabels.length > 0 && (
-              <div className="palette-group">
-                <div className="overline">Labels</div>
+              <div className="palette-group" role="group" aria-label="Labels">
+                <div className="overline" aria-hidden="true">
+                  Labels
+                </div>
                 {matchingLabels.map((label) => (
                   <button
                     className="palette-row"
@@ -211,42 +320,29 @@ export function Palette({
                 {exportError}
               </p>
             )}
-            <div className="palette-group">
-              <div className="overline">Actions</div>
-              {actions.map(([label, path]) => (
-                <button
-                  className="palette-row"
-                  key={label}
-                  onClick={async () => {
-                    if (path.startsWith("/api")) {
-                      try {
-                        const url = URL.createObjectURL(
-                          await api.exportNotes(),
-                        );
-                        const link = document.createElement("a");
-                        link.href = url;
-                        link.download = "spunto-export.zip";
-                        link.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
-                        onClose();
-                      } catch {
-                        setExportError(
-                          "Could not export this space. Try again.",
-                        );
-                      }
-                    } else go(path);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </>
+            {actions.length > 0 && (
+              <div className="palette-group" role="group" aria-label="Actions">
+                <div className="overline" aria-hidden="true">
+                  Actions
+                </div>
+                {actions.map((action) => (
+                  <button
+                    className="palette-row"
+                    key={action.label}
+                    onClick={action.run}
+                  >
+                    {action.label}
+                    {action.keys && <kbd>{action.keys}</kbd>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         <footer className="palette-footer">
           {result
             ? "Esc to go back"
-            : "Enter to search · Tab to move · Esc to close"}
+            : "↑ ↓ to choose · ↵ to open · Esc to close"}
         </footer>
       </section>
     </div>

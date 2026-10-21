@@ -59,6 +59,7 @@ interface SpuntoDao {
  @RawQuery(observedEntities=[NoteEntity::class,LabelEntity::class,ViewMembershipEntity::class]) fun filteredPaging(query:SupportSQLiteQuery):PagingSource<Int,NoteEntity>
  @RawQuery(observedEntities=[NoteEntity::class,LabelEntity::class,ViewMembershipEntity::class]) suspend fun filteredNotes(query:SupportSQLiteQuery):List<NoteEntity>
  @Query("SELECT * FROM notes WHERE id=:id") fun observe(id: String): Flow<NoteEntity?>
+ @Query("SELECT * FROM notes WHERE conflictOf IS NOT NULL AND trashed=0 ORDER BY updatedAt DESC") fun conflicts(): Flow<List<NoteEntity>>
  @Query("SELECT * FROM notes WHERE id=:id") suspend fun get(id: String): NoteEntity?
  @Query("SELECT * FROM notes") suspend fun all(): List<NoteEntity>
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(note: NoteEntity): Long
@@ -74,12 +75,21 @@ interface SpuntoDao {
  @Query("DELETE FROM outbox WHERE opId=:id") suspend fun removeOutbox(id: String)
  @Query("UPDATE outbox SET sent=1 WHERE opId IN (:ids)") suspend fun markSent(ids: List<String>)
  @Query("UPDATE outbox SET error=:error WHERE opId=:id") suspend fun reject(id: String,error: String)
- @Query("SELECT COUNT(*) FROM outbox") fun pendingCount(): Flow<Int>
+ @Query("SELECT COUNT(*) FROM outbox WHERE error IS NULL") fun pendingCount(): Flow<Int>
+ @Query("SELECT * FROM outbox WHERE error IS NOT NULL ORDER BY createdAt,rowid") fun refusedOutbox():Flow<List<OutboxEntity>>
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putDraft(draft: DraftEntity)
  @Query("SELECT * FROM drafts WHERE id=:id") fun draft(id: String): Flow<DraftEntity?>
  @Query("SELECT * FROM drafts WHERE id=:id") suspend fun draftSnapshot(id:String):DraftEntity?
  @Query("DELETE FROM drafts WHERE id=:id AND body=:body AND updatedAt=:updatedAt") suspend fun clearDraftSnapshot(id:String,body:String,updatedAt:Long)
  @Query("DELETE FROM drafts WHERE id=:id AND body=:body") suspend fun clearDraft(id: String, body: String)
+ /**
+  * A draft holding words the note never saved. Older builds kept a draft after saving it; once a sync
+  * replaced that text, the history holds it, so such a draft never reopens over the newer note.
+  */
+ @Query("SELECT * FROM drafts d WHERE d.id=:draftId AND d.body<>'' AND NOT EXISTS (SELECT 1 FROM revisions r WHERE r.noteId=:noteId AND r.body=d.body)")
+ suspend fun unsavedDraft(draftId:String,noteId:String=draftId):DraftEntity?
+ @Query("SELECT * FROM drafts d WHERE d.id=:id AND d.body<>'' AND NOT EXISTS (SELECT 1 FROM revisions r WHERE r.noteId=:id AND r.body=d.body)")
+ fun observeUnsavedDraft(id:String):Flow<DraftEntity?>
  @Insert suspend fun putRevision(revision: RevisionEntity)
  @Query("SELECT * FROM revisions WHERE noteId=:id ORDER BY at DESC") fun history(id: String): Flow<List<RevisionEntity>>
  @Query("SELECT * FROM revisions WHERE noteId=:id ORDER BY lastEditAt DESC, at DESC, id DESC LIMIT 1") suspend fun latestRevision(id:String):RevisionEntity?
@@ -101,7 +111,7 @@ interface SpuntoDao {
     CASE WHEN instr(l.key,'/')=0 THEN '' ELSE substr(l.key,instr(l.key,'/')+1) END,
     CASE WHEN instr(l.path,'/')=0 THEN '' ELSE substr(l.path,instr(l.path,'/')+1) END, 1
    FROM labels l JOIN notes n ON n.id=l.noteId
-   WHERE n.trashed=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
+   WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
    UNION ALL
    SELECT noteId,
     key||'/'||CASE WHEN instr(tailKey,'/')=0 THEN tailKey ELSE substr(tailKey,1,instr(tailKey,'/')-1) END,
@@ -113,6 +123,14 @@ interface SpuntoDao {
   SELECT key, MIN(path) AS path, COUNT(DISTINCT noteId) AS count
   FROM hierarchy GROUP BY key ORDER BY key
  """) fun labels(): Flow<List<LabelCount>>
+ /** The "All notes" count beside the sheet row: the notes the label counts above see. */
+ @Query("SELECT COUNT(*) FROM notes n WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)") fun noteCount(): Flow<Int>
+ /** L1 order: labels on notes edited since [since] first, then by overall use; a use is a note search can find (not archived or trashed) that carries the label. */
+ @Query("""
+  SELECT l.key, MIN(l.path) AS path, COUNT(DISTINCT l.noteId) AS count FROM labels l JOIN notes n ON n.id=l.noteId
+  WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
+  GROUP BY l.key ORDER BY COUNT(DISTINCT CASE WHEN n.updatedAt>=:since THEN l.noteId END) DESC, count DESC, l.key LIMIT :limit
+ """) fun labelsByUse(since: Long, limit: Int): Flow<List<LabelCount>>
  @Query("SELECT * FROM sync_state WHERE id=1") suspend fun state(): SyncStateEntity?
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putState(state: SyncStateEntity)
  @Query("SELECT * FROM sync_state WHERE id=1") fun observeState(): Flow<SyncStateEntity?>

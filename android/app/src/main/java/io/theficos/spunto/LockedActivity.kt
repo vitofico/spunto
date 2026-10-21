@@ -7,6 +7,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -28,6 +29,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoTheme
 import kotlinx.coroutines.launch
 
@@ -63,6 +65,7 @@ abstract class LockedActivity: FragmentActivity() {
  }
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
+  enableEdgeToEdge() // Android 15+ forces it at targetSdk 35; doing it everywhere keeps older phones the same.
   promptState = ViewModelProvider(this)[LockPromptState::class.java]
   prompt = buildPrompt(promptState.token)
   lifecycleScope.launch { appLock.state.collect { state ->
@@ -93,9 +96,9 @@ abstract class LockedActivity: FragmentActivity() {
       } }
       Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
        Text("Spunto is locked", style = MaterialTheme.typography.headlineLarge)
-       Spacer(Modifier.height(16.dp)); Text("Unlock with a strong biometric or this phone's PIN, pattern or password.")
+       Spacer(Modifier.height(SpuntoSpacing.s16)); Text("Unlock with a strong biometric or this phone's PIN, pattern or password.")
        if(error.isNotEmpty()) Text(error)
-       Spacer(Modifier.height(20.dp)); Button(onClick = { authenticate(null) }) { Text("Unlock Spunto") }
+       Spacer(Modifier.height(SpuntoSpacing.s20)); Button(onClick = { authenticate(null) }) { Text("Unlock Spunto") }
        TextButton(onClick = { authenticate(null, credentialOnly = true) }) { Text("Use screen lock") }
        TextButton(onClick = { finish() }) { Text("Close") }
       }}

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { willSentence } from "../src/features/format";
 
 // This suite uses the packaged app and real API. Fixture-only suites also run
 // against Vite when working on individual components.
@@ -49,9 +50,7 @@ test("real server capture, image, checkbox, edit history, search and label rewri
   await expect(card.locator("img")).toBeVisible();
   await card.getByRole("checkbox").click();
   await expect(card.getByRole("checkbox")).toBeChecked();
-  await card
-    .getByRole("link", { name: "Open note: " + title + " #" + label })
-    .click();
+  await card.getByRole("link", { name: new RegExp(", " + title) }).click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.getByLabel("Edit note")).toHaveValue(
     /- \[x\] 🎈 Read this/,
@@ -63,7 +62,7 @@ test("real server capture, image, checkbox, edit history, search and label rewri
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   await page.getByText("Revision history").click();
   await expect(
-    page.getByRole("button", { name: "Restore this version" }).first(),
+    page.getByRole("button", { name: "Restore", exact: true }).first(),
   ).toBeVisible();
   await page.goto("/search?q=" + encodeURIComponent(suffix));
   await expect(
@@ -81,12 +80,16 @@ test("real server capture, image, checkbox, edit history, search and label rewri
     .getByRole("link", { name: "#" + label, exact: true })
     .click();
   await expect(page).toHaveURL(new RegExp("/l/" + label));
-  await page.getByLabel("Label actions").selectOption("rename");
-  await page.getByLabel("New label path").fill(label + "renamed");
+  await page.getByLabel("Label actions").click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await page.getByLabel("New name").fill(label + "renamed");
   await expect(
-    page.getByText("Rewrites 1 notes.", { exact: false }),
+    page.getByText("Renames #" + label + " in 1 note.", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Rename", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Rename", exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(label + "renamed"));
   await expect(
     page.locator("article.entry").filter({ hasText: title }),
@@ -201,7 +204,10 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
     await toggle.click();
     const sheet = page.getByRole("dialog", { name: "Turn on Tasks?" });
     await expect(sheet).toBeVisible();
-    await expect(sheet.locator("ul li")).toHaveText(tasks.permission_sentences);
+    // The server's sentences, reworded to follow "It will".
+    await expect(sheet.locator("ul li")).toHaveText(
+      tasks.permission_sentences.map(willSentence),
+    );
     const [enableRequest] = await Promise.all([
       page.waitForRequest(
         (request) =>
@@ -339,17 +345,18 @@ test("real owner profile retains identity and exports portable Markdown", async 
     suffix +
     "\nOwner-authored Markdown #export/fixture\n- [ ] Keep the original words.";
   try {
+    // A single-owner install has no display name field; the setting stays in the API.
     await page.goto("/settings/profile");
-    const field = page.getByLabel("Display name (optional)", { exact: true });
-    await field.fill(displayName);
-    await page
-      .getByRole("button", { name: "Save profile", exact: true })
-      .click();
-    await expect(page.getByRole("main").getByRole("status")).toHaveText(
-      "Profile saved.",
-    );
-    await page.reload();
-    await expect(field).toHaveValue(displayName);
+    await expect(
+      page.getByRole("heading", { name: "Password", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Display name (optional)")).toHaveCount(0);
+    const saved = await page.request.put("/api/v1/settings", {
+      headers: { Origin: origin },
+      data: { owner_display_name: displayName },
+    });
+    expect(saved.ok()).toBe(true);
+    expect((await saved.json()).owner_display_name).toBe(displayName);
     const after = await page.request.get("/api/v1/auth/session");
     expect(await after.json()).toEqual(session);
     await page.goto("/");

@@ -132,6 +132,23 @@ async def test_resurface_anniversary_machine_exclusion_daily_idempotency(plugin_
     assert (await ctx.storage.records.get("shown", anniversary["id"]))["last_shown"] == NOW
 
 
+async def test_resurface_never_picks_an_archived_note(plugin_host):
+    host = plugin_host
+    domain = Notes(host.store, OWNER)
+    archived = await domain.create(
+        "Archived anniversary",
+        created_at=int(datetime(2020, 10, 14, tzinfo=UTC).timestamp() * 1000),
+    )
+    await domain.flags(archived["id"], {"archived": True})
+    other = await domain.create(
+        "Other old note", created_at=int(datetime(2020, 1, 1, tzinfo=UTC).timestamp() * 1000)
+    )
+    await resurface.daily(Ctx(host, "resurface"))
+    slip = await rows(host, "SELECT * FROM annotation WHERE plugin_id='resurface'")
+    assert [row["note_id"] for row in slip] == [other["id"]]
+    assert json.loads(slip[0]["payload"])["items"][0]["reason"] == "From your notes"
+
+
 def test_import_links_preserve_markdown_code_escapes_and_plain_mentions():
     relative = "/attachments/fixture.png"
     absolute = "https://source.example/attachments/fixture.png"

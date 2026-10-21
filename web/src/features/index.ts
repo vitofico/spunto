@@ -4,7 +4,6 @@ export {
   PluginRailViews,
   ReviewLine,
   DailySlip,
-  PluginDailySlip,
   SuggestionLine,
   EntryMeta,
   NotePanel,

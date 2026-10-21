@@ -1,74 +1,77 @@
 package io.theficos.spunto
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.theficos.spunto.core.design.*
 
-/** Reused by the picker and label page; counts already include distinct descendant notes. */
+/** Reused by the picker and label page; counts already include distinct descendant notes. Long-press manages a label. */
 internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(String)->Unit,onManageLabel:((String)->Unit)?=null,managementAvailable:Boolean=true) {
  items(rows,key={"label:"+it.key}) {row ->
-  Row(Modifier.fillMaxWidth().padding(start=(row.depth.coerceAtMost(4)*16).dp),verticalAlignment=Alignment.CenterVertically) {
-   TextButton(onClick={onLabel(row.key)},colors=ButtonDefaults.textButtonColors(containerColor=if(row.selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent),modifier=Modifier.weight(1f).heightIn(min=48.dp).testTag("label:"+row.key).semantics {selected=row.selected;contentDescription="#${row.path}, ${row.count} notes"}) {
-    Text("#${row.path.substringAfterLast('/')}",Modifier.weight(1f).padding(end=8.dp),style=MaterialTheme.typography.bodyMedium,maxLines=1,overflow=TextOverflow.Ellipsis)
-    Text(row.count.toString(),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-   }
-   onManageLabel?.let {manage ->TextButton(enabled=managementAvailable,onClick={manage(row.path)},modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription="Manage #${row.path} in the web app"}) {Text("Manage")}}
-  }
+  SheetRow("#${row.path.substringAfterLast('/')}",row.selected,Modifier.testTag("label:"+row.key),count=row.count,depth=row.depth,description="#${row.path}, ${notesCount(row.count)}",
+   onLongClick=onManageLabel?.takeIf {managementAvailable}?.let {manage -> {manage(row.path)}},longClickLabel="Manage #${row.path} in the web app") {onLabel(row.key)}
  }
 }
+/** A6 row: ink text after its glyph, if any, the count in ink-3 at the right, the active one in the accent on an accent-soft pill; 48 dp tall, 16 dp per level. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun SheetRow(title:String,selected:Boolean,modifier:Modifier=Modifier,count:Int?=null,depth:Int=0,description:String?=null,glyph:Int?=null,onLongClick:(()->Unit)?=null,longClickLabel:String?=null,onClick:()->Unit) {
+ val ink=if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+ Row(modifier.fillMaxWidth().padding(start=(depth.coerceAtMost(4)*16).dp).heightIn(min=48.dp).clip(CircleShape).background(if(selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+  .combinedClickable(role=Role.Button,onLongClickLabel=longClickLabel,onLongClick=onLongClick,onClick=onClick).semantics {this.selected=selected;description?.let {contentDescription=it}}.padding(horizontal=SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
+  glyph?.let {Icon(painterResource(it),contentDescription=null,modifier=Modifier.padding(end=SpuntoSpacing.s16).size(24.dp),tint=ink)}
+  Text(title,Modifier.weight(1f).padding(end=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis)
+  count?.let {Text(it.toString(),style=MaterialTheme.typography.labelMedium,color=if(selected) ink else SpuntoColors.ink3)}
+ }
+}
+@Composable private fun SheetOverline(text:String,action:(@Composable ()->Unit)?=null) =
+ Row(Modifier.fillMaxWidth().padding(top=SpuntoSpacing.s16,start=SpuntoSpacing.s12).heightIn(min=32.dp),verticalAlignment=Alignment.CenterVertically) {
+  Text(text.uppercase(),Modifier.weight(1f).semantics {heading();contentDescription=text},style=SpuntoType.overline,color=SpuntoColors.ink3);action?.invoke()
+ }
 
-/** Stateless navigation callbacks; opening, searching and dismissing never save or navigate. */
+/** Stateless navigation callbacks; opening, searching and dismissing never save or navigate. The drag handle closes it (A6). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun LabelsSheet(
  snapshot:LabelsNavigationSnapshot,onRoute:(String)->Unit,onSettings:()->Unit,
  onManageLabels:(String)->Unit,onManageViews:()->Unit,onDismiss:()->Unit,
- managementAvailable:Boolean=false,managementMessage:String="Connect and sync with your server to manage shared labels and views.",
+ managementAvailable:Boolean=false,managementMessage:String="Connect and sync with your server to manage shared labels and views.",reviewWaiting:Int=0,allNotes:Int?=null,
 ) {
  var query by remember {mutableStateOf("")};var showMore by remember {mutableStateOf(false)}
  val latest by rememberUpdatedState(snapshot)
  val views=remember(snapshot.manifest) {declaredActiveViews(snapshot.manifest)}
  val rows=remember(snapshot.labels,query,snapshot.route) {labelSheetRows(snapshot.labels,query,snapshot.route.takeIf {it.startsWith("label:")}?.removePrefix("label:"))}
- ModalBottomSheet(onDismissRequest=onDismiss,scrimColor=MaterialTheme.colorScheme.scrim) {
-  Column(Modifier.fillMaxWidth().fillMaxHeight(.88f).imePadding().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text("Labels and views",Modifier.weight(1f),style=MaterialTheme.typography.titleLarge);TextButton(onClick=onDismiss) {Text("Close")}}
-   OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text("Find a label")},singleLine=true)
-   LazyColumn(Modifier.weight(1f),contentPadding=PaddingValues(bottom=24.dp)) {
-    items(listOf("timeline" to "All notes","archive" to "Archive","trash" to "Trash","review" to "Review"),key={it.first}) {(route,title) ->
-     TextButton(onClick={onRoute(route)},colors=ButtonDefaults.textButtonColors(containerColor=if(snapshot.route==route) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent),modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).semantics {selected=snapshot.route==route}) {Text(title,Modifier.fillMaxWidth())}
-    }
-    if(views.isNotEmpty()) {
-     item {Text("Views",Modifier.padding(top=16.dp,bottom=8.dp),style=MaterialTheme.typography.titleMedium)}
-     items(views.filter {!it.hidden || showMore},key={it.route}) {view ->
-      TextButton(onClick={resolveViewRoute(latest.manifest,view.route)?.takeIf {!it.hidden || showMore}?.let {onRoute(it.route)}},colors=ButtonDefaults.textButtonColors(containerColor=if(snapshot.route==view.route) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent),modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).semantics {selected=snapshot.route==view.route}) {Text(view.title,Modifier.fillMaxWidth())}
-     }
-     if(views.any {it.hidden}) item {TextButton(onClick={showMore=!showMore}) {Text(if(showMore) "Show fewer views" else "Show more views")}}
-     item {TextButton(enabled=managementAvailable,onClick=onManageViews) {Text("Manage views in the web app")}}
-    }
-    item {Text("Labels",Modifier.padding(top=16.dp,bottom=8.dp),style=MaterialTheme.typography.titleMedium)}
-    if(rows.isEmpty()) item {Text(if(snapshot.labels.isEmpty()) "Labels grow as you write. Type # in a note." else "No labels match this search.",style=MaterialTheme.typography.bodyMedium)}
-    labelTreeItems(rows,onLabel={key ->if(latest.labels.any {it.key==key}) onRoute("label:$key")},onManageLabel={path ->if(managementAvailable && latest.labels.any {it.path==path}) onManageLabels(path)},managementAvailable=managementAvailable)
-    item {Text(managementMessage,Modifier.padding(vertical=12.dp),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-    item {TextButton(onClick=onSettings,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Settings",Modifier.fillMaxWidth())}}
+ // Fully open from the start, and one scrolling column, so large font sizes still reach every row.
+ ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),scrimColor=MaterialTheme.colorScheme.scrim) {
+  LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s8,end=SpuntoSpacing.s8,bottom=SpuntoSpacing.s24)) {
+   item(key="find") {OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),placeholder={Text("Find a label")},singleLine=true)}
+   items(listOfNotNull(Triple("timeline","All notes",R.drawable.ic_notes),Triple("archive","Archive",R.drawable.ic_archive),Triple("trash","Trash",R.drawable.ic_trash),Triple("review","Review",R.drawable.ic_inbox).takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title,glyph) ->
+    val count=when(route) {"timeline" -> allNotes;"review" -> reviewWaiting;else -> null}
+    SheetRow(title,snapshot.route==route,count=count,description=count?.let {"$title, ${notesCount(it)}"}.takeIf {route=="timeline"},glyph=glyph) {onRoute(route)}
    }
+   if(views.isNotEmpty()) {
+    item(key="views") {SheetOverline("Views") {if(views.any {it.hidden}) TextButton(onClick={showMore=!showMore}) {Text(if(showMore) "Show fewer views" else "Show more views")}}}
+    items(views.filter {!it.hidden || showMore},key={it.route}) {view ->
+     SheetRow(view.title,snapshot.route==view.route,onLongClick=onManageViews.takeIf {managementAvailable},longClickLabel="Manage views in the web app") {resolveViewRoute(latest.manifest,view.route)?.takeIf {!it.hidden || showMore}?.let {onRoute(it.route)}}
+    }
+   }
+   item(key="labels") {SheetOverline("Labels")}
+   if(rows.isEmpty()) item(key="no-labels") {Text(if(snapshot.labels.isEmpty()) "Labels grow as you write. Type # in a note." else "No labels match this search.",Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyMedium,color=SpuntoColors.ink3)}
+   labelTreeItems(rows,onLabel={key ->if(latest.labels.any {it.key==key}) onRoute("label:$key")},onManageLabel={path ->if(managementAvailable && latest.labels.any {it.path==path}) onManageLabels(path)},managementAvailable=managementAvailable)
+   item(key="manage") {Text(if(managementAvailable && rows.isNotEmpty()) "Long-press a label to rename, merge or remove it in the web app." else managementMessage,Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s12),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
+   item(key="settings") {HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s12),color=MaterialTheme.colorScheme.outlineVariant);SheetRow("Settings",false) {onSettings()}}
   }
- }
-}
-
-@Composable fun SettingsLanding(onRoute:(String)->Unit,onConnect:()->Unit,isConnected:Boolean) {
- LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-  item {Text("Settings",style=MaterialTheme.typography.titleLarge)}
-  items(listOf("appearance" to "Appearance","plugins" to "Plugins","ai" to "AI models","devices" to "Devices","status" to "Status","labels" to "Labels","data" to "Export","profile" to "Profile"),key={it.first}) {(route,title) ->
-   TextButton(onClick={onRoute(route)},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(title,Modifier.fillMaxWidth())}
-  }
-  item {TextButton(onClick={onRoute("guide")},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Show guide",Modifier.fillMaxWidth())}}
-  if(!isConnected) item {TextButton(onClick=onConnect) {Text("Connect to your server")}}
  }
 }

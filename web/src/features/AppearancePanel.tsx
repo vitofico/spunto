@@ -112,7 +112,7 @@ export function AppearancePanel() {
   return (
     <>
       <h1>Appearance</h1>
-      <p className={styles.muted}>A quiet page, in your colours.</p>
+      <p className="muted">A quiet page, in your colours.</p>
       {ready && requested !== selected.theme && (
         <p className={styles.facts}>
           The saved colour pack is unavailable. Using Carta until it returns.
@@ -130,6 +130,8 @@ export function AppearancePanel() {
             <button
               className={styles.theme}
               key={card.id}
+              aria-label={card.name}
+              aria-describedby={`theme-${card.id}-about`}
               aria-pressed={selected.theme === card.id}
               disabled={save.isPending || card.status !== "available"}
               onClick={() =>
@@ -146,6 +148,7 @@ export function AppearancePanel() {
                 className={styles.preview}
                 data-theme-preview={card.id}
                 style={colors}
+                aria-hidden="true"
               >
                 <small>Today · 09:41</small>
                 <p>Leave room for the next thought.</p>
@@ -163,7 +166,7 @@ export function AppearancePanel() {
               <span className={styles.themeName}>
                 {card.name}
                 {selected.theme === card.id ? " ✓" : ""}
-                <small>
+                <small id={`theme-${card.id}-about`}>
                   {card.status === "failed"
                     ? (card.reason ?? "This pack is unavailable.")
                     : (card.description ?? "Installed colour pack")}
@@ -196,7 +199,7 @@ export function AppearancePanel() {
           </div>
         </>
       )}
-      <label className={`${styles.row} ${styles.field}`}>
+      <label className={`${styles.row} ${styles.formField}`}>
         <span>Use a different theme on this device</span>
         <input
           className={styles.switch}
@@ -270,7 +273,7 @@ export function AppearancePanel() {
         Mode, reading face and text size apply to this browser.
       </p>
       {(save.error ?? query.error) && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {(save.error ?? query.error)?.message}
         </p>
       )}

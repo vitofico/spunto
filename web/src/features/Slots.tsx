@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { api } from "../lib/api";
+import { NoteBody } from "../components/core/NoteCard";
+import { useToast } from "../components/core/Toast";
 import { createIdempotencyKey } from "../lib/drafts";
 import { copyText } from "./copy";
 import type { Args, Annotation, Note, Plugin, Suggestion } from "../lib/types";
@@ -8,6 +11,7 @@ import { VocabularyOutput, outputText, validComponent } from "./Vocabulary";
 import { Dialog } from "./Dialog";
 import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
 import { labelChangeImpact } from "./labelChange";
+import { plural } from "./format";
 import styles from "./Feature.module.css";
 export function usePlugins() {
   return useQuery({ queryKey: ["manifest"], queryFn: api.manifest });
@@ -33,18 +37,19 @@ export function visibleSuggestions(
 }
 export function ReviewLine() {
   const manifest = usePlugins();
+  const active = new Set(
+    activePlugins(manifest.data?.plugins).map((p) => p.id),
+  );
   const query = useQuery({
     queryKey: ["suggestions", "review"],
     queryFn: () => api.suggestions("review"),
-    enabled: !!manifest.data?.plugins.length,
+    enabled: active.size > 0,
   });
   const count =
-    query.data?.suggestions.filter((s) =>
-      manifest.data?.plugins.some((p) => p.id === s.plugin),
-    ).length ?? 0;
+    query.data?.suggestions.filter((s) => active.has(s.plugin)).length ?? 0;
   return count >= 3 ? (
     <p className={styles.reviewLine}>
-      {count} suggestions · <a href="/review">Review</a>
+      {plural(count, "suggestion")} · <Link href="/review">Review</Link>
     </p>
   ) : null;
 }
@@ -61,6 +66,20 @@ export function SuggestionLine({
   const client = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<Suggestion | null>(null);
+  const opener = useRef<HTMLElement>(null);
+  const describe = useId();
+  const toast = useToast();
+  // A touch long-press shows the provenance a mouse gets from the tooltip.
+  const press = useRef<{ timer?: number; shown?: boolean }>({});
+  const release = () => {
+    window.clearTimeout(press.current.timer);
+    press.current.timer = undefined;
+  };
+  const reveal = (provenance: string) => {
+    release();
+    press.current.shown = true;
+    toast.show({ message: provenance });
+  };
   const impact = useQuery({
     queryKey: [
       "label-impact",
@@ -97,7 +116,8 @@ export function SuggestionLine({
   }, [note.id]);
   const suggestions = visibleSuggestions(note, manifest.data?.plugins ?? []);
   if (editing || !suggestions.length) return null;
-  const apply = (s: Suggestion) => {
+  const apply = (s: Suggestion, trigger: HTMLElement) => {
+    opener.current = trigger;
     if (["replace_body", "merge_notes", "label_change"].includes(s.action))
       setPreview(s);
     else decision.mutate({ id: s.id, action: "accept" });
@@ -125,48 +145,89 @@ export function SuggestionLine({
                 s.action,
               ),
             )
-          )
+          ) {
+            opener.current = null;
             onReview ? onReview() : setPreview(suggestions[0]);
-          else
+          } else
             for (const s of suggestions)
               decision.mutate({ id: s.id, action: "accept" });
         }
       }}
     >
-      {(expanded ? suggestions : suggestions.slice(0, 3)).map((s) => (
-        <span className={styles.suggestionGroup} key={s.id}>
-          <button
-            className={styles.pill}
-            disabled={decision.isPending}
-            title={`Suggested by ${manifest.data?.plugins.find((p) => p.id === s.plugin)?.name ?? s.plugin}: ${s.reason}`}
-            onClick={() => apply(s)}
-          >
-            {suggestionTitle(s)}
-            {s.payload.is_new === true && <small>new</small>}
-          </button>
-          <button
-            className={styles.dismiss}
-            aria-label={`Dismiss ${suggestionTitle(s)}`}
-            disabled={decision.isPending}
-            onClick={() => decision.mutate({ id: s.id, action: "dismiss" })}
-          >
-            ×
-          </button>
-        </span>
-      ))}
+      {(expanded ? suggestions : suggestions.slice(0, 3)).map((s) => {
+        const by = manifest.data?.plugins.find((p) => p.id === s.plugin)?.name;
+        const provenance = `Suggested by ${by}${s.reason ? `: ${s.reason}` : ""}`;
+        return (
+          <span className={styles.suggestionGroup} key={s.id}>
+            <button
+              className={styles.pill}
+              disabled={decision.isPending}
+              title={provenance}
+              aria-describedby={`${describe}-${s.id}`}
+              onPointerDown={(e) => {
+                press.current =
+                  e.pointerType === "mouse"
+                    ? {}
+                    : {
+                        timer: window.setTimeout(() => reveal(provenance), 500),
+                      };
+              }}
+              onPointerUp={release}
+              onPointerCancel={release}
+              onPointerLeave={release}
+              onContextMenu={(e) => {
+                if (press.current.timer === undefined) return;
+                e.preventDefault();
+                reveal(provenance);
+              }}
+              onClick={(e) => {
+                const held = press.current.shown;
+                press.current = {};
+                if (!held) apply(s, e.currentTarget);
+              }}
+            >
+              {suggestionTitle(s)}
+              {s.payload.is_new === true && <small>new</small>}
+            </button>
+            <span id={`${describe}-${s.id}`} hidden>
+              {provenance}
+            </span>
+            <button
+              className={styles.dismiss}
+              aria-label={`Dismiss ${suggestionTitle(s)}`}
+              disabled={decision.isPending}
+              onClick={() => decision.mutate({ id: s.id, action: "dismiss" })}
+            >
+              ×
+            </button>
+          </span>
+        );
+      })}
       {!expanded && suggestions.length > 3 && (
         <button className={styles.overflow} onClick={() => setExpanded(true)}>
           +{suggestions.length - 3}
         </button>
       )}
+      <button
+        className={styles.dismiss}
+        aria-label={`Dismiss ${plural(suggestions.length, "suggestion")}`}
+        disabled={decision.isPending}
+        onClick={() => {
+          for (const s of suggestions)
+            decision.mutate({ id: s.id, action: "dismiss" });
+        }}
+      >
+        Dismiss
+      </button>
       {decision.isError && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {decision.error.message}
         </p>
       )}
       {preview && (
         <Dialog
           title={suggestionTitle(preview)}
+          opener={opener.current}
           onClose={() => setPreview(null)}
           footer={
             <>
@@ -296,7 +357,7 @@ function PanelSection({
         onCommand={(id, args) => command.mutate({ id, args })}
       />
       {command.isError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {command.error.message}
         </p>
       )}
@@ -345,6 +406,7 @@ export function PluginNoteSlots({
 export function DailySlip() {
   const manifest = usePlugins();
   const client = useQueryClient();
+  const toast = useToast();
   const query = useQuery({
     queryKey: ["slip"],
     queryFn: () =>
@@ -373,24 +435,43 @@ export function DailySlip() {
       }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["slip"] }),
   });
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ["slip"] });
+    void client.invalidateQueries({ queryKey: ["notes"] });
+  };
   const archive = useMutation({
-    mutationFn: (id: string) => api.flags(id, { archived: true }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["notes"] }),
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      api.flags(id, { archived }),
+    onSuccess: (_, { id, archived }) => {
+      refresh();
+      if (archived)
+        toast.show({
+          message: "Archived",
+          actionLabel: "Undo",
+          onAction: () => archive.mutate({ id, archived: false }),
+        });
+    },
+    onError: (error) => toast.show({ message: error.message }),
   });
   const slip = query.data?.slip;
   if (!slip || !manifest.data?.plugins.some((p) => p.id === slip.plugin_id))
     return null;
   return (
     <section className={styles.slip}>
-      <p className={styles.overline}>
-        From your notes · {new Date(slip.note.created_at).toLocaleDateString()}
+      <p className="overline">
+        From your notes ·{" "}
+        {new Date(slip.note.created_at).toLocaleDateString(undefined, {
+          dateStyle: "long",
+        })}
       </p>
-      <blockquote>{slip.note.body.slice(0, 400)}</blockquote>
+      <blockquote>
+        <NoteBody note={slip.note} clamp />
+      </blockquote>
       <div className={styles.row}>
-        <a href={`/n/${encodeURIComponent(slip.note_id)}`}>Open</a>
+        <Link href={`/n/${encodeURIComponent(slip.note_id)}`}>Open</Link>
         <button
           disabled={archive.isPending}
-          onClick={() => archive.mutate(slip.note_id)}
+          onClick={() => archive.mutate({ id: slip.note_id, archived: true })}
         >
           Archive
         </button>
@@ -402,15 +483,14 @@ export function DailySlip() {
           ×
         </button>
       </div>
-      {(dismiss.isError || archive.isError) && (
-        <p role="alert" className={styles.error}>
-          The change could not be saved. Try again.
+      {dismiss.error && (
+        <p role="alert" className="error">
+          {dismiss.error.message}
         </p>
       )}
     </section>
   );
 }
-export const PluginDailySlip = DailySlip;
 export function PluginRailViews() {
   const manifest = usePlugins();
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
@@ -435,12 +515,12 @@ export function PluginRailViews() {
       {views
         .filter((v) => !settings.data?.hidden_views.includes(v.key))
         .map((v) => (
-          <a
+          <Link
             key={v.key}
             href={`/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`}
           >
             {v.title}
-          </a>
+          </Link>
         ))}
       {views.some((v) => settings.data?.hidden_views.includes(v.key)) && (
         <>
@@ -452,11 +532,11 @@ export function PluginRailViews() {
               .filter((v) => settings.data?.hidden_views.includes(v.key))
               .map((v) => (
                 <div key={v.key} className={styles.row}>
-                  <a
+                  <Link
                     href={`/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`}
                   >
                     {v.title}
-                  </a>
+                  </Link>
                   <button
                     onClick={() => pin.mutate(v.key)}
                     disabled={pin.isPending}
@@ -471,22 +551,33 @@ export function PluginRailViews() {
   );
 }
 export type CommandOrigin = { plugin: string; command: string; args?: Args };
-function saveCommand(value: unknown): { id: string; args: Args } | undefined {
+/** A plugin's own save: a command it offers only inside results, titled "Save as note". */
+function saveCommandIds(plugin: Plugin | undefined) {
+  return new Set(
+    (plugin?.contributes?.commands ?? [])
+      .filter((c) => !c.where?.length && c.title === "Save as note")
+      .map((c) => c.id),
+  );
+}
+function saveCommand(
+  value: unknown,
+  ids: Set<string>,
+): { id: string; args: Args } | undefined {
   if (Array.isArray(value)) {
     for (const item of value) {
-      const command = saveCommand(item);
+      const command = saveCommand(item, ids);
       if (command) return command;
     }
   } else if (value && typeof value === "object") {
     if (
       validComponent(value) &&
       value.type === "command" &&
-      value.id === "save-answer"
+      ids.has(String(value.id))
     )
       return { id: String(value.id), args: (value.args ?? {}) as Args };
     if (!("type" in value)) {
       const group = value as { items?: unknown; components?: unknown };
-      return saveCommand(group.items ?? group.components);
+      return saveCommand(group.items ?? group.components, ids);
     }
   }
 }
@@ -500,8 +591,9 @@ export function CommandResult({
   origin?: CommandOrigin;
 }) {
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<{ id?: string } | null>(null);
   const client = useQueryClient();
+  const manifest = usePlugins();
   const [display, setDisplay] = useState(value);
   const [currentOrigin, setCurrentOrigin] = useState(origin);
   const [responseId, setResponseId] = useState(0);
@@ -510,11 +602,16 @@ export function CommandResult({
   const appliedSession = useRef(session);
   activeSession.current = session;
   const text = outputText(display);
-  const providedSave = saveCommand(display);
-  const saveKey = useMemo(createIdempotencyKey, [display]);
-  const genericSave = !["ask", "context-packs", "decision-journal"].includes(
-    currentOrigin?.plugin ?? "",
+  const plugin = manifest.data?.plugins.find(
+    (p) => p.id === currentOrigin?.plugin,
   );
+  const providedSave = saveCommand(display, saveCommandIds(plugin));
+  const saveKey = useMemo(createIdempotencyKey, [display]);
+  // Plugins that create notes save their own results; an unknown origin gets no save.
+  const genericSave = !!plugin && !plugin.creates;
+  const formLabel =
+    plugin?.contributes?.commands?.find((c) => c.id === currentOrigin?.command)
+      ?.title ?? "Run";
   useEffect(() => {
     if (appliedSession.current === session) return;
     appliedSession.current = session;
@@ -522,7 +619,7 @@ export function CommandResult({
     setCurrentOrigin(origin);
     setResponseId((prior) => prior + 1);
     setCopied(false);
-    setSaved(false);
+    setSaved(null);
   }, [value, origin, session]);
   const followup = useMutation({
     mutationFn: ({
@@ -541,14 +638,14 @@ export function CommandResult({
       });
       setResponseId((prior) => prior + 1);
       setCopied(false);
-      setSaved(false);
+      setSaved(null);
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
   const save = useMutation({
     mutationFn: () => api.createNote(text, saveKey),
-    onSuccess: () => {
-      setSaved(true);
+    onSuccess: (note) => {
+      setSaved({ id: note?.id });
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
@@ -585,7 +682,7 @@ export function CommandResult({
       <VocabularyOutput
         key={responseId}
         value={display}
-        formLabel={currentOrigin?.plugin === "ask" ? "Ask" : "Run"}
+        formLabel={formLabel}
         onCommand={
           currentOrigin && !followup.isPending
             ? (id, args) =>
@@ -614,12 +711,12 @@ export function CommandResult({
           disabled={!text}
           onClick={() => void copyText(text).then(setCopied)}
         >
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : "Copy text"}
         </button>
         {genericSave && (
           <button
             className="primary"
-            disabled={!text || save.isPending || saved}
+            disabled={!text || save.isPending || !!saved}
             onClick={() => save.mutate()}
           >
             {saved
@@ -629,15 +726,18 @@ export function CommandResult({
                 : "Save as note"}
           </button>
         )}
+        {saved?.id && (
+          <Link href={`/n/${encodeURIComponent(saved.id)}`}>Open note</Link>
+        )}
         {onDismiss && <button onClick={onDismiss}>Back</button>}
       </footer>
       {save.isError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {save.error.message}
         </p>
       )}
       {followup.error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {followup.error.message}
         </p>
       )}
@@ -668,18 +768,15 @@ export function PaletteCommands({
   noteId?: string;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
 }) {
+  // One row per command: a note action that is also a palette command runs on the open note.
   return (
-    <>
-      {noteId && (
-        <PluginCommands
-          query={query}
-          where="note-actions"
-          noteId={noteId}
-          onResult={onResult}
-        />
-      )}
-      <PluginCommands query={query} where="palette" onResult={onResult} />
-    </>
+    <PluginCommands
+      query={query}
+      where={noteId ? ["note-actions", "palette"] : ["palette"]}
+      noteId={noteId}
+      onResult={onResult}
+      inPalette
+    />
   );
 }
 export function PluginCommands({
@@ -689,15 +786,21 @@ export function PluginCommands({
   pluginId,
   onChoose,
   onResult,
+  inPalette,
 }: {
   query?: string;
-  where?: string;
+  where?: string | string[];
   noteId?: string;
   pluginId?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
+  /** Rows look and line up like the palette's own rows. */
+  inPalette?: boolean;
 }) {
   const manifest = usePlugins();
+  const places = Array.isArray(where) ? where : [where];
+  const slash = places.includes("slash");
+  const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [origin, setOrigin] = useState<CommandOrigin>();
   const command = useMutation({
@@ -726,28 +829,61 @@ export function PluginCommands({
     .flatMap((p) =>
       (p.contributes?.commands ?? [])
         .slice(0, 3)
+        .map((c) => ({
+          command: c,
+          at: (c as unknown as { where?: string[] }).where ?? c.surfaces ?? [],
+        }))
         .filter(
-          (c) =>
-            (
-              (c as unknown as { where?: string[] }).where ??
-              c.surfaces ??
-              []
-            ).includes(where) &&
-            (!("online" in c) ||
-              !(c as unknown as { online?: boolean }).online ||
+          ({ command, at }) =>
+            places.some((place) => at.includes(place)) &&
+            (!("online" in command) ||
+              !(command as unknown as { online?: boolean }).online ||
               navigator.onLine),
         )
-        .map((c) => ({
+        .map(({ command, at }) => ({
           plugin: p.id,
-          id: c.id,
-          title: [...c.title].slice(0, 24).join(""),
+          id: command.id,
+          title: [...command.title].slice(0, 24).join(""),
           name: p.name,
-          args: noteId ? { note_id: noteId } : undefined,
+          args:
+            noteId && at.includes("note-actions")
+              ? { note_id: noteId }
+              : undefined,
         })),
     )
     .filter((c) =>
       c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
+  const highlighted = Math.min(active, commands.length - 1);
+  const choose = (c: CommandChoice) =>
+    onChoose ? onChoose(c) : command.mutate(c);
+  useEffect(() => setActive(0), [query]);
+  // The slash menu is driven from the editor: arrows move, Enter runs the highlighted command.
+  useEffect(() => {
+    if (!slash || !commands.length) return;
+    const key = (e: KeyboardEvent) => {
+      if (
+        !(e.target instanceof HTMLTextAreaElement) ||
+        e.isComposing ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.shiftKey ||
+        !["ArrowDown", "ArrowUp", "Enter"].includes(e.key)
+      )
+        return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Enter") choose(commands[highlighted]);
+      else
+        setActive(
+          (highlighted + (e.key === "ArrowDown" ? 1 : commands.length - 1)) %
+            commands.length,
+        );
+    };
+    document.addEventListener("keydown", key, true);
+    return () => document.removeEventListener("keydown", key, true);
+  });
   if (result)
     return (
       <CommandResult
@@ -758,20 +894,27 @@ export function PluginCommands({
     );
   if (!commands.length) return null;
   return (
-    <div>
-      {commands.map((c) => (
+    <div
+      className={slash ? styles.slash : inPalette ? "palette-group" : undefined}
+      role={slash ? "listbox" : undefined}
+      aria-label={slash ? "Commands" : undefined}
+    >
+      {commands.map((c, index) => (
         <button
-          className={styles.command}
+          className={inPalette ? "palette-row" : styles.command}
           key={`${c.plugin}/${c.id}`}
+          role={slash ? "option" : undefined}
+          aria-selected={slash ? index === highlighted : undefined}
           disabled={command.isPending}
-          onClick={() => (onChoose ? onChoose(c) : command.mutate(c))}
+          onMouseDown={slash ? (e) => e.preventDefault() : undefined}
+          onClick={() => choose(c)}
         >
           <span>{c.title}</span>
-          <small>{c.name}</small>
+          <small className="muted">{c.name}</small>
         </button>
       ))}
       {command.isError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {command.error.message}
         </p>
       )}

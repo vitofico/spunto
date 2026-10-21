@@ -98,6 +98,14 @@ async function uiCommand(
   return response.json();
 }
 
+// A returned form submits with its command's manifest title.
+const formTitles: Record<string, string> = {
+  "record-decision": "Record decision",
+  "review-decision": "Review decision",
+  edit: "Edit context pack",
+  sources: "Pack sources",
+};
+
 async function run(
   page: Page,
   dialog: Locator,
@@ -105,7 +113,10 @@ async function run(
   command: string,
 ) {
   return uiCommand(page, plugin, command, () =>
-    dialog.getByRole("button", { name: "Run", exact: true }).click(),
+    dialog
+      .getByRole("button", { name: formTitles[command], exact: true })
+      .last()
+      .click(),
   );
 }
 
@@ -132,7 +143,7 @@ async function editNote(
   return response.json();
 }
 
-async function selectStatus(dialog: Locator, value: "open" | "closed") {
+async function selectStatus(dialog: Locator, value: "Open" | "Closed") {
   await dialog
     .getByRole("group", { name: "Status (open reopens)", exact: true })
     .getByRole("button", { name: value, exact: true })
@@ -148,7 +159,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   const suffix = `${Date.now().toString(36)}-${info.project.name}`;
   let dialog = await palette(page, "Record decision");
   await uiCommand(page, "decision-journal", "record-decision", () =>
-    dialog.getByRole("button", { name: /^Record decision/ }).click(),
+    dialog.getByRole("option", { name: /^Record decision/ }).click(),
   );
   await dialog
     .getByLabel("Decision title", { exact: true })
@@ -191,7 +202,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await page.goto(`/n/${rootId}`);
   dialog = await palette(page, "Review decision");
   await uiCommand(page, "decision-journal", "review-decision", () =>
-    dialog.getByRole("button", { name: /^Review decision/ }).click(),
+    dialog.getByRole("option", { name: /^Review decision/ }).click(),
   );
   await dialog
     .getByLabel("What happened, or why reopen?", { exact: true })
@@ -199,7 +210,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await dialog
     .getByLabel("What did you learn? (optional)", { exact: true })
     .fill("Keep a separate backup copy.");
-  await selectStatus(dialog, "closed");
+  await selectStatus(dialog, "Closed");
   const reviewed = await run(
     page,
     dialog,
@@ -216,7 +227,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await page.goto(`/n/${outcomeId}`);
   dialog = await palette(page, "Review decision");
   await uiCommand(page, "decision-journal", "review-decision", () =>
-    dialog.getByRole("button", { name: /^Review decision/ }).click(),
+    dialog.getByRole("option", { name: /^Review decision/ }).click(),
   );
   await dialog
     .getByLabel("What happened, or why reopen?", { exact: true })
@@ -224,7 +235,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await dialog
     .getByLabel("Next review date (YYYY-MM-DD, optional)", { exact: true })
     .fill("2030-03-01");
-  await selectStatus(dialog, "open");
+  await selectStatus(dialog, "Open");
   const reopened = await run(
     page,
     dialog,
@@ -274,7 +285,7 @@ test("context packs curate sources, expose staleness and keep a private note cop
   const source: Note = await seeded.json();
   let dialog = await palette(page, "Context packs");
   await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("button", { name: /^Context packs/ }).click(),
+    dialog.getByRole("option", { name: /^Context packs/ }).click(),
   );
   await uiCommand(page, "context-packs", "edit", () =>
     dialog
@@ -372,7 +383,7 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await expect(
     dialog.getByText(/A revised goal, kept by the owner/),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "Copy", exact: true }).click();
+  await dialog.getByRole("button", { name: "Copy text", exact: true }).click();
   await expect(
     dialog.getByRole("button", { name: "Copied", exact: true }),
   ).toBeVisible();

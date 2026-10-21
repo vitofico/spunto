@@ -21,6 +21,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 internal data class ExportableNote(val note:Note,val stamp:NoteExportStamp)
 /** Read the saved local revision, never the editor buffer, under the current replica authority. */
@@ -29,7 +30,7 @@ internal suspend fun readNoteForExport(model:SpuntoViewModel,id:String):Exportab
  val credentials=model.container.auth.config.first()
  val result=model.container.database.withTransaction {
   val note=model.repository.dao.get(id)?.note() ?: return@withTransaction null
-  val draft=model.repository.dao.draftSnapshot(id)?.body
+  val draft=model.repository.dao.unsavedDraft(id)?.body
   if(draft!=null && draft!=note.body) return@withTransaction null
   val replica=model.repository.dao.state()
   ExportableNote(note,noteExportStamp(note,draft,credentials,replica?.serverUrl,replica?.epoch))
@@ -45,16 +46,19 @@ private enum class ExportAction {Share,Save}
 private data class ExportApproval(val action:ExportAction,val stamp:NoteExportStamp)
 private data class SelectedDocument(val request:NoteExportSession.Request,val uri:Uri)
 
-@Composable internal fun NoteExportActions(model:SpuntoViewModel,note:Note,enabled:Boolean) {
+/** [content] gets Share and Save actions and whether they can run now; by default two text buttons. */
+@Composable internal fun NoteExportActions(model:SpuntoViewModel,note:Note,enabled:Boolean,content:@Composable (share:()->Unit,save:()->Unit,available:Boolean)->Unit={share,save,available ->
+ Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {TextButton(onClick=share,enabled=available) {Text("Share")};TextButton(onClick=save,enabled=available) {Text("Save Markdown")}}
+}) {
  val credentials by model.auth.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null)
- val draft by model.repository.draft(note.id).collectAsState(initial=null)
+ val unsaved=remember(note.id) {model.repository.dao.observeUnsavedDraft(note.id)}.collectAsState(initial=null).value?.body
  // A different registration cannot consume the previous note/account's picker result.
  key(note.id,credentials,replica?.serverUrl,replica?.epoch) {
-  NoteExportActionsForOwner(model,note,enabled && (draft==null || draft?.body==note.body),noteExportStamp(note,draft?.body,credentials,replica?.serverUrl,replica?.epoch))
+  NoteExportActionsForOwner(model,note,enabled && (unsaved==null || unsaved==note.body),noteExportStamp(note,unsaved,credentials,replica?.serverUrl,replica?.epoch),content)
  }
 }
-@Composable private fun NoteExportActionsForOwner(model:SpuntoViewModel,note:Note,enabled:Boolean,stamp:NoteExportStamp) {
+@Composable private fun NoteExportActionsForOwner(model:SpuntoViewModel,note:Note,enabled:Boolean,stamp:NoteExportStamp,content:@Composable (()->Unit,()->Unit,Boolean)->Unit) {
  val context=LocalContext.current
  val scope=rememberCoroutineScope()
  val gate by model.container.appLock.state.collectAsState()
@@ -100,13 +104,7 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
    finally {busy=false}
   }
  }
- Column {
-  FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-   TextButton(onClick={begin(ExportAction.Share)},enabled=enabled && gate.unlocked && !busy && request==null) {Text("Share")}
-   TextButton(onClick={begin(ExportAction.Save)},enabled=enabled && gate.unlocked && !busy && request==null) {Text("Save Markdown")}
-  }
-  Text(if(enabled) "Saved note text only. Attachment files aren't included." else "Finish editing to share or save the saved note.",style=MaterialTheme.typography.bodySmall)
- }
+ Column {content({begin(ExportAction.Share)},{begin(ExportAction.Save)},enabled && gate.unlocked && !busy && request==null)}
  if(gate.unlocked) approval?.let {pending ->
   AlertDialog(onDismissRequest={approval=null},title={Text(if(pending.action==ExportAction.Share) "Share private note?" else "Save private note?")},text={Text("This exports the saved Markdown outside Spunto. Attachment files aren't included. The copy won't be protected by Spunto's app lock.")},confirmButton={TextButton(onClick={begin(pending.action,pending.stamp)},enabled=!busy) {Text("Continue")}},dismissButton={TextButton(onClick={approval=null}) {Text("Cancel")}})
  }

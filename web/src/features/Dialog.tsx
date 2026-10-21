@@ -5,16 +5,19 @@ export function Dialog({
   onClose,
   children,
   footer,
+  opener,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** The control that opened it, for a click: WebKit doesn't focus a clicked button. */
+  opener?: HTMLElement | null;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
-    const previous = document.activeElement;
+    const previous = opener ?? document.activeElement;
     const dialog = ref.current;
     if (dialog && !dialog.open) dialog.showModal();
     return () => {

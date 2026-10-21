@@ -43,7 +43,7 @@ class AppContainer(val context:Context) {
  val preferences get()=current.preferences
  init {
   scope.launch {auth.selection.collect {selection -> if(selection.replicaId!=active.value.replicaId) {val previous=active.value;previous.retire();io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.cacheSlip(context,null,null);active.value=newReplica(selection)};scheduler.periodic()}}
-  connectivity.registerDefaultNetworkCallback(object:ConnectivityManager.NetworkCallback() {override fun onAvailable(network:Network) {connected.value=true};override fun onLost(network:Network) {connected.value=connectivity.activeNetwork!=null}})
+  connectivity.registerDefaultNetworkCallback(object:ConnectivityManager.NetworkCallback() {override fun onAvailable(network:Network) {connected.value=true};override fun onLost(network:Network) {connected.value=false}})
  }
 }
 class ReplicaContainer internal constructor(val context:Context,val replicaId:String,val generation:Long,val auth:AuthStore,internal val appLock:AppLock,val connected:MutableStateFlow<Boolean>,val scheduler:SyncScheduler,private val databases:ReplicaDatabaseCache) {
@@ -69,7 +69,7 @@ class ReplicaContainer internal constructor(val context:Context,val replicaId:St
       val raw=manifest.value.toString()
       if(raw!=previous) {io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.apply(context,manifest.enabled("quick-capture"),manifest.enabled("dictation"));if(!manifest.enabled("dictation")) context.getSystemService(android.content.pm.ShortcutManager::class.java).removeDynamicShortcuts(listOf("dictate"));previous=raw}
      }
-    },cacheSlip={id,text ->io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.cacheSlip(context,id,text)})
+    },cacheSlip={id,text,writtenAt ->io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.cacheSlip(context,id,text,writtenAt)})
    }
   }
  }

@@ -1,4 +1,5 @@
 import java.time.LocalDate
+import java.util.zip.ZipFile
 
 plugins { alias(libs.plugins.android.application); alias(libs.plugins.kotlin.android); alias(libs.plugins.kotlin.compose); alias(libs.plugins.androidx.baselineprofile) }
 val spuntoVersionCode = providers.gradleProperty("spuntoVersionCode").orNull?.let { raw ->
@@ -19,7 +20,7 @@ android {
  // Compile original profiles with the R8 mapping; synthetic profile rewriting can race.
  experimentalProperties["android.experimental.art-profile-r8-rewriting"] = false
  buildTypes {
-  debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug"; resValue("string", "app_name", "Spunto Debug"); isMinifyEnabled = true; proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-debug.pro"); testProguardFiles("proguard-android-test.pro") }
+  debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug"; resValue("string", "app_name", "Spunto Debug"); resValue("string", "application_id", "io.theficos.spunto.debug"); isMinifyEnabled = true; proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-debug.pro"); testProguardFiles("proguard-android-test.pro") }
   release { isMinifyEnabled = true; vcsInfo.include = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
  }
 }
@@ -51,7 +52,8 @@ val verifyApkBudget by tasks.registering {
  doLast {
   val apks=fileTree(layout.buildDirectory.dir("outputs/apk")) { include("**/*.apk");exclude("androidTest/**") }.files
   check(apks.isNotEmpty()) { "Build an app APK before checking its budget." }
-  apks.sortedBy { it.path }.forEach { apk -> check(apk.length()<=15_000_000L) { "${apk.name}: ${apk.length()} bytes exceeds the 15 MB APK budget." };logger.lifecycle("${apk.name}: ${apk.length()} / 15000000 bytes") }
+  // Incremental packaging leaves dead space in the file, so count the packaged entries; CI also checks the fresh file.
+  apks.sortedBy { it.path }.forEach { apk -> val size=ZipFile(apk).use { zip -> zip.entries().asSequence().sumOf { entry -> entry.compressedSize } };check(size<=15_000_000L) { "${apk.name}: $size bytes of entries exceed the 15 MB APK budget." };logger.lifecycle("${apk.name}: $size / 15000000 bytes of entries") }
  }
 }
 tasks.configureEach { if(name.matches(Regex("assemble(?!.*AndroidTest)[A-Z].*"))) finalizedBy(verifyApkBudget) }

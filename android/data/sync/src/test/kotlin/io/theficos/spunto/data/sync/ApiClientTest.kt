@@ -26,6 +26,12 @@ class ApiClientTest {
   val op=Json.parseToJsonElement(req.body.readUtf8()).jsonObject["ops"]!!.jsonArray.single().jsonObject;assertEquals(123,op["created_at"]!!.jsonPrimitive.int);assertEquals("id",op["note_id"]!!.jsonPrimitive.content);assertFalse(op.containsKey("noteId"))
  }
  @Test fun signInUsesVersionedServerPath() = runBlocking {server.enqueue(MockResponse().setBody("""{"id":"d","token":"fixture","name":"Phone"}"""));api("").signIn("synthetic-password","Phone");assertEquals("/api/v1/auth/devices",server.takeRequest().path)}
+ @Test fun signOutRevokesOnlyThisPhonesCredentialAndSaysWhenItCouldNot() = runBlocking {
+  server.enqueue(MockResponse().setResponseCode(204));assertTrue(api().signOut())
+  val request=server.takeRequest();assertEquals("POST",request.method);assertEquals("/api/v1/auth/logout",request.path);assertEquals("Bearer test-synthetic",request.getHeader("Authorization"))
+  server.enqueue(MockResponse().setResponseCode(401).setBody("""{"code":"unauthenticated"}"""));assertTrue(api().signOut())
+  server.enqueue(MockResponse().setResponseCode(503));assertFalse(api().signOut())
+ }
  @Test fun unauthorizedRemainsTypedFailure() = runBlocking { server.enqueue(MockResponse().setResponseCode(401).setBody("""{"code":"unauthorized"}"""));try {api().meta();fail("Expected401") } catch(e:ApiException) { assertEquals(401,e.status);assertEquals("unauthorized",e.code) } }
  @Test fun pairingExchangesCodeInBody() = runBlocking { server.enqueue(MockResponse().setBody("""{"id":"d","token":"fixture","name":"Phone"}"""));assertEquals("d",api("").pairingExchange("synthetic","Phone").id); val request=server.takeRequest();assertEquals("/api/v1/auth/pairing/exchange",request.path);assertNull(request.getHeader("Authorization")) }
  @Test fun duplicateOriginalDoesNotRequireAnotherOperationId() = runBlocking { server.enqueue(MockResponse().setBody("""{"epoch":"e","results":[{"op_id":"op","status":"duplicate","original":{"status":"applied","version":1}}]}""")); assertEquals("applied",api().push("e",listOf(OutboxOperation(opId="op",type="note.create",noteId="id",body="fixture"))).results.single().original!!.status) }

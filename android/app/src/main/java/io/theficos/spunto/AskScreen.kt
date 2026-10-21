@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.serialization.json.*
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 /** A direct destination for Ask; each question is grounded in a fresh search of the notes. */
 @Composable fun AskScreen(model:SpuntoViewModel,onNote:(String)->Unit) {
@@ -30,7 +31,7 @@ import kotlinx.serialization.json.*
  val keyboard=LocalSoftwareKeyboardController.current
  LaunchedEffect(auth,epoch,manifest) {if(!enabled || auth==null) {request?.cancel();answer=null;asked="";asking=false;failed=false}}
  DisposableEffect(auth,epoch) {onDispose {request?.cancel()}}
- LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+ LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s20)) {
   item {
    AskQuestionInput(question,enabled,online,asking,onQuestion={question=it},onAsk={
     val config=model.auth.value
@@ -42,10 +43,10 @@ import kotlinx.serialization.json.*
     }
    })
   }
-  if(asking) item {Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("Reading your notes…")}}
+  if(asking) item {Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("Reading your notes…")}}
   if(failed && !asking) item {Text("Couldn't answer this question. Check the connection and Settings → AI models, then try again.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodyMedium)}
   answer?.takeIf {enabled}?.let {output ->
-   item {HorizontalDivider();Text(asked,Modifier.padding(top=20.dp),style=MaterialTheme.typography.titleMedium)}
+   item {HorizontalDivider();Text(asked,Modifier.padding(top=SpuntoSpacing.s20),style=MaterialTheme.typography.titleMedium)}
    item {RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote)}
   }
  }
@@ -53,7 +54,7 @@ import kotlinx.serialization.json.*
 
 @Composable internal fun AskQuestionInput(question:String,enabled:Boolean,online:Boolean,asking:Boolean,onQuestion:(String)->Unit,onAsk:()->Unit) {
  val questionLength=question.codePointCount(0,question.length)
- Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   Text("Find an answer in your notes",style=MaterialTheme.typography.headlineSmall)
   Text("Ask a question in your own words. Each question searches your notes and includes sources. Private notes stay private.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
   when {

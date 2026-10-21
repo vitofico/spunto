@@ -35,7 +35,7 @@ class NativeCaptureTest {
    compose.onNodeWithContentDescription("Search").performClick()
    compose.onNodeWithText("Search notes",useUnmergedTree=true).assertExists()
    compose.onNode(hasSetTextAction() and hasText("Search notes")).performTextInput(unique)
-   compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Note,",substring=true).fetchSemanticsNodes().any { node -> node.config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].any { it.contains(fixture) } } }
+   compose.waitUntil(10_000) { compose.onAllNodes(hasClickAction() and hasText(unique,substring=true)).fetchSemanticsNodes().isNotEmpty() }
   } finally {
    authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}
   }

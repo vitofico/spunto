@@ -33,30 +33,78 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 describe("durable saves", () => {
-  it("keeps new keystrokes while a create ACK is in flight, then edits that same note", async () => {
+  it("starts a fresh draft on submit so typing during the create becomes the next capture", async () => {
     const pending = deferred<Note>();
     const store = memory();
-    const create = vi.fn(() => pending.promise);
-    const update = vi.fn(async (_id, body) => note(body, 2));
+    const create = vi
+      .fn()
+      .mockImplementationOnce(() => pending.promise)
+      .mockImplementation(async (body: string) => note(body));
+    const update = vi.fn();
+    const shown: [string, boolean][] = [];
     const draft = new DraftController(
       store,
       "draft",
       { create, update },
       undefined,
       () => key,
+      undefined,
+      (capture, queued) => shown.push([capture.body, queued]),
     );
     draft.setBody("sent");
     const save = draft.save();
+    expect(draft.getSnapshot().body).toBe("");
+    expect(shown).toEqual([["sent", true]]);
     draft.setBody("newer");
+    expect(JSON.parse(store.getItem("draft")!)).toMatchObject({
+      body: "newer",
+      outbox: [{ body: "sent", key }],
+    });
     pending.resolve(note("sent"));
     await save;
-    expect(draft.getSnapshot().body).toBe("newer");
-    expect(JSON.parse(store.getItem("draft")!).body).toBe("newer");
+    expect(draft.getSnapshot()).toMatchObject({
+      body: "newer",
+      dirty: true,
+      submitted: false,
+    });
+    expect(JSON.parse(store.getItem("draft")!).outbox).toEqual([]);
+    expect(draft.canSaveAutomatically()).toBe(false);
     await draft.save();
-    expect(create).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith("note-id", "newer", 1);
+    expect(create.mock.calls).toEqual([
+      ["sent", key],
+      ["newer", key],
+    ]);
+    expect(update).not.toHaveBeenCalled();
     expect(draft.getSnapshot().body).toBe("");
     expect(store.getItem("draft")).toBeNull();
+  });
+  it("queues captures saved while offline and sends them in order once reachable", async () => {
+    const store = memory();
+    let online = false;
+    const create = vi.fn(async (body: string) => {
+      if (!online) throw new ApiError(0, "unreachable");
+      return note(body);
+    });
+    let n = 0;
+    const draft = new DraftController(
+      store,
+      "draft",
+      { create, update: vi.fn() },
+      undefined,
+      () => `00000000-0000-4000-8000-00000000000${++n}`,
+    );
+    draft.setBody("first");
+    await draft.save();
+    draft.setBody("second");
+    await draft.save();
+    expect(draft.getSnapshot()).toMatchObject({ body: "", state: "error" });
+    online = true;
+    await draft.saveAutomatically();
+    await vi.waitFor(() => expect(store.getItem("draft")).toBeNull());
+    expect(create.mock.calls.slice(-2).map((call) => call[0])).toEqual([
+      "first",
+      "second",
+    ]);
   });
   it("retries an uncertain create with the exact original key and payload across reload", async () => {
     const store = memory();
@@ -82,7 +130,7 @@ describe("durable saves", () => {
       undefined,
       () => crypto.randomUUID(),
     );
-    await recovered.save();
+    await recovered.saveAutomatically();
     expect(create.mock.calls).toEqual([
       ["first", key],
       ["first", key],
@@ -249,13 +297,14 @@ it("keeps legacy queued submission intent through newer ACKs and reloads until t
   expect(update).toHaveBeenCalledTimes(1);
 });
 
-it("requires explicit retry after nonretryable failures even when the submitted draft is reloaded or corrected", async () => {
+it("returns a refused capture to the composer and sends it again only when saved explicitly", async () => {
   for (const status of [401, 403, 422]) {
     const store = memory();
     const create = vi
       .fn()
       .mockRejectedValueOnce(new ApiError(status, "validation_failed"))
       .mockImplementation(async (body) => note(body));
+    const shown: [string, boolean][] = [];
     const transport = { create, update: vi.fn() };
     const first = new DraftController(
       store,
@@ -263,12 +312,20 @@ it("requires explicit retry after nonretryable failures even when the submitted 
       transport,
       undefined,
       () => key,
+      undefined,
+      (capture, queued) => shown.push([capture.body, queued]),
     );
     first.setBody("submitted");
     await first.save();
+    expect(shown).toEqual([
+      ["submitted", true],
+      ["submitted", false],
+    ]);
     const restored = new DraftController(store, "draft", transport);
-    expect(restored.getSnapshot().submitted).toBe(true);
-    expect(restored.getSnapshot().retryBlocked).toBe(true);
+    expect(restored.getSnapshot()).toMatchObject({
+      body: "submitted",
+      submitted: false,
+    });
     await restored.saveAutomatically();
     restored.setBody("corrected");
     await restored.saveAutomatically();
@@ -301,4 +358,113 @@ it("recovers submission intent from legacy captures whose create ACK left newer 
   expect(create).not.toHaveBeenCalled();
   expect(restored.getSnapshot().submitted).toBe(false);
   expect(store.getItem("draft")).toBeNull();
+});
+
+describe("leaving a note before its save is acknowledged", () => {
+  it("clears the stored draft once the server holds exactly that text, so reopening shows no unsaved changes", async () => {
+    const pending = deferred<Note>();
+    const store = memory();
+    const update = vi.fn(() => pending.promise);
+    const transport = { create: vi.fn(), update };
+    const editing = new DraftController(
+      store,
+      "draft",
+      transport,
+      note("base"),
+    );
+    editing.setBody("quick edit");
+    // Leaving within the autosave delay: persist, start the save, deactivate.
+    editing.persist();
+    const save = editing.saveAutomatically();
+    editing.deactivate();
+    pending.resolve(note("quick edit", 2));
+    await save;
+    expect(store.getItem("draft")).toBeNull();
+    const reopened = new DraftController(
+      store,
+      "draft",
+      transport,
+      note("quick edit", 2),
+    );
+    expect(reopened.getSnapshot()).toMatchObject({
+      dirty: false,
+      state: "saved",
+    });
+    await reopened.saveAutomatically();
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+  it("keeps newer typing from another view but bases it on the acknowledged version", async () => {
+    const pending = deferred<Note>();
+    const store = memory();
+    const update = vi.fn(() => pending.promise);
+    const editing = new DraftController(
+      store,
+      "draft",
+      { create: vi.fn(), update },
+      note("base"),
+    );
+    editing.setBody("sent");
+    const save = editing.save();
+    editing.setBody("sent plus more");
+    editing.deactivate();
+    pending.resolve(note("sent", 2));
+    await save;
+    expect(JSON.parse(store.getItem("draft")!)).toMatchObject({
+      body: "sent plus more",
+      version: 2,
+    });
+    expect(JSON.parse(store.getItem("draft")!).pending).toBeUndefined();
+  });
+  it("adopts the server copy when a reopened draft already matches it", () => {
+    const store = memory();
+    store.setItem(
+      "draft",
+      JSON.stringify({
+        body: "same text",
+        revision: 3,
+        noteId: "note-id",
+        version: 1,
+        pending: { body: "same text", revision: 3, key, version: 1 },
+      }),
+    );
+    const reopened = new DraftController(
+      store,
+      "draft",
+      { create: vi.fn(), update: vi.fn() },
+      note("same text", 1),
+    );
+    expect(reopened.getSnapshot().dirty).toBe(true);
+    reopened.syncNote(note("same text", 2));
+    expect(reopened.getSnapshot()).toMatchObject({
+      dirty: false,
+      state: "saved",
+    });
+    expect(store.getItem("draft")).toBeNull();
+  });
+  it("forgets the local copy when the owner keeps the saved version of a conflict", async () => {
+    const store = memory();
+    const draft = new DraftController(
+      store,
+      "draft",
+      {
+        create: vi.fn(),
+        update: vi
+          .fn()
+          .mockRejectedValue(
+            new ApiError(409, "version_conflict", "conflict-copy"),
+          ),
+      },
+      note("base"),
+    );
+    draft.setBody("mine");
+    await draft.save();
+    expect(draft.getSnapshot().conflict).toBe("conflict-copy");
+    expect(draft.discard(note("theirs", 3))).toBe(true);
+    expect(draft.getSnapshot()).toMatchObject({
+      body: "theirs",
+      dirty: false,
+      conflict: null,
+    });
+    expect(store.getItem("draft")).toBeNull();
+  });
 });

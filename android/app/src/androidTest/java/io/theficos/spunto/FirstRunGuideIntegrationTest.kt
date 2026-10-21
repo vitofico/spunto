@@ -31,8 +31,8 @@ class FirstRunGuideIntegrationTest {
  }
  private fun nextStep(number:Int) {
   reachableAction("Next").performClick()
-  waitFor("Step $number of 4")
-  compose.onNodeWithText("Step $number of 4").assertIsDisplayed()
+  waitFor("Getting started · $number of 4")
+  compose.onNodeWithText("Getting started · $number of 4").assertIsDisplayed()
  }
  private fun settingsGuideEntry():SemanticsNodeInteraction {
   compose.waitUntil(10_000) {
@@ -40,10 +40,10 @@ class FirstRunGuideIntegrationTest {
     compose.onAllNodes(hasScrollAction()).fetchSemanticsNodes().size==1
   }
   compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
-  val entry=compose.onNodeWithText("Show guide")
+  val entry=compose.onNodeWithText("Show the guide")
   // Lazy discovery can compose the row just outside the viewport; then reveal its text.
   if(!entry.isDisplayed()) {
-   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Show guide"))
+   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Show the guide"))
    if(!entry.isDisplayed()) entry.performScrollTo()
   }
   compose.waitUntil(10_000) {entry.isDisplayed()}
@@ -56,19 +56,19 @@ class FirstRunGuideIntegrationTest {
   val scenario=ActivityScenario.launch<MainActivity>(launcher())
   try {
    scenario.onActivity {assertEquals(Intent.ACTION_MAIN,it.intent.action);assertTrue(it.intent.hasCategory(Intent.CATEGORY_LAUNCHER))}
-   waitFor("Step 1 of 4")
+   waitFor("Getting started · 1 of 4")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
    nextStep(2);scenario.recreate()
-   waitFor("Step 2 of 4")
+   waitFor("Getting started · 2 of 4")
    repeat(2) {nextStep(it+3)}
    reachableAction("Start writing").performClick();waitForEditor()
    assertTrue(store.completed)
    scenario.recreate();waitForEditor()
-   compose.onNodeWithText("Getting started").assertDoesNotExist()
+   compose.onNodeWithText("Getting started",substring=true).assertDoesNotExist()
    compose.onNodeWithContentDescription("Settings").performClick()
    settingsGuideEntry().performClick()
    nextStep(2);scenario.recreate()
-   waitFor("Step 2 of 4")
+   waitFor("Getting started · 2 of 4")
    compose.onNodeWithText("Skip").performClick()
    settingsGuideEntry().assertIsDisplayed()
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
@@ -77,12 +77,12 @@ class FirstRunGuideIntegrationTest {
  }
  @Test fun incomingNoteDefersGuideAndItsMarkerUntilANormalLauncherEntry() {
   ActivityScenario.launch<MainActivity>(launcher().putExtra("noteId","synthetic-guide-deferred-missing-note")).use {
-   waitFor("Note unavailable.")
-   compose.onNodeWithText("Getting started").assertDoesNotExist()
+   waitFor("This note isn't on this phone.")
+   compose.onNodeWithText("Getting started",substring=true).assertDoesNotExist()
    assertFalse(store.completed)
   }
   ActivityScenario.launch<MainActivity>(launcher()).use {
-   waitFor("Step 1 of 4")
+   waitFor("Getting started · 1 of 4")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
    assertFalse(store.completed)
   }
@@ -92,7 +92,7 @@ class FirstRunGuideIntegrationTest {
   val share=Intent(context,CaptureActivity::class.java).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"Synthetic guide share ${System.nanoTime()}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   ActivityScenario.launch<CaptureActivity>(share).use {
    waitForEditor()
-   compose.onNodeWithText("Getting started").assertDoesNotExist()
+   compose.onNodeWithText("Getting started",substring=true).assertDoesNotExist()
    assertFalse(store.completed)
   }
   assertEquals(before,runBlocking {app.container.repository.dao.all().size})

@@ -987,6 +987,9 @@ class Notes:
         if len(query) > 500:
             raise Problem(422, "validation_failed", "query must have at most 500 characters.")
         match, inline = search_query(query)
+        if not match and not inline and query.strip():
+            # Punctuation alone has no words to match; listing every note would read as hits.
+            return {"hits": [], "next_cursor": None, "semantic": "off"}
         match = fold(match)
         conditions, args = self._filters([*(labels or []), *inline], from_date, to_date)
         conditions.append("n.trashed_at IS NULL")
@@ -1192,14 +1195,23 @@ class Notes:
                 order = "note_fts.rank" if ranked else "n.created_at DESC,n.id DESC"
                 if ranked:
                     conditions.append("note_fts.rank MATCH 'bm25(2.0,1.0,0.5)'")
-                candidates = await conn.execute_fetchall(
-                    "SELECT n.id FROM note n"  # noqa: S608
+                query = (
+                    "SELECT n.id"  # noqa: S608
+                    + (",n.updated_at,note_fts.rank AS score" if ranked else "")
+                    + " FROM note n"
                     + join
                     + " WHERE "
                     + " AND ".join(conditions)
-                    + f" ORDER BY {order} LIMIT 50",
-                    args,
+                    + f" ORDER BY {order} LIMIT 50"
                 )
+                if ranked:
+                    # Equal scores (a duplicate, say) put the newer note first; only
+                    # the 50 kept candidates are sorted again.
+                    query = (
+                        f"SELECT id FROM ({query}) AS ranked"  # noqa: S608
+                        " ORDER BY score,updated_at DESC,id DESC"
+                    )
+                candidates = await conn.execute_fetchall(query, args)
             rows = await full_rows(conn, candidates[:limit])
             hits = [
                 {**await self._serialize(conn, row, render=render), "match": "keyword"}
@@ -1214,14 +1226,19 @@ class Notes:
             "semantic": "off",
         }
 
-    async def labels(self, prefix: str | None = None, limit: int = 500) -> dict:
+    async def labels(
+        self, prefix: str | None = None, limit: int = 500, *, include_archived: bool = True
+    ) -> dict:
+        """Labels with note counts. The web rail leaves archived notes out, so its
+        counts match the label views, which never show archived notes."""
         visibility, args = self._visibility()
+        archived = "" if include_archived else "AND n.archived_at IS NULL "
         async with self.store.read() as conn:
             rows = await conn.execute_fetchall(
                 "SELECT n.id,l.key,l.path FROM label l JOIN note_label nl ON "  # noqa: S608
                 "nl.label_id=l.id "  # noqa: S608
                 "JOIN note n ON nl.note_id=n.id WHERE n.trashed_at IS NULL "
-                f"AND ({visibility}) ORDER BY l.id",  # noqa: S608
+                f"{archived}AND ({visibility}) ORDER BY l.id",  # noqa: S608
                 args,
             )
         counts, displays = {}, {}

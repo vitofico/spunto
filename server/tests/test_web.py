@@ -220,6 +220,35 @@ async def test_slip_old_note_visibility_dismissal_and_catalog_counts(server):
     ] == "Old recall"
 
 
+async def test_slip_leaves_with_an_archived_or_trashed_note(server):
+    await setup(server)
+    old = await note(server, "Old recall", created_at="2020-01-01T12:00:00Z")
+    await server.services.host.enable("resurface", ["notes.read", "annotate", "schedule"])
+    payload = {"type": "notes", "items": [{"id": old["id"]}]}
+    async with server.services.store.write() as conn:
+        await conn.execute(
+            "INSERT INTO annotation VALUES (?,?,?,?,?,?)",
+            ("resurface", old["id"], "slip", json.dumps(payload), 1, now_ms()),
+        )
+
+    async def slip():
+        return (await server.client.get("/api/v1/slip")).json()["slip"]
+
+    async def flag(**flags):
+        await server.client.post(f"/api/v1/notes/{old['id']}/flags", json=flags, headers=ORIGIN)
+
+    assert (await slip())["note_id"] == old["id"]
+    await flag(archived=True)
+    assert await slip() is None
+    body = {"plugin_id": "resurface", "note_id": old["id"]}
+    dismissed = await server.client.post("/api/v1/slip/dismiss", json=body, headers=ORIGIN)
+    assert dismissed.status_code == 404
+    await flag(archived=False)
+    assert (await slip())["note_id"] == old["id"]
+    await flag(trashed=True)
+    assert await slip() is None
+
+
 @pytest.mark.parametrize("prefix", ["", "🎈\n\n", "a\r\n\r\n", "# Heading\n\n"])
 async def test_checkbox_offsets_are_utf16_and_code_is_protected(prefix):
     body = (

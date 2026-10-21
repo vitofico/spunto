@@ -44,6 +44,19 @@ let unauthorized: (reason?: string) => void = () => {};
 export function onUnauthorized(callback: (reason?: string) => void) {
   unauthorized = callback;
 }
+const settledListeners = new Set<() => void>();
+/** Runs after any request settles, once the caller's own handlers have run (sync state). */
+export function onRequestSettled(listener: () => void) {
+  settledListeners.add(listener);
+  return () => {
+    settledListeners.delete(listener);
+  };
+}
+function settled() {
+  setTimeout(() => {
+    for (const listener of settledListeners) listener();
+  });
+}
 const responseGenerations = new WeakMap<Response, number>();
 async function check(
   response: Response,
@@ -75,7 +88,7 @@ async function check(
       )
     )
       unauthorized();
-    throw problem(response.status, body);
+    throw problem(response.status, body, response);
   }
 }
 export const generatedClient = createClient<paths>({
@@ -145,6 +158,8 @@ async function result<T>(call: Promise<{ data?: unknown }>) {
     return normalizeWire(value.data) as T;
   } catch (error) {
     throw safeError(error);
+  } finally {
+    settled();
   }
 }
 export interface RequestOptions {
@@ -212,6 +227,8 @@ export async function request<T = unknown>(
   } catch (error) {
     if (options.signal?.aborted) throw error;
     throw safeError(error);
+  } finally {
+    settled();
   }
 }
 const segment = encodeURIComponent;
@@ -523,7 +540,13 @@ export const api = {
       limit <= 1_000_000_000
         ? limit
         : 5_000_000;
-    if (file.size > maximum) throw new ApiError(422, "validation_failed");
+    if (file.size > maximum)
+      throw new ApiError(
+        422,
+        "validation_failed",
+        undefined,
+        `This file is too large. The server accepts files up to ${Math.max(1, Math.floor(maximum / 1_000_000))} MB.`,
+      );
     const form = new FormData();
     form.append("file", file);
     return request<Attachment>("/api/v1/attachments", {

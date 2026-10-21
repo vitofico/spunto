@@ -13,6 +13,8 @@ on:
       - "scripts/smoke-selfhost.sh"
       - "scripts/check-image-size.py"
       - ".github/workflows/server.yml"
+      - "android/core/design/generate-tokens.py"
+      - "android/core/design/src/main/java/io/theficos/spunto/core/design/Tokens.kt"
   pull_request:
     paths:
       - "server/**"
@@ -21,6 +23,8 @@ on:
       - "scripts/smoke-selfhost.sh"
       - "scripts/check-image-size.py"
       - ".github/workflows/server.yml"
+      - "android/core/design/generate-tokens.py"
+      - "android/core/design/src/main/java/io/theficos/spunto/core/design/Tokens.kt"
   workflow_call:
     inputs:
       release_source:
@@ -72,11 +76,12 @@ jobs:
       - run: npm install --global pnpm@12.11.2
       - run: pnpm install --frozen-lockfile
       - run: uv sync --project ../server --locked
-      - name: Verify generated API and theme tokens
+      - name: Verify generated API and design tokens
         run: |
           pnpm generate:api
           pnpm generate:tokens
-          git diff --exit-code -- src/lib/openapi.json src/lib/api-types.ts src/styles/tokens.css ../server/src/spunto/host/theme_tokens.json
+          python3 ../android/core/design/generate-tokens.py
+          git diff --exit-code
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm format:check

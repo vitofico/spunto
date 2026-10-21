@@ -89,11 +89,11 @@ export function SuggestionPreview({
               : ", including nested labels."}
           </p>
         ) : (
-          <p className={styles.error} role="alert">
+          <p className="error" role="alert">
             The affected notes could not be counted. Try again.
           </p>
         )}
-        <p className={styles.muted}>
+        <p className="muted">
           {Array.isArray(s.payload.note_ids)
             ? "Each selected note must still be unchanged and unlabeled when you apply."
             : "The change is applied to your latest notes. Their words stay."}

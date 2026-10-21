@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
@@ -11,15 +11,9 @@ import {
   type AccessGrant,
 } from "../lib";
 import { Dialog } from "./Dialog";
+import { ErrorLine } from "./SettingsParts";
 import styles from "./Feature.module.css";
 
-function ErrorLine({ error }: { error: Error | null }) {
-  return error ? (
-    <p className={styles.error} role="alert">
-      {error.message}
-    </p>
-  ) : null;
-}
 function GrantForm({
   add,
   pending,
@@ -31,7 +25,7 @@ function GrantForm({
   const [role, setRole] = useState<"editor" | "viewer">("viewer");
   return (
     <form
-      className={`${styles.field} ${styles.grantForm}`}
+      className={`${styles.formField} ${styles.grantForm}`}
       onSubmit={(event) => {
         event.preventDefault();
         add(email.trim(), role);
@@ -40,6 +34,7 @@ function GrantForm({
       <label>
         Username or verified email
         <input
+          className="field"
           type="text"
           required
           value={email}
@@ -52,6 +47,7 @@ function GrantForm({
       <label>
         Access
         <select
+          className="field"
           value={role}
           onChange={(event) => setRole(event.target.value as typeof role)}
         >
@@ -172,13 +168,14 @@ function HostedSpaces() {
   return (
     <>
       <h1>Spaces</h1>
-      <p className={styles.muted}>
+      <p className="muted">
         Keep your own notes in your personal space. Create a shared space when a
         group needs the same notes and labels.
       </p>
-      <label className={styles.field}>
+      <label className={styles.formField}>
         Current space
         <select
+          className="field"
           value={workspace?.id ?? session?.workspace_id ?? ""}
           disabled={change.isPending || !spaces.data}
           onChange={(event) => change.mutate(event.target.value)}
@@ -213,9 +210,10 @@ function HostedSpaces() {
           create.mutate();
         }}
       >
-        <label className={styles.field}>
+        <label className={styles.formField}>
           Space name
           <input
+            className="field"
             required
             maxLength={120}
             value={name}
@@ -241,18 +239,33 @@ function HostedSpaces() {
 }
 export function ShareNote({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const hosted = useHosted();
   const role = useWorkspaceRole();
   return hosted && role === "owner" ? (
     <>
-      <button className="button" onClick={() => setOpen(true)}>
+      <button ref={trigger} className="button" onClick={() => setOpen(true)}>
         Share
       </button>
-      {open && <NoteShareDialog id={id} close={() => setOpen(false)} />}
+      {open && (
+        <NoteShareDialog
+          id={id}
+          opener={trigger.current}
+          close={() => setOpen(false)}
+        />
+      )}
     </>
   ) : null;
 }
-function NoteShareDialog({ id, close }: { id: string; close: () => void }) {
+function NoteShareDialog({
+  id,
+  opener,
+  close,
+}: {
+  id: string;
+  opener: HTMLElement | null;
+  close: () => void;
+}) {
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["note-shares", id],
@@ -277,6 +290,7 @@ function NoteShareDialog({ id, close }: { id: string; close: () => void }) {
   return (
     <Dialog
       title="Share this note"
+      opener={opener}
       onClose={close}
       footer={<button onClick={close}>Done</button>}
     >

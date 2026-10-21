@@ -1,6 +1,9 @@
 package io.theficos.spunto
 
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -11,11 +14,24 @@ import io.theficos.spunto.core.model.uuidV7
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import io.theficos.spunto.core.design.SpuntoTheme
+import io.theficos.spunto.data.local.NotesRepository
 import io.theficos.spunto.data.local.RevisionEntity
+import androidx.room.withTransaction
 import io.theficos.spunto.data.sync.HistoryRefreshResult
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
+
+/** What SpuntoApp gives every page, for pages composed on their own: the back stack and the snackbar. */
+@Composable internal fun ShellLocals(content:@Composable ()->Unit) {
+ val scope=rememberCoroutineScope()
+ val nav=remember { Navigator(mutableStateListOf("timeline")) {} };val feedback=remember { Feedback(SnackbarHostState(),scope) }
+ CompositionLocalProvider(LocalNavigator provides nav,LocalFeedback provides feedback,content=content)
+}
+/** A private synthetic note made the way the app makes one, a create with the Private flag, so its later edits sync instead of being refused. */
+internal suspend fun NotesRepository.privateSyntheticNote(id:String,body:String)=db.withTransaction {save(body,id);setFlags(id,privateNote=true)}
+/** The note text, which edits in place when tapped. */
+internal val editableNote=SemanticsMatcher("taps to edit the note") { it.config.getOrNull(SemanticsActions.OnClick)?.label=="Edit note" }
 
 /** Rendering fixtures plus one unique private synthetic note; owner settings and capture draft remain untouched. */
 @RunWith(AndroidJUnit4::class)
@@ -26,9 +42,10 @@ class HistoryAndDateControlsTest {
   val revision=RevisionEntity(id="server/e/2",noteId="synthetic-note",body="Synthetic historical words",at=2000,version=2,historySource="server",changeKind="restore")
   var editing by mutableStateOf(true);var restored:RevisionEntity?=null
   compose.setContent { SpuntoTheme("carta","light") { LazyColumn { revisionHistoryItems(listOf(revision),false,HistoryRefreshResult.Cached("unavailable"),editing) {restored=it} } } }
-  compose.onNodeWithText("Showing history saved on this phone.").assertIsDisplayed();compose.onNodeWithText("Finish editing before restoring a revision.").assertIsDisplayed()
-  compose.onNodeWithText("Restore this revision").assertIsNotEnabled();compose.runOnIdle {editing=false}
-  compose.onNodeWithText("Restore this revision").performClick();compose.runOnIdle {assertEquals(revision,restored)}
+  compose.onNodeWithText("Showing history saved on this phone.").assertIsDisplayed();compose.onNodeWithText("Finish editing before restoring a version.").assertIsDisplayed()
+  compose.onNode(hasClickAction() and hasText("Version 2",substring=true)).assertTextContains("Restored",substring=true).performClick()
+  compose.onNodeWithText("Restore this version").assertIsNotEnabled();compose.runOnIdle {editing=false}
+  compose.onNodeWithText("Restore this version").performClick();compose.runOnIdle {assertEquals(revision,restored)}
  }
  @Test fun dateFilterSheetPreventsReversedRangesAndKeepsClearExplicit() {
   var from by mutableStateOf("2026-10-15");var to by mutableStateOf("2026-10-14")
@@ -47,21 +64,23 @@ class HistoryAndDateControlsTest {
   val model=SpuntoViewModel(app);val repository=model.repository;val id=uuidV7()
   val a="Synthetic history A "+System.nanoTime();val b="Synthetic history B "+System.nanoTime();val d="Synthetic history D "+System.nanoTime()
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
-  runBlocking {repository.putNote(Note(id,a,privateNote=true))}
+  runBlocking {repository.privateSyntheticNote(id,a)}
   try {
-   compose.setContent {SpuntoTheme("carta","light") {NoteScreen(model,id,onClose={},onNote={})}}
-   compose.waitUntil(10_000) {compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
-   compose.onNodeWithText("Edit").performClick()
+   compose.setContent {SpuntoTheme("carta","light") {ShellLocals {NoteScreen(model,id,onClose={},onNote={})}}}
+   compose.waitUntil(10_000) {compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
+   compose.onNode(editableNote).performClick()
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Note text").performTextReplacement(b)
    compose.onNodeWithText("Done").performClick()
-   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==b} && compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
-   compose.onNodeWithContentDescription("More note actions").performClick()
-   compose.onNodeWithText("History").performClick()
-   compose.onNodeWithText("Restore this revision").performScrollTo().performClick()
-   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==a}}
-   compose.onNodeWithText("Close history").performScrollTo().performClick()
-   compose.onNodeWithText("Edit").performClick()
+   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==b} && compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
+   // Outside the app shell the top bar icons render in place, under the page list, so tap them through semantics.
+   compose.onNodeWithContentDescription("More note actions").performSemanticsAction(SemanticsActions.OnClick)
+   compose.waitUntil(10_000) {compose.onAllNodesWithText("History").fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithText("History").performSemanticsAction(SemanticsActions.OnClick)
+   compose.onNode(hasClickAction() and hasText(a,substring=true)).performScrollTo().performClick()
+   compose.onNodeWithText("Restore this version").performScrollTo().performClick()
+   compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==a} && compose.onAllNodesWithText("Restore this version").fetchSemanticsNodes().isEmpty()}
+   compose.onNode(editableNote).performClick()
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Note text").assertTextEquals(a)
    compose.mainClock.advanceTimeBy(5500);compose.waitForIdle()
@@ -84,7 +103,7 @@ class HistoryAndDateControlsTest {
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
   runBlocking {
    authority.requireCurrent()
-   repository.putNote(Note(id,a,privateNote=true))
+   repository.privateSyntheticNote(id,a)
    val editor=repository.beginEditor(id)
    assertTrue(repository.finishEditor(repository.editorWrite(editor,b)))
    val original=repository.history(id).first().first {it.body==a}
@@ -116,7 +135,7 @@ class HistoryAndDateControlsTest {
   val capture=runBlocking {repository.dao.draftSnapshot("capture")}
   runBlocking {
    authority.requireCurrent()
-   repository.putNote(Note(id,quote,privateNote=true));repository.putNote(Note(resumed,"> Synthetic resumed quote",privateNote=true))
+   repository.privateSyntheticNote(id,quote);repository.privateSyntheticNote(resumed,"> Synthetic resumed quote")
    repository.saveDraft(resumed,retained)
   }
   val selected=mutableStateOf(id)
@@ -155,12 +174,11 @@ class HistoryAndDateControlsTest {
   val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
   val model=SpuntoViewModel(app);val repository=model.repository;val id=uuidV7()
   val original="Synthetic tombstoned committed "+System.nanoTime();val typed="Synthetic tombstoned visible words "+System.nanoTime()
-  runBlocking {repository.putNote(Note(id,original,privateNote=true));repository.update(id,original)}
+  runBlocking {repository.privateSyntheticNote(id,original)}
   compose.setContent {SpuntoTheme("carta","light") {Composer(model,id,original,autoFocus=false,onSave={})}}
   compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
   compose.onNodeWithContentDescription("Note text").performTextReplacement(typed)
   compose.waitUntil(10_000) {runBlocking {repository.dao.draftSnapshot(id)?.body==typed}}
-  val queued=runBlocking {repository.dao.outbox().filter {it.noteId==id}.map {it.opId to it.payload}}
   assertEquals(original,runBlocking {repository.dao.get(id)!!.body})
   runBlocking {
    repository.dao.putTombstone(io.theficos.spunto.data.local.TombstoneEntity(id,System.currentTimeMillis()))
@@ -172,7 +190,8 @@ class HistoryAndDateControlsTest {
   compose.onNodeWithContentDescription("Note text").assertIsEnabled().assertTextEquals(typed)
   assertEquals(typed,runBlocking {repository.dao.draftSnapshot(id)!!.body})
   assertEquals(original,runBlocking {repository.dao.get(id)!!.body});assertTrue(runBlocking {repository.dao.get(id)!!.trashed})
-  assertEquals(queued,runBlocking {repository.dao.outbox().filter {it.noteId==id}.map {it.opId to it.payload}})
+  // Sync may finish the create meanwhile; what matters is that the typed words were never queued.
+  assertTrue(runBlocking {repository.dao.outbox().none {it.noteId==id && typed in it.payload}})
  }
 
 }

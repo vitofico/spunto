@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsPage } from "../src/features/Settings";
 import { api } from "../src/lib/api";
 import * as auth from "../src/lib/query";
+import { draftStorageKey } from "../src/lib/drafts";
 import type { Preferences } from "../src/lib/types";
 
 const initial: Preferences = {
@@ -17,10 +18,11 @@ const initial: Preferences = {
 const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   for (const client of clients.splice(0)) client.clear();
   vi.restoreAllMocks();
 });
-function fixture(settings = initial) {
+function fixture(settings = initial, hosted = true) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -30,6 +32,7 @@ function fixture(settings = initial) {
     credential_id: "fixture-session",
   });
   vi.spyOn(auth, "currentOwner").mockReturnValue("fixture-owner");
+  vi.spyOn(auth, "useHosted").mockReturnValue(hosted);
   vi.spyOn(api, "settings").mockResolvedValue(settings);
   const view = () => (
     <QueryClientProvider client={client}>
@@ -57,7 +60,9 @@ it("saves and clears a private optional display name without replacing other pre
   expect(
     screen.getByRole("link", { name: "Profile" }).getAttribute("href"),
   ).toBe("/settings/profile");
-  expect(screen.getByText(/It is not a username/)).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "Account settings" }).getAttribute("href"),
+  ).toBe("/settings/account");
   const name = 'Élodie 李 <img src=x onerror="alert(1)">';
   await user.type(input, `  ${name}  `);
   await user.click(screen.getByRole("button", { name: "Save profile" }));
@@ -164,4 +169,87 @@ it("shows a load failure without offering to overwrite an unknown profile", asyn
     (screen.getByRole("button", { name: "Save profile" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
+});
+
+it("offers the password, not an unused display name, on a single-owner server", async () => {
+  const { client } = fixture(initial, false);
+  client.setQueryData(["session"], {
+    owner_id: "fixture-owner",
+    credential_id: "fixture-session",
+    password_managed: false,
+  });
+  const showGuide = vi.fn();
+  render(
+    <QueryClientProvider client={client}>
+      <SettingsPage section="profile" onShowGuide={showGuide} />
+    </QueryClientProvider>,
+  );
+  expect(screen.queryByRole("textbox", { name: /Display name/ })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Spaces" })).toBeNull();
+  expect(screen.getByLabelText(/New password/)).toBeTruthy();
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Show guide" }));
+  // The click names its button, so focus returns there (WebKit leaves a clicked button unfocused).
+  expect(showGuide).toHaveBeenCalledExactlyOnceWith(
+    screen.getByRole("button", { name: "Show guide" }),
+  );
+});
+
+it("signs out at once without drafts and warns before erasing unsent notes", async () => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
+  const { view } = fixture();
+  const logout = vi.fn().mockResolvedValue(undefined);
+  vi.spyOn(auth, "useAuth").mockReturnValue({
+    logout,
+  } as unknown as ReturnType<typeof auth.useAuth>);
+  const first = render(view());
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  expect(logout).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("dialog")).toBeNull();
+
+  first.unmount();
+  logout.mockClear();
+  localStorage.setItem(
+    draftStorageKey("fixture-owner", "new"),
+    JSON.stringify({ body: "Half a thought", revision: 1 }),
+  );
+  localStorage.setItem(
+    draftStorageKey("fixture-owner", "note-1"),
+    JSON.stringify({ body: "   ", revision: 1 }),
+  );
+  // A capture saved offline waits in the composer's outbox until the server has it.
+  localStorage.setItem(
+    draftStorageKey("fixture-owner", "composer"),
+    JSON.stringify({
+      body: "",
+      revision: 2,
+      outbox: [
+        {
+          body: "Saved offline",
+          revision: 1,
+          key: "00000000-0000-4000-8000-000000000001",
+        },
+      ],
+    }),
+  );
+  render(view());
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  const dialog = await screen.findByRole("dialog", { name: "Sign out?" });
+  expect(dialog.textContent).toContain(
+    "2 unsent notes on this browser will be erased.",
+  );
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(logout).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Sign out and erase" }),
+  );
+  expect(logout).toHaveBeenCalledTimes(1);
 });

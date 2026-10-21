@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { api, useLabels } from "../../lib";
+import { formatShortcut } from "../../lib/platform";
 import { Icon } from "./Icon";
 import { SlashCommands } from "../../features/Slots";
 export function activeLabel(body: string, caret: number) {
@@ -23,13 +24,64 @@ export function highlightedParts(body: string) {
             : "",
     }));
 }
+/** Enter inside a list: the next item, or the end of the list when the item is empty. */
+export function continueList(body: string, caret: number) {
+  const start = body.lastIndexOf("\n", caret - 1) + 1;
+  const end = body.indexOf("\n", caret);
+  const line = body.slice(start, end < 0 ? body.length : end);
+  const item = /^(\s*)([-*+]|(\d+)([.)]))\s+(\[[ xX]\]\s+)?/.exec(line);
+  // A caret inside the marker is not a list item yet: Enter splits the line as usual.
+  if (!item || caret < start + item[0].length) return null;
+  if (item[0].length === line.length && caret === start + line.length)
+    return { body: body.slice(0, start) + body.slice(caret), caret: start };
+  const marker = item[3] ? Number(item[3]) + 1 + item[4]! : item[2];
+  const next = "\n" + item[1] + marker + " " + (item[5] ? "[ ] " : "");
+  return {
+    body: body.slice(0, caret) + next + body.slice(caret),
+    caret: caret + next.length,
+  };
+}
+/** Where a click on rendered Markdown lands in its source text, when the browser can tell. */
+export function sourceOffset(
+  container: HTMLElement,
+  x: number,
+  y: number,
+  body: string,
+) {
+  const point = document.caretPositionFromPoint?.(x, y);
+  const range = point
+    ? { node: point.offsetNode, offset: point.offset }
+    : (() => {
+        const legacy = document.caretRangeFromPoint?.(x, y);
+        return (
+          legacy && {
+            node: legacy.startContainer,
+            offset: legacy.startOffset,
+          }
+        );
+      })();
+  if (!range || !container.contains(range.node)) return undefined;
+  const before = document.createRange();
+  before.setStart(container, 0);
+  before.setEnd(range.node, range.offset);
+  // Rendered text is the source minus its markup, so walk the source in order.
+  let at = 0;
+  for (const char of before.toString()) {
+    const found = body.indexOf(char, at);
+    if (found < 0) return undefined;
+    at = found + char.length;
+  }
+  return at;
+}
 interface Props {
   body: string;
   setBody: (body: string) => void;
   onSave: () => void;
-  upload?: (file: File) => Promise<unknown>;
+  upload?: (file: File) => Promise<{ snippet: string }>;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Where the caret starts when the editor opens focused; the end of the text by default. */
+  caret?: number;
   note?: boolean;
   busy?: boolean;
   saveDisabled?: boolean;
@@ -43,6 +95,7 @@ export function Editor({
   upload,
   placeholder = "What’s on your mind?",
   autoFocus = false,
+  caret: initialCaret,
   note = false,
   busy = false,
   saveDisabled = false,
@@ -51,52 +104,78 @@ export function Editor({
 }: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   const file = useRef<HTMLInputElement>(null);
+  const listId = useId();
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [caret, setCaret] = useState(body.length);
   const [selected, setSelected] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
+  // Autocomplete waits for typing, so opening a note that ends in a label shows no popup.
+  const [dismissed, setDismissed] = useState(true);
   const labels = useLabels();
   const prefix = dismissed ? null : activeLabel(body, caret);
-  const matches = (labels.data?.labels ?? [])
-    .filter(
-      (l) =>
-        prefix !== null &&
-        l.path.toLowerCase().startsWith(prefix.toLowerCase()),
-    )
-    .slice(0, 6);
+  const known = (labels.data?.labels ?? []).filter(
+    (l) =>
+      prefix !== null && l.path.toLowerCase().startsWith(prefix.toLowerCase()),
+  );
+  const options = [
+    ...known.slice(0, 6).map((l) => ({ path: l.path, fresh: false })),
+    ...(prefix &&
+    !/\/$/.test(prefix) &&
+    !known.some((l) => l.path.toLowerCase() === prefix.toLowerCase())
+      ? [{ path: prefix, fresh: true }]
+      : []),
+  ];
+  const open = prefix !== null && options.length > 0;
+  const active = Math.min(selected, options.length - 1);
   const slash = /^\/([^\n]*)$/.exec(
     body.slice(0, caret).split("\n").at(-1) ?? "",
   )?.[1];
-  useEffect(() => {
+  // The composer gives each capture away at once, so only a note editor ever shows "Saving…".
+  const saving = note && busy;
+  useLayoutEffect(() => {
     const el = input.current;
     if (el) {
       el.style.height = "auto";
       el.style.height = Math.max(note ? 280 : 114, el.scrollHeight) + "px";
     }
   }, [body, note]);
-  function insert(text: string) {
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!autoFocus || !el) return;
+    const at = Math.min(initialCaret ?? el.value.length, el.value.length);
+    // The field opens where the reader already is; focus never scrolls the page.
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(at, at);
+    setCaret(at);
+    // Only the first focus places the caret; later renders keep the owner's selection.
+  }, []);
+  function place(text: string, at: number) {
+    setBody(text);
+    input.current?.focus();
+    requestAnimationFrame(() => {
+      input.current?.setSelectionRange(at, at);
+      setCaret(at);
+    });
+  }
+  /** Toolbar inserts act at the selection the field remembers, even after it lost focus. */
+  function insert(text: (before: string, after: string) => string) {
     const el = input.current;
     if (!el) return;
-    const start = el.selectionStart,
+    const value = el.value,
+      start = el.selectionStart,
       end = el.selectionEnd;
-    setBody(body.slice(0, start) + text + body.slice(end));
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(start + text.length, start + text.length);
-      setCaret(start + text.length);
-    });
+    const added = text(value.slice(0, start), value.slice(end));
+    place(
+      value.slice(0, start) + added + value.slice(end),
+      start + added.length,
+    );
   }
   function choose(path: string) {
     const start = caret - (prefix?.length ?? 0) - 1;
-    const next = body.slice(0, start) + "#" + path + " " + body.slice(caret);
-    setBody(next);
     setDismissed(true);
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      const pos = start + path.length + 2;
-      input.current?.setSelectionRange(pos, pos);
-      setCaret(pos);
-    });
+    place(
+      body.slice(0, start) + "#" + path + " " + body.slice(caret),
+      start + path.length + 2,
+    );
   }
   return (
     <div className={note ? "note-editor" : "composer"}>
@@ -113,8 +192,10 @@ export function Editor({
           ref={input}
           id={id}
           aria-label={note ? "Edit note" : "New note"}
+          aria-autocomplete="list"
+          aria-controls={open ? listId : undefined}
+          aria-activedescendant={open ? `${listId}-${active}` : undefined}
           value={body}
-          autoFocus={autoFocus}
           placeholder={placeholder}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
           onChange={(e) => {
@@ -128,39 +209,62 @@ export function Editor({
             setSelected(0);
           }}
           onKeyDown={(e) => {
-            if (
-              (e.metaKey || e.ctrlKey) &&
-              (e.key === "Enter" || e.key.toLowerCase() === "s")
-            ) {
+            const mod = e.metaKey || e.ctrlKey;
+            if (mod && e.key === "Enter") {
               e.preventDefault();
               onSave();
-            } else if (prefix !== null && matches.length) {
+            } else if (mod && e.key.toLowerCase() === "s") {
+              // In a note, ⌘S is useDraftEditor's save-in-place shortcut; editing continues.
+              if (!note) {
+                e.preventDefault();
+                onSave();
+              }
+            } else if (open) {
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
                 setSelected(
-                  (selected +
-                    (e.key === "ArrowDown" ? 1 : matches.length - 1)) %
-                    matches.length,
+                  (active + (e.key === "ArrowDown" ? 1 : options.length - 1)) %
+                    options.length,
                 );
               } else if (e.key === "Enter" || e.key === "Tab") {
                 e.preventDefault();
-                choose(matches[selected].path);
+                choose(options[active]!.path);
               } else if (e.key === "Escape") {
                 e.preventDefault();
                 setDismissed(true);
               }
             } else if (e.key === "Escape") {
               e.currentTarget.blur();
+            } else if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.altKey &&
+              !e.nativeEvent.isComposing &&
+              e.currentTarget.selectionStart === e.currentTarget.selectionEnd
+            ) {
+              const next = continueList(
+                e.currentTarget.value,
+                e.currentTarget.selectionStart,
+              );
+              if (next) {
+                e.preventDefault();
+                place(next.body, next.caret);
+              }
             }
           }}
         />
       </div>
       <div className="composer-tools">
-        <div className="row">
+        {/* Tools act on the text without taking focus from it, so the caret and the phone keyboard stay. */}
+        <div className="row" onMouseDown={(e) => e.preventDefault()}>
           <button
             className="button"
             aria-label="Add label"
-            onClick={() => insert("#")}
+            onClick={() => {
+              setDismissed(false);
+              setSelected(0);
+              insert((before) => (/(^|\s)$/.test(before) ? "#" : " #"));
+            }}
           >
             <Icon name="hash" />
           </button>
@@ -168,7 +272,11 @@ export function Editor({
             className="button"
             aria-label="Add checklist"
             onClick={() =>
-              insert((body && !body.endsWith("\n") ? "\n" : "") + "- [ ] ")
+              insert((before) =>
+                before.slice(before.lastIndexOf("\n") + 1).trim()
+                  ? "\n- [ ] "
+                  : "- [ ] ",
+              )
             }
           >
             <Icon name="cbox" />
@@ -184,20 +292,32 @@ export function Editor({
               </button>
               <input
                 ref={file}
-                className="sr-only"
+                hidden
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
                 onChange={(e) => {
                   const value = e.target.files?.[0];
                   if (value) {
                     setUploadError(null);
-                    void upload(value).catch((error) =>
-                      setUploadError(
-                        error instanceof Error
-                          ? error.message
-                          : "Could not attach the image. Try again.",
-                      ),
-                    );
+                    void upload(value)
+                      .then((attachment) =>
+                        insert((before, after) => {
+                          const lead = before && !before.endsWith("\n");
+                          const tail = after && !after.startsWith("\n");
+                          return (
+                            (lead ? "\n" : "") +
+                            attachment.snippet +
+                            (tail ? "\n" : "")
+                          );
+                        }),
+                      )
+                      .catch((error) =>
+                        setUploadError(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not attach the image. Try again.",
+                        ),
+                      );
                   }
                   e.currentTarget.value = "";
                 }}
@@ -206,13 +326,13 @@ export function Editor({
           )}
         </div>
         <div className="row">
-          <span className="composer-hint">⌘ ↵</span>
+          <span className="composer-hint">{formatShortcut("mod+enter")}</span>
           <button
             className="button primary"
-            disabled={busy || saveDisabled || !body.trim()}
+            disabled={saving || saveDisabled || !body.trim()}
             onClick={onSave}
           >
-            {busy ? "Saving…" : note ? "Done" : "Save"}
+            {saving ? "Saving…" : note ? "Done" : "Save"}
           </button>
         </div>
       </div>
@@ -221,19 +341,31 @@ export function Editor({
           {error || uploadError}
         </p>
       )}
-      {prefix !== null && matches.length > 0 && (
-        <div className="autocomplete" role="listbox" aria-label="Labels">
-          {matches.map((label, index) => (
-            <button
-              key={label.path}
-              className={index === selected ? "active" : ""}
+      {open && (
+        <div
+          className="autocomplete"
+          role="listbox"
+          id={listId}
+          aria-label="Labels"
+        >
+          {options.map((option, index) => (
+            <div
+              key={option.path + option.fresh}
+              id={`${listId}-${index}`}
+              className={index === active ? "active" : ""}
               role="option"
-              aria-selected={index === selected}
+              aria-selected={index === active}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => choose(label.path)}
+              onClick={() => choose(option.path)}
             >
-              #{label.path}
-            </button>
+              {option.fresh ? (
+                <>
+                  <span className="muted">New label</span> #{option.path}
+                </>
+              ) : (
+                <>#{option.path}</>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -242,11 +374,23 @@ export function Editor({
           query={slash}
           onChoose={(choice) => {
             setDismissed(true);
+            // The typed "/query" was only the way to the menu; it leaves with it.
+            const start = body.lastIndexOf("\n", caret - 1) + 1;
+            place(body.slice(0, start) + body.slice(caret), start);
             void api
               .command(choice.plugin, choice.id, choice.args ?? {})
               .then((value) =>
                 window.dispatchEvent(
-                  new CustomEvent("spunto:command-result", { detail: value }),
+                  new CustomEvent("spunto:command-result", {
+                    detail: {
+                      value,
+                      origin: {
+                        plugin: choice.plugin,
+                        command: choice.id,
+                        args: choice.args,
+                      },
+                    },
+                  }),
                 ),
               )
               .catch((error) => setUploadError(error.message));

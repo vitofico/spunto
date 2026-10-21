@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 private data class QrCameraUi(
  val ready:Boolean=false,val focus:Boolean=false,val torch:Boolean=false,val light:Boolean=false,
@@ -53,12 +54,12 @@ private data class QrCameraUi(
   if(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) preview.resume()
   onDispose {lifecycle.removeObserver(observer);preview.close()}
  }
- Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
   Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.scrim) {
    AndroidView(factory={preview},modifier=Modifier.fillMaxWidth().height(300.dp))
   }
   Text(state.message,style=MaterialTheme.typography.bodySmall,color=if(state.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
-  FlowRow(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+  FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
    if(state.focus) TextButton(enabled=state.ready,onClick=preview::focusCenter) {Text("Focus")}
    if(state.torch) TextButton(enabled=state.ready,onClick=preview::toggleLight) {Text(if(state.light) "Light off" else "Light on")}
    if(state.cameras.size>1) Box {

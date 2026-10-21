@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
 import type { Plugin } from "../src/lib/types";
 import { SettingsPage } from "../src/features/Settings";
+import { ToastProvider } from "../src/components/core/Toast";
 
 const removed: Plugin = {
   id: "retained-demo",
@@ -73,7 +74,9 @@ function catalog(plugins: Plugin[]) {
 function renderPage(section: string) {
   return render(
     <QueryClientProvider client={client}>
-      <SettingsPage section={section} />
+      <ToastProvider>
+        <SettingsPage section={section} />
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -141,7 +144,9 @@ it("waits for catalog eligibility and never requests Removed or unknown settings
   expect(api.ai).not.toHaveBeenCalled();
   view.rerender(
     <QueryClientProvider client={client}>
-      <SettingsPage section="plugins/unknown-id" />
+      <ToastProvider>
+        <SettingsPage section="plugins/unknown-id" />
+      </ToastProvider>
     </QueryClientProvider>,
   );
   expect(
@@ -228,13 +233,16 @@ it("labels actual origin without guessing from IDs and shows uncategorized Remov
     ]),
   );
   renderPage("plugins");
-  expect(await screen.findByText("Built-in · 1")).toBeTruthy();
-  expect(screen.getByText("Origin unknown · 1")).toBeTruthy();
-  expect(screen.getByText("Operator-installed · 1")).toBeTruthy();
-  expect(screen.getByText("Removed · Off")).toBeTruthy();
+  expect(await screen.findByText("Removed · Off")).toBeTruthy();
+  expect(screen.queryByText(/Built-in/)).toBeNull();
+  expect(screen.getByText(/^Origin unknown · /)).toBeTruthy();
   expect(
-    screen.getByRole("link", { name: "Stored data" }).getAttribute("href"),
+    screen.getByText("Operator-installed · Plugin code is no longer installed"),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: removed.name }).getAttribute("href"),
   ).toBe(`/settings/plugins/${removed.id}`);
+  expect(screen.queryByRole("link", { name: "Bundled fixture" })).toBeNull();
   expect(
     screen.queryByRole("switch", { name: `Enable ${removed.name}` }),
   ).toBeNull();
@@ -277,7 +285,7 @@ it("drops a pending enable dialog when its catalog record becomes Removed", asyn
   expect(api.enablePlugin).not.toHaveBeenCalled();
 });
 
-it("drops Undo when a disabled plugin becomes Removed", async () => {
+it("refuses Undo once a disabled plugin becomes Removed", async () => {
   vi.mocked(api.catalog).mockResolvedValue(
     catalog([{ ...installed, state: "enabled", switch: "on" }]),
   );
@@ -285,7 +293,8 @@ it("drops Undo when a disabled plugin becomes Removed", async () => {
   fireEvent.click(await screen.findByRole("switch", { name: "Enable Tasks" }));
   await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith("tasks"));
   publish([{ ...installed, state: "disabled", switch: "off" }]);
-  expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
+  expect(await screen.findByText("Tasks is off")).toBeTruthy();
+  const undo = screen.getByRole("button", { name: "Undo" });
   publish([
     {
       ...removed,
@@ -294,9 +303,12 @@ it("drops Undo when a disabled plugin becomes Removed", async () => {
       category: installed.category,
     },
   ]);
-  await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull(),
-  );
+  fireEvent.click(undo);
+  expect(
+    await screen.findByText(
+      "That plugin switch is unavailable. Review its current permissions.",
+    ),
+  ).toBeTruthy();
   expect(api.enablePlugin).not.toHaveBeenCalled();
 });
 
@@ -348,7 +360,56 @@ it("does not offer Undo for an actual toggle receipt that remains On", async () 
   expect(api.enablePlugin).not.toHaveBeenCalled();
 });
 
-it("does not restore unknown permission grants through Undo", async () => {
+it.each([
+  ["grants were cleared", { granted: [] }],
+  [
+    "permissions changed",
+    {
+      permissions: [...installed.permissions, "ai.chat"],
+      granted: installed.permissions,
+    },
+  ],
+])(
+  "does not restore unknown permission grants through Undo after %s",
+  async (_, change) => {
+    vi.mocked(api.catalog).mockResolvedValue(
+      catalog([
+        {
+          ...installed,
+          state: "enabled",
+          switch: "on",
+          granted: installed.permissions,
+        },
+      ]),
+    );
+    renderPage("plugins");
+    fireEvent.click(
+      await screen.findByRole("switch", { name: "Enable Tasks" }),
+    );
+    await waitFor(() =>
+      expect(api.disablePlugin).toHaveBeenCalledWith("tasks"),
+    );
+    publish([
+      {
+        ...installed,
+        state: "disabled",
+        switch: "off",
+        granted: installed.permissions,
+      },
+    ]);
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    publish([{ ...installed, state: "disabled", switch: "off", ...change }]);
+    fireEvent.click(undo);
+    expect(
+      await screen.findByText(
+        "That plugin switch is unavailable. Review its current permissions.",
+      ),
+    ).toBeTruthy();
+    expect(api.enablePlugin).not.toHaveBeenCalled();
+  },
+);
+
+it("Undo turns a plugin back on while its grants still stand", async () => {
   vi.mocked(api.catalog).mockResolvedValue(
     catalog([
       {
@@ -370,22 +431,13 @@ it("does not restore unknown permission grants through Undo", async () => {
       granted: installed.permissions,
     },
   ]);
-  expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
-  publish([{ ...installed, state: "disabled", switch: "off", granted: [] }]);
+  fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull(),
+    expect(api.enablePlugin).toHaveBeenCalledWith(
+      "tasks",
+      installed.permissions,
+    ),
   );
-  publish([
-    {
-      ...installed,
-      state: "disabled",
-      switch: "off",
-      permissions: [...installed.permissions, "ai.chat"],
-      granted: installed.permissions,
-    },
-  ]);
-  expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
-  expect(api.enablePlugin).not.toHaveBeenCalled();
 });
 
 it("does not expose stale Removed view or MCP arrangement actions", async () => {
@@ -419,40 +471,6 @@ function capturedClick(button: HTMLElement): () => void {
   return props.onClick;
 }
 
-it("rejects a captured stale Undo callback after same-permission grants are cleared", async () => {
-  vi.mocked(api.catalog).mockResolvedValue(
-    catalog([
-      {
-        ...installed,
-        state: "enabled",
-        switch: "on",
-        granted: installed.permissions,
-      },
-    ]),
-  );
-  renderPage("plugins");
-  fireEvent.click(await screen.findByRole("switch", { name: "Enable Tasks" }));
-  await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith("tasks"));
-  publish([
-    {
-      ...installed,
-      state: "disabled",
-      switch: "off",
-      granted: installed.permissions,
-    },
-  ]);
-  const undo = capturedClick(
-    await screen.findByRole("button", { name: "Undo" }),
-  );
-  publish([{ ...installed, state: "disabled", switch: "off", granted: [] }]);
-  await waitFor(() =>
-    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull(),
-  );
-  act(() => undo());
-  expect(await screen.findByRole("alert")).toBeTruthy();
-  expect(api.enablePlugin).not.toHaveBeenCalled();
-});
-
 it("explicit permission approval still grants a replacement intentionally", async () => {
   vi.mocked(api.catalog).mockResolvedValue(
     catalog([{ ...installed, granted: [], can_enable: true }]),
@@ -460,7 +478,7 @@ it("explicit permission approval still grants a replacement intentionally", asyn
   renderPage("plugins");
   fireEvent.click(await screen.findByRole("switch", { name: "Enable Tasks" }));
   const dialog = await screen.findByRole("dialog", { name: "Turn on Tasks?" });
-  expect(within(dialog).getByText("Reads your notes")).toBeTruthy();
+  expect(within(dialog).getByText("Read your notes")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Turn on" }));
   await waitFor(() =>
     expect(api.enablePlugin).toHaveBeenCalledWith(

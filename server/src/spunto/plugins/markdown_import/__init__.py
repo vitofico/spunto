@@ -458,20 +458,31 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
     return report
 
 
+def count(value: int, one: str) -> str:
+    return f"{value} {one if value == 1 else one + 's'}"
+
+
+def size(value: int) -> str:
+    for unit, scale in (("GB", 10**9), ("MB", 10**6), ("KB", 10**3)):
+        if value >= scale:
+            amount = value / scale
+            text = f"{amount:.1f}" if amount < 10 else f"{amount:.0f}"
+            return f"{text.removesuffix('.0')} {unit}"
+    return count(value, "byte")
+
+
 def report_output(report: dict) -> list[dict]:
-    return [
-        {
-            "type": "text",
-            "text": (
-                f"{report['notes']} notes, {report['attachments']} attachments "
-                f"({report['attachment_bytes']} bytes). "
-                f"Created {report['created']}, updated {report['updated']}, "
-                f"unchanged {report['unchanged']}; "
-                f"skipped {report['skipped_owner_edits']} owner-edited notes. "
-                f"{report['missing_links']} missing local links."
-            ),
-        }
-    ]
+    text = (
+        f"{count(report['notes'], 'note')} and {count(report['attachments'], 'attachment')} "
+        f"({size(report['attachment_bytes'])}). "
+        f"Created {report['created']}, updated {report['updated']}, "
+        f"unchanged {report['unchanged']}."
+    )
+    if report["skipped_owner_edits"]:
+        text += f" Kept {count(report['skipped_owner_edits'], 'note')} you had edited."
+    if report["missing_links"]:
+        text += f" {count(report['missing_links'], 'local link')} could not be found."
+    return [{"type": "text", "text": text}]
 
 
 @plugin.route("report")

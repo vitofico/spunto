@@ -29,11 +29,11 @@ class NativePluginControlsTest {
    NativePluginRow(NativePluginFacts(row("pinned-plugin",pin=1)),true,false,{toggles++},{},{},{})
    NativePluginRow(NativePluginFacts(row("removed-plugin","removed",1)),true,false,{toggles++},{},{},{})
   }}}
-  compose.onNodeWithContentDescription("voice-memos wanted on").assertIsOn()
-  compose.onNodeWithContentDescription("failed-plugin wanted on").assertIsOn()
-  compose.onNodeWithContentDescription("pinned-plugin wanted on").assertDoesNotExist()
-  compose.onNodeWithContentDescription("removed-plugin wanted on").assertDoesNotExist()
-  compose.onNodeWithText("Removed").assertExists();compose.onNodeWithText("214 records kept").assertExists()
+  compose.onNode(hasContentDescription("voice-memos") and isToggleable()).assertIsOn()
+  compose.onNode(hasContentDescription("failed-plugin") and isToggleable()).assertIsOn()
+  compose.onNode(hasContentDescription("pinned-plugin") and isToggleable()).assertDoesNotExist()
+  compose.onNode(hasContentDescription("removed-plugin") and isToggleable()).assertDoesNotExist()
+  compose.onNodeWithText("Removed · 214 records kept").assertExists()
   compose.runOnIdle {assertEquals(0,toggles)}
  }
  @Test fun offlineSettingsShowValuesAndEnvironmentStatusWithoutInputsOrRequests() {
@@ -79,14 +79,14 @@ class NativePluginControlsTest {
   try {
    compose.setContent {SpuntoTheme {val current by state.collectAsState();val busy by actions.busy.collectAsState();val undo by actions.undo.collectAsState();Column {
     NativePluginRow(nativePluginCatalog(current.catalog,current.manifest).rows.single(),true,busy,{actions.toggle("voice-memos",it)},{},{},{})
-    NativePluginUndo(undo,true,busy) {actions.undo {fail("No new scopes")}}
+    NativePluginUndo(undo,"voice-memos",true,busy) {actions.undo {fail("No new scopes")}}
    }}}
-   compose.onNodeWithContentDescription("voice-memos wanted on").performClick();withTimeout(10_000) {entered.await()}
-   compose.onNodeWithText("Undo").assertDoesNotExist();compose.onNodeWithContentDescription("voice-memos wanted on").assertIsNotEnabled()
+   compose.onNode(hasContentDescription("voice-memos") and isToggleable()).performClick();withTimeout(10_000) {entered.await()}
+   compose.onNodeWithText("Undo").assertDoesNotExist();compose.onNode(hasContentDescription("voice-memos") and isToggleable()).assertIsNotEnabled()
    release.complete(Unit);compose.waitUntil(10_000) {actions.undo.value!=null && !actions.busy.value}
-   compose.onNodeWithContentDescription("voice-memos wanted on").assertIsOff();compose.onNodeWithText("Undo").performClick()
+   compose.onNode(hasContentDescription("voice-memos") and isToggleable()).assertIsOff();compose.onNodeWithText("Undo").performClick()
    compose.waitUntil(10_000) {calls==2 && !actions.busy.value}
-   compose.onNodeWithContentDescription("voice-memos wanted on").assertIsOn();compose.onNodeWithText("Undo").assertDoesNotExist()
+   compose.onNode(hasContentDescription("voice-memos") and isToggleable()).assertIsOn();compose.onNodeWithText("Undo").assertDoesNotExist()
    compose.runOnIdle {assertEquals(listOf(emptyList<String>(),listOf("ai.transcribe")),accepted)}
   } finally {scope.cancel()}
  }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -17,9 +18,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import io.theficos.spunto.core.design.Markdown
+import io.theficos.spunto.core.design.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.FlowRow
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.ApiClient
 import io.theficos.spunto.data.sync.ApiException
@@ -72,7 +75,7 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
  catch(error:Exception) {
   if(current()) {
    if(error is ApiException && error.status==401) model.reauthenticate.value=true
-   onError(when(error) {is ApiException -> pluginCommandErrorMessage(error.status,error.code);is IllegalArgumentException -> error.message ?: "Check the tool inputs.";is java.net.SocketTimeoutException -> "The tool took too long. Try again, or choose a faster model in Settings → AI.";else -> "Couldn't reach the server. Check your connection, then retry."})
+   onError(when(error) {is ApiException -> apiErrorMessage(error);is IllegalArgumentException -> error.message ?: "Check the tool inputs.";is java.net.SocketTimeoutException -> "The tool took too long. Try again.";else -> "Couldn't reach the server. Check your connection, then retry."})
   }
  } finally { onComplete() }
 }
@@ -92,36 +95,24 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
   if(live && (!online || note.privateNote) || !live && components.isEmpty()) return@forEach
   var expanded by remember(note.id,id) { mutableStateOf(model.container.preferences.getBoolean("panel-open:$id",false)) }
   var result by remember(note.id,id,note.serverRev) { mutableStateOf<JsonElement?>(null) }
-  var error by remember(note.id,id,note.serverRev,online) {mutableStateOf("")}
-  var loading by remember(note.id,id) {mutableStateOf(false)}
-  var retry by remember(note.id,id) {mutableIntStateOf(0)}
-  LaunchedEffect(online,note.id,note.serverRev,note.privateNote,expanded,retry) {
-   if(live && online && !note.privateNote && expanded) {
+  // Live sections load when the note opens, as on the web; until they have something to say they are absent (03 A5).
+  LaunchedEffect(online,note.id,note.serverRev,note.privateNote) {
+   if(live && online && !note.privateNote) {
     val auth=model.auth.value ?: return@LaunchedEffect
     val epoch=model.pluginReplicaEpoch
     fun current()=model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(id)
-    loading=true;error=""
     try {
      val response=ApiClient(auth).guarded {current()}.request("/api/v1/plugins/$id/panel",query=mapOf("note_id" to note.id))
      if(current()) result=response
     } catch(cancelled:CancellationException) {throw cancelled}
-    catch(failure:Exception) {if(current()) {
-     error=if(failure is ApiException) pluginCommandErrorMessage(failure.status,failure.code) else "Couldn't load this panel. Check your connection and retry."
-     if(failure is ApiException && failure.status==401) model.reauthenticate.value=true
-    }} finally {loading=false}
+    catch(failure:Exception) {if(failure is ApiException && failure.status==401 && current()) model.reauthenticate.value=true}
    }
   }
-  Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-   TextButton(onClick={expanded=!expanded;model.container.preferences.edit().putBoolean("panel-open:$id",expanded).apply()}) { Text(panel.string("title").ifBlank { plugin.string("name") }+if(expanded) " −" else " +") }
-   if(expanded) {
-    val content=if(live) result else JsonArray(components)
-    when {
-     loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
-     error.isNotBlank() -> {Text(error,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall);TextButton(onClick={retry++}) {Text("Retry")}}
-     content!=null && outputComponents(content).isNotEmpty() -> RenderOutput(model,buildJsonObject {put("plugin_id",id);put("payload",content)},onNote)
-     else -> Text("Nothing to show yet.",style=MaterialTheme.typography.bodySmall)
-    }
-   }
+  val content=if(live) result else JsonArray(components)
+  if(content==null || outputComponents(content).isEmpty()) return@forEach
+  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+   TextButton(onClick={expanded=!expanded;model.container.preferences.edit().putBoolean("panel-open:$id",expanded).apply()},modifier=Modifier.heightIn(min=48.dp).semantics {stateDescription=if(expanded) "Open" else "Closed"}) { Text((panel.string("title").ifBlank { plugin.string("name") }).uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3) }
+   if(expanded) RenderOutput(model,buildJsonObject {put("plugin_id",id);put("payload",content)},onNote)
   }
  }
 }
@@ -145,30 +136,32 @@ internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugin
  Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surface,modifier=Modifier.drawWithContent {
   drawContent()
   drawRoundRect(accent,cornerRadius=CornerRadius(16.dp.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(),3.dp.toPx()))))
- }.semantics { contentDescription="$title · $pluginName · proposed ${if(changesWords) "wording change" else "addition"}";customActions=listOf(CustomAccessibilityAction("Dismiss suggestion") { onDismiss();true }) }.clickable(onClick=onClick)) {
-  Row(Modifier.padding(horizontal=12.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+ }.semantics { contentDescription="$title · $pluginName · proposed ${if(changesWords) "wording change" else "addition"}";customActions=listOf(CustomAccessibilityAction("Dismiss suggestion") { onDismiss();true }) }.combinedClickable(onLongClickLabel="Dismiss suggestion",onLongClick=onDismiss,onClick=onClick)) {
+  Row(Modifier.padding(start=SpuntoSpacing.s12),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
    if(changesWords) androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
     val stroke=1.5.dp.toPx()
     drawLine(accent,androidx.compose.ui.geometry.Offset(size.width*.18f,size.height*.84f),androidx.compose.ui.geometry.Offset(size.width*.72f,size.height*.30f),stroke)
     drawLine(accent,androidx.compose.ui.geometry.Offset(size.width*.58f,size.height*.19f),androidx.compose.ui.geometry.Offset(size.width*.84f,size.height*.45f),stroke)
    } else Text("+",color=accent)
    Text(title,style=MaterialTheme.typography.labelLarge)
+   Box(Modifier.size(40.dp).clickable(onClickLabel="Dismiss suggestion",onClick=onDismiss).clearAndSetSemantics {},contentAlignment=Alignment.Center) {Text("×",color=SpuntoColors.ink3)}
   }
  }
 }
 
+/** 03 §5.1: one line of dashed pills; what does not fit folds into "+N", which unfolds the rest for this note only. Each pill dismisses on × or long-press; the grey "Dismiss" ending the row dismisses them all. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable fun ProposalLine(proposals:List<JsonObject>,pluginNames:Map<String,String>,onSelect:(JsonObject)->Unit,onDismiss:(String)->Unit) {
  var expanded by remember { mutableStateOf(false) }
- @Composable fun chips() {
+ FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(6.dp),itemVerticalAlignment=Alignment.CenterVertically) {
   (if(expanded) proposals else proposals.take(3)).forEach { data ->
    ProposedPill(data.string("title").ifEmpty { (data["payload"] as? JsonObject)?.string("path")?.takeIf(String::isNotBlank)?.let { "Add #$it" } ?: "Review change" },pluginNames[data.string("plugin")] ?: data.string("plugin"),data.string("action") in setOf("replace_body","merge_notes"),{onSelect(data)},{onDismiss(data.string("id"))})
   }
-  if(proposals.size>3) TextButton(onClick={expanded=!expanded}) { Text(if(expanded) "Show fewer" else "+${proposals.size-3}") }
+  if(proposals.size>3 && !expanded) Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,modifier=Modifier.heightIn(min=40.dp).clickable(onClickLabel="Show ${proposals.size-3} more suggestions") {expanded=true}) {
+   Box(Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8)) {Text("+${proposals.size-3}",style=MaterialTheme.typography.labelLarge)}
+  }
+  TextButton(onClick={proposals.forEach {onDismiss(it.string("id"))}},modifier=Modifier.semantics {contentDescription="Dismiss ${if(proposals.size==1) "1 suggestion" else "${proposals.size} suggestions"}"}) {Text("Dismiss",style=MaterialTheme.typography.labelLarge,color=SpuntoColors.ink3)}
  }
- if(expanded) FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) { chips() }
- else Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { chips() }
- TextButton(onClick={proposals.forEach { onDismiss(it.string("id")) }}) { Text("Dismiss all") }
 }
 
 @Composable fun Suggestions(model:SpuntoViewModel,noteId:String,onNote:(String)->Unit) {
@@ -186,6 +179,8 @@ internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugin
  selected?.let { id -> outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let { SuggestionDecisionDialog(model,proposalData(it),onNote) { selected=null } } }
 }
 
+/** Suggestions waiting in Review: pending, from a plugin that is still on. */
+internal fun waitingProposals(model:SpuntoViewModel,outputs:List<PluginOutputEntity>)=outputs.filter { it.kind=="suggestion" && payload(it.payload).string("status")=="pending" && model.container.manifest.enabled(payload(it.payload).string("plugin")) }
 private fun proposalKind(action:String)=when(action) { "add_label","label_change" -> "Labels";"merge_notes" -> "Duplicate notes";"replace_body" -> "Wording changes";"set_title" -> "Titles";"append_text" -> "Links and additions";else -> "Other suggestions" }
 @Composable fun ReviewScreen(model:SpuntoViewModel,onNote:(String)->Unit) {
  val manifest=model.manifest.collectAsState().value
@@ -193,15 +188,15 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  val online by model.online.collectAsState()
  var selected by remember { mutableStateOf<String?>(null) }
  val expanded=remember { mutableStateMapOf<String,Boolean>() }
- val proposals=outputs.filter { it.kind=="suggestion" && payload(it.payload).string("status")=="pending" && model.container.manifest.enabled(payload(it.payload).string("plugin")) }
- LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+ val proposals=waitingProposals(model,outputs)
+ LazyColumn(contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
   if(proposals.isEmpty()) item { Text("All caught up.",style=MaterialTheme.typography.titleLarge) }
   proposals.groupBy { proposalKind(payload(it.payload).string("action")) }.forEach { (kind,group) ->
    item { Text(kind,style=MaterialTheme.typography.titleMedium) }
    items(if(expanded[kind]==true) group else group.take(3),key={it.id}) { item ->
     val data=proposalData(item)
     Surface(color=MaterialTheme.colorScheme.surfaceContainer,shape=MaterialTheme.shapes.medium) {
-     Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+     Column(Modifier.padding(SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
       Text(data.string("title").ifBlank { "Review change" },style=MaterialTheme.typography.titleSmall)
       val plugin=data.string("plugin")
       Text(model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.string("name") ?: plugin,style=MaterialTheme.typography.bodySmall)
@@ -238,7 +233,7 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  var error by remember(data) {mutableStateOf("")}
  val run:(String,JsonObject)->Unit={ id,args -> if(!running && online && plugin.isNotBlank()) { running=true;error="";runCommand(model,plugin,id,args,deliver,{running=false},scope,onError={error=it}) } }
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value="Sync to review this suggestion." }
- Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   val components=outputComponents(data)
   if(components.isEmpty() && command.isNotBlank()) Text("This result has no preview in this app. Check Review for suggestions or open the web app.",style=MaterialTheme.typography.bodySmall)
   components.forEach { component ->
@@ -261,17 +256,17 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  var active by remember { mutableStateOf(true) }
  val close={active=false;sheetScope.cancel();onClose()}
  ModalBottomSheet(onDismissRequest=close,scrimColor=MaterialTheme.colorScheme.scrim) {
-  Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+  Column(Modifier.padding(SpuntoSpacing.s20).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
    Text(command?.string("title")?.takeIf(String::isNotBlank) ?: plugin?.string("name")?.takeIf(String::isNotBlank) ?: "Tool result",style=MaterialTheme.typography.titleLarge)
    RenderOutput(model,result,{id -> close();onNote(id)},{if(active) onResult(it)},commandScope=sheetScope,onProposalOpen=close)
    (plugin?.get("ai_destinations") as? JsonObject)?.forEach { (_,raw) -> (raw as? JsonObject)?.let { destination -> Text("${destination.string("model")} at ${destination.string("host")} · ${if(destination.bool("leaves_network")) "outside your network" else "on your network"}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
    val copied=resultCopyText(result)
-   Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
     if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied))}) {Text(if(outputComponents(result).any {it.string("type")=="diff"}) "Copy changes" else "Copy")}
     TextButton(onClick=close) { Text("Close") }
    }
-   Spacer(Modifier.height(24.dp))
+   Spacer(Modifier.height(SpuntoSpacing.s24))
   }
  }
 }
@@ -287,7 +282,7 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
   "replace_body" -> { Text("Based on version ${data["note_version"] ?: "unknown"}",style=MaterialTheme.typography.bodySmall);if(target==null) Text("Note unavailable") else TextChangePreview(target!!.body,proposed.string("body")) }
   "set_title" -> Text("Title: ${proposed.string("title")}")
   "label_change" -> { Text(labelChangeSummary(proposed));Text("Review the affected notes in the web app before applying.",style=MaterialTheme.typography.bodySmall) }
-  "merge_notes" -> { val source by remember(proposed.string("source_id")) { model.repository.observe(proposed.string("source_id")) }.collectAsState(null);Text("Compare",style=MaterialTheme.typography.titleLarge);Text("The source will be appended to the destination and moved to Trash.");Text("Destination",style=MaterialTheme.typography.titleSmall);Text(target?.body ?: "Note unavailable",fontFamily=FontFamily.Monospace);Text("Source",style=MaterialTheme.typography.titleSmall);Text(source?.body ?: "Note unavailable",fontFamily=FontFamily.Monospace) }
+  "merge_notes" -> { val source by remember(proposed.string("source_id")) { model.repository.observe(proposed.string("source_id")) }.collectAsState(null);Text("Compare",style=MaterialTheme.typography.titleLarge);Text("The source will be appended to the destination and moved to Trash.");Text("Destination",style=MaterialTheme.typography.titleSmall);Text(target?.body ?: "Note unavailable",fontFamily=monoFont());Text("Source",style=MaterialTheme.typography.titleSmall);Text(source?.body ?: "Note unavailable",fontFamily=monoFont()) }
  }
  if(data.string("reason").isNotBlank()) Text(data.string("reason"),style=MaterialTheme.typography.bodySmall)
 }
@@ -310,7 +305,7 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
   "open" -> true
   else -> eligible
  }
- AlertDialog(onDismissRequest=onClose,title={Text(if(action=="merge_notes") "Compare notes" else "Review change")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+ AlertDialog(onDismissRequest=onClose,title={Text(if(action=="merge_notes") "Compare notes" else "Review change")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   SuggestionPreview(model,data)
   if(stale) Text("This note changed. Wait for a fresh suggestion.",style=MaterialTheme.typography.bodySmall)
   if(data.string("status")!="pending") Text("This suggestion is ${data.string("status").ifEmpty { "unavailable" }}.",style=MaterialTheme.typography.bodySmall)
@@ -331,9 +326,15 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
  val scope=rememberCoroutineScope()
  val commands=remember(manifest,privateNote) {noteTools(model.container.manifest.plugins(),privateNote)}
  if(commands.isEmpty()) return
- TextButton(onClick={expanded=true;query="";error=""}) {Text("Tools")}
+ fun run(tool:NoteTool) {running=true;error="";attempt=runCommand(model,tool.pluginId,tool.id,buildJsonObject {put("note_id",noteId)},{expanded=false;onResult(it)},{running=false},scope,onError={error=it})}
+ // 03 R9: plugin verbs between hairlines, each with its plugin's name in grey; six here, the rest under More.
+ HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
+ commands.take(6).forEach {tool -> NoteSheetRow(tool.title,tool.pluginName,enabled=online && !running) {run(tool)}}
+ if(commands.size>6) NoteSheetRow("More",enabled=online && !running) {expanded=true;query="";error=""}
+ if(running && !expanded) Text("Working… This can take a moment with AI.",Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
+ if(error.isNotBlank() && !expanded) Text(error,Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
  if(expanded) ModalBottomSheet(onDismissRequest={attempt?.cancel();expanded=false}) {
-  Column(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+  Column(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    Text("Note tools",style=MaterialTheme.typography.titleLarge)
    if(!online) Text("Connect to the server to use tools.",style=MaterialTheme.typography.bodySmall)
    if(commands.size>5) OutlinedTextField(value=query,onValueChange={query=it},label={Text("Find a tool")},singleLine=true,modifier=Modifier.fillMaxWidth())
@@ -341,16 +342,13 @@ private fun proposalKind(action:String)=when(action) { "add_label","label_change
    if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text("Working… This can take a moment with AI.",style=MaterialTheme.typography.bodySmall)}
    val visible=commands.filter {it.title.contains(query,true) || it.pluginName.contains(query,true)}
    if(visible.isEmpty()) Text("No tools match your search.")
-   LazyColumn(Modifier.weight(1f,false),contentPadding=PaddingValues(bottom=24.dp)) {
+   LazyColumn(Modifier.weight(1f,false),contentPadding=PaddingValues(bottom=SpuntoSpacing.s24)) {
     items(visible,key={it.pluginId+"/"+it.id}) {tool ->
-     ListItem(headlineContent={Text(tool.title)},supportingContent=if(commands.count {it.title==tool.title}>1) {{Text(tool.pluginName)}} else null,modifier=Modifier.clickable(enabled=online && !running) {
-      running=true;error=""
-      attempt=runCommand(model,tool.pluginId,tool.id,buildJsonObject {put("note_id",noteId)},{expanded=false;onResult(it)},{running=false},scope,onError={error=it})
-     })
+     ListItem(headlineContent={Text(tool.title)},trailingContent={Text(tool.pluginName,style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)},modifier=Modifier.clickable(enabled=online && !running) {run(tool)})
     }
    }
    TextButton(onClick={attempt?.cancel();expanded=false}) {Text(if(running) "Cancel" else "Close")}
-   Spacer(Modifier.height(12.dp))
+   Spacer(Modifier.height(SpuntoSpacing.s12))
   }
  }
 }

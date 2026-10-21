@@ -18,7 +18,7 @@ class SettingsBackNavigationTest {
  private val container get()=(compose.activity.application as SpuntoApplication).container
 
  private fun settingsVisible() {
-  compose.onAllNodesWithText("Settings").assertCountEquals(2)
+  compose.onAllNodesWithText("Settings").assertCountEquals(1)
   compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
  }
 
@@ -30,18 +30,19 @@ class SettingsBackNavigationTest {
    compose.waitUntil(10_000) {compose.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Settings").performClick()
    settingsVisible()
-   listOf("Appearance","Plugins","Devices","Status","Labels","Export","Profile").forEach {section ->
+   // Devices, Profile and Export open the web app; only these two are pages on the phone.
+   listOf("Appearance","Plugins").forEach {section ->
     compose.onNode(hasScrollAction()).performScrollToNode(hasText(section) and hasClickAction())
     compose.onNodeWithText(section).performClick()
-    compose.onNodeWithText("Back").assertIsDisplayed()
+    compose.onNodeWithContentDescription("Back").assertIsDisplayed()
     if(systemBack) {
      compose.activityRule.scenario.recreate()
-     compose.onNodeWithText("Back").assertIsDisplayed()
+     compose.onNodeWithContentDescription("Back").assertIsDisplayed()
      pressBack()
-    } else compose.onNodeWithText("Back").performClick()
+    } else compose.onNodeWithContentDescription("Back").performClick()
     settingsVisible()
    }
-   if(systemBack) pressBack() else compose.onNodeWithText("Back").performClick()
+   if(systemBack) pressBack() else compose.onNodeWithContentDescription("Back").performClick()
    compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
    compose.onAllNodesWithText("Settings").assertCountEquals(0)
   } finally {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}

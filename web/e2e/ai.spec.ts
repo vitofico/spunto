@@ -64,6 +64,7 @@ const ask = {
   switch: "on",
   state: "enabled",
   permissions: ["notes.read", "notes.create", "ai.chat", "ai.embed"],
+  creates: "machine",
   ai_route: { chat: "local" },
   contributes: {
     commands: [
@@ -281,6 +282,7 @@ async function fixture(page: Page, withModels = false) {
               ...note,
               id: "neighbor",
               body: "Coffee neighbor",
+              title: "Coffee neighbor",
               html: "<p>Coffee neighbor</p>",
             }
           : note,
@@ -306,6 +308,12 @@ test("model inventory choices and environment reset require Save on mobile", asy
   await expect(
     embedding.locator("option").filter({ hasText: "fixture-embedding-v2" }),
   ).toHaveCount(1);
+  // Phone targets: a model choice and the short "AI" tab are at least 44 px.
+  expect((await embedding.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect(
+    (await page.getByRole("link", { name: "AI", exact: true }).boundingBox())!
+      .width,
+  ).toBeGreaterThanOrEqual(44);
   await embedding.selectOption(
     JSON.stringify(["local", "fixture-embedding-v2"]),
   );
@@ -412,11 +420,13 @@ test("live related panel and Ask form preserve the save-answer action", async ({
   await page.getByText("Related · 1 item").click();
   await expect(page.getByText("Coffee neighbor")).toBeVisible();
   await page.keyboard.press("Meta+k");
-  await page.getByRole("button", { name: /Ask your notes/ }).click();
+  await page.getByRole("option", { name: /Ask your notes/ }).click();
   await page
     .getByLabel("Question", { exact: true })
     .fill("Where did I have coffee?");
-  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Ask your notes", exact: true })
+    .click();
   await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Save as note", exact: true }),
@@ -431,7 +441,7 @@ test("live related panel and Ask form preserve the save-answer action", async ({
     .poll(() => state.commands.at(-1))
     .toEqual({ id: "save-answer", args: { answer_id: "fixture-receipt" } });
   await expect(page.locator('a[href="/n/saved-answer"]')).toHaveText(
-    "Coffee in Rome",
+    note.title,
   );
 });
 

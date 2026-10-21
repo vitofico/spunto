@@ -4,6 +4,8 @@ import androidx.test.core.app.ApplicationProvider
 import io.theficos.spunto.data.local.*
 import io.theficos.spunto.core.model.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
 import okhttp3.mockwebserver.*
 import org.junit.*
@@ -41,6 +43,39 @@ class SyncEngineTest {
   }}
   val work=async(Dispatchers.Default){engine().sync()};assertTrue(withContext(Dispatchers.IO){waiting.await(10,TimeUnit.SECONDS)});repo.update(id,"second");release.countDown();assertTrue(work.await() is SyncStatus.Complete)
   assertEquals("second",repo.dao.get(id)!!.body);assertEquals(2,repo.dao.get(id)!!.serverRev);assertTrue(repo.dao.outbox().isEmpty())
+ }
+ @Test fun completeSyncThatFindsNothingNewIsNotRepeated()=runBlocking {
+  // A server whose change_seq moved without a row (a plugin switch) used to answer every wait with "changed".
+  val url=server.url("/").toString().trimEnd('/');repo.dao.putState(SyncStateEntity(epoch="e",cursor="e.4",pluginsRev=1,serverUrl=url))
+  var pulls=0;val waits=java.util.Collections.synchronizedList(mutableListOf<String>())
+  server.dispatcher=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(request.requestUrl!!.encodedPath){
+   "/api/v1/meta"->response("""{"sync_epoch":"e"}""")
+   "/api/v1/sync/pull"->{pulls++;response("""{"epoch":"e","cursor":"e.4","has_more":false,"plugins_rev":1,"items":[]}""")}
+   "/api/v1/changes/wait"->{val cursor=request.requestUrl!!.queryParameter("cursor")!!;waits+=cursor;response("""{"cursor":"e.5","plugins_rev":1,"changed":${cursor!="e.5"}}""").setHeadersDelay(50,TimeUnit.MILLISECONDS)}
+   "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+   else->response("{}",404)
+  }}
+  val waiter=launch(Dispatchers.Default) {ChangeWaiter({AuthConfig(server.url("/").toString(),"synthetic","d","Phone",true)},repo,engine()).run()}
+  withContext(Dispatchers.IO) {Thread.sleep(1500)};waiter.cancelAndJoin()
+  assertEquals(1,pulls);assertEquals("e.4",waits.first());assertTrue(waits.size>1 && waits.drop(1).all {it=="e.5"})
+ }
+ @Test fun conflictIsSurfacedAndKeepingTheCopySettlesItThroughTheOutbox()=runBlocking {
+  val id=uuidV7();val copy=uuidV7();repo.putNote(Note(id,"saved",serverRev=1));repo.dao.putState(SyncStateEntity(epoch="e",cursor="e.0"));repo.update(id,"phone")
+  server.dispatcher=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(request.requestUrl!!.encodedPath){
+   "/api/v1/meta"->response("""{"sync_epoch":"e"}""")
+   "/api/v1/notes/$id"->response(note(id,"other device",2).toString())
+   "/api/v1/sync/push"->{val op=Json.parseToJsonElement(request.body.readUtf8()).jsonObject["ops"]!!.jsonArray.single().jsonObject
+    response(buildJsonObject{put("epoch","e");put("results",buildJsonArray{add(buildJsonObject{put("op_id",op["op_id"]!!);put("status","conflict");put("version",2);put("conflict_id",copy);put("note",JsonObject(note(copy,"phone",1)+mapOf("conflict_of" to JsonPrimitive(id))))})})}.toString())}
+   "/api/v1/sync/pull"->response("""{"epoch":"e","cursor":"e.2","has_more":false,"plugins_rev":0,"items":[]}""")
+   "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+   else->response("{}",404)
+  }}
+  assertTrue(engine().sync() is SyncStatus.Complete)
+  assertEquals(listOf(copy to id),repo.conflicts.first().map {it.id to it.conflictOf});assertEquals("other device",repo.dao.get(id)!!.body)
+  repo.keepConflictCopy(copy)
+  assertEquals("phone",repo.dao.get(id)!!.body);assertTrue(repo.dao.get(copy)!!.trashed);assertTrue(repo.conflicts.first().isEmpty())
+  val ops=repo.dao.outbox().map {Json.decodeFromString<OutboxOperation>(it.payload)}
+  assertEquals(listOf("note.update" to id,"note.flags" to copy),ops.map {it.type to it.noteId});assertEquals(2,ops.first().baseVersion)
  }
  @Test fun restoreIncludesChangedReplicaButSkipsKnownTombstones()=runBlocking {
   val id=repo.create("survives restore");val deleted=repo.create("deleted");repo.dao.outbox().forEach{repo.dao.removeOutbox(it.opId)};repo.dao.putTombstone(TombstoneEntity(deleted,1));repo.dao.putState(SyncStateEntity(epoch="old",cursor="old.5"))
@@ -179,4 +214,54 @@ class SyncEngineTest {
   }
  }
 
+ private fun refusingServer(pushed:MutableList<JsonObject>,pull:JsonArray=JsonArray(emptyList()),notes:Map<String,JsonObject> =emptyMap(),result:(JsonObject)->JsonObject)=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(val path=request.requestUrl!!.encodedPath){
+  "/api/v1/meta"->response("""{"sync_epoch":"e"}""")
+  "/api/v1/sync/push"->{val ops=Json.parseToJsonElement(request.body.readUtf8()).jsonObject["ops"]!!.jsonArray.map {it.jsonObject};synchronized(pushed) {pushed+=ops};response(buildJsonObject {put("epoch","e");put("results",JsonArray(ops.map {op ->JsonObject(result(op)+("op_id" to op["op_id"]!!))}))}.toString())}
+  "/api/v1/sync/pull"->response(buildJsonObject {put("epoch","e");put("cursor","e.2");put("has_more",false);put("plugins_rev",0);put("items",pull)}.toString())
+  "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+  else->notes[path.removePrefix("/api/v1/notes/")]?.let {response(it.toString())} ?: response("{}",404)
+ }}
+ private fun applied(op:JsonObject,version:Int=(op["base_version"]?.jsonPrimitive?.int ?: 0)+1)=buildJsonObject {put("status","applied");put("version",version);put("note",note(op["note_id"]!!.jsonPrimitive.content,op["body"]!!.jsonPrimitive.content,version))}
+ @Test fun refusedChangeLeavesTheWaitingCountKeepsItsWordsAndSettlesAsANewNote()=runBlocking {
+  // Edited on this phone while another device deleted it: the server refuses the edit, and nothing can retry it.
+  val id=uuidV7();repo.putNote(Note(id,"Server words",serverRev=1));repo.update(id,"Phone words");val pushed=mutableListOf<JsonObject>()
+  val newer=note(id,"Newer server words",2)
+  server.dispatcher=refusingServer(pushed,buildJsonArray {add(buildJsonObject {put("kind","note");put("change_seq",2);put("data",newer)})},mapOf(id to newer)) {op ->if(op["note_id"]!!.jsonPrimitive.content==id) buildJsonObject {put("status","rejected");put("code","not_found")} else applied(op)}
+  assertEquals(SyncStatus.Complete(0),engine().sync());assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(1,pushed.size);assertEquals(0,repo.pendingCount.first());assertEquals(mapOf(id to "not_found"),repo.refused.first())
+  assertEquals("Phone words",repo.dao.get(id)!!.body)
+  val copy=repo.keepRefusedAsNewNote(id)
+  assertEquals(emptyMap<String,String>(),repo.refused.first());assertEquals("Phone words",repo.dao.get(copy)!!.body);assertEquals(1,repo.pendingCount.first())
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals("Newer server words",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending);assertFalse(repo.dao.get(copy)!!.pending);assertTrue(repo.dao.outbox().isEmpty())
+ }
+ @Test fun shortenedNotesSyncAfterTheServerRefusedThemAsTooLong()=runBlocking {
+  val fresh=repo.create("x".repeat(100_001));val known=uuidV7();repo.putNote(Note(known,"Server words",serverRev=1));repo.update(known,"y".repeat(100_001));val pushed=mutableListOf<JsonObject>()
+  server.dispatcher=refusingServer(pushed) {op ->if(op["body"]!!.jsonPrimitive.content.length>100_000) buildJsonObject {put("status","rejected");put("code","too_large")} else applied(op)}
+  assertEquals(SyncStatus.Complete(0),engine().sync());assertEquals(mapOf(fresh to "too_large",known to "too_large"),repo.refused.first())
+  repo.update(fresh,"Short now");repo.update(known,"Short too")
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(listOf("note.create","note.update","note.create","note.update"),pushed.map {it["type"]!!.jsonPrimitive.content})
+  assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
+  assertEquals("Short now",repo.dao.get(fresh)!!.body);assertEquals("Short too",repo.dao.get(known)!!.body);assertFalse(repo.dao.get(fresh)!!.pending);assertFalse(repo.dao.get(known)!!.pending)
+ }
+ @Test fun refusedDecisionLetsTheServerCopyWin()=runBlocking {
+  val id=uuidV7();val proposal=uuidV7();repo.putNote(Note(id,"Owner words",serverRev=1));val pushed=mutableListOf<JsonObject>()
+  repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {put("action","append_text");put("payload",buildJsonObject {put("text","Machine words")});put("status","pending")}.toString()))
+  repo.decideSuggestion(proposal,"accept");assertTrue(repo.dao.get(id)!!.body.endsWith("Machine words"))
+  server.dispatcher=refusingServer(pushed,notes=mapOf(id to note(id,"Owner words\n\nDecided on the web",2))) {buildJsonObject {put("status","rejected");put("code","suggestion_decided")}}
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
+  assertEquals("Owner words\n\nDecided on the web",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending)
+ }
+ @Test fun decisionRefusedByAnOlderBuildIsSettledNotShownAsARefusedNote()=runBlocking {
+  val id=uuidV7();val proposal=uuidV7();repo.putNote(Note(id,"Owner words",serverRev=1));val pushed=mutableListOf<JsonObject>()
+  repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {put("action","append_text");put("payload",buildJsonObject {put("text","Machine words")});put("status","pending")}.toString()))
+  repo.decideSuggestion(proposal,"accept");repo.dao.reject(repo.dao.outbox().single().opId,"suggestion_decided")
+  assertEquals(mapOf(id to "suggestion_decided"),repo.refused.first())
+  server.dispatcher=refusingServer(pushed,notes=mapOf(id to note(id,"Owner words\n\nDecided on the web",2))) {applied(it)}
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertTrue(pushed.isEmpty());assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
+  assertEquals("Owner words\n\nDecided on the web",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending)
+ }
 }

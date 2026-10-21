@@ -38,7 +38,7 @@
       "highlight": "#5F4A1A",
       "danger": "#ED7473",
       "warn": "#E1AD57",
-      "sh": "234 229 221",
+      "sh": "0 0 0",
       "chrome": "#0C0B0A",
       "chrome-pill": "#1C1916"
     }
@@ -82,7 +82,7 @@
       "highlight": "#57481A",
       "danger": "#F07A7A",
       "warn": "#E0AE55",
-      "sh": "228 232 238",
+      "sh": "0 0 0",
       "chrome": "#0A0C0E",
       "chrome-pill": "#1A1D22"
     }
@@ -126,7 +126,7 @@
       "highlight": "#4F4A1C",
       "danger": "#EE7C78",
       "warn": "#DDB05A",
-      "sh": "226 232 226",
+      "sh": "0 0 0",
       "chrome": "#090B0A",
       "chrome-pill": "#191D1A"
     }
@@ -170,7 +170,7 @@
       "highlight": "#664022",
       "danger": "#FFA39C",
       "warn": "#FFC17A",
-      "sh": "255 240 235",
+      "sh": "0 0 0",
       "chrome": "#1B0813",
       "chrome-pill": "#451A2D"
     }
@@ -214,7 +214,7 @@
       "highlight": "#143E64",
       "danger": "#FF92B2",
       "warn": "#F4C070",
-      "sh": "243 238 255",
+      "sh": "0 0 0",
       "chrome": "#0B0820",
       "chrome-pill": "#2B2151"
     }

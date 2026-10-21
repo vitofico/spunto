@@ -300,7 +300,7 @@ it("retries queued captures restored from storage after idle without an online e
   expect(editor.submitted).toBe(false);
 });
 
-it("automatically saves newer typing after an earlier submitted capture ACK and keeps the next capture local", async () => {
+it("starts a fresh draft on submit, shows the capture at once and keeps typing during the save as the next capture", async () => {
   let acknowledge!: (note: Note) => void;
   const create = vi.spyOn(api, "createNote").mockImplementation(
     () =>
@@ -308,11 +308,11 @@ it("automatically saves newer typing after an earlier submitted capture ACK and 
         acknowledge = resolve;
       }),
   );
-  const update = vi
-    .spyOn(api, "updateNote")
-    .mockImplementation(
-      async (id, body, version) => ({ id, body, version: version + 1 }) as Note,
-    );
+  const update = vi.spyOn(api, "updateNote");
+  queryClient.setQueryData(["notes", { view: "timeline", limit: 50 }], {
+    pages: [{ notes: [], next_cursor: null }],
+    pageParams: [undefined],
+  });
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
@@ -320,31 +320,53 @@ it("automatically saves newer typing after an earlier submitted capture ACK and 
       </QueryClientProvider>,
     );
   });
-  act(() => editor.setBody("submitted"));
+  act(() => editor.setBody("submitted #idea"));
   act(() => {
     void editor.save();
   });
+  expect(editor.body).toBe("");
+  const shown = queryClient.getQueryData<{
+    pages: { notes: Note[] }[];
+  }>(["notes", { view: "timeline", limit: 50 }])!.pages[0]!.notes;
+  expect(shown.map((note) => [note.body, note.labels])).toEqual([
+    ["submitted #idea", ["idea"]],
+  ]);
+  const timeline = (notes: Note[]) =>
+    queryClient.setQueryData(["notes", { view: "timeline", limit: 50 }], {
+      pages: [{ notes, next_cursor: null }],
+      pageParams: [undefined],
+    });
+  const bodies = () =>
+    queryClient
+      .getQueryData<{
+        pages: { notes: Note[] }[];
+      }>(["notes", { view: "timeline", limit: 50 }])!
+      .pages[0]!.notes.map((note) => note.body);
+  // A refetch before the server answers keeps the capture on screen.
+  await act(async () => {
+    timeline([]);
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(bodies()).toEqual(["submitted #idea"]);
   act(() => editor.setBody("newer typing"));
   await act(async () => {
-    acknowledge({ id: "created", body: "submitted", version: 1 } as Note);
+    acknowledge({ id: "created", body: "submitted #idea", version: 1 } as Note);
   });
-  expect(editor.body).toBe("newer typing");
-  expect(editor.submitted).toBe(true);
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(5000);
+    timeline([{ id: "created", body: "submitted #idea", version: 1 } as Note]);
+    await vi.advanceTimersByTimeAsync(0);
   });
-  expect(update).toHaveBeenCalledWith("created", "newer typing", 1);
-  expect(editor.body).toBe("");
+  expect(bodies()).toEqual(["submitted #idea"]);
+  expect(editor.body).toBe("newer typing");
   expect(editor.submitted).toBe(false);
-  act(() => editor.setBody("next capture"));
   await act(async () => {
     window.dispatchEvent(new Event("online"));
     await vi.advanceTimersByTimeAsync(60000);
     window.dispatchEvent(new Event("pagehide"));
   });
   expect(create).toHaveBeenCalledTimes(1);
-  expect(update).toHaveBeenCalledTimes(1);
-  expect(editor.body).toBe("next capture");
+  expect(update).not.toHaveBeenCalled();
+  expect(editor.body).toBe("newer typing");
 });
 
 it("explicit sign-out clears only this owner and prevents the editor from saving", async () => {

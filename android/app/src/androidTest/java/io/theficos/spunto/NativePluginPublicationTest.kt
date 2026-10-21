@@ -58,8 +58,8 @@ class NativePluginPublicationTest {
   val outputs=listOf(PluginOutputEntity("annotation","synthetic-output","synthetic-slip","""{"kind":"slip","plugin":"resurface"}"""))
   val entered=CountDownLatch(1);val release=CountDownLatch(1);val attempted=CountDownLatch(1);val offFinished=CountDownLatch(1)
   val failure=AtomicReference<Throwable?>(null)
-  val write:(String?,String?)->Unit={id,text -> check(prefs.edit().putString("slip-id",id).putString("slip-text",text).commit())}
-  val old=Thread {try {cache.withCaptureSurfacePublication(notes,outputs,{}, {id,text -> entered.countDown();check(release.await(10,TimeUnit.SECONDS));write(id,text)})} catch(error:Throwable) {failure.compareAndSet(null,error)}}.apply {start()}
+  val write:(String?,String?,Long?)->Unit={id,text,_ -> check(prefs.edit().putString("slip-id",id).putString("slip-text",text).commit())}
+  val old=Thread {try {cache.withCaptureSurfacePublication(notes,outputs,{}, {id,text,at -> entered.countDown();check(release.await(10,TimeUnit.SECONDS));write(id,text,at)})} catch(error:Throwable) {failure.compareAndSet(null,error)}}.apply {start()}
   try {
    assertTrue(entered.await(10,TimeUnit.SECONDS))
    val newer=Thread {try {
@@ -91,11 +91,11 @@ class NativePluginPublicationTest {
   fun output(id:String,plugin:String="resurface",kind:String="annotation",payload:String="""{"kind":"slip","plugin":"$plugin"}""")=PluginOutputEntity(kind,"output-$id",id,payload)
   val outputs=listOf(output("first",payload="malformed"),output("first",kind="view"),output("first",payload="""{"kind":"other","plugin":"resurface"}"""),output("private"),output("trashed"),output("first",plugin="disabled"),output("first"),output("second"))
   var id:String?=null;var text:String?=null;var updated=false
-  cache.withCaptureSurfacePublication(notes,outputs,{updated=true},{nextId,nextText -> id=nextId;text=nextText})
+  cache.withCaptureSurfacePublication(notes,outputs,{updated=true},{nextId,nextText,_ -> id=nextId;text=nextText})
   assertTrue(updated);assertEquals("first",id);assertEquals("x".repeat(280),text)
   // A restored owner with no committed pair keeps bootstrap quick/dictate defaults and clears old slips.
   fence.bind("https://synthetic.invalid","restored")
-  cache.withCaptureSurfacePublication(notes,outputs,{assertTrue(cache.enabled("quick-capture"));assertTrue(cache.enabled("dictation"))},{nextId,nextText -> id=nextId;text=nextText})
+  cache.withCaptureSurfacePublication(notes,outputs,{assertTrue(cache.enabled("quick-capture"));assertTrue(cache.enabled("dictation"))},{nextId,nextText,_ -> id=nextId;text=nextText})
   assertNull(id);assertNull(text)
   isolated.getSharedPreferences("plugin-manifest",Context.MODE_PRIVATE).edit().clear().commit()
  }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, request } from "../lib/api";
 import { VocabularyOutput } from "./Vocabulary";
+import { formatBytes, plural } from "./format";
 import styles from "./Feature.module.css";
 
 type Preview = {
@@ -42,6 +43,7 @@ export function MarkdownImport() {
     onSuccess: (result) => {
       setReport(result);
       void client.invalidateQueries({ queryKey: ["notes"] });
+      void client.invalidateQueries({ queryKey: ["labels"] });
     },
   });
   const importing = useMutation({
@@ -58,14 +60,15 @@ export function MarkdownImport() {
   const error = upload.error ?? importing.error ?? refresh.error;
   return (
     <section aria-label="Import Markdown">
-      <p className={styles.muted}>
+      <p className="muted">
         Upload a Markdown ZIP to preview its notes and attachments. Spunto
         exports preserve their metadata; other vaults use supported front
         matter. Notes you edited here are kept.
       </p>
-      <label>
-        Markdown ZIP{" "}
+      <label className={styles.filePicker}>
+        Choose a Markdown ZIP
         <input
+          className="sr-only"
           type="file"
           accept=".zip,application/zip"
           disabled={busy}
@@ -84,13 +87,16 @@ export function MarkdownImport() {
       {preview && (
         <div>
           <p>
-            {preview.report.notes} notes and {preview.report.attachments}{" "}
-            attachments ({preview.report.attachment_bytes} bytes).
+            {plural(preview.report.notes, "note")} and{" "}
+            {plural(preview.report.attachments, "attachment")}
+            {preview.report.attachment_bytes > 0 &&
+              ` (${formatBytes(preview.report.attachment_bytes)})`}
+            .
           </p>
           {preview.report.missing_links > 0 && (
             <p>
-              {preview.report.missing_links} local links could not be found.
-              Their original links will stay.
+              {plural(preview.report.missing_links, "local link")} could not be
+              found. The original links stay as they are.
             </p>
           )}
           <button disabled={busy || queued} onClick={() => importing.mutate()}>
@@ -98,19 +104,15 @@ export function MarkdownImport() {
           </button>
         </div>
       )}
-      {queued && (
-        <p>
-          Imports run in the background. Refresh the report to check progress.
-        </p>
-      )}
+      {/* The server's report says what happens next, such as "Import queued." */}
+      {report ? <VocabularyOutput value={report} /> : null}
       {(queued || report !== undefined) && (
         <button disabled={refresh.isPending} onClick={() => refresh.mutate()}>
           Refresh import report
         </button>
       )}
-      {report ? <VocabularyOutput value={report} /> : null}
       {error && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {error.message}
         </p>
       )}

@@ -6,27 +6,55 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import androidx.glance.GlanceId
-import androidx.glance.GlanceModifier
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.*
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.*
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.color.ColorProvider
 import androidx.glance.layout.*
-import androidx.glance.text.Text
-import androidx.glance.Button
-import androidx.compose.ui.unit.dp
+import androidx.glance.text.*
+import androidx.glance.unit.ColorProvider
 import kotlinx.coroutines.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+// Carta, until the app hands over its theme.
+private val cartaLight=mapOf("paper" to "#F8F5F0","ink" to "#221D18","ink-2" to "#5B544C","ink-3" to "#6E6860","accent" to "#9F4C2A")
+private val cartaDark=mapOf("paper" to "#171412","ink" to "#EAE5DD","ink-2" to "#BDB6AE","ink-3" to "#9D978F","accent" to "#E7986F")
 
 object CaptureSurfaces {
  fun lockedPreviews(context:Context)=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE).getBoolean("app-lock-enabled",false)
  fun refreshWidgets(context:Context) {CoroutineScope(Dispatchers.IO).launch {CaptureWidget().updateAll(context)}}
  fun enabled(context:Context,id:String)=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE).getBoolean(id,true)
  fun intent(context:Context,dictate:Boolean=false)=Intent().setClassName(context.packageName,"io.theficos.spunto.CaptureActivity").putExtra("dictate",dictate).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
- fun cacheSlip(context:Context,id:String?,text:String?) {
+ /** The day's slip for the taller widget, with the day its note was written for the overline. */
+ fun cacheSlip(context:Context,id:String?,text:String?,writtenAt:Long?=null) {
   val prefs=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
-  val safeId=if(lockedPreviews(context)) null else id;val safeText=if(lockedPreviews(context)) null else text
-  if(prefs.getString("slip-id",null)==safeId && prefs.getString("slip-text",null)==safeText) return
-  prefs.edit().putString("slip-id",safeId).putString("slip-text",safeText).apply()
+  val safeId=if(lockedPreviews(context)) null else id;val safeText=if(lockedPreviews(context)) null else text;val safeAt=if(safeId==null) 0L else writtenAt ?: 0L
+  if(prefs.getString("slip-id",null)==safeId && prefs.getString("slip-text",null)==safeText && prefs.getLong("slip-at",0L)==safeAt) return
+  prefs.edit().putString("slip-id",safeId).putString("slip-text",safeText).putLong("slip-at",safeAt).apply()
   CoroutineScope(Dispatchers.IO).launch { CaptureWidget().updateAll(context) }
+ }
+ /** The app's theme as the widget draws it; the widget then follows the system's day or night (03 A11). */
+ fun palette(context:Context,light:Map<String,String>,dark:Map<String,String>) {
+  fun encode(values:Map<String,String>)=cartaLight.keys.mapNotNull { role -> values[role]?.let {"$role=$it"} }.joinToString(";")
+  val prefs=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
+  if(prefs.getString("palette-light",null)==encode(light) && prefs.getString("palette-dark",null)==encode(dark)) return
+  prefs.edit().putString("palette-light",encode(light)).putString("palette-dark",encode(dark)).apply()
+  refreshWidgets(context)
+ }
+ internal fun colors(context:Context):(String)->ColorProvider {
+  val prefs=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
+  fun decode(key:String,fallback:Map<String,String>)=fallback+prefs.getString(key,null).orEmpty().split(';').mapNotNull { it.split('=').takeIf { pair -> pair.size==2 && pair[0] in fallback && Regex("#[0-9a-fA-F]{6}").matches(pair[1]) }?.let { (role,hex) -> role to hex } }
+  val light=decode("palette-light",cartaLight);val dark=decode("palette-dark",cartaDark)
+  fun color(hex:String)=Color(android.graphics.Color.parseColor(hex))
+  return { role -> ColorProvider(day=color(light.getValue(role)),night=color(dark.getValue(role))) }
  }
  fun apply(context:Context,quick:Boolean,dictation:Boolean) {
   context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE).edit().putBoolean("quick-capture",quick).putBoolean("dictation",dictation).apply()
@@ -34,19 +62,40 @@ object CaptureSurfaces {
   CoroutineScope(Dispatchers.IO).launch { CaptureWidget().updateAll(context) }
  }
 }
+/** "FROM YOUR NOTES · 19 MARCH 2025", as the timeline's slip writes it; a slip saved before its date was kept shows no date. */
+internal fun slipOverline(writtenAt:Long,zone:ZoneId=ZoneId.systemDefault(),locale:Locale=Locale.getDefault())=
+ ("From your notes"+if(writtenAt>0) " · "+DateTimeFormatter.ofPattern("d MMMM yyyy",locale).format(Instant.ofEpochMilli(writtenAt).atZone(zone)) else "").uppercase(locale)
+/** 03 A11: a paper "Write a note" pill with a mic when dictation is on; a taller widget adds the day's slip. */
 class CaptureWidget : GlanceAppWidget() {
- override suspend fun provideGlance(context:Context,id:GlanceId) {
-  provideContent {
-   Column(GlanceModifier.fillMaxSize().padding(16.dp)) {
-    Text("spunto.")
-    if(CaptureSurfaces.enabled(context,"quick-capture")) {
-     val slip=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
-     val slipId=if(CaptureSurfaces.lockedPreviews(context)) null else slip.getString("slip-id",null)
-     if(slipId!=null) { Text("From your notes"); Text(slip.getString("slip-text","").orEmpty()); Button("Open",onClick=actionStartActivity(Intent().setClassName(context.packageName,"io.theficos.spunto.MainActivity").putExtra("noteId",slipId))) }
-     Spacer(GlanceModifier.height(12.dp))
-     Button("New note",onClick=actionStartActivity(CaptureSurfaces.intent(context)))
-     if(CaptureSurfaces.enabled(context,"dictation")) Button("Dictate",onClick=actionStartActivity(CaptureSurfaces.intent(context,true)))
-    } else Text("Quick capture is off. Turn it on in Settings → Plugins.")
+ override val sizeMode=SizeMode.Exact
+ override suspend fun provideGlance(context:Context,id:GlanceId) { provideContent { CaptureWidgetContent(context) } }
+}
+@Composable private fun CaptureWidgetContent(context:Context) {
+ val color=CaptureSurfaces.colors(context)
+ val pill=GlanceModifier.fillMaxWidth().height(48.dp).cornerRadius(24.dp).background(color("paper"))
+ Column(GlanceModifier.fillMaxSize().padding(4.dp)) {
+  if(!CaptureSurfaces.enabled(context,"quick-capture")) {
+   Box(pill.padding(horizontal=20.dp),contentAlignment=Alignment.CenterStart) { Text("Quick capture is off. Turn it on in Settings → Plugins.",style=TextStyle(color=color("ink-2"),fontSize=13.sp),maxLines=2) }
+   return@Column
+  }
+  Row(pill,verticalAlignment=Alignment.CenterVertically) {
+   Row(GlanceModifier.defaultWeight().fillMaxHeight().padding(start=20.dp).clickable(actionStartActivity(CaptureSurfaces.intent(context))),verticalAlignment=Alignment.CenterVertically) {
+    Image(ImageProvider(R.drawable.ic_pencil),null,GlanceModifier.size(20.dp),colorFilter=ColorFilter.tint(color("ink-2")))
+    Spacer(GlanceModifier.width(12.dp))
+    Text("Write a note",style=TextStyle(color=color("ink-2"),fontSize=16.sp),maxLines=1)
+   }
+   if(CaptureSurfaces.enabled(context,"dictation")) Box(GlanceModifier.size(48.dp).clickable(actionStartActivity(CaptureSurfaces.intent(context,true))),contentAlignment=Alignment.Center) {
+    Image(ImageProvider(R.drawable.ic_mic),"Dictate a note",GlanceModifier.size(22.dp),colorFilter=ColorFilter.tint(color("accent")))
+   }
+  }
+  val slip=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
+  val slipId=if(CaptureSurfaces.lockedPreviews(context)) null else slip.getString("slip-id",null)
+  if(slipId!=null && LocalSize.current.height>=110.dp) {
+   Spacer(GlanceModifier.height(8.dp))
+   Column(GlanceModifier.fillMaxWidth().defaultWeight().cornerRadius(16.dp).background(color("paper")).padding(horizontal=20.dp,vertical=10.dp).clickable(actionStartActivity(Intent().setClassName(context.packageName,"io.theficos.spunto.MainActivity").putExtra("noteId",slipId)))) {
+    Text(slipOverline(slip.getLong("slip-at",0L)),style=TextStyle(color=color("ink-3"),fontSize=11.sp,fontWeight=FontWeight.Medium))
+    Spacer(GlanceModifier.height(4.dp))
+    Text(slip.getString("slip-text","").orEmpty(),style=TextStyle(color=color("ink"),fontSize=15.sp,fontFamily=FontFamily.Serif),maxLines=2)
    }
   }
  }

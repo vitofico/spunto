@@ -50,6 +50,7 @@ export function PairDevice() {
   const [copyStatus, setCopyStatus] = useState("");
   const [now, setNow] = useState(Date.now);
   const generation = useRef(0);
+  const trigger = useRef<HTMLButtonElement>(null);
   const expires = pairing ? Date.parse(pairing.expires_at) : 0;
   const expired = !!pairing && (!Number.isFinite(expires) || expires <= now);
   useEffect(() => {
@@ -93,13 +94,14 @@ export function PairDevice() {
   const payload = pairing ? pairingPayload(pairing) : "";
   return (
     <>
-      <button onClick={() => void create()} disabled={pending}>
+      <button ref={trigger} onClick={() => void create()} disabled={pending}>
         {pending ? "Creating code…" : "Pair an Android device"}
       </button>
       {error && <p role="alert">{error}</p>}
       {pairing && (
         <Dialog
           title="Pair an Android device"
+          opener={trigger.current}
           onClose={close}
           footer={<button onClick={close}>Close</button>}
         >

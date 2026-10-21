@@ -336,6 +336,20 @@ def test_parameter_translation_preserves_literals():
     assert args == ["x", "X", 1]
 
 
+def test_ranked_search_translation_scores_without_fts5_rank():
+    sql, args, _ = _translate(
+        "SELECT id FROM (SELECT n.id,n.updated_at,note_fts.rank AS score FROM note n"
+        " JOIN note_fts ON note_fts.rowid=n.rowid WHERE note_fts MATCH ? AND n.trashed_at IS NULL"
+        " AND note_fts.rank MATCH 'bm25(2.0,1.0,0.5)' ORDER BY note_fts.rank LIMIT 50) AS ranked"
+        " ORDER BY score,updated_at DESC,id DESC",
+        ["plan"],
+    )
+    assert "note_fts.rank" not in sql
+    assert "-ts_rank_cd(note_fts.document,to_tsquery('simple',%s)) AS score" in sql
+    assert sql.count("%s") == len(args) == 3
+    assert len(set(args)) == 1
+
+
 async def test_pgvector_privacy_retrieval_model_switch_and_workspace_isolation(pg):
     from test_vectors import Embeddings
 

@@ -41,6 +41,8 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
    if(state.serverUrl.isNotEmpty() && state.serverUrl!=serverUrl) return@withLock SyncStatus.Waiting("different_server").also { mutableState.value=it }
    if(state.replicaId.isNotEmpty() && state.replicaId!=config.replicaId) return@withLock SyncStatus.Waiting("different_identity").also {mutableState.value=it}
    state=state.copy(replicaId=config.replicaId);ownedTransaction {dao.putState(state)}
+   // Older builds kept a refused decision queued as a refused note change; the server's copies settle it instead.
+   ownedTransaction { dao.outbox().filter { it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="suggestion.decide" }.forEach { dao.removeOutbox(it.opId);it.noteId?.let { id -> dao.putRefresh(RefreshNoteEntity(id)) } } }
    val previousEpoch=state.epoch
    val meta=api.meta(); val epoch=meta["sync_epoch"]?.jsonPrimitive?.content ?: state.epoch
    val maximum=(meta["max_upload_bytes"] as? JsonPrimitive)?.takeUnless {it.isString}?.longOrNull?.takeIf {it in 1_000_000L..1_000_000_000L}?:LEGACY_UPLOAD_LIMIT
@@ -89,7 +91,7 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
    val manifest=api.manifest()
    val catalog=api.get("/api/v1/plugins")
    persistPluginSnapshot(repository,config,epoch,manifest,catalog,configProvider=configProvider)
-   val pending=dao.outbox().size
+   val pending=dao.outbox().count { it.error==null }
    repository.record("complete")
    SyncStatus.Complete(pending).also { mutableState.value=it }
   } catch(cancelled:CancellationException) { throw cancelled }
@@ -129,11 +131,19 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
  private suspend fun acknowledge(result:PushResult,batch:List<OutboxEntity>) = ownedTransaction {
   val dao=repository.dao; val sent=batch.firstOrNull { it.opId==result.opId }?:return@ownedTransaction
   val effective=if(result.status=="duplicate") result.original?:result else result
-  if(effective.status=="rejected") { dao.reject(sent.opId,effective.code?:"rejected"); sent.noteId?.let { dao.get(it)?.note()?.let { note -> repository.putNote(note.copy(syncError=effective.code?:"rejected",pending=true)) } }; return@ownedTransaction }
+  val sentOperation=Json.decodeFromString<OutboxOperation>(sent.payload)
+  if(effective.status=="rejected") {
+   // A refused decision (decided elsewhere first) leaves the server's copies in charge. A refused note change keeps
+   // its row, so pulls never overwrite the words, but leaves the waiting count until the owner settles it on the note.
+   if(sentOperation.type=="suggestion.decide") { dao.removeOutbox(sent.opId);(listOfNotNull(sent.noteId)+sentOperation.affectedNoteIds).distinct().forEach { dao.putRefresh(RefreshNoteEntity(it)) } }
+   else { dao.reject(sent.opId,effective.code?:"rejected"); sent.noteId?.let { dao.get(it)?.note()?.let { note -> repository.putNote(note.copy(syncError=effective.code?:"rejected",pending=true)) } } }
+   return@ownedTransaction
+  }
   if(effective.status !in listOf("applied","merged","conflict","duplicate")) return@ownedTransaction
   dao.removeOutbox(sent.opId)
-  val sentOperation=Json.decodeFromString<OutboxOperation>(sent.payload)
   if(sentOperation.type=="note.restore") sentOperation.supersededOpIds.forEach { dao.removeOutbox(it) }
+  // The server holds this note's latest words now, so changes it refused earlier are settled.
+  if(sentOperation.type in listOf("note.create","note.update","note.restore")) dao.outbox().filter { it.noteId==sent.noteId && it.error!=null }.forEach { dao.removeOutbox(it.opId) }
   val id=sent.noteId?:return@ownedTransaction
   val note=dao.get(id)?.note()?:return@ownedTransaction
   val remaining=dao.outbox().filter { it.noteId==id }
@@ -176,6 +186,9 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
 class ChangeWaiter(private val configProvider:suspend ()->AuthConfig?,private val repository:NotesRepository,private val engine:SyncEngine) {
  constructor(auth:AuthStore,repository:NotesRepository,engine:SyncEngine):this({auth.config.first()},repository,engine)
  suspend fun run() {
+  // Our cursor, and the server position a complete sync could not move it past: wait from there, or an
+  // older server whose pull cursor lags behind its change_seq answers "changed" at once, forever.
+  var settled:Pair<String,String>?=null
   while(currentCoroutineContext().isActive) {
    val config=configProvider()?:return
    if(!config.ownsReplica(repository.replicaId)) return
@@ -183,8 +196,8 @@ class ChangeWaiter(private val configProvider:suspend ()->AuthConfig?,private va
     val state=repository.dao.state()
     if(state!=null && state.serverUrl.isNotEmpty() && state.serverUrl!=config.serverUrl.trimEnd('/')) return
     if(state==null || state.cursor.isEmpty()) { engine.sync();delay(1000);continue }
-    val response=ApiClient(config).waitForChanges(state.cursor,state.pluginsRev)
-    if(response["changed"]?.jsonPrimitive?.booleanOrNull==true) engine.sync()
+    val response=ApiClient(config).waitForChanges(settled?.takeIf {it.first==state.cursor}?.second ?: state.cursor,state.pluginsRev)
+    if(response["changed"]?.jsonPrimitive?.booleanOrNull==true && engine.sync() is SyncStatus.Complete && repository.dao.state()?.cursor==state.cursor) settled=response["cursor"]?.jsonPrimitive?.contentOrNull?.let {state.cursor to it}
    }
    catch(cancelled:CancellationException) { throw cancelled }
    catch(error:Exception) { if(error is ApiException && error.status==401) { engine.sync(); return }; delay(30_000) }

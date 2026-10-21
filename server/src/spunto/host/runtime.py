@@ -773,7 +773,7 @@ class Host:
                     "vision": "a vision model",
                 }[capability]
                 if self.gateway is None:
-                    return f"Needs {title}. Choose one in Settings → AI."
+                    return f"Needs {title}. AI is off."
                 try:
                     profile = self.gateway.profile_for(
                         requirement, self.states[manifest["id"]].get("ai_route")

@@ -29,7 +29,7 @@ fun timelineQuery(spec:TimelineSpec):SupportSQLiteQuery = runCatching {
   TimelineKind.HOME -> clauses+="n.archived=0"
   TimelineKind.ARCHIVE -> clauses+="n.archived=1"
   TimelineKind.TRASH -> clauses+="n.trashed=1"
-  TimelineKind.LABEL -> label(spec.label)
+  TimelineKind.LABEL -> { clauses+="n.archived=0";label(spec.label) }
   TimelineKind.PLUGIN -> {
    require(spec.pluginId.isNotEmpty())
    val allowed=setOf("labels","no_labels","source","open_tasks","pinned","archived","days","created_within_days","member","not_member")

@@ -87,3 +87,30 @@ it("ships the identical server palettes and all light/dark/system CSS previews",
     );
   }
 });
+it("generates fixed type, space, radius and motion tokens and darker depth in dark modes", () => {
+  const css = readFileSync("src/styles/tokens.css", "utf8");
+  const block = (selector: string) => {
+    const start = css.indexOf(selector + "{");
+    expect(start).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf("}", start));
+  };
+  const root = block("\n:root");
+  for (const px of source.spacing) expect(root).toContain(`--s-${px}:${px}px;`);
+  for (const [key, px] of Object.entries(source.radius))
+    expect(root).toContain(`--r-${key}:${px}px;`);
+  expect(root).toContain("--t-meta:400 0.78125rem/1.28;");
+  expect(root).toContain("--t-overline-tracking:0.08em;");
+  expect(root).toContain("--dur-2:180ms;");
+  expect(root).toContain("--ease-out:cubic-bezier(0.2, 0.8, 0.2, 1);");
+  expect(root).toContain("--measure:36rem;");
+  expect(root).toContain("--scrim:rgb(var(--sh) / 0.32);");
+  for (const dark of [
+    block(':root[data-mode="dark"]'),
+    block('\n:root[data-mode="system"]'),
+  ])
+    expect(dark).toContain("--scrim:rgb(var(--sh) / 0.5);");
+  for (const modes of Object.values(source.themes) as {
+    dark: { sh: string };
+  }[])
+    expect(modes.dark.sh).toBe("0 0 0");
+});

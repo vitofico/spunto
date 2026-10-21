@@ -39,7 +39,7 @@ internal data class NativePluginFacts(val raw:JsonObject,private val manifestAct
  val permissionReviewRequired=wantedOn && permissions!=null && granted!=null && !granted.toSet().containsAll(permissions)
  val origin=when(raw.pluginText("origin")) { "bundled" -> "Built in"; "operator" -> "Third party"; else -> "Origin unavailable" }
  val contribution=if(removed) JsonObject(emptyMap()) else raw["contributes"] as? JsonObject ?: JsonObject(emptyMap())
- val facts:List<String> get()=pluginDestinationFacts(this)+pluginScheduleFacts(this)
+ val facts:List<String> get()=pluginDestinationFacts(this,pluginMissingModel(this).takeIf {state=="waiting"})+pluginScheduleFacts(this)
  val permissionLines:List<String> get()=raw.pluginStrings("permission_sentences")?.takeIf {it.isNotEmpty()} ?: permissions.orEmpty().map(::pluginPermissionSentence)
  val slots:List<String> get()=contribution.keys.mapNotNull { when(it) {
   "suggestions" -> "Suggestions under notes and in Review"; "review" -> "Review"; "panel" -> "About this note"; "meta" -> "Note details"; "slip" -> "Daily slip"; "commands" -> "Commands"; "views" -> "Views"; "ranking" -> "Search ranking"; "mcp_tools" -> "Agent tools"; "schedules" -> "Scheduled runs"; else -> null
@@ -61,13 +61,33 @@ internal fun pluginPermissionSentence(permission:String):String=when(permission)
  permission.startsWith("ai.") -> "Uses ${permission.removePrefix("ai.")} AI"; permission.startsWith("net.out:") -> "Talks to ${permission.removePrefix("net.out:")}"; else -> permission
  }
 }
-internal fun pluginDestinationFacts(plugin:NativePluginFacts):List<String> {
+/** Permission sentences read as what the plugin "will" do: "Reads your notes" becomes "Read your notes", "Never reads" becomes "Never read". */
+internal fun pluginWillSentence(sentence:String):String {
+ if(sentence.startsWith("Never ")) return "Never "+pluginWillSentence(sentence.removePrefix("Never "))
+ val verb=sentence.substringBefore(' ');val rest=sentence.substring(verb.length)
+ val base=when {
+  verb.length<4 || !verb.endsWith("s") || verb.endsWith("ss") -> verb
+  Regex("(ch|sh|x|ss)es$").containsMatchIn(verb) -> verb.dropLast(2)
+  else -> verb.dropLast(1)
+ }
+ return base+rest
+}
+/** The AI capability a waiting plugin is missing a model for, from the host's destinations; null when nothing is missing. */
+internal fun pluginMissingModel(plugin:NativePluginFacts):String? {
+ val destinations=plugin.raw["ai_destinations"] as? JsonObject
+ return plugin.permissions.orEmpty().filter {it.startsWith("ai.")}.map {it.removePrefix("ai.")}.firstOrNull {(destinations?.get(it) as? JsonObject)?.pluginText("model").isNullOrBlank()}
+}
+internal fun aiModelName(capability:String)=when(capability) { "chat" -> "a chat model"; "embed" -> "an embedding model"; "vision" -> "a vision model"; "transcribe" -> "a transcription model"; else -> "an AI model" }
+/** The waiting line in the switch's place (03 §6.4): "Needs a chat model". */
+internal fun pluginWaitingLine(plugin:NativePluginFacts):String = pluginMissingModel(plugin)?.let {"Needs ${aiModelName(it)}"} ?: "Waiting for a requirement"
+/** Where each AI capability sends note text; [said] is a missing model the waiting line already names, so it is left out. */
+internal fun pluginDestinationFacts(plugin:NativePluginFacts,said:String?=null):List<String> {
  if(plugin.removed) return listOf("Removed · retained access history only")
  val result=mutableListOf<String>()
  val destinations=plugin.raw["ai_destinations"] as? JsonObject ?: JsonObject(emptyMap())
  val capabilities=mapOf("chat" to "Chat","embed" to "Embeddings","vision" to "Vision","transcribe" to "Transcription")
  plugin.permissions.orEmpty().filter {it.startsWith("ai.")}.forEach {permission ->
-  val capability=permission.removePrefix("ai.");val label=capabilities[capability] ?: return@forEach
+  val capability=permission.removePrefix("ai.");val label=capabilities[capability]?.takeIf {capability!=said} ?: return@forEach
   val destination=destinations[capability] as? JsonObject
   val model=destination?.pluginText("model");val host=destination?.pluginText("host");val outside=destination?.pluginFlag("leaves_network")
   result+=if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) "$label: note text to $model at $host, ${if(outside) "outside your network" else "on your network"}" else "$label: no model is set up"
@@ -76,7 +96,7 @@ internal fun pluginDestinationFacts(plugin:NativePluginFacts):List<String> {
  val network=plugin.raw.pluginStrings("network_destinations").orEmpty().filter {it.isNotBlank()}.distinct()
  network.forEach {result+="Talks to $it"}
  if(plugin.permissions.orEmpty().any {it.startsWith("net.out:")} && network.isEmpty()) result+="Outbound network destinations are unavailable"
- if(result.isEmpty()) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") "Recognition uses this phone or its speech provider, according to this phone’s setting" else if(plugin.raw.pluginText("kind")=="device") "Stays on the phone" else "Stays on your server"
+ if(result.isEmpty() && said==null) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") "Recognition uses this phone or its speech provider, according to this phone’s setting" else if(plugin.raw.pluginText("kind")=="device") "Stays on the phone" else "Stays on your server"
  return result
 }
 internal fun pluginScheduleFacts(plugin:NativePluginFacts):List<String> {
@@ -126,7 +146,7 @@ internal fun pluginPageCacheKey(server:String,plugin:NativePluginFacts):String {
 internal fun pluginWebUrl(server:String,httpConsent:Boolean,path:String):String?=runCatching {
  val root=URI(server);require(root.scheme in setOf("http","https") && root.host!=null && root.rawUserInfo==null && root.rawQuery==null && root.rawFragment==null && root.rawPath in setOf("","/"))
  require(root.scheme=="https" || httpConsent)
- require(path in setOf("/settings/plugins","/settings/ai","/status") || path.startsWith("/settings/plugins/") && pluginIdPattern.matches(path.removePrefix("/settings/plugins/")))
+ require(path in setOf("/settings/plugins","/settings/ai","/settings/devices","/status") || path.startsWith("/settings/plugins/") && pluginIdPattern.matches(path.removePrefix("/settings/plugins/")))
  server.trimEnd('/')+path
 }.getOrNull()
 internal data class PluginUndo(val pluginId:String,val server:String,val permissions:List<String>,val grants:Set<String>,val expiresAt:Long)

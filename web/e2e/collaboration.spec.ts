@@ -35,7 +35,8 @@ async function fixture(page: Page) {
         contentType: "application/json",
         body: JSON.stringify(data),
       });
-    if (path.endsWith("/changes/wait")) return route.abort();
+    // A quiet server holds the long poll open; a failed feed now reads as offline.
+    if (path.endsWith("/changes/wait")) return;
     if (path.endsWith("/meta"))
       return json({
         setup_pending: false,
@@ -180,15 +181,15 @@ test("workspace selection survives reload while labels, drafts and viewer contro
   await page.getByLabel("Current space").selectOption(team.id);
   await expect(page.getByText("Studio note", { exact: true })).toBeVisible();
   await expect(page.getByLabel("New note")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Pin", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Actions for/ })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("link", { name: "studio 1", exact: false }),
   ).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(
-    page.getByRole("button", { name: "New note", exact: true }),
+    page.getByRole("option", { name: "New note", exact: true }),
   ).toHaveCount(0);
   await page.keyboard.press("Escape");
   state.noteSpaces.length = 0;

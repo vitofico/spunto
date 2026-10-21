@@ -1,11 +1,10 @@
 import { test, expect } from "@playwright/test";
 
-test("password-only unlock leads to a private editable and clearable owner profile", async ({
+test("password-only unlock leads to a single-owner profile with password and sign out", async ({
   page,
 }, testInfo) => {
   let authenticated = false;
-  let name = "";
-  const patches: unknown[] = [];
+  let loggedOut = false;
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -41,24 +40,26 @@ test("password-only unlock leads to a private editable and clearable owner profi
       authenticated = true;
       return route.fulfill({ status: 204 });
     }
-    if (path === "/api/v1/changes/wait") return route.abort();
+    if (path === "/api/v1/auth/logout") {
+      expect(request.method()).toBe("POST");
+      authenticated = false;
+      loggedOut = true;
+      return route.fulfill({ status: 204 });
+    }
+    // A quiet server holds the long poll open; a failed feed now reads as offline.
+    if (path === "/api/v1/changes/wait") return;
     if (path === "/api/v1/plugins/manifest")
       return json({ ui: 1, plugins_rev: 0, plugins: [] });
     if (path === "/api/v1/labels") return json({ labels: [], total: 0 });
     if (path === "/api/v1/settings") {
       expect(authenticated).toBe(true);
-      if (request.method() === "PUT") {
-        const patch = request.postDataJSON();
-        patches.push(patch);
-        expect(Object.keys(patch)).toEqual(["owner_display_name"]);
-        name = patch.owner_display_name;
-      }
+      expect(request.method()).toBe("GET");
       return json({
         theme: "carta",
         plugin_order: [],
         hidden_views: [],
         hidden_mcp_tools: [],
-        owner_display_name: name,
+        owner_display_name: "",
       });
     }
     return json({ code: "fixture_route_missing" }, 404);
@@ -90,27 +91,21 @@ test("password-only unlock leads to a private editable and clearable owner profi
   await expect(
     page.getByRole("heading", { name: "Profile", exact: true }),
   ).toBeVisible();
-  const input = page.getByLabel("Display name (optional)", { exact: true });
-  const literal = "Élodie 李 <owner>";
-  await input.fill(`  ${literal}  `);
-  await page.getByRole("button", { name: "Save profile" }).click();
-  await expect(page.getByRole("main").getByRole("status")).toHaveText(
-    "Profile saved.",
-  );
-  await expect(input).toHaveValue(literal);
-  await page.reload();
-  await expect(input).toHaveValue(literal);
+  // A single-owner server has no use for a display name; the password lives here.
+  await expect(page.getByLabel(/Display name/)).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Spaces", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel(/New password/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show guide", exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("profile.png"),
   });
-  await input.clear();
-  await page.getByRole("button", { name: "Save profile" }).click();
-  await expect(page.getByRole("main").getByRole("status")).toHaveText(
-    "Profile saved.",
-  );
-  await expect(input).toHaveValue("");
-  expect(patches).toEqual([
-    { owner_display_name: literal },
-    { owner_display_name: "" },
-  ]);
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Unlock your Spunto" }),
+  ).toBeVisible();
+  expect(loggedOut).toBe(true);
 });

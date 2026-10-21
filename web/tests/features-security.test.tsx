@@ -13,6 +13,7 @@ import {
   validateSettings,
 } from "../src/features/SchemaForm";
 import { visibleSuggestions } from "../src/features/Slots";
+import { api } from "../src/lib/api";
 import type { Note, Plugin, Suggestion } from "../src/lib/types";
 afterEach(cleanup);
 const wrap = (child: React.ReactNode) =>
@@ -72,6 +73,32 @@ describe("closed plugin vocabulary", () => {
     expect(
       validComponent({ type: "command", id: "x", title: "A".repeat(25) }),
     ).toBe(false);
+  });
+  it("names a referenced note by its plain title, never its raw Markdown", async () => {
+    const note = vi.spyOn(api, "note").mockImplementation(
+      async (id) =>
+        ({
+          id,
+          body: id === "titled" ? "## **Bold** idea #work\n\nMore" : "#solo",
+          title: id === "titled" ? "Bold idea" : "",
+        }) as Note,
+    );
+    wrap(
+      <VocabularyItem
+        value={{
+          type: "notes",
+          items: [{ id: "titled", reason: "Related" }, { id: "untitled" }],
+        }}
+      />,
+    );
+    expect(
+      (await screen.findByRole("link", { name: /^Bold idea/ })).textContent,
+    ).toBe("Bold idea · Related");
+    expect(
+      await screen.findByRole("link", { name: "Untitled note" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    note.mockRestore();
   });
   it("limits fallback recursion and draws precomputed hunks as escaped text", () => {
     const { container } = wrap(

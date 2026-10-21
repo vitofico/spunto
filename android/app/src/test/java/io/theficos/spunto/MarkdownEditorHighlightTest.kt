@@ -3,7 +3,6 @@ package io.theficos.spunto
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontFamily
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -20,7 +19,7 @@ class MarkdownEditorHighlightTest {
   }
   val label=transformed.text.spanStyles.single {it.item.color==Color.Red}
   assertEquals("#project/spunto",body.substring(label.start,label.end))
-  assertTrue(transformed.text.spanStyles.any {it.item.fontFamily==FontFamily.Monospace && body.substring(it.start,it.end)=="`#not-label`"})
+  assertTrue(transformed.text.spanStyles.any {it.item.fontFamily==io.theficos.spunto.core.design.monoFont() && body.substring(it.start,it.end)=="`#not-label`"})
  }
  @Test fun liveRecognitionColourWinsOnlyItsExactRangeAndNeverChangesSource() {
   val body="# Heading\nnew words #label"

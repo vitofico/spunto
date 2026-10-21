@@ -34,16 +34,12 @@
   font-display: swap;
 }
 :root {
-  --f-serif: Literata, Georgia, serif;
-  --f-sans: Inter, system-ui, sans-serif;
-  --f-mono: "JetBrains Mono", monospace;
   --body-face: var(--f-serif);
-  --body-size: 1.0625rem;
-  --surface: var(--raised);
-  --line: var(--rule);
-  --e2: 0 1px 2px rgb(var(--sh)/0.06), 0 8px 24px rgb(var(--sh)/0.08);
-  --e3: 0 2px 6px rgb(var(--sh)/0.08), 0 24px 64px rgb(var(--sh)/0.18);
-  --scrim: rgb(var(--sh)/0.32);
+  --body-size: var(--t-body-size);
+  --column-width: calc(var(--measure) + 2 * var(--s-48));
+  /* Settings: a 155px section list beside a section in the reading measure (03 W8). */
+  --settings-width: calc(155px + var(--s-48) + var(--measure));
+  accent-color: var(--accent);
   font-synthesis: none;
 }
 * {
@@ -53,7 +49,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 400 0.875rem/1.5 var(--f-sans);
+  font: var(--t-ui) var(--f-sans);
   -webkit-font-smoothing: antialiased;
 }
 .app[hidden] {
@@ -82,8 +78,10 @@ a {
   color: var(--accent);
   text-decoration: none;
 }
-a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  a:hover {
+    text-decoration: underline;
+  }
 }
 button:disabled {
   opacity: 0.5;
@@ -95,11 +93,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-[role="link"][tabindex]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+  outline-offset: var(--s-2);
 }
 ::selection {
   background: var(--highlight);
@@ -109,18 +103,21 @@ button.primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--r-full);
   min-height: 36px;
-  padding: 7px 14px;
+  padding: var(--s-8) var(--s-12);
   max-width: 100%;
-  line-height: 1.25rem;
+  line-height: var(--t-ui-line);
   text-align: center;
   overflow-wrap: anywhere;
   color: var(--ink-2);
+  transition: background-color var(--dur-1) var(--ease-out);
 }
-.button:not(:disabled):hover {
-  background: var(--sunken);
-  text-decoration: none;
+@media (hover: hover) {
+  .button:not(:disabled):hover {
+    background: var(--sunken);
+    text-decoration: none;
+  }
 }
 .primary,
 button.primary {
@@ -128,8 +125,10 @@ button.primary {
   color: var(--on-accent);
   font-weight: 500;
 }
-.primary:not(:disabled):hover {
-  background: var(--accent-strong);
+@media (hover: hover) {
+  .primary:not(:disabled):hover {
+    background: var(--accent-strong);
+  }
 }
 .muted {
   color: var(--ink-3);
@@ -141,53 +140,76 @@ button.primary {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--field);
-  border-radius: 10px;
+  border-radius: var(--r-12);
   background: var(--raised);
-  padding: 11px 12px;
+  padding: var(--s-12);
+}
+/* Rounded text fields show focus on their own edge, never as a second ring. */
+.field:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+/* A choice looks like the other fields in every engine (WebKit draws a small popup
+   button otherwise); two triangles in a token colour make its chevron. */
+select.field {
+  appearance: none;
+  padding-right: var(--s-32);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position:
+    calc(100% - 19px) 50%,
+    calc(100% - 14px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
 }
 .row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--s-12);
 }
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--s-20);
 }
 .card {
   border: 1px solid var(--rule);
   background: var(--raised);
-  border-radius: 14px;
-  padding: 20px;
+  border-radius: var(--r-14);
+  padding: var(--s-20);
 }
 .page-title {
-  font: 600 1.5rem/1.9375rem var(--f-serif);
-  margin: 0 0 24px;
+  font: var(--t-title) var(--f-serif);
+  margin: 0 0 var(--s-24);
   overflow-wrap: anywhere;
 }
 .overline {
-  font-size: 0.71875rem;
-  font-weight: 500;
+  font: var(--t-overline) var(--f-sans);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--t-overline-tracking);
   color: var(--ink-3);
 }
 .error {
   color: var(--danger);
-  font-size: 0.8125rem;
+  font-size: var(--t-meta-size);
   overflow-wrap: anywhere;
 }
 .page-status {
-  margin: 28px 0;
+  margin: var(--s-24) 0;
   color: var(--ink-2);
 }
 .sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 code,
 pre {
@@ -205,17 +227,17 @@ pre {
   inset: 0 auto 0 0;
   width: 248px;
   border-right: 1px solid var(--rule);
-  padding: 36px 24px 24px;
+  padding: var(--s-32) var(--s-24) var(--s-24);
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: var(--s-24);
   overflow: auto;
   background: var(--paper);
   z-index: 20;
 }
 .collapsed .rail {
   width: 76px;
-  padding: 36px 12px;
+  padding: var(--s-32) var(--s-12);
 }
 .wordmark {
   font: 600 1.875rem/1 var(--f-serif);
@@ -230,30 +252,32 @@ pre {
 }
 .rail-search {
   width: 100%;
-  border: 1px solid var(--rule-strong);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border: 1px solid var(--field);
+  border-radius: var(--r-12);
+  padding: var(--s-12);
   justify-content: space-between;
   color: var(--ink-3);
 }
 kbd {
-  font: 0.6875rem var(--f-mono);
+  font: var(--t-overline-size) var(--f-mono);
   color: var(--ink-3);
 }
 .rail nav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--s-2);
 }
+/* The inline padding matches the label tree's base indent in App.tsx. */
 .rail nav a {
   color: var(--ink-2);
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-8);
   display: flex;
-  gap: 10px;
+  gap: var(--s-8);
   align-items: center;
   min-width: 0;
   overflow-wrap: anywhere;
+  transition: background-color var(--dur-1) var(--ease-out);
 }
 .rail nav a > .rail-label,
 .label-tree a > span:nth-child(2) {
@@ -263,7 +287,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--s-12);
   flex-wrap: wrap;
 }
 .rail-close {
@@ -274,20 +298,34 @@ kbd {
   color: var(--ink);
   font-weight: 500;
 }
+@media (hover: hover) {
+  .rail nav a:hover {
+    background: var(--sunken);
+    text-decoration: none;
+  }
+}
+/* Only the label list scrolls; everything else in the rail keeps its height, so
+   the footer can never paint over (and take clicks meant for) a label. */
+.rail > :not(.label-tree) {
+  flex-shrink: 0;
+}
 .label-tree {
-  min-height: 60px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .label-tree a .count {
   margin-left: auto;
   color: var(--ink-3);
-  font-size: 0.75rem;
+  font-size: var(--t-meta-size);
 }
 .rail-foot {
   margin-top: auto;
 }
 .rail-foot p {
-  margin: 14px 10px 0;
-  font-size: 0.75rem;
+  margin: var(--s-12) var(--s-12) 0;
+  font-size: var(--t-meta-size);
   color: var(--ink-3);
 }
 .collapsed .rail-label,
@@ -299,32 +337,35 @@ kbd {
   display: none;
 }
 .column {
-  max-width: 720px;
-  padding: 48px 48px 100px;
+  max-width: var(--column-width);
+  padding: var(--s-48) var(--s-48) var(--s-96);
   margin: auto;
   min-width: 0;
+}
+.column.wide-column {
+  max-width: calc(var(--settings-width) + 2 * var(--s-48));
 }
 .topbar {
   display: none;
 }
 .banner {
   background: var(--sunken);
-  font-size: 0.75rem;
-  padding: 9px 12px;
-  margin-bottom: 24px;
-  border-radius: 6px;
+  font-size: var(--t-meta-size);
+  padding: var(--s-8) var(--s-12);
+  margin-bottom: var(--s-24);
+  border-radius: var(--r-8);
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
+.banner-short {
+  display: none;
+}
 .composer {
   position: relative;
-  border: 1px solid var(--rule-strong);
+  border: 1px solid var(--field);
   background: var(--raised);
-  border-radius: 14px;
-  margin-bottom: 36px;
-}
-.composer:focus-within {
-  border-color: var(--field);
+  border-radius: var(--r-14);
+  margin-bottom: var(--s-32);
 }
 .editor-wrap {
   position: relative;
@@ -332,10 +373,11 @@ kbd {
 }
 .editor-wrap textarea,
 .highlight {
-  font: 400 var(--body-size)/1.6 var(--body-face);
+  font: var(--t-body-weight) var(--body-size) / var(--body-line)
+    var(--body-face);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  padding: 20px 20px 12px;
+  padding: var(--s-20) var(--s-20) var(--s-12);
   width: 100%;
   margin: 0;
   border: 0;
@@ -359,10 +401,17 @@ kbd {
 .editor-wrap textarea:focus {
   outline: none;
 }
-.composer:focus-within,
-.note-editor:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+/* Browsers treat every focused text area as :focus-visible, so the editors mark
+   focus with one rounded accent edge instead of an outer ring. */
+.note-editor {
+  border-radius: var(--r-14);
+}
+.composer:has(textarea:focus) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.note-editor:has(textarea:focus) {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .highlight {
   position: absolute;
@@ -380,8 +429,8 @@ kbd {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px 12px;
-  gap: 8px;
+  padding: var(--s-8) var(--s-12) var(--s-12);
+  gap: var(--s-8);
   flex-wrap: wrap;
 }
 .composer-tools > .row:last-child {
@@ -389,7 +438,7 @@ kbd {
 }
 .composer > .error,
 .note-editor > .error {
-  padding: 0 16px 12px;
+  padding: 0 var(--s-16) var(--s-12);
   margin: 0;
 }
 .composer-tools button {
@@ -399,65 +448,197 @@ kbd {
   min-width: 68px;
 }
 .composer-hint {
-  font-size: 0.6875rem;
+  font-size: var(--t-overline-size);
   color: var(--ink-3);
 }
 .autocomplete {
   position: absolute;
-  top: calc(100% - 8px);
-  left: 16px;
+  top: calc(100% - var(--s-8));
+  left: var(--s-16);
   min-width: 220px;
-  max-width: calc(100% - 32px);
-  padding: 6px;
+  max-width: calc(100% - var(--s-32));
+  padding: var(--s-8);
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: var(--r-14);
   box-shadow: var(--e2);
   background: var(--raised);
   z-index: 5;
 }
-.autocomplete button {
-  display: block;
-  padding: 9px 12px;
-  width: 100%;
-  text-align: left;
+.autocomplete [role="option"] {
+  padding: var(--s-8) var(--s-12);
   color: var(--accent);
-  border-radius: 8px;
+  border-radius: var(--r-8);
+  cursor: pointer;
 }
-.autocomplete button.active {
+.autocomplete [role="option"].active {
   background: var(--sunken);
 }
-.day {
-  margin: 34px 0 20px;
+.autocomplete .muted {
+  margin-right: var(--s-4);
 }
+.day {
+  margin: var(--s-32) 0 var(--s-12);
+}
+/* Entries are passages, not cards: 20px apart across one hairline (03 §5.1). */
 .entry {
   position: relative;
-  margin: 0 0 26px;
-  padding: 0 0 24px;
+  padding: var(--s-8) 0 var(--s-12);
   border-bottom: 1px solid var(--rule);
   overflow-wrap: anywhere;
 }
 .entry-main {
-  display: block;
   color: var(--ink);
-  border-radius: 4px;
+  cursor: pointer;
 }
-.entry-main:hover {
-  text-decoration: none;
-}
+/* The time hangs in the 64px gutter, centred on the first line of text. */
 .entry .time {
   position: absolute;
-  left: -64px;
-  top: 4px;
-  font: 0.78125rem var(--f-sans);
+  left: calc(-1 * var(--s-64));
+  top: calc(
+    var(--s-8) +
+      (
+        var(--body-size) * var(--body-line) - var(--t-meta-size) *
+          var(--t-meta-line)
+      ) /
+      2
+  );
+  font: var(--t-meta) var(--f-sans);
   font-variant-numeric: tabular-nums;
   color: var(--ink-3);
+  border-radius: var(--r-4);
+}
+.entry .time .icon {
+  width: 16px;
+  height: 16px;
+}
+@media (hover: hover) {
+  .entry a.time:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+}
+.entry.queued .entry-main {
+  animation: arrive var(--dur-flash) var(--ease-out);
+}
+@keyframes arrive {
+  from {
+    background: var(--highlight);
+  }
+}
+/* Shown only when a capture is still unsent after a moment. */
+.entry .waiting {
+  animation: hold 1.5s step-end;
+}
+@keyframes hold {
+  from {
+    visibility: hidden;
+  }
+}
+.entry > .more {
+  position: absolute;
+  top: var(--s-4);
+  right: calc(-1 * var(--s-48) + var(--s-8));
+}
+@media (hover: hover) and (min-width: 600px) {
+  .entry > .more:not([data-open]) .icon-button {
+    opacity: 0;
+    transition: opacity var(--dur-1) var(--ease-out);
+  }
+  .entry:is(:hover, :focus-within) > .more .icon-button {
+    opacity: 1;
+  }
+}
+.more {
+  position: relative;
+}
+.icon-button {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-4));
+  z-index: 30;
+  min-width: 180px;
+  padding: var(--s-4);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-14);
+  box-shadow: var(--e2);
+  display: flex;
+  flex-direction: column;
+}
+.menu [role="menuitem"] {
+  text-align: left;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-8);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.menu [role="menuitem"].danger {
+  color: var(--danger);
+}
+.menu [role="menuitem"]:focus-visible {
+  outline: none;
+  background: var(--sunken);
+}
+@media (hover: hover) {
+  .menu [role="menuitem"]:hover {
+    background: var(--sunken);
+  }
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+.chip .icon {
+  width: 14px;
+  height: 14px;
+}
+.agent-glyph {
+  font-family: var(--f-mono);
+}
+.entry-meta .conflict::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--warn);
+}
+.clamp[data-clamped] {
+  max-height: calc(8 * var(--body-size) * var(--body-line));
+  overflow: hidden;
+}
+.clamp[data-overflow] {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 2 * var(--body-size) * var(--body-line)),
+    transparent
+  );
+}
+.show-more {
+  margin-top: var(--s-4);
+  padding: var(--s-4) 0;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--f-sans);
+}
+@media (hover: hover) {
+  .show-more:hover {
+    color: var(--ink);
+  }
 }
 .note-body {
-  font: 400 var(--body-size)/1.6 var(--body-face);
+  font: var(--t-body-weight) var(--body-size) / var(--body-line)
+    var(--body-face);
   overflow-wrap: anywhere;
 }
 .note-body.machine {
-  font: 400 1rem/1.5625rem var(--f-sans);
+  font: var(--t-ui-lg) var(--f-sans);
 }
 .note-body p {
   margin: 0 0 0.6em;
@@ -468,8 +649,8 @@ kbd {
 .note-body h1,
 .note-body h2,
 .note-body h3 {
-  font: 600 1.1875rem/1.6875rem var(--body-face);
-  margin: 0 0 8px;
+  font: var(--t-heading) var(--body-face);
+  margin: 0 0 var(--s-8);
 }
 .note-body a {
   color: var(--accent);
@@ -477,18 +658,18 @@ kbd {
 .note-body pre {
   max-width: 100%;
   overflow: auto;
-  padding: 12px;
+  padding: var(--s-12);
   background: var(--sunken);
-  border-radius: 8px;
-  font-size: 0.84375rem;
-  line-height: 1.6;
+  border-radius: var(--r-8);
+  font-size: var(--t-mono-size);
+  line-height: var(--t-mono-line);
   overflow-wrap: normal;
 }
 .note-body code {
   font-size: 0.88em;
   background: var(--sunken);
-  border-radius: 4px;
-  padding: 2px 4px;
+  border-radius: var(--r-4);
+  padding: var(--s-2) var(--s-4);
 }
 .note-body pre code {
   padding: 0;
@@ -502,6 +683,32 @@ kbd {
 .note-body li + li {
   margin-top: 0.25em;
 }
+/* Task lists: the box hangs where a bullet would be; done items fade to ink-3. */
+.note-body li:has(> input[type="checkbox"], > p > input[type="checkbox"]) {
+  list-style: none;
+}
+.note-body li:has(> input:checked, > p > input:checked) {
+  color: var(--ink-3);
+}
+.note-body input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0 var(--s-8) 0 calc(-18px - var(--s-8));
+  vertical-align: -3px;
+  cursor: pointer;
+}
+.note-body input[type="checkbox"]:disabled {
+  cursor: default;
+  opacity: 1;
+}
+/* An open task's box takes the theme's field edge and surface, not the browser's
+   grey; a ticked one keeps the native box filled with the accent. */
+.note-body input[type="checkbox"]:not(:checked) {
+  appearance: none;
+  border: 1.5px solid var(--field);
+  border-radius: var(--r-4);
+  background: var(--raised);
+}
 .note-body table {
   display: block;
   max-width: 100%;
@@ -512,7 +719,7 @@ kbd {
 }
 .note-body :is(th, td) {
   min-width: 8rem;
-  padding: 8px 12px;
+  padding: var(--s-8) var(--s-12);
   border: 1px solid var(--rule);
   text-align: left;
   vertical-align: top;
@@ -520,71 +727,74 @@ kbd {
 .note-body img {
   max-width: 100%;
   height: auto;
-  border-radius: 8px;
+  border-radius: var(--r-8);
 }
 .note-body blockquote {
   border-left: 2px solid var(--rule-strong);
-  margin: 16px 0;
-  padding-left: 16px;
+  margin: var(--s-16) 0;
+  padding-left: var(--s-16);
   color: var(--ink-2);
-}
-.note-body input[type="checkbox"] {
-  accent-color: var(--accent);
 }
 .entry-meta {
   display: flex;
-  gap: 12px;
+  gap: var(--s-12);
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 9px;
-  font-size: 0.71875rem;
+  margin-top: var(--s-8);
+  font: var(--t-meta) var(--f-sans);
   color: var(--ink-3);
 }
 .entry-meta:empty {
   display: none;
 }
-.entry-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  opacity: 0;
-  margin-top: 8px;
-}
-.entry:hover .entry-actions,
-.entry:focus-within .entry-actions {
-  opacity: 1;
-}
-.entry-actions button {
-  font-size: 0.75rem;
-  padding: 5px 8px;
-  min-height: 28px;
-}
+/* The one empty state: a serif headline, one sans line, at most one action. */
 .empty {
-  margin: 72px auto 48px;
-  max-width: 420px;
+  margin: var(--s-64) 0 var(--s-48);
+  max-width: 28rem;
   overflow-wrap: anywhere;
 }
 .empty :is(h1, h2) {
-  font: 400 2.125rem/2.5rem var(--f-serif);
-  letter-spacing: -0.01em;
-  margin: 0 0 16px;
+  font: var(--t-display) var(--f-serif);
+  letter-spacing: var(--t-display-tracking);
+  margin: 0 0 var(--s-16);
 }
 .empty p {
   color: var(--ink-2);
+  margin: 0 0 var(--s-16);
 }
 .empty ol {
-  padding-left: 20px;
+  padding-left: var(--s-20);
   line-height: 2;
+}
+.back {
+  margin-left: calc(-1 * var(--s-8));
+  color: var(--ink-2);
 }
 .note-header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--s-12);
   align-items: center;
-  margin: 30px 0 24px;
-  font-size: 0.78125rem;
+  margin: var(--s-16) 0 var(--s-24);
+  font: var(--t-meta) var(--f-sans);
   color: var(--ink-3);
+}
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+  min-width: 0;
+}
+.note-tools {
+  gap: var(--s-4);
+  font: var(--t-ui) var(--f-sans);
+}
+.note-tools .button .icon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--s-4);
 }
 .note-header > .row,
 .history-item > .row,
@@ -592,24 +802,83 @@ kbd {
   flex-wrap: wrap;
   min-width: 0;
 }
-.note-actions {
+.note-read {
+  cursor: text;
+}
+.link-button {
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+}
+@media (hover: hover) {
+  .link-button:hover {
+    text-decoration: underline;
+  }
+}
+.conflict-notice > p:first-child {
+  margin: 0;
+}
+.conflict-notice > .row {
+  margin-top: var(--s-12);
+  flex-wrap: wrap;
+}
+.diff-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin: 20px 0;
+  gap: var(--s-12);
+  font: var(--t-meta) var(--f-sans);
+  margin: var(--s-12) 0 var(--s-8);
+}
+.diff {
+  font: var(--t-mono-size) / var(--t-mono-line) var(--f-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: var(--r-8);
+  background: var(--raised);
+  color: var(--ink-2);
+  padding: var(--s-8) 0;
+}
+.diff > * {
+  display: block;
+  padding: 0 var(--s-12);
+}
+.diff del,
+.diff-legend del {
+  text-decoration: none;
+  background: var(--sunken);
+  color: var(--ink-3);
+  box-shadow: inset 2px 0 var(--rule-strong);
+}
+.diff ins,
+.diff-legend ins {
+  text-decoration: none;
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.diff-legend :is(del, ins) {
+  padding: 0 var(--s-8);
+  border-radius: var(--r-4);
+}
+.diff-skip {
+  color: var(--ink-3);
+  font-family: var(--f-sans);
+  font-size: var(--t-meta-size);
 }
 .note-editor .editor-wrap,
 .note-editor textarea {
   min-height: 280px;
 }
 .saved-line {
-  font-size: 0.75rem;
+  font-size: var(--t-meta-size);
   color: var(--ink-3);
-  margin: 12px 0;
+  margin: var(--s-12) 0;
 }
 .history {
-  margin-top: 36px;
-  padding-top: 20px;
+  margin-top: var(--s-32);
+  padding-top: var(--s-20);
   border-top: 1px solid var(--rule);
 }
 .history summary {
@@ -617,21 +886,23 @@ kbd {
   color: var(--ink-2);
 }
 .history-item {
-  padding: 16px 0;
+  padding: var(--s-16) 0;
   border-bottom: 1px solid var(--rule);
 }
-.history-item pre {
-  font-size: 0.75rem;
-  white-space: pre-wrap;
+.history-item > .row {
+  justify-content: space-between;
+  margin-bottom: var(--s-8);
+  font-size: var(--t-meta-size);
+  color: var(--ink-2);
+}
+.history-item .diff {
   max-height: 180px;
-  overflow: auto;
-  overflow-wrap: anywhere;
 }
 .search-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 36px;
+  gap: var(--s-16);
+  margin-bottom: var(--s-32);
 }
 .search-form > .row {
   display: grid;
@@ -640,25 +911,28 @@ kbd {
 .search-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 0.75rem;
+  align-items: center;
+  gap: var(--s-12) var(--s-16);
   color: var(--ink-2);
-}
-.search-filters input {
-  border: 1px solid var(--field);
-  background: var(--raised);
-  border-radius: 5px;
-  padding: 5px;
 }
 .search-filters label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-8);
   min-width: 0;
 }
-.search-filters input[type="date"] {
-  min-width: 0;
+.search-filters .field {
+  width: auto;
   max-width: 100%;
+  padding: var(--s-8) var(--s-12);
+}
+.search-form .error {
+  margin: 0;
+}
+mark[data-match] {
+  background: var(--highlight);
+  color: inherit;
+  border-radius: var(--r-4);
 }
 .overlay {
   position: fixed;
@@ -668,7 +942,22 @@ kbd {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 12vh 20px 20px;
+  padding: 12vh var(--s-20) var(--s-20);
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* Mouse-opened only; from the keyboard the palette appears at once (03 §9.2). */
+.palette.enter {
+  animation: palette-in var(--dur-1) var(--ease-out);
 }
 .palette {
   width: 640px;
@@ -677,7 +966,7 @@ kbd {
   overflow: auto;
   background: var(--raised);
   border: 1px solid var(--rule-strong);
-  border-radius: 20px;
+  border-radius: var(--r-20);
   box-shadow: var(--e3);
   overscroll-behavior: contain;
 }
@@ -685,33 +974,29 @@ kbd {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--rule);
-  padding-right: 12px;
+  padding-right: var(--s-12);
 }
-.palette input {
+.palette-head input {
   width: 100%;
   min-width: 0;
   border: 0;
-  padding: 22px;
+  padding: var(--s-20);
   background: none;
-  font-size: 1.0625rem;
-  border-radius: 20px 20px 0 0;
+  font-size: var(--t-ui-lg-size);
+  border-radius: var(--r-20) var(--r-20) 0 0;
 }
-.palette input:focus {
+/* The palette is the field: its caret marks focus, no ring inside it. */
+.palette-head input:focus {
   outline: none;
 }
-.palette input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -4px;
-  border-radius: 14px;
-}
 .palette-group {
-  padding: 14px 12px 0;
+  padding: var(--s-12) var(--s-12) 0;
 }
 .palette-group .overline {
-  padding: 0 12px 5px;
+  padding: 0 var(--s-12) var(--s-4);
 }
 .palette-status {
-  margin: 8px 12px 12px;
+  margin: var(--s-8) var(--s-12) var(--s-12);
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }
@@ -724,28 +1009,73 @@ kbd {
   justify-content: space-between;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-8);
   color: var(--ink-2);
-  gap: 12px;
+  gap: var(--s-12);
   overflow-wrap: anywhere;
 }
-.palette-row:hover,
-.palette-row:focus {
+.palette-row:focus,
+.palette [aria-selected="true"] {
   background: var(--sunken);
 }
-.palette-footer {
-  padding: 14px 24px;
+.palette-row > :is(kbd, .muted) {
+  margin-left: auto;
+}
+/* ↵ opens the highlighted row, so its hint follows the highlight. */
+.palette [aria-selected="true"]::after {
+  content: "↵";
+  content: "↵" / "";
+  font: var(--t-overline-size) var(--f-mono);
   color: var(--ink-3);
-  font-size: 0.71875rem;
+}
+.palette-row q {
+  color: var(--ink);
+}
+.keys {
+  display: grid;
+  gap: var(--s-8);
+  margin: 0 0 var(--s-24);
+}
+.keys > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: var(--s-16);
+  align-items: baseline;
+}
+.keys dt {
+  color: var(--ink-3);
+}
+.keys dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+.keys kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--field);
+  border-radius: var(--r-4);
+  text-align: center;
+  color: var(--ink-2);
+}
+@media (hover: hover) {
+  .palette-row:hover {
+    background: var(--sunken);
+  }
+}
+.palette-footer {
+  padding: var(--s-12) var(--s-24);
+  color: var(--ink-3);
+  font-size: var(--t-meta-size);
   border-top: 1px solid var(--rule);
-  margin-top: 12px;
+  margin-top: var(--s-12);
 }
 .auth {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--s-24);
 }
 .auth form {
   width: 100%;
@@ -753,14 +1083,14 @@ kbd {
   max-width: 340px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--s-20);
 }
 .auth .wordmark {
   font-size: clamp(2rem, 15vw, 3rem);
-  margin-bottom: 16px;
+  margin-bottom: var(--s-16);
 }
 .auth h1 {
-  font: 600 1.5rem/1.9375rem var(--f-serif);
+  font: var(--t-title) var(--f-serif);
   margin: 0;
 }
 .auth p {
@@ -772,50 +1102,148 @@ kbd {
 .auth label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--s-8);
   color: var(--ink-2);
 }
 .auth .primary {
   width: 100%;
   min-height: 44px;
 }
+/* One line kept free under the field, so an error never moves the button. */
+.auth .auth-message {
+  line-height: var(--t-meta-line);
+  min-height: calc(var(--t-meta-size) * var(--t-meta-line));
+  margin-top: calc(-1 * var(--s-12));
+}
+.auth .banner {
+  margin: 0;
+}
+.auth-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-16);
+  text-align: center;
+}
+.auth-state p {
+  color: var(--ink-2);
+}
+.auth-state .button {
+  width: auto;
+  min-height: 44px;
+}
 .label-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 28px;
-  gap: 16px;
+  margin-bottom: var(--s-24);
+  gap: var(--s-16);
 }
 .label-title h1 {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.label-title select {
+.label-title h1:focus {
+  outline: none;
+}
+.icon-button {
+  min-width: 36px;
+  padding: var(--s-8);
+}
+.menu-anchor {
+  position: relative;
   flex-shrink: 0;
+}
+/* A small themed menu, drawn like the label autocomplete. */
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-4));
+  min-width: 180px;
+  padding: var(--s-8);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-14);
+  background: var(--raised);
+  box-shadow: var(--e2);
+  z-index: 10;
+  animation: fade-in var(--dur-1) var(--ease-out);
+}
+.menu button {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-8);
+  text-align: left;
+  color: var(--ink-2);
+}
+.menu button.danger {
+  color: var(--danger);
+}
+.menu button:focus-visible {
+  outline-offset: -2px;
+}
+.menu button:focus,
+.menu button:hover {
+  background: var(--sunken);
+}
+.composer-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+  margin: 0 0 var(--s-8);
+  font-size: var(--t-meta-size);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) 0 var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+/* WebKit keeps a bare text run in a flex box as wide as its longest word. */
+.chip > span {
+  min-width: 0;
+}
+.chip button {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: var(--s-2);
+  border-radius: var(--r-full);
+  color: var(--ink-2);
+}
+.chip .icon {
+  width: 14px;
+  height: 14px;
 }
 .load-more {
   display: block;
-  margin: 24px auto;
+  margin: var(--s-24) auto;
   color: var(--ink-3);
 }
 .notice {
   background: var(--accent-soft);
   color: var(--ink-2);
-  padding: 12px 16px;
-  border-radius: 10px;
-  margin: 16px 0;
+  padding: var(--s-12) var(--s-16);
+  border-radius: var(--r-12);
+  margin: var(--s-16) 0;
   overflow-wrap: anywhere;
 }
 .skip-link {
   position: fixed;
-  left: 12px;
-  top: 12px;
-  transform: translateY(calc(-100% - 24px));
+  left: var(--s-12);
+  top: var(--s-12);
+  transform: translateY(calc(-100% - var(--s-24)));
   z-index: 120;
   background: var(--raised);
-  padding: 8px;
-  border-radius: 6px;
+  padding: var(--s-8);
+  border-radius: var(--r-8);
 }
 .skip-link:focus {
   transform: translateY(0);
@@ -826,26 +1254,31 @@ kbd {
   }
   .note-panel {
     position: absolute;
-    left: calc(100% + 48px);
+    left: calc(100% + var(--s-48));
     top: 74px;
     width: 240px;
   }
-  .note-column {
-    margin-left: max(48px, calc((100vw - 248px - 720px - 288px) / 2));
+  /* Room for the side panel only when a plugin put something in it. */
+  .note-column:has(.note-panel > *) {
+    margin-left: max(
+      var(--s-48),
+      calc((100vw - 248px - var(--column-width) - 288px) / 2)
+    );
     margin-right: 288px;
   }
 }
 @media (max-width: 1279px) {
   .entry .time {
     position: static;
-    display: block;
-    margin-bottom: 8px;
+    display: inline-block;
+    margin-bottom: var(--s-8);
   }
-  .column {
-    max-width: 680px;
+  .entry > .more {
+    top: 0;
+    right: 0;
   }
   .note-panel {
-    margin-top: 32px;
+    margin-top: var(--s-32);
   }
 }
 @media (max-width: 1023px) {
@@ -857,12 +1290,13 @@ kbd {
   .collapsed .rail {
     display: none;
     width: 248px;
-    padding: 28px 24px;
+    padding: var(--s-24);
   }
   .rail.open {
     display: flex;
-    width: min(max(248px, 15.5rem), calc(100vw - 24px));
-    padding-inline: 20px;
+    width: min(max(248px, 15.5rem), calc(100vw - var(--s-24)));
+    padding-inline: var(--s-20);
+    animation: drawer-in var(--dur-2) var(--ease-out);
   }
   .rail-heading .wordmark {
     font-size: clamp(1.5rem, 9vw, 1.875rem);
@@ -872,14 +1306,16 @@ kbd {
   }
   .app .rail.open .rail-label,
   .app .rail.open .wordmark-text,
-  .app .rail.open .label-tree,
   .app .rail.open .overline,
   .app .rail.open .rail-foot p {
     display: initial;
   }
+  .app .rail.open .label-tree {
+    display: block;
+  }
   .topbar {
     min-height: 64px;
-    padding: 0 24px;
+    padding: 0 var(--s-24);
     display: grid;
     grid-template-columns: 48px minmax(0, 1fr) 48px;
     align-items: center;
@@ -891,70 +1327,142 @@ kbd {
     font-size: clamp(1.5rem, 9vw, 1.875rem);
   }
   .column {
-    padding-top: 32px;
+    padding-top: var(--s-32);
   }
   .rail-backdrop {
     position: fixed;
     inset: 0;
     background: var(--scrim);
     z-index: 19;
+    animation: fade-in var(--dur-2) var(--ease-out);
+  }
+}
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+@media (hover: none) {
+  .rail-search kbd {
+    display: none;
   }
 }
 @media (max-width: 599px) {
   .column {
-    padding: 24px 20px 60px;
+    padding: var(--s-24) var(--s-20) var(--s-64);
+  }
+  .banner-long {
+    display: none;
+  }
+  .banner-short {
+    display: inline;
   }
   .topbar {
-    padding: 0 16px;
+    padding: 0 var(--s-16);
   }
   .button,
   button.primary,
-  .entry-actions .button,
   .rail nav a,
-  .palette-row {
+  .palette-row,
+  .menu [role="menuitem"],
+  .autocomplete [role="option"],
+  .history summary {
     min-height: 44px;
+  }
+  .icon-button {
+    width: 44px;
+  }
+  .menu [role="menuitem"] {
+    display: flex;
+    align-items: center;
+  }
+  /* Padding, not flex, so the summary keeps its disclosure marker. */
+  .history summary {
+    padding-block: var(--s-12);
+  }
+  /* The time row holds the 44px menu button, so the button takes no extra height. */
+  .entry .time {
+    margin-bottom: var(--s-16);
+  }
+  .entry > .more {
+    top: calc(var(--s-8) - 14px);
+  }
+  .entry .time,
+  .note-meta .chip,
+  .show-more {
+    min-height: 24px;
+  }
+  .note-body li:has(> input[type="checkbox"], > p > input[type="checkbox"]) {
+    min-height: 44px;
+    padding-block: var(--s-8);
+  }
+  .note-body
+    li
+    + li:has(> input[type="checkbox"], > p > input[type="checkbox"]) {
+    margin-top: 0;
   }
   .field,
   .search-filters input {
-    font-size: 1rem;
+    font-size: var(--t-ui-lg-size);
   }
-  .entry-actions .button {
-    padding: 10px 12px;
+  select.field,
+  .search-filters .field {
+    min-height: 44px;
   }
-  .entry-actions {
-    opacity: 1;
+  /* The two dates share a row, each label above its field. */
+  .search-filters .date-filter {
+    flex: 1 1 8rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s-4);
+  }
+  .search-filters .date-filter .field {
+    width: 100%;
   }
   .composer-tools {
-    padding: 4px 8px 8px;
+    padding: var(--s-4) var(--s-8) var(--s-8);
   }
   .composer-hint {
     display: none;
   }
   .editor-wrap textarea,
   .highlight {
-    padding: 16px;
+    padding: var(--s-16);
   }
   .palette {
-    border-radius: 14px;
+    border-radius: var(--r-14);
   }
   .overlay {
-    padding: 7vh 12px 12px;
+    padding: 7vh var(--s-12) var(--s-12);
   }
   .day {
-    margin-top: 28px;
+    margin-top: var(--s-24);
   }
   .note-header {
-    align-items: flex-start;
+    align-items: center;
   }
   .note-header .row {
     flex-wrap: wrap;
+  }
+  .show-more {
+    min-height: 44px;
   }
   .label-title {
     flex-wrap: wrap;
     align-items: flex-start;
   }
   .label-title h1 {
-    flex-basis: 100%;
+    flex: 1 1 0;
+  }
+  .icon-button,
+  .menu button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .chip button {
+    padding: var(--s-12);
+    margin: calc(-1 * var(--s-8)) 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -966,15 +1474,49 @@ kbd {
     scroll-behavior: auto !important;
   }
 }
+@media print {
+  .rail,
+  .rail-backdrop,
+  .topbar,
+  .skip-link,
+  .banner,
+  .composer,
+  .more,
+  .back,
+  .show-more,
+  .note-panel {
+    display: none !important;
+  }
+  .app,
+  .app.collapsed {
+    padding-left: 0;
+  }
+  .column {
+    max-width: none;
+    padding: 0;
+  }
+}
 
-:root[data-reading="sans"] {
-  --body-face: var(--f-sans);
+:root {
+  --body-line: var(--t-body-line);
 }
 :root[data-size="s"] {
   --body-size: 1rem;
 }
 :root[data-size="l"] {
   --body-size: 1.1875rem;
+}
+/* Inter runs larger than Literata: 16.5/27 at M, scaled by 16/17 or 19/17 (03 §11.2). */
+:root[data-reading="sans"] {
+  --body-face: var(--f-sans);
+  --body-size: 1.03125rem;
+  --body-line: 1.6364;
+}
+:root[data-reading="sans"][data-size="s"] {
+  --body-size: 0.9706rem;
+}
+:root[data-reading="sans"][data-size="l"] {
+  --body-size: 1.1526rem;
 }
 
 .icon {
@@ -986,7 +1528,7 @@ kbd {
 .rail-search > span {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-8);
   min-width: 0;
 }
 .rail-search .rail-label {

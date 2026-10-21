@@ -22,8 +22,16 @@ class LabelsSheetTest {
   compose.onNodeWithText("Find a label").performTextInput("SPUNTO")
   compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("label:project/spunto"))
   compose.onNodeWithTag("label:project").assertExists();compose.onNodeWithTag("label:project/spunto").assertExists()
-  compose.onNodeWithText("Close").performClick()
+  compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
   compose.runOnIdle {assertTrue(routes.isEmpty());assertEquals(0,management);assertEquals("Synthetic draft remains exactly here",draft.value);assertFalse(open.value)}
+ }
+ @Test fun allNotesCarriesItsCountAndReviewOnlyShowsWhenItemsWait() {
+  val waiting=mutableStateOf(0)
+  compose.setContent {SpuntoTheme("carta","light") {LabelsSheet(LabelsNavigationSnapshot("timeline",labels,manifest()),{},{},{},{},{},reviewWaiting=waiting.value,allNotes=24)}}
+  compose.onNode(hasText("All notes") and hasText("24")).assertIsDisplayed().assertIsSelected().assert(hasContentDescription("All notes, 24 notes"))
+  compose.onNodeWithText("Archive").assertIsDisplayed();compose.onNodeWithText("Trash").assertIsDisplayed();compose.onNodeWithText("Review").assertDoesNotExist()
+  compose.runOnIdle {waiting.value=6}
+  compose.onNode(hasText("Review") and hasText("6")).assertIsDisplayed()
  }
  @Test fun exactLabelSelectionNavigatesOnceWithCanonicalKey() {
   val open=mutableStateOf(true);val routes=mutableListOf<String>()
@@ -39,7 +47,8 @@ class LabelsSheetTest {
   compose.onNodeWithText("Unlabeled").assertDoesNotExist()
   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Show more views"));compose.onNodeWithText("Show more views").performClick()
   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Unlabeled"));compose.onNodeWithText("Unlabeled").performClick()
-  compose.onNode(hasScrollAction()).performScrollToNode(hasText("Manage views in the web app"));compose.onNodeWithText("Manage views in the web app").assertIsNotEnabled()
+  compose.onNode(hasScrollAction()).performScrollToNode(hasText("Offline. Shared management needs your server."))
+  compose.onNodeWithText("Offline. Shared management needs your server.").assertIsDisplayed()
   compose.runOnIdle {assertEquals(listOf("view:label-suggestions:unlabeled"),routes);assertEquals(0,management);assertEquals(before,cached.toString())}
  }
  @Test fun cachedPublicationChangesRemoveInactiveViewsFromAnOpenSheet() {

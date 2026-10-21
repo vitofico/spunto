@@ -2,7 +2,6 @@ package io.theficos.spunto
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.*
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
@@ -23,7 +22,7 @@ internal class MarkdownEditorHighlight(
     val style=when(span.kind) {
      MarkdownSourceKind.Heading,MarkdownSourceKind.Strong -> SpanStyle(fontWeight=FontWeight.SemiBold)
      MarkdownSourceKind.Emphasis -> SpanStyle(fontStyle=FontStyle.Italic)
-     MarkdownSourceKind.Code -> SpanStyle(fontFamily=FontFamily.Monospace,background=codeBackground)
+     MarkdownSourceKind.Code -> SpanStyle(fontFamily=io.theficos.spunto.core.design.monoFont(),background=codeBackground)
     }
     addStyle(style,span.start,span.end)
    }

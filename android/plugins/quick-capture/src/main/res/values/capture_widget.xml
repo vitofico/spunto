@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carta, as the widget draws it before the app hands over its theme (QuickCapture.kt). -->
+<resources>
+ <color name="capture_widget_paper">#F8F5F0</color>
+ <color name="capture_widget_ink_2">#5B544C</color>
+ <color name="capture_widget_accent">#9F4C2A</color>
+ <string name="capture_widget_write">Write a note</string>
+ <string name="capture_widget_description">Write or dictate a note from your home screen.</string>
+</resources>

@@ -160,9 +160,7 @@ async def test_lifecycle_secrets_generation_and_isolated_storage(tmp_path, monke
         ],
     ) as host:
         assert host.states["ai-wait"]["state"] == "waiting"
-        assert host.states["ai-wait"]["last_error"] == (
-            "Needs a chat model. Choose one in Settings → AI."
-        )
+        assert host.states["ai-wait"]["last_error"] == "Needs a chat model. AI is off."
         assert host.manifest()["plugins"] == []
         await host.enable("example", [])
         await host.enable("second", [])

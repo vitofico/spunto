@@ -52,6 +52,8 @@ def test_colour_pack_preserves_builtins_and_ignores_executable_extra_keys(tmp_pa
     assert 'data-theme="operator-paper"' in css and 'data-accent="extra"' in css
     assert "must-not-load" not in css and "url(" not in css and "font" not in css
     assert "@media(prefers-color-scheme:dark)" in css
+    assert registry.selected("operator-paper")["dark"]["sh"] == "0 0 0"
+    assert "--sh:0 0 0;" in css.split('[data-mode="dark"]{', 1)[1].split("}", 1)[0]
     assert (
         ThemeRegistry(settings.model_copy(update={"data_dir": tmp_path / "other"})).catalog()
         != registry.catalog()

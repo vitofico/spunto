@@ -295,15 +295,21 @@ test("permission sheet gates enable; Escape cancels; delete dialog names records
 }) => {
   const state = await fixture(page);
   await page.goto("/settings/plugins");
-  await page.getByRole("switch", { name: "Enable Resurface" }).click();
+  const enable = page.getByRole("switch", { name: "Enable Resurface" });
+  await enable.click();
   await expect(
     page.getByRole("dialog", { name: "Turn on Resurface?" }),
   ).toBeVisible();
   expect(state.enableCalls()).toBe(0);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  // WebKit doesn't focus a clicked control; focus still returns to it.
+  await expect(enable).toBeFocused();
   expect(state.enableCalls()).toBe(0);
-  await page.getByRole("switch", { name: "Enable Resurface" }).click();
+  await enable.click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(enable).toBeFocused();
+  await enable.click();
   await page.getByRole("button", { name: "Turn on", exact: true }).click();
   await expect.poll(state.enableCalls).toBe(1);
   await page.goto("/settings/plugins/resurface");
@@ -311,9 +317,13 @@ test("permission sheet gates enable; Escape cancels; delete dialog names records
   await expect(
     page.getByRole("textbox", { name: "Provider token" }),
   ).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Delete this plugin’s data…" })
-    .click();
+  const remove = page.getByRole("button", {
+    name: "Delete this plugin’s data…",
+  });
+  await remove.click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(remove).toBeFocused();
+  await remove.click();
   await expect(page.getByRole("dialog")).toContainText("7 plugin records");
   await expect(page.getByRole("dialog")).toContainText(
     "Its notes stay: they are notes.",
@@ -327,7 +337,17 @@ test("tokens default to read and excluded private/external text; one-time secret
 }) => {
   const state = await fixture(page);
   await page.goto("/settings/tokens");
-  await page.getByRole("button", { name: "Create token", exact: true }).click();
+  const create = page.getByRole("button", {
+    name: "Create token",
+    exact: true,
+  });
+  await create.click();
+  await page.keyboard.press("Escape");
+  await expect(create).toBeFocused();
+  await create.click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(create).toBeFocused();
+  await create.click();
   await page.getByLabel("Name", { exact: true }).fill("Notebook agent");
   await expect(page.getByLabel("Scope")).toHaveValue("read");
   await expect(page.getByLabel("Include private notes")).not.toBeChecked();

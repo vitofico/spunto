@@ -57,7 +57,8 @@ class PluginCatalogScrollTest {
     if(step==6 || step==16) {
      compose.mainClock.autoAdvance=true
      if(step==6) {
-      list().performScrollToNode(hasText(bottomRow))
+      // Varied rows append tags to the name ("Synthetic data 7 · Default with AI").
+      list().performScrollToNode(hasText(bottomRow,substring=true))
       list().performSemanticsAction(SemanticsActions.ScrollBy) {it(0f,10_000f)}
      } else list().performScrollToIndex(0)
      compose.waitForIdle()
@@ -89,7 +90,7 @@ class PluginCatalogScrollTest {
   repeat(4) {assertTrue("Flings must render different list positions",flingBothWays().size>3)}
   list().performScrollToNode(hasText("Synthetic data 7"))
   compose.onNodeWithText("Synthetic data 7").assertIsDisplayed()
-  compose.onNodeWithContentDescription("Synthetic data 7 wanted on").performClick()
+  compose.onNode(hasContentDescription("Synthetic data 7") and isToggleable()).performClick()
   compose.runOnIdle {assertEquals("test-data-h",toggled)}
   list().performScrollToIndex(0)
   compose.onNodeWithText("All 48").assertIsDisplayed()
@@ -157,12 +158,12 @@ class PluginCatalogScrollTest {
   compose.setContent {SpuntoTheme {
    NativePluginCatalogList(projection,JsonObject(emptyMap()),true,false,null,{_,_ ->},{},{},{},{})
   }}
-  compose.onNodeWithText(schedule).assertDoesNotExist()
+  compose.onNodeWithText(schedule,substring=true).assertDoesNotExist()
   var sawScheduledRow=false
   flingBothWays {step ->
    if(step==6) {
     compose.onNodeWithText(plugin.name).assertIsDisplayed()
-    compose.onNodeWithText(schedule).assertIsDisplayed()
+    compose.onNodeWithText(schedule,substring=true).assertIsDisplayed()
     sawScheduledRow=true
    }
   }

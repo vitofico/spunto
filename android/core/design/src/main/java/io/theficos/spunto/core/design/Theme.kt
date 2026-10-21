@@ -11,13 +11,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
@@ -119,9 +117,10 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
   primary=c("accent"),onPrimary=c("on-accent"),primaryContainer=c("accent-soft"),onPrimaryContainer=c("accent-strong"),inversePrimary=c("paper"),
   secondary=c("accent-strong"),onSecondary=c("on-accent"),secondaryContainer=c("accent-soft"),onSecondaryContainer=c("ink"),
   tertiary=c("accent"),onTertiary=c("on-accent"),tertiaryContainer=c("accent-soft"),onTertiaryContainer=c("ink"),
-  background=paper,onBackground=c("ink"),surface=paper,onSurface=c("ink"),surfaceVariant=c("sunken"),onSurfaceVariant=c("ink-2"),surfaceTint=c("accent"),
+  background=paper,onBackground=c("ink"),surface=paper,onSurface=c("ink"),surfaceVariant=c("sunken"),onSurfaceVariant=c("ink-2"),surfaceTint=paper,
   inverseSurface=c("ink"),inverseOnSurface=c("paper"),outline=c("field"),outlineVariant=c("rule"),
-  error=c("danger"),onError=c("paper"),errorContainer=c("sunken"),onErrorContainer=c("danger"),
+  // A faint danger tint that equals no surface: Material gives text on a surface that matches errorContainer the danger colour.
+  error=c("danger"),onError=c("paper"),errorContainer=lerp(paper,c("danger"),.08f),onErrorContainer=c("danger"),
   surfaceContainer=c("raised"),surfaceContainerLow=c("raised"),surfaceContainerLowest=c("raised"),surfaceContainerHigh=c("sunken"),surfaceContainerHighest=c("sunken"),surfaceBright=c("raised"),surfaceDim=c("sunken"),scrim=if(dark) Color.Black.copy(alpha=.5f) else c("ink").copy(alpha=.32f)
  )
 }
@@ -139,8 +138,8 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
  val scheme=paletteColorScheme(values,dark,black,selected)
  val dynamic=if((wallpaper || theme.isEmpty() && preferences.getBoolean("wallpaper",false)) && Build.VERSION.SDK_INT >= 31) {
   val d=if(dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-  val neutral=d.copy(onSurface=c("ink"),onBackground=c("ink"),onSurfaceVariant=c("ink-2"),outline=c("field"),outlineVariant=scheme.outlineVariant,scrim=scheme.scrim)
-  if(black) neutral.copy(background=Color.Black,surface=Color.Black,surfaceVariant=Color.Black,surfaceContainer=scheme.surfaceContainer,surfaceContainerLowest=scheme.surfaceContainerLowest,surfaceContainerLow=scheme.surfaceContainerLow,surfaceContainerHigh=Color.Black,surfaceContainerHighest=Color.Black,surfaceBright=scheme.surfaceBright,surfaceDim=Color.Black) else neutral
+  val neutral=d.copy(onSurface=c("ink"),onBackground=c("ink"),onSurfaceVariant=c("ink-2"),outline=c("field"),outlineVariant=scheme.outlineVariant,scrim=scheme.scrim,surfaceTint=d.surface)
+  if(black) neutral.copy(background=Color.Black,surface=Color.Black,surfaceTint=Color.Black,surfaceVariant=Color.Black,surfaceContainer=scheme.surfaceContainer,surfaceContainerLowest=scheme.surfaceContainerLowest,surfaceContainerLow=scheme.surfaceContainerLow,surfaceContainerHigh=Color.Black,surfaceContainerHighest=Color.Black,surfaceBright=scheme.surfaceBright,surfaceDim=Color.Black) else neutral
  } else scheme
  val view=LocalView.current
  if(!LocalSpuntoTheme.current && !view.isInEditMode) SideEffect {
@@ -149,10 +148,10 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
    isAppearanceLightNavigationBars=useDarkSystemBarIcons(dynamic.background)
   } }
  }
- CompositionLocalProvider(LocalSpuntoTheme provides true) {
-  MaterialTheme(colorScheme=dynamic, typography=readingTypography(readingFace.ifEmpty { preferences.getString("reading-face","serif").orEmpty() },readingSize.ifEmpty { preferences.getString("reading-size","M").orEmpty() }),content=content)
+ val face=readingFace.ifEmpty { preferences.getString("reading-face","serif").orEmpty() };val size=readingSize.ifEmpty { preferences.getString("reading-size","M").orEmpty() }
+ val type=remember(face,size) { spuntoType(face,size) }
+ val roles=remember(values,selected,dark) { spuntoColorRoles(values,builtInTokens[selected]?.get(if(dark) "dark" else "light")) }
+ CompositionLocalProvider(LocalSpuntoTheme provides true,LocalSpuntoType provides type,LocalSpuntoColors provides roles) {
+  MaterialTheme(colorScheme=dynamic,typography=spuntoMaterialTypography,content=content)
  }
 }
-fun readingTypography(face:String,size:String)=Typography(bodyLarge=androidx.compose.ui.text.TextStyle(fontFamily=if(normalizedReadingFace(face)=="sans") uiFont() else readingFont(),fontSize=readingTextSize(size).sp,lineHeight=readingLineHeight(size).sp),bodyMedium=androidx.compose.ui.text.TextStyle(fontFamily=uiFont(),fontSize=14.sp,lineHeight=21.sp),titleLarge=androidx.compose.ui.text.TextStyle(fontFamily=readingFont(),fontSize=24.sp),labelLarge=androidx.compose.ui.text.TextStyle(fontFamily=uiFont(),fontSize=14.sp))
-fun readingFont(): FontFamily = FontFamily(Font(R.font.literata))
-fun uiFont(): FontFamily = FontFamily(Font(R.font.inter))

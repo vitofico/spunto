@@ -46,7 +46,7 @@ class FilteredNotesTest {
   assertEquals(listOf(pinned,newest),rows(TimelineSpec()).map { it.id })
   assertEquals(listOf(archivedNew,archivedPinned),rows(TimelineSpec(kind=TimelineKind.ARCHIVE)).map { it.id })
   assertEquals(listOf(newTrash,oldTrash),rows(TimelineSpec(kind=TimelineKind.TRASH)).map { it.id })
-  assertEquals(listOf(archivedPinned,pinned,newest),rows(TimelineSpec(kind=TimelineKind.LABEL,label="project")).map { it.id })
+  assertEquals(listOf(pinned,newest),rows(TimelineSpec(kind=TimelineKind.LABEL,label="project")).map { it.id })
  }
  @Test fun createdRangeUsesInclusiveFromAndWholeInclusiveToWithoutSilentInvalidDates()=runBlocking {
   val range=CreatedRange.parse("2026-10-14","2026-10-14",ZoneOffset.UTC)

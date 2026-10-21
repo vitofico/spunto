@@ -484,3 +484,24 @@ test("Back to a scrolled timeline keeps the place and leaves the composer alone"
     .toBe(true);
   await expect(page.getByLabel("New note")).not.toBeFocused();
 });
+
+test("label dialogs return focus to Label actions on Cancel and Escape", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.goto("/l/ideas");
+  const actions = page.getByRole("button", { name: "Label actions" });
+  for (const [item, close] of [
+    ["Rename", "Cancel"],
+    ["Merge into…", "Escape"],
+  ]) {
+    await actions.click();
+    await page.getByRole("menuitem", { name: item }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    if (close === "Escape") await page.keyboard.press("Escape");
+    else await dialog.getByRole("button", { name: close }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(actions).toBeFocused();
+  }
+});

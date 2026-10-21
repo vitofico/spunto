@@ -71,6 +71,8 @@ function LabelMenu({
   ];
   function choose(action: "rename" | "merge" | "remove") {
     setOpen(false);
+    // The dialog this opens returns focus to what was focused when it opened.
+    trigger.current?.focus();
     onChoose(action);
   }
   return (

@@ -326,6 +326,16 @@ function focusEntry(entry: HTMLElement) {
 let entryDepth = -1;
 const scrollPositions = new Map<string, number>();
 if (typeof history !== "undefined") history.scrollRestoration = "manual";
+/** The number this history entry was given, when Back or a reload returns to it. */
+function savedDepth() {
+  const state: unknown = history.state;
+  return state && typeof state === "object" && "spuntoDepth" in state
+    ? Number(state.spuntoDepth)
+    : NaN;
+}
+/** Back returns to a list left scrolled down: nothing there takes focus, so it keeps its place. */
+const returningScrolled = (location: string) =>
+  (scrollPositions.get(savedDepth() + location) ?? 0) > 0;
 /**
  * Numbers each history entry (in history.state) so Back can tell whether the
  * previous entry is still this app, and puts each list back where it was left.
@@ -333,10 +343,7 @@ if (typeof history !== "undefined") history.scrollRestoration = "manual";
 function useHistoryEntries(location: string) {
   useLayoutEffect(() => {
     const state: unknown = history.state;
-    const saved =
-      state && typeof state === "object" && "spuntoDepth" in state
-        ? Number(state.spuntoDepth)
-        : NaN;
+    const saved = savedDepth();
     const returning = Number.isInteger(saved);
     entryDepth = returning ? saved : entryDepth + 1;
     if (!returning)
@@ -354,11 +361,20 @@ function useHistoryEntries(location: string) {
     const target = returning ? (scrollPositions.get(key) ?? 0) : 0;
     let frame = 0,
       tries = 0,
+      height = 0,
+      steady = 0,
       restoring = true;
-    // Cached lists render at once; one still loading gets a few frames to grow.
+    // A cached list renders at once, then still grows ("Show more" appears after it is measured)
+    // and a list still loading grows later: hold the position until the page height settles.
     const restore = () => {
       window.scrollTo(0, target);
-      if (restoring && Math.abs(window.scrollY - target) > 1 && tries++ < 60)
+      const now = document.documentElement.scrollHeight;
+      steady =
+        now === height && Math.abs(window.scrollY - target) <= 1
+          ? steady + 1
+          : 0;
+      height = now;
+      if (restoring && target && steady < 3 && tries++ < 60)
         frame = requestAnimationFrame(restore);
       else restoring = false;
     };
@@ -427,6 +443,7 @@ export default function App() {
     StatusPage,
   } = pages;
   const signedIn = auth.status === "authenticated";
+  const returning = returningScrolled(location);
   useEffect(() => {
     if (!signedIn) return;
     // Fetch the note screen while idle, so opening a note works offline later.
@@ -771,7 +788,7 @@ export default function App() {
           >
             <Switch>
               <Route path="/">
-                <Timeline />
+                <Timeline focusComposer={!returning} />
               </Route>
               <Route path="/n/:id">
                 {(params) => <NotePage id={params.id} />}
@@ -795,7 +812,11 @@ export default function App() {
                 {(params) => {
                   const label = decoded(params["*"] ?? "");
                   return label ? (
-                    <Timeline key={label} label={label} />
+                    <Timeline
+                      key={label}
+                      label={label}
+                      focusComposer={!returning}
+                    />
                   ) : (
                     <NotFound />
                   );

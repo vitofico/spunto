@@ -291,9 +291,11 @@ function Empty({
 export default function Timeline({
   view = "timeline",
   label,
+  focusComposer = true,
 }: {
   view?: string;
   label?: string;
+  focusComposer?: boolean;
 }) {
   const canEdit = useWorkspaceRole() !== "viewer";
   const [, navigate] = useLocation();
@@ -474,7 +476,7 @@ export default function Timeline({
             setBody={draft.setBody}
             onSave={() => void save()}
             upload={draft.uploadAttachment}
-            autoFocus
+            autoFocus={focusComposer}
             error={draft.error?.message}
             busy={draft.state === "saving"}
           />

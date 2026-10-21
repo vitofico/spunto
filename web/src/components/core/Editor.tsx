@@ -141,7 +141,8 @@ export function Editor({
     const el = input.current;
     if (!autoFocus || !el) return;
     const at = Math.min(initialCaret ?? el.value.length, el.value.length);
-    el.focus();
+    // The field opens where the reader already is; focus never scrolls the page.
+    el.focus({ preventScroll: true });
     el.setSelectionRange(at, at);
     setCaret(at);
     // Only the first focus places the caret; later renders keep the owner's selection.

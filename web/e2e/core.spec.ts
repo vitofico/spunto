@@ -429,3 +429,53 @@ test("a native modal keeps keyboard control above the command palette", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp("/n/" + initial.id));
 });
+
+test("Back to a scrolled timeline keeps the place and leaves the composer alone", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  // Long notes get "Show more" once measured, after the list is first drawn.
+  const long = Array.from({ length: 16 }, (_, n) => `Line ${n + 1}.`);
+  for (let index = 0; index < 30; index++) {
+    const body = (
+      index % 3 ? [`Note ${index}`] : [`Long ${index}`, ...long]
+    ).join("\n\n");
+    state.notes().push({
+      ...structuredClone(initial),
+      id: `0192f3c4-3333-7000-8000-${String(index).padStart(12, "0")}`,
+      body,
+      title: body.split("\n")[0],
+      html: body
+        .split("\n\n")
+        .map((line) => `<p>${line}</p>`)
+        .join(""),
+    });
+  }
+  await page.goto("/");
+  await expect(page.locator("article.entry")).toHaveCount(31);
+  await expect(page.locator(".show-more").first()).toBeVisible();
+  const card = page.locator("article.entry").nth(24);
+  await card.scrollIntoViewIfNeeded();
+  const place = () =>
+    card.evaluate((entry) => [
+      window.scrollY,
+      Math.round(entry.getBoundingClientRect().top),
+    ]);
+  const before = await place();
+  expect(before[0]).toBeGreaterThan(1000);
+  await card.locator("a.time").click();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(card).toBeVisible();
+  await expect
+    .poll(async () => {
+      const after = await place();
+      return after.every(
+        (value, index) => Math.abs(value - before[index]) <= 2,
+      );
+    })
+    .toBe(true);
+  await expect(page.getByLabel("New note")).not.toBeFocused();
+});

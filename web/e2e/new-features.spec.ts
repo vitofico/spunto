@@ -143,7 +143,7 @@ async function editNote(
   return response.json();
 }
 
-async function selectStatus(dialog: Locator, value: "open" | "closed") {
+async function selectStatus(dialog: Locator, value: "Open" | "Closed") {
   await dialog
     .getByRole("group", { name: "Status (open reopens)", exact: true })
     .getByRole("button", { name: value, exact: true })
@@ -210,7 +210,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await dialog
     .getByLabel("What did you learn? (optional)", { exact: true })
     .fill("Keep a separate backup copy.");
-  await selectStatus(dialog, "closed");
+  await selectStatus(dialog, "Closed");
   const reviewed = await run(
     page,
     dialog,
@@ -235,7 +235,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await dialog
     .getByLabel("Next review date (YYYY-MM-DD, optional)", { exact: true })
     .fill("2030-03-01");
-  await selectStatus(dialog, "open");
+  await selectStatus(dialog, "Open");
   const reopened = await run(
     page,
     dialog,

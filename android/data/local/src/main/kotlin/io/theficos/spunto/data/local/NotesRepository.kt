@@ -24,6 +24,8 @@ class EditorLease internal constructor(val noteId:String?,val draftId:String) {
  internal var accepted=0L
  internal var committedBody:String?=null
 }
+/** Unsaved words only when written after the note's last change; an older draft was saved already or overtaken by a sync. */
+fun DraftEntity.unsavedOver(note:NoteEntity?)=body.isNotEmpty() && (note==null || updatedAt>note.updatedAt)
 data class EditorWrite internal constructor(val lease:EditorLease,val body:String,internal val sequence:Long)
 
 class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private val onChange: () -> Unit = {}) {
@@ -45,7 +47,11 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    val missing=commit && lease.noteId!=null && (dao.get(lease.noteId)==null || dao.tombstone(lease.noteId)!=null)
    // A disappeared note must not erase the last editor words; only the note/outbox commit is refused.
    dao.putDraft(DraftEntity(lease.draftId,write.body,System.currentTimeMillis()))
-   if(commit && !missing && lease.noteId!=null && dao.get(lease.noteId)?.body!=write.body) save(write.body,lease.noteId)
+   if(commit && !missing && lease.noteId!=null) {
+    if(dao.get(lease.noteId)?.body!=write.body) save(write.body,lease.noteId)
+    // The note holds these words now; a draft left behind would reopen over newer synced text.
+    dao.clearDraft(lease.draftId,write.body)
+   }
    missing
   }
   lease.accepted=write.sequence

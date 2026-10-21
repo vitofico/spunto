@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.room.withTransaction
 import io.theficos.spunto.core.model.Note
+import io.theficos.spunto.data.local.unsavedOver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -29,8 +30,9 @@ internal suspend fun readNoteForExport(model:SpuntoViewModel,id:String):Exportab
  if(!model.container.appLock.state.value.unlocked) return null
  val credentials=model.container.auth.config.first()
  val result=model.container.database.withTransaction {
-  val note=model.repository.dao.get(id)?.note() ?: return@withTransaction null
-  val draft=model.repository.dao.draftSnapshot(id)?.body
+  val stored=model.repository.dao.get(id) ?: return@withTransaction null
+  val note=stored.note()
+  val draft=model.repository.dao.draftSnapshot(id)?.takeIf { it.unsavedOver(stored) }?.body
   if(draft!=null && draft!=note.body) return@withTransaction null
   val replica=model.repository.dao.state()
   ExportableNote(note,noteExportStamp(note,draft,credentials,replica?.serverUrl,replica?.epoch))

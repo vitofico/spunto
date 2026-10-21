@@ -117,8 +117,21 @@ class NotesRepositoryTest {
   assertNull(repo.dao.draftSnapshot(id));assertEquals("A",repo.dao.get(id)!!.body)
   val newEditor=repo.beginEditor(id);assertTrue(repo.persistEditor(repo.editorWrite(newEditor,"D"),commit=true))
   val before=repo.dao.outbox();gate.complete(Unit);assertFalse(delayed.await())
-  assertEquals(before,repo.dao.outbox());assertEquals("D",repo.dao.get(id)!!.body);assertEquals("D",repo.dao.draftSnapshot(id)!!.body)
+  assertEquals(before,repo.dao.outbox());assertEquals("D",repo.dao.get(id)!!.body);assertNull(repo.dao.draftSnapshot(id))
   assertTrue(repo.dao.get(id)!!.privateNote)
+ }
+ @Test fun committedEditorLeavesNoDraftToReopenOverASyncedEdit()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  val editor=repo.beginEditor(id);assertTrue(repo.persistEditor(repo.editorWrite(editor,"Phone words, edited")))
+  assertEquals("Phone words, edited",repo.dao.draftSnapshot(id)!!.body)
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, edited")));assertNull(repo.dao.draftSnapshot(id))
+  // A draft an older build left behind loses to the web edit a later sync brought in.
+  repo.dao.putDraft(DraftEntity(id,"Phone words, edited",10))
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Edited on the web",serverRev=3,updatedAt=20,pending=false))
+  assertFalse(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)))
+  // Words typed after the note's last change, then not saved (the app was killed), still win.
+  repo.dao.putDraft(DraftEntity(id,"Typed after the sync",30));assertTrue(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)))
+  assertTrue(DraftEntity("capture","Unsent capture",1).unsavedOver(null));assertFalse(DraftEntity("capture","",1).unsavedOver(null))
  }
  @Test fun readAwaitsCommitAndOldEditorCallbacksAreFenced()=runBlocking {
   val id=uuidV7();repo.putNote(Note(id,"A",serverRev=1))

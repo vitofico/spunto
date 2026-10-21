@@ -55,3 +55,18 @@ internal val LocalTopBar=staticCompositionLocalOf<TopBarSlot?> { null }
   onDispose { if(slot.actions===mine) slot.actions=null }
  }
 }
+
+/** The bar docked to the keyboard (or the navigation bar): the composer's and editor's tools and Save, outside the page scroll. */
+@Stable class BottomBarSlot { internal var content by mutableStateOf<(@Composable ()->Unit)?>(null) }
+internal val LocalBottomBar=staticCompositionLocalOf<BottomBarSlot?> { null }
+/** Docks [content] while the caller is shown; outside the app shell (capture sheets, tests) it renders in place. */
+@Composable fun BottomBar(content:@Composable ()->Unit) {
+ val slot=LocalBottomBar.current
+ if(slot==null) { content();return }
+ val latest by rememberUpdatedState(content)
+ DisposableEffect(slot) {
+  val mine:@Composable ()->Unit={ latest() }
+  slot.content=mine
+  onDispose { if(slot.content===mine) slot.content=null }
+ }
+}

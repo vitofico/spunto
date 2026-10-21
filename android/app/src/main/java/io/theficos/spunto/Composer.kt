@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.theficos.spunto
 
 import android.Manifest
@@ -8,13 +9,20 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.ReportDrawnWhen
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.*
@@ -36,7 +44,7 @@ import io.theficos.spunto.plugins.dictation.voice.*
 import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String="What's on your mind?",trailing:(@Composable ()->Unit)?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -54,7 +62,10 @@ import kotlinx.coroutines.*
  val keyboard=LocalSoftwareKeyboardController.current
  var ready by remember(id) { mutableStateOf(false) }
  var focused by remember(id) { mutableStateOf(false) }
- ReportDrawnWhen { ready && (autoDictate || !autoFocus || focused) }
+ // Focus once per page visit: returning from a note, a rotation or a permission dialog restores this flag, so the keyboard stays down.
+ var focusSpent by rememberSaveable(id,draftId) { mutableStateOf(false) }
+ ReportDrawnWhen { ready && (autoDictate || !autoFocus || focused || focusSpent) }
+ var images by remember(id,draftId) { mutableStateOf(emptyList<Pair<java.io.File,String>>()) }
  var committed by remember(id,draftId) { mutableStateOf(initial) }
  var saving by remember(id,draftId) { mutableStateOf(false) }
  var closing by remember(id,draftId) { mutableStateOf(false) }
@@ -144,7 +155,7 @@ import kotlinx.coroutines.*
   committed=current ?: initial
   ready=true
   androidx.compose.runtime.withFrameNanos { }
-  if(autoDictate && mic) micTap() else if(autoFocus) { focus.requestFocus(); keyboard?.show() }
+  if(autoDictate && mic) micTap() else if(autoFocus && !focusSpent) { focusSpent=true; focus.requestFocus(); keyboard?.show() }
  }
  LaunchedEffect(dictation.phase) { if(previousPhase in setOf(DictationPhase.Listening,DictationPhase.Stopping) && dictation.phase !in setOf(DictationPhase.Listening,DictationPhase.Stopping)) { val words=(dictation.text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }-wordsBefore).coerceAtLeast(0);view.announceForAccessibility("Stopped. $words words added.") };previousPhase=dictation.phase }
  LaunchedEffect(dictation.text) { if(!saved && !voice.hasSession && dictation.phase!=DictationPhase.NeedsPermission && dictation.text.isNotEmpty()) {if(dictation.text!=value.text) dictatedText=true;value=TextFieldValue(dictation.text,TextRange(dictation.text.length))} }
@@ -230,24 +241,30 @@ import kotlinx.coroutines.*
   saved=false;value=new
  }
  val prefix=Regex("(?:^|\\s)#([\\p{L}\\p{N}_/-]*)$").find(value.text.take(value.selection.start))?.groupValues?.get(1)
- Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-  Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer) {
-   Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-   Box(Modifier.fillMaxWidth().padding(16.dp).heightIn(min=96.dp)) {
-    if(value.text.isEmpty()) Text("What's on your mind?",color=MaterialTheme.colorScheme.onSurfaceVariant,style=SpuntoType.reading)
-    BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
-   }
-  if(prefix!=null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-   labelCounts.filter { it.key.startsWith(prefix,true) }.sortedByDescending { it.count }.take(3).forEach { label -> SuggestionChip(onClick={val caret=value.selection.start; val start=caret-prefix.length; val text=value.text.replaceRange(start,caret,label.path+" "); ownerValue(TextFieldValue(text,TextRange(start+label.path.length+1)))},label={Text("#${label.path}")}) }
-   if(prefix.isNotEmpty() && labelCounts.none { it.key.equals(prefix,true) }) Text("New label #$prefix",style=MaterialTheme.typography.labelMedium)
+ fun insertAtCaret(text:String,at:Int=value.selection.min,replaceTo:Int=value.selection.max) { ownerValue(TextFieldValue(value.text.replaceRange(at,replaceTo,text),TextRange(at+text.length)));focus.requestFocus() }
+ // "#" lands at the caret and opens label suggestions; a checklist item starts on its own line.
+ fun insertLabel() { val before=value.text.getOrNull(value.selection.min-1);insertAtCaret(if(before==null || before.isWhitespace() || before in "([") "#" else " #") }
+ fun insertTask() {
+  val caret=value.selection.max;val lineStart=value.text.lastIndexOf('\n',caret-1)+1;val lineEnd=value.text.indexOf('\n',caret).let {if(it<0) value.text.length else it}
+  if(value.text.substring(lineStart,lineEnd).isBlank()) insertAtCaret("- [ ] ",lineStart,lineEnd) else insertAtCaret("\n- [ ] ",lineEnd,lineEnd)
+ }
+ suspend fun attachImage(uri:Uri) {
+  val mime=context.contentResolver.getType(uri)?.takeIf {it.startsWith("image/")} ?: "image/jpeg"
+  val file=withContext(Dispatchers.IO) {
+   val target=java.io.File(model.container.privateDirectory("pending-attachments"),java.util.UUID.randomUUID().toString())
+   try {requireNotNull(context.contentResolver.openInputStream(uri)) {"This image is no longer available."}.use {input ->target.outputStream().use {input.copyTo(it)}};target} catch(error:Exception) {target.delete();throw error}
   }
-  ComposerToolbar(tools={
-    TextButton(onClick={ownerValue(TextFieldValue(value.text+" #",TextRange(value.text.length+2)));focus.requestFocus()},enabled=ready && !closing) { Text("# Label") }
-    if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,listening,startingVoice) {if(listening) session.stopAndKeep() else micTap()}
-    if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty()) {Text("Record voice memo")}
-   },save={
-   if(showSaveAction) ComposerSaveAction(enabled=ready && !closing && !saving && (value.text.isNotBlank() || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty),saving=saving,startingVoice=startingVoice,onSave={
-    if(startingVoice || saving) return@ComposerSaveAction
+  try {
+   if(file.length() !in 1..IMAGE_IMPORT_LIMIT) {file.delete();throw IllegalArgumentException("Choose an image of at most 5 MB.")}
+   if(id=="capture") images=images+(file to mime)
+   else {val attachment=model.repository.queueImage(id,file.absolutePath,mime);val text=value.text.trimEnd()+"\n\n[image:$attachment]";ownerValue(TextFieldValue(text,TextRange(text.length)))}
+  } catch(error:Exception) {if(id=="capture") file.delete();throw error}
+ }
+ val pickImage=rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {uri ->
+  if(uri!=null) scope.launch {try {attachImage(uri)} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=(error as? IllegalArgumentException)?.message ?: "Couldn't add this image. Your text is kept."}}
+ }
+ fun saveNow() {
+    if(startingVoice || saving) return
     val tappedRevision=ownerRevision
     val tappedWrite=model.repository.editorWrite(lease,value.text)
     retaining=recordingActive(voice.state.value.phase) || voice.state.value.recording!=null || pendingRecording!=null
@@ -273,10 +290,14 @@ import kotlinx.coroutines.*
       onRecordingSaved(noteId)
      } else {
       val body=if(listening) session.stopForSave() else value.text
-      if(body.isNotBlank() || canSaveEmpty) {
+      if(body.isNotBlank() || canSaveEmpty || images.isNotEmpty()) {
        if(id!="capture") check(model.repository.finishEditor(model.repository.editorWrite(lease,body))) { "Editor is no longer active." }
        val dictated=dictatedText || listening && body.isNotBlank() && body!=dictationInitial
-       if(id=="capture" && onPlainCaptureSave!=null) onPlainCaptureSave(body,if(dictated) "dictation" else null) else onSave(body)
+       if(id=="capture" && onPlainCaptureSave!=null) {
+        val noteId=onPlainCaptureSave(body,if(dictated) "dictation" else null)
+        if(noteId!=null) images.forEach { (file,mime) -> model.repository.queueImage(noteId,file.absolutePath,mime) }
+        images=emptyList()
+       } else onSave(body)
        if(id=="capture") model.container.scope.launch { runCatching { model.repository.clearDraft(draftId,body) } }
        if(value.text==body) { saved=true;value=TextFieldValue("");dictatedText=false }
        if(autoFocus) focus.requestFocus()
@@ -285,21 +306,71 @@ import kotlinx.coroutines.*
     } catch(cancelled:CancellationException) {throw cancelled}
     catch(error:Exception) { model.message.value=if(error is IllegalArgumentException || error is IllegalStateException) error.message.orEmpty() else "Couldn't save on this phone. Your draft is still here." }
     finally { saving=false;retaining=false }
-   }})
-  })
    }
+ }
+ val canSave=ready && !closing && !saving && (value.text.isNotBlank() || images.isNotEmpty() || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty)
+ val switchLanguage:()->Unit={scope.launch {
+  val restart=listening || dictation.phase==DictationPhase.NeedsLanguage;session.stopAndKeep()
+  language=when(language) {"it-IT" -> "en-US";"en-US" -> if(autoAvailable) "auto" else "it-IT";else -> "it-IT"};device.update(language=language)
+  if(restart) start() else session.clearNotice()
+ }}
+ Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+  Surface(shape=MaterialTheme.shapes.medium,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent) {
+   Box(Modifier.fillMaxWidth().padding(if(boxed) 16.dp else 0.dp).heightIn(min=if(boxed) 96.dp else 48.dp)) {
+    if(value.text.isEmpty()) Text(placeholder,color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
+    BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+   }
+  }
+  if(images.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
+   Text(if(images.size==1) "1 image to attach" else "${images.size} images to attach",Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
+   TextButton(onClick={images.forEach {it.first.delete()};images=emptyList()},modifier=Modifier.heightIn(min=48.dp)) {Text("Remove")}
   }
   if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT<33) Text("Voice recording needs Android 13 or newer. You can still type, or use dictation when available.",style=MaterialTheme.typography.bodySmall)
   VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't discard this clip. It is kept on this phone."}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't recover this clip. Your recording and text are kept."}}},saveAction=if(showSaveAction) "Save" else "Done")
   pendingRecording?.let {row ->AttachmentPlayer(model,row.id,"Recording ${recordingTime(row.durationMs)}",AttachmentEntity(row.id,row.noteId.orEmpty(),row.finalPath,"audio/ogg",kind="recording",durationMs=row.durationMs,byteSize=row.byteSize,sha256=row.sha256,serverUrl=row.serverUrl,status="local-only"))}
-  if(recordingNeedsPermission) Row {Text("Allow microphone permission to record.",Modifier.weight(1f));TextButton(onClick={permissionAction="recording";if(permanent) context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}"))) else permission.launch(Manifest.permission.RECORD_AUDIO)}) {Text(if(permanent) "Open settings" else "Allow")}}
-  if(dictationEnabled && !voice.hasSession && (listening || dictation.message.isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.message.startsWith("Didn't catch")))) {
-   Text(dictation.message,color=MaterialTheme.colorScheme.onSurfaceVariant)
-   Row { TextButton(onClick={scope.launch { val wasListening=listening; session.stopAndKeep(); language=when(language) { "it-IT" -> "en-US";"en-US" -> if(autoAvailable) "auto" else "it-IT"; else -> "it-IT" };device.update(language=language); if(wasListening) start() }}) { Text(when(language) { "it-IT" -> "Italian"; "en-US" -> "English";else -> "Auto" }) }; TextButton(onClick={session.stopAndKeep();focus.requestFocus();keyboard?.show()}) { Text("Keyboard") }
-    if(dictation.phase==DictationPhase.NeedsPermission) TextButton(onClick={if(permanent) context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}"))) else permission.launch(Manifest.permission.RECORD_AUDIO)}) { Text(if(permanent) "Open settings" else "Allow") }
-    if(dictation.phase==DictationPhase.NeedsLanguage) TextButton(onClick={scope.launch { PlatformSpeechEngine.download(context,language) }}) { Text("Download") }
-   }
+  fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}
+  // One message and one way forward per state (03 A13).
+  if(recordingNeedsPermission) DictationNotice(if(permanent) "Microphone access is off for spunto." else "Recording needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {permissionAction="recording";if(permanent) openSettings() else permission.launch(Manifest.permission.RECORD_AUDIO)}
+  if(dictationEnabled && !voice.hasSession) when {
+   dictation.phase==DictationPhase.NeedsPermission -> DictationNotice(if(permanent) "Microphone access is off for spunto." else "Dictation needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {if(permanent) openSettings() else {permissionAction="dictation";permission.launch(Manifest.permission.RECORD_AUDIO)}}
+   dictation.phase==DictationPhase.NeedsLanguage -> DictationNotice(dictation.message,"Download") {scope.launch {PlatformSpeechEngine.download(context,language)}}
+   listening || dictation.message.isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.message.startsWith("Didn't catch")) -> DictationNotice(dictation.message)
   }
+ }
+ // Hiding the keyboard ends typing in the capture composer: focus goes, so its bar undocks and the list
+ // stops holding the composer in place (a focused item stays composed, which kept day headers from sticking).
+ val imeVisible=WindowInsets.isImeVisible;val focusManager=LocalFocusManager.current;var keyboardShown by remember { mutableStateOf(false) }
+ LaunchedEffect(imeVisible) { if(keyboardShown && !imeVisible && focused && id=="capture" && !listening) focusManager.clearFocus();keyboardShown=imeVisible }
+ val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || images.isNotEmpty() || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
+ // A label already typed in full offers nothing to complete, so the tools stay.
+ val suggestions=prefix?.let {labelCounts.filter {label -> label.key.startsWith(it,true) && !label.path.equals(it,true)}.sortedByDescending {it.count}.take(5)}.orEmpty()
+ val newLabel=prefix?.takeIf {it.isNotEmpty() && labelCounts.none {label -> label.path.equals(it,true)}}
+ if(docked) BottomBar {
+  ComposerToolbar(tools={
+   if(prefix!=null && (suggestions.isNotEmpty() || newLabel!=null)) {
+    suggestions.forEach {label -> SuggestionChip(onClick={val caret=value.selection.start;insertAtCaret(label.path+" ",caret-prefix.length,caret)},label={Text("#${label.path}")})}
+    if(newLabel!=null) Text("New label #$newLabel",Modifier.padding(horizontal=8.dp),style=MaterialTheme.typography.labelMedium,color=SpuntoColors.ink3)
+   } else if(listening || dictation.phase==DictationPhase.NeedsLanguage) {
+    IconButton(onClick={session.stopAndKeep();focus.requestFocus();keyboard?.show()}) {Icon(painterResource(R.drawable.ic_keyboard),contentDescription="Back to typing",modifier=Modifier.size(24.dp))}
+    TextButton(onClick=switchLanguage,modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription="Dictation language, ${languageName(language)}. Switch"}) {Text(languageName(language))}
+    if(listening) ComposerDictationAction(true,true,startingVoice) {session.stopAndKeep()}
+   } else if(tools) {
+    IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription="Add a label"})}
+    IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription="Add a checklist item",modifier=Modifier.size(24.dp))}
+    if(id!="capture" || onPlainCaptureSave!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=ready && !closing && !saving) {Icon(painterResource(R.drawable.ic_image),contentDescription="Add an image",modifier=Modifier.size(24.dp))}
+    if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,false,startingVoice) {micTap()}
+    if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text("Record")}
+   }
+  },save={
+   if(showSaveAction) ComposerSaveAction(enabled=canSave,saving=saving,startingVoice=startingVoice) {saveNow()} else trailing?.invoke()
+  })
+ }
+}
+private fun languageName(tag:String)=when(tag) {"it-IT" -> "Italian";"en-US" -> "English";else -> "Auto"}
+@Composable private fun DictationNotice(message:String,action:String?=null,onAction:()->Unit={}) {
+ Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+  Text(message,Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  if(action!=null) TextButton(onClick=onAction,modifier=Modifier.heightIn(min=48.dp)) {Text(action)}
  }
 }
 

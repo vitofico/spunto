@@ -94,9 +94,9 @@ import kotlinx.serialization.json.*
  LaunchedEffect(appearanceManifest,themeOverride,requestedTheme,requestedAccent,activeSelection) {
   if(appearanceManifest!=null) storeSelectedThemeSnapshot(model.container.preferences,SelectedThemeSnapshot(themeOverride,requestedTheme,requestedAccent,manifestFingerprint,activeSelection))
  }
- val topBar=remember { TopBarSlot() }
+ val topBar=remember { TopBarSlot() };val bottomBar=remember { BottomBarSlot() }
  val snackbar=remember { SnackbarHostState() };val feedbackScope=rememberCoroutineScope();val feedback=remember { Feedback(snackbar,feedbackScope) }
- CompositionLocalProvider(LocalNavigator provides nav,LocalTopBar provides topBar,LocalFeedback provides feedback) {
+ CompositionLocalProvider(LocalNavigator provides nav,LocalTopBar provides topBar,LocalBottomBar provides bottomBar,LocalFeedback provides feedback) {
  SpuntoTheme(activeSelection.id,mode,black,wallpaper,pack=activeSelection.mode(dark),readingFace=readingFace,readingSize=readingSize) {
   FirstRunGuideGate(guideStore,eligible=guideEligible && initialNoteId==null && route=="timeline" && !reauth,replay=route=="guide",canConnect=auth==null,onStartWriting={nav.home()},onSkipReplay={nav.back()},onConnect={nav.open("login")},content=appContent@{
   if(reauth || route=="login") {
@@ -120,7 +120,7 @@ import kotlinx.serialization.json.*
     Icon(painterResource(R.drawable.ic_settings),contentDescription="Settings",modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    topBar.actions?.invoke(this)
-  },windowInsets=WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal+WindowInsetsSides.Top))},snackbarHost={SnackbarHost(snackbar)},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
+  },windowInsets=WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal+WindowInsetsSides.Top))},bottomBar={bottomBar.content?.let { bar -> Surface(color=MaterialTheme.colorScheme.background) { Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),contentAlignment=Alignment.Center) { Box(Modifier.widthIn(max=640.dp)) { bar() } } } }},snackbarHost={SnackbarHost(snackbar)},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})

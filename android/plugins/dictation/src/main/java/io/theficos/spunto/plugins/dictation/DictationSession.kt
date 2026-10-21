@@ -23,7 +23,7 @@ class DictationSession(
     private var generation = 0
     private var lastPartialWrite = 0L
     fun start(text: String, start: Int, end: Int, language: String, permission: Boolean, options: SpeechOptions = SpeechOptions()) {
-        if (!permission) { stopAndKeep(); mutable.value = DictationState(DictationPhase.NeedsPermission, text, message = "Microphone permission is needed · Allow"); return }
+        if (!permission) { stopAndKeep(); mutable.value = DictationState(DictationPhase.NeedsPermission, text, message = "Dictation needs the microphone. Audio stays on this phone."); return }
         finish()
         buffer = TranscriptBuffer(text, start, end)
         if (!focus.acquire()) { mutable.value = DictationState(DictationPhase.Failed, text, message = "The microphone is in use by another app."); return }
@@ -47,8 +47,8 @@ class DictationSession(
                         logError(event.code)
                         val hasWords = buffer.hasCapture
                         val message = when(event.reason) {
-                            SpeechFailure.Permission -> "Microphone permission is needed · Allow"
-                            SpeechFailure.Language -> "${if(language.startsWith("it")) "Italian" else "English"} needs a one-time download to work offline · Download"
+                            SpeechFailure.Permission -> "Dictation needs the microphone. Audio stays on this phone."
+                            SpeechFailure.Language -> "${if(language.startsWith("it")) "Italian" else "English"} needs a one-time download to work offline"
                             SpeechFailure.Empty -> if(hasWords) "Stopped." else "Didn't catch anything. Tap the mic to try again."
                             SpeechFailure.Microphone -> "The microphone is in use by another app."
                             SpeechFailure.Network -> "This phone can't dictate ${if(language.startsWith("it")) "Italian" else "English"} offline. Type, or download it in Settings → Plugins → Dictation."
@@ -79,6 +79,8 @@ class DictationSession(
         persist(buffer.text)
         return buffer.text
     }
+    /** Drops a notice that no longer applies (a download asked for the previous language) without touching the text. */
+    fun clearNotice() { if(state.value.phase !in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)) mutable.value=DictationState(text=state.value.text) }
     fun stopAndKeep() { if(state.value.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)) commitAndFinish() }
     private fun commitAndFinish() {
         val text=buffer.commitPartial()

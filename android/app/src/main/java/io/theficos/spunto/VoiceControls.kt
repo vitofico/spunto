@@ -1,7 +1,9 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.theficos.spunto
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -17,7 +19,9 @@ internal fun recordingActive(phase:RecordingPhase)=phase in setOf(RecordingPhase
  Button(onClick={if(!startingVoice) onSave()},enabled=enabled && !startingVoice,modifier=Modifier.heightIn(min=48.dp)) {Text(if(saving) "Saving…" else "Save")}
 }
 @Composable internal fun ComposerDictationAction(enabled:Boolean,listening:Boolean,startingVoice:Boolean,onTap:()->Unit) {
- TextButton(onClick={if(!startingVoice) onTap()},enabled=enabled && !startingVoice,modifier=Modifier.semantics {contentDescription=if(listening) "Stop dictation" else "Dictate"}) {Text(if(listening) "■ Stop" else "Dictate")}
+ IconButton(onClick={if(!startingVoice) onTap()},enabled=enabled && !startingVoice,modifier=Modifier.semantics {contentDescription=if(listening) "Stop dictation" else "Dictate"}) {
+  if(listening) Box(Modifier.size(18.dp).background(MaterialTheme.colorScheme.primary,MaterialTheme.shapes.extraSmall)) else Icon(painterResource(R.drawable.ic_mic),contentDescription=null,modifier=Modifier.size(24.dp))
+ }
 }
 
 @Composable fun VoiceControls(state:RecordingState,transcriptionActive:Boolean,pending:RecordingDraftEntity?,recoveries:List<RecordingDraftEntity>,enabled:Boolean,onStop:()->Unit,onDiscard:(String)->Unit,onRecover:(String)->Unit,saveAction:String="Save") {

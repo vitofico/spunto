@@ -11,9 +11,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.data.local.NoteEntity
+import io.theficos.spunto.data.sync.AuthConfig
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
@@ -24,9 +27,15 @@ class NoteExportTest {
  @get:Rule val timeout=org.junit.rules.Timeout(5,java.util.concurrent.TimeUnit.MINUTES)
  private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
  private val app get()=instrumentation.targetContext.applicationContext as SpuntoApplication
- private fun fixture():Triple<SpuntoViewModel,LocalFixtureAuthority,Note> {
+ private var signedIn:AuthConfig?=null
+ /** The fixtures need a signed-out app: each test signs this emulator out, then signs the same device back in. */
+ @Before fun signOut() {
   check(instrumentation.targetContext.packageName=="io.theficos.spunto.debug")
   check(android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand("getprop ro.kernel.qemu")).bufferedReader().use {it.readText()}.trim()=="1") {"Export fixtures require an emulator."}
+  runBlocking {val auth=app.container.current.auth;signedIn=auth.config.first();auth.clear()}
+ }
+ @After fun signBackIn() {runBlocking {signedIn?.let {app.container.current.auth.save(it)}}}
+ private fun fixture():Triple<SpuntoViewModel,LocalFixtureAuthority,Note> {
   val model=SpuntoViewModel(app)
   val authority=runBlocking {LocalFixtureAuthority.require(model.container)}
   check(!model.container.appLock.state.value.enabled)

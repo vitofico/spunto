@@ -17,7 +17,6 @@ import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
-import org.junit.Before
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -25,27 +24,13 @@ import org.junit.Test
 class AppearanceCacheTest {
  @get:Rule val compose=createComposeRule()
  private val context get()=InstrumentationRegistry.getInstrumentation().targetContext
- private val appearance get()=context.getSharedPreferences("appearance",Context.MODE_PRIVATE)
- private val manifestPreferences get()=context.getSharedPreferences("plugin-manifest",Context.MODE_PRIVATE)
- private lateinit var originalAppearance:Map<String,*>
- private lateinit var originalManifest:Map<String,*>
  private val fixtureNames=mutableListOf<String>()
  private val showContent=mutableStateOf(true)
  private var containsContent=false
- @Before fun retainExactOwnerPreferences() { originalAppearance=appearance.all.toMap();originalManifest=manifestPreferences.all.toMap() }
- @After fun restoreExactOwnerPreferences() {
+ /** Fixtures live in their own preference files; the owner's appearance and manifest are never touched. */
+ @After fun deleteFixturePreferences() {
   if(containsContent) { compose.runOnIdle { showContent.value=false };compose.waitForIdle() }
-  restore(appearance,originalAppearance);restore(manifestPreferences,originalManifest)
   fixtureNames.forEach { context.deleteSharedPreferences(it) }
-  assertEquals(originalAppearance,appearance.all);assertEquals(originalManifest,manifestPreferences.all)
- }
- private fun restore(preferences:SharedPreferences,original:Map<String,*>) {
-  preferences.edit().clear().apply {
-   original.forEach { (key,value) -> when(value) {
-    is String -> putString(key,value);is Boolean -> putBoolean(key,value);is Int -> putInt(key,value);is Long -> putLong(key,value);is Float -> putFloat(key,value)
-    is Set<*> -> putStringSet(key,value.filterIsInstance<String>().toSet())
-   } }
-  }.commit()
  }
  private fun fixturePreferences():SharedPreferences { val name="appearance-fixture-${UUID.randomUUID()}";fixtureNames.add(name);return context.getSharedPreferences(name,Context.MODE_PRIVATE) }
  private fun pack():ThemeCard {
@@ -113,6 +98,9 @@ class AppearanceCacheTest {
   assertEquals(instance,readSelectedThemeSnapshot(preferences,fingerprint));assertEquals(reset,preferences.all)
  }
  @Test fun defaultCaptureThemeUsesMatchingCacheInFirstFrameAndFreshFailureWins() {
+  // A namespace of its own: in a full run the app's signed-in replica keeps rewriting the shared manifest.
+  val namespace="fixture-${UUID.randomUUID()}";fixtureNames+=listOf("appearance-$namespace","plugin-manifest-$namespace")
+  val appearance=context.getSharedPreferences("appearance-$namespace",Context.MODE_PRIVATE);val manifestPreferences=context.getSharedPreferences("plugin-manifest-$namespace",Context.MODE_PRIVATE)
   val raw=manifest(pack());val fingerprint=themeManifestFingerprint(raw)
   val selected=resolveThemeSelection("fixture-pack","blue-accent",decodeThemeManifest(raw).catalog)
   appearance.edit().clear().putString("mode","dark").putString("reading-face","sans").putString("reading-size","L").commit()
@@ -122,7 +110,7 @@ class AppearanceCacheTest {
   containsContent=true
   compose.setContent {
    if(showContent.value) CompositionLocalProvider(LocalDensity provides Density(1f,1.6f)) {
-    SpuntoTheme {
+    SpuntoTheme(namespace=namespace) {
      val color=MaterialTheme.colorScheme.primary;val typography=MaterialTheme.typography;val reading=SpuntoType.reading
      val pixels=with(LocalDensity.current) { reading.fontSize.toPx() }
      SideEffect { seen.add(color);prosePixels.add(pixels);assertEquals(18f*16.5f/17,reading.fontSize.value,.001f);assertEquals(uiFont(),reading.fontFamily);assertEquals(14f,typography.bodyMedium.fontSize.value,0f) }

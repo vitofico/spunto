@@ -114,6 +114,8 @@ interface SpuntoDao {
   SELECT key, MIN(path) AS path, COUNT(DISTINCT noteId) AS count
   FROM hierarchy GROUP BY key ORDER BY key
  """) fun labels(): Flow<List<LabelCount>>
+ /** The "All notes" count beside the sheet row: the notes the label counts above see. */
+ @Query("SELECT COUNT(*) FROM notes n WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)") fun noteCount(): Flow<Int>
  @Query("SELECT * FROM sync_state WHERE id=1") suspend fun state(): SyncStateEntity?
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putState(state: SyncStateEntity)
  @Query("SELECT * FROM sync_state WHERE id=1") fun observeState(): Flow<SyncStateEntity?>

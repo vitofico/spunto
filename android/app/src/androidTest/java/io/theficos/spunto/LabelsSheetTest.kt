@@ -25,6 +25,14 @@ class LabelsSheetTest {
   compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
   compose.runOnIdle {assertTrue(routes.isEmpty());assertEquals(0,management);assertEquals("Synthetic draft remains exactly here",draft.value);assertFalse(open.value)}
  }
+ @Test fun allNotesCarriesItsCountAndReviewOnlyShowsWhenItemsWait() {
+  val waiting=mutableStateOf(0)
+  compose.setContent {SpuntoTheme("carta","light") {LabelsSheet(LabelsNavigationSnapshot("timeline",labels,manifest()),{},{},{},{},{},reviewWaiting=waiting.value,allNotes=24)}}
+  compose.onNode(hasText("All notes") and hasText("24")).assertIsDisplayed().assertIsSelected().assert(hasContentDescription("All notes, 24 notes"))
+  compose.onNodeWithText("Archive").assertIsDisplayed();compose.onNodeWithText("Trash").assertIsDisplayed();compose.onNodeWithText("Review").assertDoesNotExist()
+  compose.runOnIdle {waiting.value=6}
+  compose.onNode(hasText("Review") and hasText("6")).assertIsDisplayed()
+ }
  @Test fun exactLabelSelectionNavigatesOnceWithCanonicalKey() {
   val open=mutableStateOf(true);val routes=mutableListOf<String>()
   compose.setContent {SpuntoTheme("carta","dark") {if(open.value) LabelsSheet(LabelsNavigationSnapshot("label:project/spunto",labels,manifest()),{routes+=it;open.value=false},{},{},{},{open.value=false})}}

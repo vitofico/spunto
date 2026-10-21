@@ -21,6 +21,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  private val historyRepository by lazy { HistoryRepository(repository,container.auth) }
  val notes=repository.notes.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val labels=repository.labels().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val noteCount=repository.dao.noteCount().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),null)
  val outputs=repository.outputs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val pending=repository.pendingCount.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),0)
  private val keptConflicts=MutableStateFlow(container.preferences.getStringSet("conflicts-kept",null).orEmpty().toSet())

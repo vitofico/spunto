@@ -75,6 +75,13 @@ class LabelsHierarchyTest {
   repository.dao.put(repository.dao.get(other)!!.copy(trashed=true));assertTrue(empty.await().isEmpty())
   assertNotNull(repository.dao.get(live));assertNotNull(repository.dao.get(other))
  }
+ @Test fun allNotesCountSeesTheSameNotesAsLabelCountsAndFollowsChanges()=runBlocking {
+  val live=note("Synthetic plain");note("Synthetic #Project");note("Synthetic archived",archived=true);note("Synthetic trash",trashed=true)
+  val purged=note("Synthetic pending row");repository.dao.putTombstone(TombstoneEntity(purged,1))
+  assertEquals(2,repository.dao.noteCount().first())
+  val changed=async {withTimeout(3000) {repository.dao.noteCount().first {it==1}}}
+  repository.dao.put(repository.dao.get(live)!!.copy(archived=true));assertEquals(1,changed.await())
+ }
  @Test fun readingHierarchyLeavesPendingPayloadDraftAndRevisionIdentityUntouched()=runBlocking {
   val id=repository.create("Synthetic local #Project/Spunto")
   repository.dao.putDraft(DraftEntity("capture","Synthetic retained draft",42))

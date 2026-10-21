@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,13 +26,15 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
    onLongClick=onManageLabel?.takeIf {managementAvailable}?.let {manage -> {manage(row.path)}},longClickLabel="Manage #${row.path} in the web app") {onLabel(row.key)}
  }
 }
-/** A6 row: ink text, the count in ink-3 at the right, the active one on an accent-soft pill; 48 dp tall, 16 dp per level. */
+/** A6 row: ink text after its glyph, if any, the count in ink-3 at the right, the active one in the accent on an accent-soft pill; 48 dp tall, 16 dp per level. */
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun SheetRow(title:String,selected:Boolean,modifier:Modifier=Modifier,count:Int?=null,depth:Int=0,description:String?=null,onLongClick:(()->Unit)?=null,longClickLabel:String?=null,onClick:()->Unit) {
+@Composable private fun SheetRow(title:String,selected:Boolean,modifier:Modifier=Modifier,count:Int?=null,depth:Int=0,description:String?=null,glyph:Int?=null,onLongClick:(()->Unit)?=null,longClickLabel:String?=null,onClick:()->Unit) {
+ val ink=if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
  Row(modifier.fillMaxWidth().padding(start=(depth.coerceAtMost(4)*16).dp).heightIn(min=48.dp).clip(CircleShape).background(if(selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
   .combinedClickable(role=Role.Button,onLongClickLabel=longClickLabel,onLongClick=onLongClick,onClick=onClick).semantics {this.selected=selected;description?.let {contentDescription=it}}.padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-  Text(title,Modifier.weight(1f).padding(end=8.dp),style=MaterialTheme.typography.bodyLarge,color=if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)
-  count?.let {Text(it.toString(),style=MaterialTheme.typography.labelMedium,color=SpuntoColors.ink3)}
+  glyph?.let {Icon(painterResource(it),contentDescription=null,modifier=Modifier.padding(end=16.dp).size(24.dp),tint=ink)}
+  Text(title,Modifier.weight(1f).padding(end=8.dp),style=MaterialTheme.typography.bodyLarge,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis)
+  count?.let {Text(it.toString(),style=MaterialTheme.typography.labelMedium,color=if(selected) ink else SpuntoColors.ink3)}
  }
 }
 @Composable private fun SheetOverline(text:String,action:(@Composable ()->Unit)?=null) =
@@ -44,7 +47,7 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
 @Composable fun LabelsSheet(
  snapshot:LabelsNavigationSnapshot,onRoute:(String)->Unit,onSettings:()->Unit,
  onManageLabels:(String)->Unit,onManageViews:()->Unit,onDismiss:()->Unit,
- managementAvailable:Boolean=false,managementMessage:String="Connect and sync with your server to manage shared labels and views.",reviewWaiting:Int=0,
+ managementAvailable:Boolean=false,managementMessage:String="Connect and sync with your server to manage shared labels and views.",reviewWaiting:Int=0,allNotes:Int?=null,
 ) {
  var query by remember {mutableStateOf("")};var showMore by remember {mutableStateOf(false)}
  val latest by rememberUpdatedState(snapshot)
@@ -54,8 +57,9 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),scrimColor=MaterialTheme.colorScheme.scrim) {
   LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding(),contentPadding=PaddingValues(start=8.dp,end=8.dp,bottom=24.dp)) {
    item(key="find") {OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),placeholder={Text("Find a label")},singleLine=true)}
-   items(listOfNotNull("timeline" to "All notes","archive" to "Archive","trash" to "Trash",("review" to "Review").takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title) ->
-    SheetRow(title,snapshot.route==route,count=if(route=="review") reviewWaiting else null) {onRoute(route)}
+   items(listOfNotNull(Triple("timeline","All notes",R.drawable.ic_notes),Triple("archive","Archive",R.drawable.ic_archive),Triple("trash","Trash",R.drawable.ic_trash),Triple("review","Review",R.drawable.ic_inbox).takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title,glyph) ->
+    val count=when(route) {"timeline" -> allNotes;"review" -> reviewWaiting;else -> null}
+    SheetRow(title,snapshot.route==route,count=count,description=count?.let {"$title, ${notesCount(it)}"}.takeIf {route=="timeline"},glyph=glyph) {onRoute(route)}
    }
    if(views.isNotEmpty()) {
     item(key="views") {SheetOverline("Views") {if(views.any {it.hidden}) TextButton(onClick={showMore=!showMore}) {Text(if(showMore) "Show fewer views" else "Show more views")}}}

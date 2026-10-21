@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { ApiError } from "../lib/errors";
 import { useHosted } from "../lib/query";
 import type {
   AICapability,
@@ -31,17 +30,6 @@ function sameSelections(a: AIModelSelections, b: AIModelSelections) {
 }
 function modelValue(choice?: AIModelChoice) {
   return choice ? JSON.stringify([choice.profile, choice.model]) : "";
-}
-function selectionError(error: Error) {
-  if (error instanceof ApiError) {
-    if (error.code === "ai_selection_changed")
-      return "Model settings changed elsewhere. Your choices are kept. Discard changes and reload to review the latest settings.";
-    if (error.code === "ai_model_invalid")
-      return "That model is no longer available for this capability. Your choices are kept. Refresh models and choose another.";
-    if (error.code === "ai_inventory_unavailable")
-      return "Could not load the provider’s model list. Your choices are kept. Refresh models and try again.";
-  }
-  return "Could not save model choices. Your choices are kept.";
 }
 function AIModelSettings({
   ai,
@@ -324,7 +312,7 @@ function AIModelSettings({
       {save.isSuccess && <p role="status">Model choices saved.</p>}
       {save.error && (
         <p role="alert" className="error">
-          {selectionError(save.error)}
+          {save.error.message}
         </p>
       )}
       {reload.error && (

@@ -294,7 +294,12 @@ it("keeps saved choices and other providers usable when one inventory fails", as
 
 it("preserves dirty choices and the original revision across polling and a CAS conflict", async () => {
   vi.mocked(api.saveAIModels).mockRejectedValue(
-    new ApiError(409, "ai_selection_changed"),
+    new ApiError(
+      409,
+      "ai_selection_changed",
+      undefined,
+      "AI model choices changed. Reload before saving again.",
+    ),
   );
   wrap();
   const embed = await screen.findByRole("combobox", {
@@ -317,7 +322,7 @@ it("preserves dirty choices and the original revision across polling and a CAS c
   fireEvent.click(screen.getByRole("button", { name: "Save models" }));
   expect(
     await screen.findByText(
-      /Model settings changed elsewhere. Your choices are kept/,
+      "AI model choices changed. Reload before saving again.",
     ),
   ).toBeTruthy();
   expect((embed as HTMLSelectElement).value).toBe(
@@ -334,20 +339,27 @@ it("preserves dirty choices and the original revision across polling and a CAS c
     screen.getByRole("button", { name: "Discard changes and reload" }),
   );
   await waitFor(() => expect((embed as HTMLSelectElement).value).toBe(""));
-  expect(screen.queryByText(/Model settings changed elsewhere/)).toBeNull();
+  expect(screen.queryByText(/AI model choices changed/)).toBeNull();
 });
 
 it.each([
   [
     422,
     "ai_model_invalid",
-    "That model is no longer available for this capability",
+    "Choose an available model compatible with this capability.",
   ],
-  [503, "ai_inventory_unavailable", "Could not load the provider’s model list"],
+  [
+    503,
+    "ai_inventory_unavailable",
+    "The provider could not verify the selected model.",
+  ],
+  [500, "request_failed", "The model settings could not be stored."],
 ] as const)(
-  "keeps choices after a %s save failure",
+  "keeps choices and shows the server's reason after a %s save failure",
   async (code, reason, message) => {
-    vi.mocked(api.saveAIModels).mockRejectedValue(new ApiError(code, reason));
+    vi.mocked(api.saveAIModels).mockRejectedValue(
+      new ApiError(code, reason, undefined, message),
+    );
     wrap();
     const embed = await screen.findByRole("combobox", {
       name: "Embeddings model",
@@ -355,7 +367,7 @@ it.each([
     await within(embed).findByRole("option", { name: "fixture-embedding-v2" });
     selectModel("Embeddings model", "local", "fixture-embedding-v2");
     fireEvent.click(screen.getByRole("button", { name: "Save models" }));
-    expect(await screen.findByText(new RegExp(message))).toBeTruthy();
+    expect(await screen.findByText(message)).toBeTruthy();
     expect((embed as HTMLSelectElement).value).toBe(
       value("local", "fixture-embedding-v2"),
     );

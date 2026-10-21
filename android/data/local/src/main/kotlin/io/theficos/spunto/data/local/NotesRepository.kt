@@ -81,6 +81,13 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  fun observe(id: String) = dao.observe(id).map { it?.note() }
  fun paging(spec:TimelineSpec=TimelineSpec()) = Pager(PagingConfig(pageSize=40,enablePlaceholders=false)) { dao.filteredPaging(timelineQuery(spec)) }.flow
  fun labels() = dao.labels()
+ /** Conflicted copies the owner has not settled; settling one is an ordinary edit plus a trash flag, so it syncs like any change. */
+ val conflicts = dao.conflicts().map { rows -> rows.map { it.note() } }
+ suspend fun keepConflictCopy(copyId:String) = db.withTransaction {
+  val copy=dao.get(copyId)?.note(); val original=copy?.conflictOf?.let { dao.get(it) }
+  require(copy!=null && original!=null && dao.tombstone(original.id)==null) { "The original note is no longer on this phone." }
+  save(copy.body,original.id); setFlags(copyId,trashed=true)
+ }
  /** Canonical server rows own coalescing; pending local snapshots stay available offline. */
  fun history(id:String) = combine(dao.history(id),dao.serverHistory(id),dao.historyCache(id),dao.observe(id),dao.observeOutbox()) { local,server,cache,note,outbox ->
   if(note==null) emptyList() else {

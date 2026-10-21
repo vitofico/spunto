@@ -59,6 +59,7 @@ interface SpuntoDao {
  @RawQuery(observedEntities=[NoteEntity::class,LabelEntity::class,ViewMembershipEntity::class]) fun filteredPaging(query:SupportSQLiteQuery):PagingSource<Int,NoteEntity>
  @RawQuery(observedEntities=[NoteEntity::class,LabelEntity::class,ViewMembershipEntity::class]) suspend fun filteredNotes(query:SupportSQLiteQuery):List<NoteEntity>
  @Query("SELECT * FROM notes WHERE id=:id") fun observe(id: String): Flow<NoteEntity?>
+ @Query("SELECT * FROM notes WHERE conflictOf IS NOT NULL AND trashed=0 ORDER BY updatedAt DESC") fun conflicts(): Flow<List<NoteEntity>>
  @Query("SELECT * FROM notes WHERE id=:id") suspend fun get(id: String): NoteEntity?
  @Query("SELECT * FROM notes") suspend fun all(): List<NoteEntity>
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(note: NoteEntity): Long

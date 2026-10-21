@@ -4,6 +4,8 @@ import androidx.test.core.app.ApplicationProvider
 import io.theficos.spunto.data.local.*
 import io.theficos.spunto.core.model.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
 import okhttp3.mockwebserver.*
 import org.junit.*
@@ -56,6 +58,24 @@ class SyncEngineTest {
   val waiter=launch(Dispatchers.Default) {ChangeWaiter({AuthConfig(server.url("/").toString(),"synthetic","d","Phone",true)},repo,engine()).run()}
   withContext(Dispatchers.IO) {Thread.sleep(1500)};waiter.cancelAndJoin()
   assertEquals(1,pulls);assertEquals("e.4",waits.first());assertTrue(waits.size>1 && waits.drop(1).all {it=="e.5"})
+ }
+ @Test fun conflictIsSurfacedAndKeepingTheCopySettlesItThroughTheOutbox()=runBlocking {
+  val id=uuidV7();val copy=uuidV7();repo.putNote(Note(id,"saved",serverRev=1));repo.dao.putState(SyncStateEntity(epoch="e",cursor="e.0"));repo.update(id,"phone")
+  server.dispatcher=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(request.requestUrl!!.encodedPath){
+   "/api/v1/meta"->response("""{"sync_epoch":"e"}""")
+   "/api/v1/notes/$id"->response(note(id,"other device",2).toString())
+   "/api/v1/sync/push"->{val op=Json.parseToJsonElement(request.body.readUtf8()).jsonObject["ops"]!!.jsonArray.single().jsonObject
+    response(buildJsonObject{put("epoch","e");put("results",buildJsonArray{add(buildJsonObject{put("op_id",op["op_id"]!!);put("status","conflict");put("version",2);put("conflict_id",copy);put("note",JsonObject(note(copy,"phone",1)+mapOf("conflict_of" to JsonPrimitive(id))))})})}.toString())}
+   "/api/v1/sync/pull"->response("""{"epoch":"e","cursor":"e.2","has_more":false,"plugins_rev":0,"items":[]}""")
+   "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+   else->response("{}",404)
+  }}
+  assertTrue(engine().sync() is SyncStatus.Complete)
+  assertEquals(listOf(copy to id),repo.conflicts.first().map {it.id to it.conflictOf});assertEquals("other device",repo.dao.get(id)!!.body)
+  repo.keepConflictCopy(copy)
+  assertEquals("phone",repo.dao.get(id)!!.body);assertTrue(repo.dao.get(copy)!!.trashed);assertTrue(repo.conflicts.first().isEmpty())
+  val ops=repo.dao.outbox().map {Json.decodeFromString<OutboxOperation>(it.payload)}
+  assertEquals(listOf("note.update" to id,"note.flags" to copy),ops.map {it.type to it.noteId});assertEquals(2,ops.first().baseVersion)
  }
  @Test fun restoreIncludesChangedReplicaButSkipsKnownTombstones()=runBlocking {
   val id=repo.create("survives restore");val deleted=repo.create("deleted");repo.dao.outbox().forEach{repo.dao.removeOutbox(it.opId)};repo.dao.putTombstone(TombstoneEntity(deleted,1));repo.dao.putState(SyncStateEntity(epoch="old",cursor="old.5"))

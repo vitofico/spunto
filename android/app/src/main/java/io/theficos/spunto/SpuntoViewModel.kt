@@ -23,6 +23,12 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  val labels=repository.labels().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val outputs=repository.outputs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val pending=repository.pendingCount.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),0)
+ private val keptConflicts=MutableStateFlow(container.preferences.getStringSet("conflicts-kept",null).orEmpty().toSet())
+ /** Conflicted copies still waiting for a decision on this phone; "Keep both" settles one here only. */
+ val conflicts=combine(repository.conflicts,keptConflicts) { rows,kept -> rows.filter { it.id !in kept } }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ /** A timeline long-press asked for this note's history; the note page opens it once. */
+ val historyFor=MutableStateFlow<String?>(null)
+ fun keepBothConflict(id:String) { keptConflicts.value+=id;container.preferences.edit().putStringSet("conflicts-kept",keptConflicts.value).apply() }
  private val pages=object:LinkedHashMap<TimelineSpec,Pair<Job,Flow<PagingData<NoteEntity>>>>(8,.75f,true) {
   override fun removeEldestEntry(eldest:MutableMap.MutableEntry<TimelineSpec,Pair<Job,Flow<PagingData<NoteEntity>>>>)=(size>4).also { if(it) eldest.value.first.cancel() }
  }

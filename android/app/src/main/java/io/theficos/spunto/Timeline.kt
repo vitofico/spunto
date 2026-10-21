@@ -91,7 +91,7 @@ internal fun entryDescription(note:Note,time:String):String {
  val launchedOnNote=(LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("noteId")!=null
  var savedId by remember { mutableStateOf<String?>(null) }
  val slipHidden=remember { mutableStateOf(model.container.preferences.getString("slip-hidden","").orEmpty()) }
- val slip=outputs.filter { it.kind=="annotation" && payload(it.payload).string("kind")=="slip" && model.container.manifest.enabled(payload(it.payload).string("plugin")) && slipHidden.value!="${LocalDate.now()}/${it.id}" }.firstNotNullOfOrNull { output -> notes.firstOrNull { note -> note.id==output.noteId && !note.privateNote && !note.trashed }?.let { output to it } }
+ val slip=dailySlip(outputs,notes,model.container.manifest::enabled) { slipHidden.value=="${LocalDate.now()}/${it.id}" }
  val lead=1+(if(proposals>=3) 1 else 0)+(if(slip!=null) 1 else 0)
  // After Save the new entry, with its day header, is scrolled into view, with a brief "Saved".
  LaunchedEffect(savedId) {

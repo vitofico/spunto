@@ -30,7 +30,8 @@ export function continueList(body: string, caret: number) {
   const end = body.indexOf("\n", caret);
   const line = body.slice(start, end < 0 ? body.length : end);
   const item = /^(\s*)([-*+]|(\d+)([.)]))\s+(\[[ xX]\]\s+)?/.exec(line);
-  if (!item) return null;
+  // A caret inside the marker is not a list item yet: Enter splits the line as usual.
+  if (!item || caret < start + item[0].length) return null;
   if (item[0].length === line.length && caret === start + line.length)
     return { body: body.slice(0, start) + body.slice(caret), caret: start };
   const marker = item[3] ? Number(item[3]) + 1 + item[4]! : item[2];

@@ -159,5 +159,7 @@ describe("editing at the caret (WW-02, WW-21, CA-34, WV-41)", () => {
     });
     expect(continueList("a\n- ", 4)).toEqual({ body: "a\n", caret: 2 });
     expect(continueList("plain", 5)).toBeNull();
+    expect(continueList("- item", 0)).toBeNull();
+    expect(continueList("12. item", 1)).toBeNull();
   });
 });

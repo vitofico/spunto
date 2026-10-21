@@ -671,15 +671,9 @@ kbd {
 .search-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-12);
-  font-size: var(--t-meta-size);
+  align-items: center;
+  gap: var(--s-12) var(--s-16);
   color: var(--ink-2);
-}
-.search-filters input {
-  border: 1px solid var(--field);
-  background: var(--raised);
-  border-radius: var(--r-4);
-  padding: var(--s-4);
 }
 .search-filters label {
   display: flex;
@@ -687,9 +681,18 @@ kbd {
   gap: var(--s-8);
   min-width: 0;
 }
-.search-filters input[type="date"] {
-  min-width: 0;
+.search-filters .field {
+  width: auto;
   max-width: 100%;
+  padding: var(--s-8) var(--s-12);
+}
+.search-form .error {
+  margin: 0;
+}
+mark[data-match] {
+  background: var(--highlight);
+  color: inherit;
+  border-radius: var(--r-4);
 }
 .overlay {
   position: fixed;
@@ -961,9 +964,21 @@ kbd {
   .palette-row {
     min-height: 44px;
   }
-  .field,
-  .search-filters input {
+  .field {
     font-size: var(--t-ui-lg-size);
+  }
+  .search-filters .field {
+    min-height: 44px;
+  }
+  /* The two dates share a row, each label above its field. */
+  .search-filters .date-filter {
+    flex: 1 1 8rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s-4);
+  }
+  .search-filters .date-filter .field {
+    width: 100%;
   }
   .entry-actions .button {
     padding: var(--s-8) var(--s-12);

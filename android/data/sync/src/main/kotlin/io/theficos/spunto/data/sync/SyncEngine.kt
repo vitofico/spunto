@@ -176,6 +176,9 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
 class ChangeWaiter(private val configProvider:suspend ()->AuthConfig?,private val repository:NotesRepository,private val engine:SyncEngine) {
  constructor(auth:AuthStore,repository:NotesRepository,engine:SyncEngine):this({auth.config.first()},repository,engine)
  suspend fun run() {
+  // Our cursor, and the server position a complete sync could not move it past: wait from there, or an
+  // older server whose pull cursor lags behind its change_seq answers "changed" at once, forever.
+  var settled:Pair<String,String>?=null
   while(currentCoroutineContext().isActive) {
    val config=configProvider()?:return
    if(!config.ownsReplica(repository.replicaId)) return
@@ -183,8 +186,8 @@ class ChangeWaiter(private val configProvider:suspend ()->AuthConfig?,private va
     val state=repository.dao.state()
     if(state!=null && state.serverUrl.isNotEmpty() && state.serverUrl!=config.serverUrl.trimEnd('/')) return
     if(state==null || state.cursor.isEmpty()) { engine.sync();delay(1000);continue }
-    val response=ApiClient(config).waitForChanges(state.cursor,state.pluginsRev)
-    if(response["changed"]?.jsonPrimitive?.booleanOrNull==true) engine.sync()
+    val response=ApiClient(config).waitForChanges(settled?.takeIf {it.first==state.cursor}?.second ?: state.cursor,state.pluginsRev)
+    if(response["changed"]?.jsonPrimitive?.booleanOrNull==true && engine.sync() is SyncStatus.Complete && repository.dao.state()?.cursor==state.cursor) settled=response["cursor"]?.jsonPrimitive?.contentOrNull?.let {state.cursor to it}
    }
    catch(cancelled:CancellationException) { throw cancelled }
    catch(error:Exception) { if(error is ApiException && error.status==401) { engine.sync(); return }; delay(30_000) }

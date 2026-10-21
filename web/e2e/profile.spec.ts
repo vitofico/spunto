@@ -41,7 +41,8 @@ test("password-only unlock leads to a private editable and clearable owner profi
       authenticated = true;
       return route.fulfill({ status: 204 });
     }
-    if (path === "/api/v1/changes/wait") return route.abort();
+    // A quiet server holds the long poll open; a failed feed now reads as offline.
+    if (path === "/api/v1/changes/wait") return;
     if (path === "/api/v1/plugins/manifest")
       return json({ ui: 1, plugins_rev: 0, plugins: [] });
     if (path === "/api/v1/labels") return json({ labels: [], total: 0 });

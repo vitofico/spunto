@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearch as useLocationSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { api, useDraftEditor, useOwner, type SharedNote } from "../lib";
+import {
+  api,
+  useDraftEditor,
+  useHosted,
+  useOwner,
+  type SharedNote,
+} from "../lib";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { NoteBody } from "../components/core/NoteCard";
 
 function sharedPath(id: string, workspaceId: string) {
@@ -138,6 +145,7 @@ function SharedDetail({
     queryKey: ["shared-note", workspaceId, id],
     queryFn: () => api.sharedNote(id, workspaceId),
   });
+  useDocumentTitle(query.data?.title || "Shared note");
   return (
     <>
       <Link href="/shared">← Shared with me</Link>
@@ -180,14 +188,22 @@ export default function SharedNotesPage({ id }: { id?: string }) {
   );
 }
 function SharedList() {
+  const hosted = useHosted();
   const query = useQuery({
     queryKey: ["shared-notes"],
     queryFn: api.sharedNotes,
+    enabled: hosted,
   });
+  useDocumentTitle("Shared with me");
   return (
     <>
       <h1 className="page-title">Shared with me</h1>
-      {query.isPending ? (
+      {!hosted ? (
+        <p className="muted">
+          This Spunto has one owner, so there is nothing shared here. Sharing
+          between accounts is part of hosted Spunto.
+        </p>
+      ) : query.isPending ? (
         <p>Opening shared notes…</p>
       ) : query.error ? (
         <p className="error" role="alert">

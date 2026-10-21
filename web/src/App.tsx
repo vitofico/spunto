@@ -26,6 +26,8 @@ import { useInstanceAppearance } from "./features/Appearance";
 import { PluginRailViews, type CommandOrigin } from "./features/Slots";
 import Timeline from "./pages/Timeline";
 import { Icon } from "./components/core/Icon";
+import { NotFound } from "./components/core/NotFound";
+import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
 import { ActiveSharedSpace } from "./features/Collaboration";
 import { Palette } from "./components/core/Palette";
@@ -171,7 +173,7 @@ function Rail({
           <span>
             <Icon name="search" /> <span className="rail-label">Search</span>
           </span>
-          <kbd>⌘ K</kbd>
+          <kbd>{formatShortcut("mod+k")}</kbd>
         </button>
         {hosted && <ActiveSharedSpace />}
         <nav>
@@ -272,6 +274,118 @@ function Rail({
     </>
   );
 }
+/** What the keys below actually do; `?` and the palette open this list. */
+const shortcuts: [string[], string][] = [
+  [["n"], "New note"],
+  [[formatShortcut("mod+enter")], "Save the note"],
+  [[formatShortcut("mod+s")], "Save while editing"],
+  [[formatShortcut("mod+k"), "/"], "Search and commands"],
+  [["j", "k"], "Next or previous note"],
+  [["↵", "o"], "Open the note"],
+  [["e"], "Edit the note"],
+  [["p"], "Pin or unpin"],
+  [["#"], "Add a label (opens the note to edit)"],
+  [["y"], "Archive"],
+  [[formatShortcut("shift+y")], "Move to trash"],
+  [["Esc"], "Close, or go back from a note"],
+  [["["], "Collapse the navigation"],
+  [["g a"], "Go to All notes"],
+  [["g l"], "Go to the labels"],
+  [["g t"], "Go to Trash"],
+  [["g s"], "Go to Settings"],
+  [["?"], "Show these keys"],
+];
+function decoded(path: string) {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return "";
+  }
+}
+/** D33 wording on wide screens; one short line on phones. */
+function UnencryptedBand() {
+  return (
+    <div className="banner">
+      <span className="banner-long">
+        Not encrypted · This server uses plain HTTP. Fine on your own network;
+        set up HTTPS before using it elsewhere.
+      </span>
+      <span className="banner-short">
+        Not encrypted · This server uses plain HTTP.
+      </span>
+    </div>
+  );
+}
+/** j/k land on the card's link to its note, or on the card itself. */
+function focusEntry(entry: HTMLElement) {
+  const link = entry.querySelector<HTMLElement>('a[href^="/n/"]');
+  if (link) return link.focus();
+  entry.tabIndex = -1;
+  entry.focus();
+}
+let entryDepth = -1;
+const scrollPositions = new Map<string, number>();
+if (typeof history !== "undefined") history.scrollRestoration = "manual";
+/**
+ * Numbers each history entry (in history.state) so Back can tell whether the
+ * previous entry is still this app, and puts each list back where it was left.
+ */
+function useHistoryEntries(location: string) {
+  useLayoutEffect(() => {
+    const state: unknown = history.state;
+    const saved =
+      state && typeof state === "object" && "spuntoDepth" in state
+        ? Number(state.spuntoDepth)
+        : NaN;
+    const returning = Number.isInteger(saved);
+    entryDepth = returning ? saved : entryDepth + 1;
+    if (!returning)
+      history.replaceState(
+        {
+          ...(state && typeof state === "object" ? state : {}),
+          spuntoDepth: entryDepth,
+        },
+        "",
+      );
+    try {
+      sessionStorage.setItem("spunto:in-app-nav", entryDepth > 0 ? "1" : "0");
+    } catch {}
+    const key = entryDepth + location;
+    const target = returning ? (scrollPositions.get(key) ?? 0) : 0;
+    let frame = 0,
+      tries = 0,
+      restoring = true;
+    // Cached lists render at once; one still loading gets a few frames to grow.
+    const restore = () => {
+      window.scrollTo(0, target);
+      if (restoring && Math.abs(window.scrollY - target) > 1 && tries++ < 60)
+        frame = requestAnimationFrame(restore);
+      else restoring = false;
+    };
+    const stop = () => {
+      restoring = false;
+      cancelAnimationFrame(frame);
+    };
+    const remember = () => {
+      if (!restoring) scrollPositions.set(key, window.scrollY);
+    };
+    restore();
+    const intents = ["wheel", "touchstart", "keydown", "pointerdown"];
+    for (const intent of intents)
+      window.addEventListener(intent, stop, { passive: true });
+    window.addEventListener("scroll", remember, { passive: true });
+    return () => {
+      stop();
+      for (const intent of intents) window.removeEventListener(intent, stop);
+      window.removeEventListener("scroll", remember);
+    };
+  }, [location]);
+}
+/** Back to the previous view when it is part of this app, else home. */
+function goBack(navigate: (path: string) => void) {
+  if (entryDepth > 0) history.back();
+  else navigate("/");
+}
 const notes = (count: number) => `${count} ${count === 1 ? "note" : "notes"}`;
 function useSync() {
   const meta = useApiQuery(["meta"], api.meta);
@@ -354,6 +468,7 @@ export default function App() {
   }
   const [commandResult, setCommandResult] = useState<unknown>(null);
   const [commandOrigin, setCommandOrigin] = useState<CommandOrigin>();
+  const [instant, setInstant] = useState(false);
   const [palette, setPalette] = useState(false),
     [help, setHelp] = useState(false),
     [collapsed, setCollapsed] = useState(false),
@@ -368,9 +483,16 @@ export default function App() {
   }
   function openSearch() {
     rememberFocus();
+    setInstant(false);
     setRailOpen(false);
     setHelp(false);
     setPalette(true);
+  }
+  function openHelp() {
+    rememberFocus();
+    setRailOpen(false);
+    setPalette(false);
+    setHelp(true);
   }
   useEffect(() => {
     if (!modalOpen) return;
@@ -403,6 +525,7 @@ export default function App() {
       const detail = (event as CustomEvent).detail;
       setCommandResult(detail?.origin ? detail.value : detail);
       setCommandOrigin(detail?.origin);
+      setInstant(false);
       overlayTrigger.current = document.activeElement as HTMLElement;
       setRailOpen(false);
       setHelp(false);
@@ -418,26 +541,21 @@ export default function App() {
     )
       navigate("/");
   }, [auth.status, location, navigate]);
+  useHistoryEntries(location);
   useEffect(() => {
     let go = false;
     const key = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      if (guideOpen) {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")
-          e.preventDefault();
-        return;
-      }
-      if (document.querySelector("dialog[open]")) {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")
-          e.preventDefault();
+      const palettePressed =
+        (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+      if (guideOpen || document.querySelector("dialog[open]")) {
+        if (palettePressed) e.preventDefault();
         return;
       }
       const target = e.target as HTMLElement;
-      const typing = target.closest(
-        "input,textarea,select,[contenteditable=true]",
-      );
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if (palettePressed) {
         e.preventDefault();
+        setInstant(true);
         if (!palette && !help && !railOpen)
           overlayTrigger.current = document.activeElement as HTMLElement;
         setRailOpen(false);
@@ -445,21 +563,96 @@ export default function App() {
         setPalette((v) => !v);
         return;
       }
-      if (target.closest('[role="dialog"]')) return;
-      if (typing) return;
-      if (e.key === "Escape") {
-        setPalette(false);
-        setHelp(false);
-        setRailOpen(false);
-        if (location.startsWith("/n/")) navigate("/");
-      } else if (e.key === "n") {
+      // Single keys never fire while typing, inside a dialog, or with a modifier held.
+      if (
+        target.closest(
+          'input,textarea,select,[contenteditable=true],[role="dialog"]',
+        ) ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey
+      )
+        return;
+      const entry = target.closest<HTMLElement>("#main .entry[data-note-id]");
+      const entryAction = (action: string) => {
+        if (!entry) return false;
         e.preventDefault();
-        navigate("/");
+        entry.dispatchEvent(
+          new CustomEvent("spunto:entry-action", { detail: action }),
+        );
+        return true;
+      };
+      if (go) {
+        go = false;
+        if (e.key === "l") {
+          e.preventDefault();
+          if (matchMedia("(min-width: 1024px)").matches)
+            document.querySelector<HTMLElement>(".label-tree a")?.focus();
+          else {
+            rememberFocus();
+            setRailOpen(true);
+          }
+          return;
+        }
+        const paths: Record<string, string> = {
+          a: "/",
+          t: "/trash",
+          s: "/settings/appearance",
+        };
+        if (paths[e.key]) {
+          e.preventDefault();
+          if (location !== paths[e.key]) navigate(paths[e.key]);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        if (location.startsWith("/n/")) goBack(navigate);
+      } else if (e.key === "j" || e.key === "k") {
+        const entries = [
+          ...document.querySelectorAll<HTMLElement>(
+            "#main .entry[data-note-id]",
+          ),
+        ];
+        if (!entries.length) return;
+        e.preventDefault();
+        const at = entry ? entries.indexOf(entry) : -1;
+        const next =
+          entries[
+            Math.min(
+              Math.max(
+                at + (e.key === "j" ? 1 : at < 0 ? entries.length : -1),
+                0,
+              ),
+              entries.length - 1,
+            )
+          ];
+        focusEntry(next);
+      } else if (e.key === "o" || (e.key === "Enter" && target === entry)) {
+        if (!entry) return;
+        e.preventDefault();
+        navigate("/n/" + entry.dataset.noteId);
+      } else if (e.key === "e") {
+        if (entryAction("edit")) return;
+        const edit = document.querySelector<HTMLElement>(
+          "#main button[data-edit-note]",
+        );
+        if (edit) {
+          e.preventDefault();
+          edit.click();
+        }
+      } else if (e.key === "p") entryAction("pin");
+      else if (e.key === "#") entryAction("label");
+      else if (e.key === "y") entryAction("archive");
+      else if (e.key === "Y") entryAction("trash");
+      else if (e.key === "n") {
+        e.preventDefault();
+        if (location !== "/") navigate("/");
         requestAnimationFrame(() =>
           document.getElementById("composer")?.focus(),
         );
       } else if (e.key === "/") {
         e.preventDefault();
+        setInstant(true);
         overlayTrigger.current = document.activeElement as HTMLElement;
         setRailOpen(false);
         setHelp(false);
@@ -467,19 +660,8 @@ export default function App() {
       } else if (e.key === "[") {
         setCollapsed((v) => !v);
       } else if (e.key === "?") {
-        overlayTrigger.current = document.activeElement as HTMLElement;
-        setRailOpen(false);
-        setPalette(false);
-        setHelp(true);
-      } else if (go) {
-        go = false;
-        const paths: Record<string, string> = {
-          a: "/",
-          l: "/",
-          t: "/trash",
-          s: "/settings/appearance",
-        };
-        if (paths[e.key]) navigate(paths[e.key]);
+        e.preventDefault();
+        openHelp();
       } else if (e.key === "g") go = true;
     };
     window.addEventListener("keydown", key);
@@ -515,7 +697,10 @@ export default function App() {
     return (
       <LoadBoundary location={location} onRetry={retryPages}>
         <Suspense fallback={<main className="auth">Opening your notes…</main>}>
-          <AuthPage setup={auth.status === "setup" || location === "/setup"} />
+          <AuthPage
+            setup={auth.status === "setup" || location === "/setup"}
+            band={meta.data?.unencrypted ? <UnencryptedBand /> : null}
+          />
         </Suspense>
       </LoadBoundary>
     );
@@ -575,12 +760,7 @@ export default function App() {
             Can’t reach the server. What you type is kept on this device.
           </div>
         )}
-        {meta.data?.unencrypted && (
-          <div className="banner">
-            Not encrypted · This server uses plain HTTP. Fine on your own
-            network; set up HTTPS before using it elsewhere.
-          </div>
-        )}
+        {meta.data?.unencrypted && <UnencryptedBand />}
         <LoadBoundary location={location} onRetry={retryPages}>
           <Suspense
             fallback={
@@ -612,12 +792,14 @@ export default function App() {
                 <Timeline view="trash" />
               </Route>
               <Route path="/l/*">
-                {(params) => (
-                  <Timeline
-                    key={params["*"]}
-                    label={decodeURIComponent(params["*"] ?? "")}
-                  />
-                )}
+                {(params) => {
+                  const label = decoded(params["*"] ?? "");
+                  return label ? (
+                    <Timeline key={label} label={label} />
+                  ) : (
+                    <NotFound />
+                  );
+                }}
               </Route>
               <Route path="/v/:plugin/:view">
                 {(params) => (
@@ -642,9 +824,7 @@ export default function App() {
                 <StatusPage />
               </Route>
               <Route>
-                <p>
-                  This page isn’t here. <Link href="/">Go to your notes.</Link>
-                </p>
+                <NotFound />
               </Route>
             </Switch>
           </Suspense>
@@ -659,6 +839,8 @@ export default function App() {
             setPalette(false);
             setCommandResult(null);
           }}
+          onHelp={openHelp}
+          instant={instant}
           noteId={location.startsWith("/n/") ? location.slice(3) : undefined}
         />
       )}{" "}
@@ -683,15 +865,21 @@ export default function App() {
             }}
           >
             <h2 className="page-title">A few keys, a little faster.</h2>
-            <p>
-              n · New note
-              <br />⌘ / Ctrl Enter · Save
-              <br />⌘ / Ctrl S · Save open note
-              <br />⌘ / Ctrl K or / · Search and commands
-              <br />[ · Collapse rail
-              <br />
-              Esc · Close or go back
-            </p>
+            <dl className="keys">
+              {shortcuts.map(([keys, action]) => (
+                <div key={action}>
+                  <dt>
+                    {keys.map((key, index) => (
+                      <span key={key}>
+                        {index > 0 && " or "}
+                        <kbd>{key}</kbd>
+                      </span>
+                    ))}
+                  </dt>
+                  <dd>{action}</dd>
+                </div>
+              ))}
+            </dl>
             <button
               className="button primary"
               autoFocus

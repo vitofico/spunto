@@ -37,6 +37,8 @@
   --body-face: var(--f-serif);
   --body-size: var(--t-body-size);
   --column-width: calc(var(--measure) + 2 * var(--s-48));
+  /* Settings: a 155px section list beside a section in the reading measure (03 W8). */
+  --settings-width: calc(155px + var(--s-48) + var(--measure));
   accent-color: var(--accent);
   font-synthesis: none;
 }
@@ -189,8 +191,12 @@ button.primary {
   position: absolute;
   width: 1px;
   height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 code,
 pre {
@@ -323,9 +329,8 @@ kbd {
   margin: auto;
   min-width: 0;
 }
-/* Settings lays out its own 960px navigation and form grid, wider than a reading column. */
 .column.wide-column {
-  max-width: calc(960px + 2 * var(--s-48));
+  max-width: calc(var(--settings-width) + 2 * var(--s-48));
 }
 .topbar {
   display: none;
@@ -709,6 +714,21 @@ mark[data-match] {
   justify-content: center;
   padding: 12vh var(--s-20) var(--s-20);
 }
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* Mouse-opened only; from the keyboard the palette appears at once (03 §9.2). */
+.palette.enter {
+  animation: palette-in var(--dur-1) var(--ease-out);
+}
 .palette {
   width: 640px;
   max-width: 100%;
@@ -765,8 +785,39 @@ mark[data-match] {
   gap: var(--s-12);
   overflow-wrap: anywhere;
 }
-.palette-row:focus {
+.palette-row:focus,
+.palette [data-active] {
   background: var(--sunken);
+}
+.palette-row q {
+  color: var(--ink);
+}
+.keys {
+  display: grid;
+  gap: var(--s-8);
+  margin: 0 0 var(--s-24);
+}
+.keys > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: var(--s-16);
+  align-items: baseline;
+}
+.keys dt {
+  color: var(--ink-3);
+}
+.keys dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+.keys kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--field);
+  border-radius: var(--r-4);
+  text-align: center;
+  color: var(--ink-2);
 }
 @media (hover: hover) {
   .palette-row:hover {
@@ -996,6 +1047,7 @@ mark[data-match] {
     display: flex;
     width: min(max(248px, 15.5rem), calc(100vw - var(--s-24)));
     padding-inline: var(--s-20);
+    animation: drawer-in var(--dur-2) var(--ease-out);
   }
   .rail-heading .wordmark {
     font-size: clamp(1.5rem, 9vw, 1.875rem);
@@ -1033,6 +1085,18 @@ mark[data-match] {
     inset: 0;
     background: var(--scrim);
     z-index: 19;
+    animation: fade-in var(--dur-2) var(--ease-out);
+  }
+}
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+@media (hover: none) {
+  .rail-search kbd {
+    display: none;
   }
 }
 @media (max-width: 599px) {

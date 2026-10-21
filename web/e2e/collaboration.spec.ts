@@ -35,7 +35,8 @@ async function fixture(page: Page) {
         contentType: "application/json",
         body: JSON.stringify(data),
       });
-    if (path.endsWith("/changes/wait")) return route.abort();
+    // A quiet server holds the long poll open; a failed feed now reads as offline.
+    if (path.endsWith("/changes/wait")) return;
     if (path.endsWith("/meta"))
       return json({
         setup_pending: false,

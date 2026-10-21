@@ -80,7 +80,7 @@ class NoteReaderUxTest {
   val id=uuidV7();val body="Synthetic caret note\n\nSecond with **bold** words and a [link](https://example.org) here.\n\n- one item tail"
   val rendered="Second with bold words and a link here."
   var mounted by mutableStateOf(true)
-  runBlocking {authority.requireCurrent();repository.putNote(Note(id,body,privateNote=true))}
+  runBlocking {authority.requireCurrent();repository.privateSyntheticNote(id,body)}
   fun tap(text:String,at:(TextLayoutResult)->Offset):TextRange {
    compose.waitUntil(10_000) {compose.onAllNodes(editableNote).fetchSemanticsNodes().isNotEmpty()}
    val node=compose.onNodeWithText(text,useUnmergedTree=true);val layouts=mutableListOf<TextLayoutResult>()

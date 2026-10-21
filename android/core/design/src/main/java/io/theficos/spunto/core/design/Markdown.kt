@@ -112,7 +112,6 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
 @Composable private fun MarkdownBlock(current:Node,body:String,tasks:Set<Int>,machine:Boolean,links:MarkdownLinks,onToggle:((Int)->Unit)?) {
  when(current) {
   is Heading -> TappableText(inline(current,links),if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
-  // Sunken is also the theme's errorContainer, so Material would pick danger red for text on it.
   is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current,line=1),Modifier.padding(12.dp)) }
   is IndentedCodeBlock -> TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current))
   is ThematicBreak -> HorizontalDivider()

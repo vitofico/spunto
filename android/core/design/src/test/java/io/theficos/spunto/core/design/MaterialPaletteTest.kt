@@ -1,5 +1,6 @@
 package io.theficos.spunto.core.design
 
+import androidx.compose.material3.contentColorFor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import org.junit.Assert.*
@@ -10,7 +11,7 @@ class MaterialPaletteTest {
   for((_,modes) in builtInTokens) for((mode,values) in modes) {
    val scheme=paletteColorScheme(values,mode=="dark")
    val allowed=values.filterKeys { it in themeColorRoles }.values.map(::tokenColor).toSet()
-   val controls=listOf(scheme.primary,scheme.onPrimary,scheme.primaryContainer,scheme.onPrimaryContainer,scheme.secondary,scheme.onSecondary,scheme.secondaryContainer,scheme.onSecondaryContainer,scheme.tertiary,scheme.onTertiary,scheme.tertiaryContainer,scheme.onTertiaryContainer,scheme.surfaceContainerLow,scheme.surfaceContainerHigh,scheme.surfaceContainerHighest,scheme.error,scheme.onError,scheme.errorContainer,scheme.onErrorContainer)
+   val controls=listOf(scheme.primary,scheme.onPrimary,scheme.primaryContainer,scheme.onPrimaryContainer,scheme.secondary,scheme.onSecondary,scheme.secondaryContainer,scheme.onSecondaryContainer,scheme.tertiary,scheme.onTertiary,scheme.tertiaryContainer,scheme.onTertiaryContainer,scheme.surfaceContainerLow,scheme.surfaceContainerHigh,scheme.surfaceContainerHighest,scheme.error,scheme.onError,scheme.onErrorContainer)
    assertTrue("$mode contains an unthemed Material colour",controls.all { it in allowed })
    for((foreground,background) in listOf(scheme.onPrimary to scheme.primary,scheme.onPrimaryContainer to scheme.primaryContainer,scheme.onSecondaryContainer to scheme.secondaryContainer,scheme.onError to scheme.error,scheme.onErrorContainer to scheme.errorContainer)) {
     val a=foreground.luminance().toDouble();val b=background.luminance().toDouble()
@@ -19,6 +20,17 @@ class MaterialPaletteTest {
    val icons=if(useDarkSystemBarIcons(scheme.background)) Color.Black else Color.White
    val a=icons.luminance().toDouble();val b=scheme.background.luminance().toDouble()
    assertTrue("$mode system icons contrast",(maxOf(a,b)+.05)/(minOf(a,b)+.05)>=4.5)
+  }
+ }
+ @Test fun textOnEverySurfaceKeepsItsInkAndErrorsStillReadAsErrors() {
+  // The error container used to equal sunken, so Material chose danger red for any text on a sunken surface.
+  for((id,modes) in builtInTokens) for((mode,values) in modes) for(black in if(mode=="dark") listOf(false,true) else listOf(false)) {
+   val scheme=paletteColorScheme(values,mode=="dark",black,id)
+   val surfaces=listOf(scheme.background,scheme.surface,scheme.surfaceVariant,scheme.surfaceContainerLowest,scheme.surfaceContainerLow,scheme.surfaceContainer,scheme.surfaceContainerHigh,scheme.surfaceContainerHighest,scheme.surfaceBright,scheme.surfaceDim)
+   assertTrue("$id $mode",surfaces.none {it==scheme.errorContainer || scheme.contentColorFor(it)==scheme.error})
+   assertEquals(scheme.error,scheme.contentColorFor(scheme.errorContainer))
+   val a=scheme.onErrorContainer.luminance().toDouble();val b=scheme.errorContainer.luminance().toDouble()
+   assertTrue("$id $mode removed text contrast",(maxOf(a,b)+.05)/(minOf(a,b)+.05)>=4.5)
   }
  }
  @Test fun pureBlackRetainsPaletteControlsAndBrightSystemIcons() {

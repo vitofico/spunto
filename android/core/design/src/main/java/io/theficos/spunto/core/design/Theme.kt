@@ -11,6 +11,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -118,7 +119,8 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
   tertiary=c("accent"),onTertiary=c("on-accent"),tertiaryContainer=c("accent-soft"),onTertiaryContainer=c("ink"),
   background=paper,onBackground=c("ink"),surface=paper,onSurface=c("ink"),surfaceVariant=c("sunken"),onSurfaceVariant=c("ink-2"),surfaceTint=paper,
   inverseSurface=c("ink"),inverseOnSurface=c("paper"),outline=c("field"),outlineVariant=c("rule"),
-  error=c("danger"),onError=c("paper"),errorContainer=c("sunken"),onErrorContainer=c("danger"),
+  // A faint danger tint that equals no surface: Material gives text on a surface that matches errorContainer the danger colour.
+  error=c("danger"),onError=c("paper"),errorContainer=lerp(paper,c("danger"),.08f),onErrorContainer=c("danger"),
   surfaceContainer=c("raised"),surfaceContainerLow=c("raised"),surfaceContainerLowest=c("raised"),surfaceContainerHigh=c("sunken"),surfaceContainerHighest=c("sunken"),surfaceBright=c("raised"),surfaceDim=c("sunken"),scrim=if(dark) Color.Black.copy(alpha=.5f) else c("ink").copy(alpha=.32f)
  )
 }

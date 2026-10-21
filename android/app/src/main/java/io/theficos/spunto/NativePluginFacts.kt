@@ -39,7 +39,7 @@ internal data class NativePluginFacts(val raw:JsonObject,private val manifestAct
  val permissionReviewRequired=wantedOn && permissions!=null && granted!=null && !granted.toSet().containsAll(permissions)
  val origin=when(raw.pluginText("origin")) { "bundled" -> "Built in"; "operator" -> "Third party"; else -> "Origin unavailable" }
  val contribution=if(removed) JsonObject(emptyMap()) else raw["contributes"] as? JsonObject ?: JsonObject(emptyMap())
- val facts:List<String> get()=pluginDestinationFacts(this)+pluginScheduleFacts(this)
+ val facts:List<String> get()=pluginDestinationFacts(this,pluginMissingModel(this).takeIf {state=="waiting"})+pluginScheduleFacts(this)
  val permissionLines:List<String> get()=raw.pluginStrings("permission_sentences")?.takeIf {it.isNotEmpty()} ?: permissions.orEmpty().map(::pluginPermissionSentence)
  val slots:List<String> get()=contribution.keys.mapNotNull { when(it) {
   "suggestions" -> "Suggestions under notes and in Review"; "review" -> "Review"; "panel" -> "About this note"; "meta" -> "Note details"; "slip" -> "Daily slip"; "commands" -> "Commands"; "views" -> "Views"; "ranking" -> "Search ranking"; "mcp_tools" -> "Agent tools"; "schedules" -> "Scheduled runs"; else -> null
@@ -80,13 +80,14 @@ internal fun pluginMissingModel(plugin:NativePluginFacts):String? {
 internal fun aiModelName(capability:String)=when(capability) { "chat" -> "a chat model"; "embed" -> "an embedding model"; "vision" -> "a vision model"; "transcribe" -> "a transcription model"; else -> "an AI model" }
 /** The waiting line in the switch's place (03 §6.4): "Needs a chat model". */
 internal fun pluginWaitingLine(plugin:NativePluginFacts):String = pluginMissingModel(plugin)?.let {"Needs ${aiModelName(it)}"} ?: "Waiting for a requirement"
-internal fun pluginDestinationFacts(plugin:NativePluginFacts):List<String> {
+/** Where each AI capability sends note text; [said] is a missing model the waiting line already names, so it is left out. */
+internal fun pluginDestinationFacts(plugin:NativePluginFacts,said:String?=null):List<String> {
  if(plugin.removed) return listOf("Removed · retained access history only")
  val result=mutableListOf<String>()
  val destinations=plugin.raw["ai_destinations"] as? JsonObject ?: JsonObject(emptyMap())
  val capabilities=mapOf("chat" to "Chat","embed" to "Embeddings","vision" to "Vision","transcribe" to "Transcription")
  plugin.permissions.orEmpty().filter {it.startsWith("ai.")}.forEach {permission ->
-  val capability=permission.removePrefix("ai.");val label=capabilities[capability] ?: return@forEach
+  val capability=permission.removePrefix("ai.");val label=capabilities[capability]?.takeIf {capability!=said} ?: return@forEach
   val destination=destinations[capability] as? JsonObject
   val model=destination?.pluginText("model");val host=destination?.pluginText("host");val outside=destination?.pluginFlag("leaves_network")
   result+=if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) "$label: note text to $model at $host, ${if(outside) "outside your network" else "on your network"}" else "$label: no model is set up"
@@ -95,7 +96,7 @@ internal fun pluginDestinationFacts(plugin:NativePluginFacts):List<String> {
  val network=plugin.raw.pluginStrings("network_destinations").orEmpty().filter {it.isNotBlank()}.distinct()
  network.forEach {result+="Talks to $it"}
  if(plugin.permissions.orEmpty().any {it.startsWith("net.out:")} && network.isEmpty()) result+="Outbound network destinations are unavailable"
- if(result.isEmpty()) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") "Recognition uses this phone or its speech provider, according to this phone’s setting" else if(plugin.raw.pluginText("kind")=="device") "Stays on the phone" else "Stays on your server"
+ if(result.isEmpty() && said==null) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") "Recognition uses this phone or its speech provider, according to this phone’s setting" else if(plugin.raw.pluginText("kind")=="device") "Stays on the phone" else "Stays on your server"
  return result
 }
 internal fun pluginScheduleFacts(plugin:NativePluginFacts):List<String> {

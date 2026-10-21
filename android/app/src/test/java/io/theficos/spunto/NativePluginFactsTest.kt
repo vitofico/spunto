@@ -24,7 +24,11 @@ class NativePluginFactsTest {
  @Test fun wantedWaitingAndFailedCountOnWithoutActiveManifest() {
   val catalog=nativePluginCatalog(pluginCatalogFixture(pluginFixture(),pluginFixture("failed-plugin",state="failed")),pluginCatalogFixture())
   assertTrue(catalog.valid);assertEquals(2,catalog.onCount);assertTrue(catalog.rows.all {it.wantedOn && !it.activeContribution && it.canDisable})
-  assertEquals(listOf("Transcription: no model is set up"),catalog.rows.first().facts)
+  // The row says the missing model once, in its waiting line; the plugin page still lists every destination.
+  val waiting=catalog.rows.first();assertEquals(emptyList<String>(),waiting.facts);assertEquals("Needs a transcription model",pluginWaitingLine(waiting))
+  assertEquals(listOf("Transcription: no model is set up"),pluginDestinationFacts(waiting))
+  val vision=NativePluginFacts(JsonObject(pluginFixture("image-text",permissions=listOf("ai.chat","ai.vision"))+("ai_destinations" to buildJsonObject {put("chat",buildJsonObject {put("model","qwen3.5");put("host","ollama.home.arpa");put("leaves_network",false)})})))
+  assertEquals("Needs a vision model",pluginWaitingLine(vision));assertEquals(listOf("Chat: note text to qwen3.5 at ollama.home.arpa, on your network"),vision.facts)
  }
  @Test fun onlyExactEnvironmentPinsUnlockAndCapabilitiesFailClosed() {
   listOf("true","1").forEach {assertEquals(EnvironmentPin.Managed,environmentPin(Json.parseToJsonElement(it)))}

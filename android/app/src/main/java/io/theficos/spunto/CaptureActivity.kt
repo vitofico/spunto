@@ -10,6 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
+import io.theficos.spunto.core.design.SpuntoColors
 import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.design.SpuntoType
 import kotlinx.coroutines.*
@@ -62,11 +64,27 @@ class CaptureActivity:LockedActivity() {
    SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) {
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(Modifier.fillMaxWidth().wrapContentHeight(),shape=MaterialTheme.shapes.extraLarge,color=MaterialTheme.colorScheme.background) {
      Column(Modifier.padding(20.dp).imePadding(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text("Close") } }
+      val sharing=shared.isNotEmpty() || image!=null
+      // A share (03 A3): what came in, sunken and quoted on save; an optional thought; up to three recent labels.
+      // A3 puts Save in the header row: the composer's bar docks there instead of under the field.
+      val header=remember { BottomBarSlot() }
+      if(sharing) Row(verticalAlignment=Alignment.CenterVertically) { Text("Save to spunto",style=MaterialTheme.typography.titleMedium);Box(Modifier.weight(1f)) { header.content?.invoke() } }
+      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text("Close") } }
       if(error.isNotEmpty()) Text(error)
-      if(shared.isNotEmpty()) Text(shared.take(500),style=SpuntoType.reading)
+      if(shared.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
+       Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        val title=intent.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf {source!=null && it.isNotBlank()}
+        Text(title ?: shared,style=SpuntoType.reading,maxLines=if(title!=null) 2 else 4,overflow=TextOverflow.Ellipsis)
+        (source?.let {Uri.parse(it).host} ?: referrer?.host)?.let {Text(it,style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)}
+       }
+      }
       if(image!=null) coil.compose.AsyncImage(model=image,contentDescription="Shared image",modifier=Modifier.fillMaxWidth().heightIn(max=180.dp))
-      Composer(model,draftId=shareKey,initial="",autoFocus=shared.isEmpty() && image==null,autoDictate=intent.getBooleanExtra("dictate",false),canSaveEmpty=shared.isNotEmpty() || image!=null,allowVoiceCapture=shared.isEmpty() && image==null,onPlainCaptureSave=if(shared.isEmpty() && image==null) {body,ref ->model.repository.create(body,sourceRef=ref);finish()} else null,onRecordingSaved={finish()},onSave={comment -> saveShare(comment,shared,source,image,shareKey)})
+      val labels by model.labels.collectAsState()
+      var chosen by remember { mutableStateOf(emptySet<String>()) }
+      CompositionLocalProvider(LocalBottomBar provides header.takeIf { sharing }) { Composer(model,draftId=shareKey,initial="",autoFocus=!sharing,autoDictate=intent.getBooleanExtra("dictate",false),canSaveEmpty=sharing,allowVoiceCapture=!sharing,tools=!sharing,placeholder=if(sharing) "Add a thought (optional)" else "What's on your mind?",onPlainCaptureSave=if(!sharing) {body,ref ->model.repository.create(body,sourceRef=ref);finish();null} else null,onRecordingSaved={finish()},onSave={comment -> saveShare(comment,shared,source,image,shareKey,chosen.joinToString(" ") {"#$it"})}) }
+      if(sharing) Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+       labels.filter {'/' !in it.key}.sortedByDescending {it.count}.take(3).forEach {label -> FilterChip(selected=label.path in chosen,onClick={chosen=if(label.path in chosen) chosen-label.path else chosen+label.path},label={Text("#${label.path}")})}
+      }
 
      }
     }
@@ -74,8 +92,9 @@ class CaptureActivity:LockedActivity() {
    }
   }
  }
- private suspend fun saveShare(comment:String,shared:String,source:String?,image:Uri?,draftId:String) {
-   val body=listOf(comment,if(shared.isNotEmpty()) shared.lines().joinToString("\n") { "> $it" } else "").filter { it.isNotBlank() }.joinToString("\n\n")
+ /** The thought first, then the shared text as a quote, then any chosen labels, so the title is never a label. */
+ private suspend fun saveShare(comment:String,shared:String,source:String?,image:Uri?,draftId:String,labels:String="") {
+   val body=listOf(comment,if(shared.isNotEmpty()) shared.lines().joinToString("\n") { "> $it" } else "",labels).filter { it.isNotBlank() }.joinToString("\n\n")
    val attachment=if(image!=null) withContext(Dispatchers.IO) {
     val folder=model.container.privateDirectory("pending-attachments")
     val target=File(folder,java.util.UUID.randomUUID().toString())

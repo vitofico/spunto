@@ -254,4 +254,14 @@ class SyncEngineTest {
   assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
   assertEquals("Owner words\n\nDecided on the web",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending)
  }
+ @Test fun decisionRefusedByAnOlderBuildIsSettledNotShownAsARefusedNote()=runBlocking {
+  val id=uuidV7();val proposal=uuidV7();repo.putNote(Note(id,"Owner words",serverRev=1));val pushed=mutableListOf<JsonObject>()
+  repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {put("action","append_text");put("payload",buildJsonObject {put("text","Machine words")});put("status","pending")}.toString()))
+  repo.decideSuggestion(proposal,"accept");repo.dao.reject(repo.dao.outbox().single().opId,"suggestion_decided")
+  assertEquals(mapOf(id to "suggestion_decided"),repo.refused.first())
+  server.dispatcher=refusingServer(pushed,notes=mapOf(id to note(id,"Owner words\n\nDecided on the web",2))) {applied(it)}
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertTrue(pushed.isEmpty());assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
+  assertEquals("Owner words\n\nDecided on the web",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending)
+ }
 }

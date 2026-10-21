@@ -41,6 +41,8 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
    if(state.serverUrl.isNotEmpty() && state.serverUrl!=serverUrl) return@withLock SyncStatus.Waiting("different_server").also { mutableState.value=it }
    if(state.replicaId.isNotEmpty() && state.replicaId!=config.replicaId) return@withLock SyncStatus.Waiting("different_identity").also {mutableState.value=it}
    state=state.copy(replicaId=config.replicaId);ownedTransaction {dao.putState(state)}
+   // Older builds kept a refused decision queued as a refused note change; the server's copies settle it instead.
+   ownedTransaction { dao.outbox().filter { it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="suggestion.decide" }.forEach { dao.removeOutbox(it.opId);it.noteId?.let { id -> dao.putRefresh(RefreshNoteEntity(id)) } } }
    val previousEpoch=state.epoch
    val meta=api.meta(); val epoch=meta["sync_epoch"]?.jsonPrimitive?.content ?: state.epoch
    val maximum=(meta["max_upload_bytes"] as? JsonPrimitive)?.takeUnless {it.isString}?.longOrNull?.takeIf {it in 1_000_000L..1_000_000_000L}?:LEGACY_UPLOAD_LIMIT

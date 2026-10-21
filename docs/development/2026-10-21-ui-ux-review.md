@@ -20,6 +20,122 @@ workflow, `AN` Android, `CA` code audit. Severity: **P0** broken or unusable, **
 a feature fails or misleads in a realistic case, a clearly visible defect or a real
 accessibility barrier, **P2** polish or friction a careful user notices, **P3** nit.
 
+## Resolution
+
+The fixes landed the same day. Shared foundations came first: the web tokens,
+toast and confirm dialog, and the Android type scale, back stack and snackbar.
+Then five lanes worked in parallel, each with its own server and emulator: web
+editing, web shell, web settings, Android core and Android shell. The merged
+result was tested end to end in Chromium and WebKit, and an audit checked every
+row of the index below against the code. The gaps it found were then closed.
+Last, an independent review of the whole branch found four more problems, and
+the final emulator run found three. All seven are the last rows of the first
+table below, and were fixed before merge.
+
+Both P0s and every P1 are fixed. Every row in the index is resolved, except the
+deliberate differences and later work listed below. The owner's decisions are
+applied:
+
+- **The first-run guide stays.** On the web, Escape skips it and its buttons
+  hold still. On Android, it has one progress line and a lighter example.
+- **The plain-HTTP band stays.** It is one short line on mobile and is also
+  shown on sign-in. On Android it sits in the single status slot.
+- **Android Settings is one sectioned page**, as A9 describes.
+- **Italian (AN-45, CA-21) comes later.**
+
+### Found while fixing
+
+| ID | Platform | What happened | Fix |
+|---|---|---|---|
+| AN-46 | Android, server | On the Status screen, sync kept triggering itself about 7 times a second while idle (owner report). Turning a plugin on or off spends a change number without writing a row. The pull cursor stopped at the last row, so the change feed always answered "changed" | On the last page, the server moves the cursor to its latest change number, and the phone won't repeat a sync that can't move its cursor. Now one plugin toggle causes one sync |
+| | Android | A lost default network still counted as online, so "Offline" never showed | Offline follows the default network |
+| | Android | A change the server refused stayed in "N notes waiting to sync" forever, and Sync did nothing | Refused changes leave the count. The status slot says "1 note couldn't sync · Review", and the note offers "Keep as new note" |
+| | Android | Text on sunken surfaces turned danger red, because the error container used the sunken colour | The error container has its own faint tint |
+| AN-26 | Android, server | Signing out left the phone's credential active | `POST /auth/logout` with a device's bearer token revokes that credential and no other, as the hosted server already does. Offline sign-out stays local |
+| WW-23 | Server, Android | The daily slip came back after its note was archived | The slip skips archived and trashed notes; Undo brings it back |
+| WW-15 | Android | Label counts included archived notes | Counts match the label views, as on the web |
+| | Server | Search ties ranked an older duplicate first | Newer notes win ties |
+| | Web | The offline count ignored queued captures, and sign-out could erase them without warning | One count of waiting and unsent notes feeds both |
+| WW-10 | Web | Back from a note lost the scroll position. WebKit scrolled to the composer, and Chromium drifted when "Show more" buttons appeared | The position holds exactly, and focus returns to the opened card |
+| | Web | Settings tabs overlapped on phones; plugin form choices rewrote note titles; the daily slip printed raw Markdown; WebKit dialogs lost focus on close; the palette highlight jumped while results arrived | Each fixed with a test |
+| | Android | The APK budget check counted dead space left by incremental packaging (a false 19 MB) | It sums the packaged entries |
+| | Server | The newer-wins tie-break made every hosted (PostgreSQL) keyword search fail | The PostgreSQL store translates the ranking score, and its suite covers ranked search |
+| | Web | On a hosted server, an expired sign-in cookie showed "Can't reach the server", and Try again could not clear it | Only failures worth retrying count as unreachable; a refusal leads to sign-in |
+| | Web | Enter with the caret inside a list marker started a new item | The line splits as usual |
+| | Android | A decision an older build saw refused stayed queued, so an upgraded phone showed its note as refused | The first sync drops those rows and refetches the note |
+| | Android | Opening a note after a web edit synced in showed the phone's older text, and Back saved it over the web edit. Every editor write kept a draft that saving never removed, and the editor always preferred it. This was older than this review | Saving clears the draft. A draft whose text the note has since replaced (it is in the phone's history) is ignored by the editor and by export; unsaved words still win |
+| | Android | Search offered a chip for a label only archived notes carry, and it found nothing | Chips count the notes search can find |
+| | Android | The guide's last step said notes stay on the phone until you connect, even when it was connected | It says the phone is connected |
+
+### Deliberate differences
+
+- **WV-29:** times and dates follow the browser's locale, so a US English
+  browser shows "8:06 AM". The spec's examples are 24-hour.
+- **WV-17:** cards and menus keep `--rule` edges, which are decorative. Every
+  control edge uses `--field`, at 3:1 or more.
+- **WV-23:** the search date inputs stay native, styled as fields.
+- **Fluid sizes:** the guide headline and the wordmark keep fluid `clamp()`
+  sizes, because the type scale has no fluid step.
+- **AN-36:** the theme shared by every device is set in the web app; the
+  phone says so.
+- **Slip date:** it reads "19 March 2025", as in 05 and the timeline, where 03
+  shows "March 2025".
+
+### Later
+
+- **Plugin manifests:** let plugins name their choices, and add a field for the
+  "save as note" role, so the client stops matching a command title.
+- **Display name:** the owner display name has no use in single-owner local
+  mode.
+- **Android sync edge cases:**
+  - an original that returns 404 on refetch leaves a stale copy;
+  - a base version ahead of the server (after a restore) is refused with 409
+    forever;
+  - "Keep as new note" drops attachments;
+  - the phone could warn before saving a note over the server's
+    100,000-character limit.
+- **Editing during a sync:** two cases save the phone's text over a newer web
+  edit, which then survives only in server History:
+  - a web edit syncs in while the note is open in the phone's editor (read
+    from the code, not reproduced);
+  - the app is killed with unsaved words, and the note is edited on the web
+    before the phone reopens it (reproduced; same as before this review).
+
+  The editor should send the version it started from, so the server keeps a
+  conflict copy.
+- **Small polish:** `#` autocomplete could use the recent-use order from
+  search; dialogs could remember their opener at document level; a folded
+  checklist fades its last hidden row to nothing, leaving a blank band above
+  "Show more".
+
+### Verification
+
+- **Web:**
+  - typecheck, 287 unit tests, format check and build all pass (initial JS
+    135,034 / 150,000 bytes gzip; fonts 319,488 / 320,000);
+  - Playwright fixture suites pass 78 of 78 in Chromium and WebKit, and the
+    live-server suites 8 of 8 in each;
+  - an end-to-end smoke covered every journey above in both engines, all five
+    themes in light and dark, at 1440 and 390 px.
+- **Server:** the full pytest suite and ruff pass, and the PostgreSQL 18
+  acceptance suite passes against a local container set up as in CI.
+- **Android:**
+  - build, unit tests in every module and the APK budget pass (about 13.7 of
+    15 MB);
+  - the instrumented suite passes on a throwaway API 37 emulator: 92 passed,
+    none failed, and 10 skipped that run only with opt-in arguments;
+  - the editor fix was checked on the emulator against a local server: an
+    upgrade from the previous build with a leftover draft, repeated web-edit
+    rounds, unsaved words after a forced stop with the phone's clock 10
+    minutes behind, and export;
+  - every changed flow was checked by hand on the emulator, including dark
+    mode, font scale 2.0 and landscape.
+- **Not verified:**
+  - real phones: iPhone Safari, and the owner's Android 16 phone;
+  - Firefox;
+  - AI-on states, since no provider was configured;
+  - TalkBack reading a folded note.
+
 ## Verdict
 
 The foundations are good. Colour is generated from one source and every text pair

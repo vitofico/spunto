@@ -44,7 +44,7 @@ import io.theficos.spunto.plugins.dictation.voice.*
 import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String="What's on your mind?",trailing:(@Composable ()->Unit)?=null,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String="What's on your mind?",trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -151,7 +151,8 @@ import kotlinx.coroutines.*
    model.repository.dao.draftSnapshot(draftId) to if(id=="capture") null else model.repository.dao.get(id)?.body
   }
   val body=draft?.body?.takeIf {it.isNotEmpty()} ?: ((current ?: initial)+if(startNewParagraph && current!=null) "\n\n" else "")
-  value=TextFieldValue(body,TextRange(body.length))
+  // The caret opens where the reader tapped (A5) unless a draft changed the text; otherwise at the end.
+  value=TextFieldValue(body,TextRange(caret?.takeIf { body==(current ?: initial) }?.coerceIn(0,body.length) ?: body.length))
   committed=current ?: initial
   ready=true
   androidx.compose.runtime.withFrameNanos { }

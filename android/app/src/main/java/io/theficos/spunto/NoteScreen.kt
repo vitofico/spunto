@@ -7,11 +7,15 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import java.time.*
@@ -43,6 +47,7 @@ import kotlinx.serialization.json.*
  val loaded by remember(id) { model.repository.observe(id).map { it to true } }.collectAsState(null to false)
  val note=loaded.first
  var editing by remember(id) { mutableStateOf(false) }
+ var caret by remember(id) { mutableStateOf<Int?>(null) }
  var actions by remember(id) { mutableStateOf(false) }
  var history by remember(id) { mutableStateOf(model.historyFor.value==id) }
  var about by remember(id) { mutableStateOf(false) }
@@ -86,12 +91,13 @@ import kotlinx.serialization.json.*
   }
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
   item {
-   if(editing) Composer(model,id,value.body,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,trailing={
+   if(editing) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,trailing={
     Button(enabled=!finishing && !restoring && finishEditor!=null,onClick={finishEditing()},modifier=Modifier.heightIn(min=48.dp)) {Text(if(finishing) "Saving…" else "Done")}
    },onSave={editing=false})
-   // Tapping the text edits it in place; links, labels and checkboxes keep their own taps.
-   else Box(Modifier.fillMaxWidth().clickable(enabled=!value.trashed && !restoring,onClickLabel="Edit note",interactionSource=remember {MutableInteractionSource()},indication=null) {editing=true}) {
-    Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")}) {model.toggleTask(value,it)}
+   // Tapping the text edits it in place with the caret where the finger landed (A5); links, labels and checkboxes keep their own taps.
+   // Each touch first forgets the last place, so a tap beside the text opens the editor at the end.
+   else Box(Modifier.fillMaxWidth().pointerInput(Unit) {awaitEachGesture {awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial);caret=null}}.clickable(enabled=!value.trashed && !restoring,onClickLabel="Edit note",interactionSource=remember {MutableInteractionSource()},indication=null) {editing=true}) {
+    Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")},onText={caret=it}) {model.toggleTask(value,it)}
    }
   }
   if(!editing) item {Suggestions(model,id,onNote)}

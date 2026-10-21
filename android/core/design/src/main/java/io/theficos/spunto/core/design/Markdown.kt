@@ -1,6 +1,8 @@
 package io.theficos.spunto.core.design
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.platform.LocalUriHandler
@@ -9,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.*
@@ -69,12 +72,12 @@ fun hasOpenTasks(body:String):Boolean {
  }
  walk(parser.parse(body));return found
 }
-/** Native text renderer; raw HTML is never executed. Taps outside links and labels fall through to the caller (open or edit the note). */
-@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onToggle: ((Int)->Unit)? = null) {
+/** Native text renderer; raw HTML is never executed. Taps outside links and labels fall through to the caller (open or edit the note); [onText] hears where in the source a finger lands on the text first (null when unmapped). */
+@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, onToggle: ((Int)->Unit)? = null) {
  val document=remember(body) { parser.parse(body) }
  val tasks=remember(body) { checklistLines(body).toSet() }
  val uri=LocalUriHandler.current
- val links=MarkdownLinks(MaterialTheme.colorScheme.primary,SpuntoColors.ruleStrong,{ target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } },onLabel)
+ val links=MarkdownLinks(MaterialTheme.colorScheme.primary,SpuntoColors.ruleStrong,{ target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } },onLabel,onText,body)
  Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
   var node=document.firstChild
   while(node!=null) { MarkdownBlock(node,body,tasks,machine,links,onToggle);node=node.next }
@@ -83,16 +86,35 @@ fun hasOpenTasks(body:String):Boolean {
 internal fun markdownBodyStyle(machine:Boolean,ownerStyle:TextStyle):TextStyle =
  if(machine) ownerStyle.copy(fontFamily=uiFont(),fontSize=17.sp,lineHeight=26.sp) else ownerStyle
 /** Labels are accent and filter by that label; links are ink with a rule-strong underline (03 §5.1), so the two stay distinct. */
-internal class MarkdownLinks(val label:Color,val underline:Color,val open:(String)->Unit,val onLabel:((String)->Unit)?)
-@Composable private fun MarkdownText(text:AnnotatedString,machine:Boolean,color:Color=MaterialTheme.colorScheme.onSurface,modifier:Modifier=Modifier) {
- Text(text,modifier,style=markdownBodyStyle(machine,SpuntoType.reading).copy(color=color))
+internal class MarkdownLinks(val label:Color,val underline:Color,val open:(String)->Unit,val onLabel:((String)->Unit)?,val onText:((Int?)->Unit)?=null,val body:String="") {
+ /** Maps a tap in [node]'s rendered text to the source, read from its [line]-th source line to its end. */
+ fun tap(node:Node,line:Int=0):((CharSequence,Int)->Unit)? {
+  val report=onText ?: return null;val start=node.sourceSpans.getOrNull(line)?.inputIndex ?: return null
+  val end=node.sourceSpans.last().let { it.inputIndex+it.length }
+  return { text,offset -> report(sourceOffset(body,start,end,text,offset)) }
+ }
+}
+/** AN-15: rendered text is the source minus its markup, so walk the source in order, as the web editor does; null when the text does not follow the source (an image caption). */
+internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,offset:Int):Int? {
+ var at=start
+ for(index in 0 until offset.coerceIn(0,rendered.length)) { val found=body.indexOf(rendered[index],at);if(found<0 || found>=end) return null;at=found+1 }
+ // Just before the tapped character, past any markup in front of it.
+ return rendered.getOrNull(offset)?.let { next -> body.indexOf(next,at).takeIf { it in at until end } } ?: at
+}
+/** Reports where a finger lands in the text without taking the tap: links, checkboxes and the caller's edit-in-place still get it. */
+@Composable private fun TappableText(text:AnnotatedString,style:TextStyle,tap:((CharSequence,Int)->Unit)?,modifier:Modifier=Modifier) {
+ var layout by remember { mutableStateOf<TextLayoutResult?>(null) };val current by rememberUpdatedState(tap)
+ Text(text,if(tap==null) modifier else modifier.pointerInput(Unit) { awaitEachGesture { val down=awaitFirstDown(requireUnconsumed=false);layout?.let { current?.invoke(it.layoutInput.text,it.getOffsetForPosition(down.position)) } } },style=style,onTextLayout={ layout=it })
+}
+@Composable private fun MarkdownText(text:AnnotatedString,machine:Boolean,color:Color=MaterialTheme.colorScheme.onSurface,modifier:Modifier=Modifier,tap:((CharSequence,Int)->Unit)?=null) {
+ TappableText(text,markdownBodyStyle(machine,SpuntoType.reading).copy(color=color),tap,modifier)
 }
 @Composable private fun MarkdownBlock(current:Node,body:String,tasks:Set<Int>,machine:Boolean,links:MarkdownLinks,onToggle:((Int)->Unit)?) {
  when(current) {
-  is Heading -> Text(inline(current,links),style=if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium)
+  is Heading -> TappableText(inline(current,links),if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
   // Sunken is also the theme's errorContainer, so Material would pick danger red for text on it.
-  is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { Text(current.literal.trimEnd(),Modifier.padding(12.dp),style=SpuntoType.mono) }
-  is IndentedCodeBlock -> Text(current.literal.trimEnd(),style=SpuntoType.mono)
+  is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current,line=1),Modifier.padding(12.dp)) }
+  is IndentedCodeBlock -> TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current))
   is ThematicBreak -> HorizontalDivider()
   is HtmlBlock -> Unit
   is BulletList,is OrderedList -> Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -110,7 +132,7 @@ internal class MarkdownLinks(val label:Color,val underline:Color,val open:(Strin
      }
     } else Row {
      Text(if(current is OrderedList) "${number++}." else "•",Modifier.width(24.dp),style=markdownBodyStyle(machine,SpuntoType.reading),color=SpuntoColors.ink3)
-     if(paragraph!=null) MarkdownText(inline(paragraph,links),machine,modifier=Modifier.weight(1f))
+     if(paragraph!=null) MarkdownText(inline(paragraph,links),machine,modifier=Modifier.weight(1f),tap=links.tap(paragraph))
     }
     var extra=paragraph?.next
     while(extra!=null) { val child=extra;Box(Modifier.padding(start=24.dp)) { MarkdownBlock(child,body,tasks,machine,links,onToggle) };extra=child.next }
@@ -121,7 +143,7 @@ internal class MarkdownLinks(val label:Color,val underline:Color,val open:(Strin
    Box(Modifier.width(3.dp).fillMaxHeight().background(SpuntoColors.ruleStrong))
    Column(Modifier.padding(start=13.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) { var child=current.firstChild;while(child!=null) { MarkdownBlock(child,body,tasks,machine,links,onToggle);child=child.next } }
   }
-  else -> MarkdownText(inline(current,links),machine)
+  else -> MarkdownText(inline(current,links),machine,tap=links.tap(current))
  }
 }
 private fun plain(node: Node):String = when(node) { is org.commonmark.node.Text -> node.literal; is Code -> node.literal; is SoftLineBreak,is HardLineBreak -> "\n"; else -> buildString { var child=node.firstChild; while(child!=null) { append(plain(child)); child=child.next } } }

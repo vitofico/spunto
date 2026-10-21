@@ -1195,14 +1195,20 @@ class Notes:
                 order = "note_fts.rank" if ranked else "n.created_at DESC,n.id DESC"
                 if ranked:
                     conditions.append("note_fts.rank MATCH 'bm25(2.0,1.0,0.5)'")
-                candidates = await conn.execute_fetchall(
-                    "SELECT n.id FROM note n"  # noqa: S608
+                query = (
+                    "SELECT n.id"  # noqa: S608
+                    + (",n.updated_at,note_fts.rank AS score" if ranked else "")
+                    + " FROM note n"
                     + join
                     + " WHERE "
                     + " AND ".join(conditions)
-                    + f" ORDER BY {order} LIMIT 50",
-                    args,
+                    + f" ORDER BY {order} LIMIT 50"
                 )
+                if ranked:
+                    # Equal scores (a duplicate, say) put the newer note first; only
+                    # the 50 kept candidates are sorted again.
+                    query = f"SELECT id FROM ({query}) ORDER BY score,updated_at DESC,id DESC"  # noqa: S608
+                candidates = await conn.execute_fetchall(query, args)
             rows = await full_rows(conn, candidates[:limit])
             hits = [
                 {**await self._serialize(conn, row, render=render), "match": "keyword"}

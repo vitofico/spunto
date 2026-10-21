@@ -217,6 +217,17 @@ async def test_domain_search_with_only_punctuation_matches_nothing(domain):
     assert [n["id"] for n in (await domain.search("#home ***"))["hits"]] == [labelled["id"]]
 
 
+async def test_domain_relevance_puts_the_newer_note_first_when_scores_tie(domain):
+    older = await domain.create("Duplicate thought about gardens")
+    newer = await domain.create("Duplicate thought about gardens")
+    async with domain.store.write() as connection:
+        await connection.execute(
+            "UPDATE note SET updated_at=updated_at-60000 WHERE id=?", (older["id"],)
+        )
+    hits = (await domain.search("gardens"))["hits"]
+    assert [n["id"] for n in hits] == [newer["id"], older["id"]]
+
+
 async def test_domain_relevance_paging_keeps_original_matches_when_bm25_corpus_changes(domain):
     original = [
         await domain.create(body)

@@ -11,4 +11,8 @@ class MarkdownTest {
  @Test fun nestedTasksKeepTheirOriginalSourceLine() {
   assertEquals(listOf(0,1),checklistLines("- [ ] Parent\n  - [x] Child"))
  }
+ @Test fun inlineLabelsMatchTheCoreTokenizerOutsideWords() {
+  val text="Plan #Project/Spunto, (#idea) and #2026 but not mail#b or #a/b/c/d/e/f #città"
+  assertEquals(listOf("#Project/Spunto","#idea","#città"),inlineLabels(text).map {text.substring(it.first,it.last+1)})
+ }
 }

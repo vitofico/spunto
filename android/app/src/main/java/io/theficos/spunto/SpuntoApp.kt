@@ -124,8 +124,9 @@ import kotlinx.serialization.json.*
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
-    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message)
+    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size)
     StatusLines(model)
+    if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}
     when {
      route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo)

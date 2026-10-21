@@ -63,3 +63,17 @@ private fun filterDateLabel(raw:String)=raw.takeIf {it.isNotBlank()}?.let {Local
   }
  }
 }
+
+/** What an active date filter reads as on its pill: a preset's name, or the dates. */
+internal fun dateFilterLabel(from:String,to:String,today:LocalDate=LocalDate.now()):String {
+ val presets=listOf(1L to "Today",7L to "Last 7 days",30L to "Last 30 days")
+ presets.firstOrNull {(days,_) ->from==today.minusDays(days-1).toString() && to==today.toString()}?.let {return it.second}
+ return when {from.isNotBlank() && to.isNotBlank() -> "${filterDateLabel(from)} – ${filterDateLabel(to)}";from.isNotBlank() -> "From ${filterDateLabel(from)}";else -> "Through ${filterDateLabel(to)}"}
+}
+/** The active date filter, cleared in one tap (03 §3.2). */
+@Composable internal fun DateFilterPill(from:String,to:String,onClear:()->Unit) {
+ val label=dateFilterLabel(from,to)
+ Row(Modifier.padding(horizontal=20.dp)) {
+  InputChip(selected=true,onClick=onClear,label={Text("$label  ×")},modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription="$label. Clear date filter"})
+ }
+}

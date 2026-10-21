@@ -148,6 +148,8 @@ export interface Plugin {
   category: string;
   kind: string;
   permissions: string[];
+  /** What the plugin's own new notes are; plugins that create notes save their own results. */
+  creates?: "machine" | "import" | "external" | "owner";
   ai_route?: Partial<Record<AICapability, string>> | null;
   ai_destinations?: Partial<
     Record<

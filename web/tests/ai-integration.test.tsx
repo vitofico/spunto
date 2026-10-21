@@ -80,6 +80,7 @@ const ask: Plugin = {
   category: "recall",
   kind: "server",
   permissions: ["notes.read", "notes.create", "ai.chat", "ai.embed"],
+  creates: "machine",
   position: 0,
   switch: "on",
   state: "enabled",
@@ -300,7 +301,8 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
   fireEvent.change(await screen.findByLabelText("Question"), {
     target: { value: "Where is coffee?" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+  // The form submits with the command's own title, not a generic "Run".
+  fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
   expect(await screen.findByText("Coffee answer")).toBeTruthy();
   expect(command).toHaveBeenCalledWith("ask", "ask", {
     question: "Where is coffee?",

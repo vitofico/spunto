@@ -9,8 +9,12 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
-import { CommandResult } from "../src/features/Slots";
-import type { Schema } from "../src/lib/types";
+import {
+  CommandResult,
+  PaletteCommands,
+  SlashCommands,
+} from "../src/features/Slots";
+import type { Plugin, Schema } from "../src/lib/types";
 
 let client: QueryClient;
 beforeEach(() => {
@@ -132,9 +136,33 @@ it("ignores an old command response after the result changes to another plugin",
   expect(screen.queryByText("Obsolete pack")).toBeNull();
 });
 
-it.each(["context-packs", "decision-journal"])(
+function manifest(...plugins: Partial<Plugin>[]) {
+  client.setQueryData(["manifest"], {
+    ui: 1,
+    plugins_rev: 1,
+    plugins: plugins.map((p, position) => ({
+      name: p.id,
+      version: "1",
+      description: "",
+      category: "develop",
+      kind: "server",
+      permissions: [],
+      state: "enabled",
+      switch: "on",
+      position,
+      ...p,
+    })),
+  });
+}
+
+it.each([
+  ["context-packs", "owner"],
+  ["decision-journal", "owner"],
+  ["unknown-plugin", undefined],
+] as const)(
   "keeps %s out of the generic public-note save path",
-  (plugin) => {
+  (plugin, creates) => {
+    if (creates) manifest({ id: plugin, creates });
     render(
       wrap(
         <CommandResult
@@ -143,9 +171,120 @@ it.each(["context-packs", "decision-journal"])(
         />,
       ),
     );
-    expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy text" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save as note" })).toBeNull();
     fireEvent.keyDown(document, { key: "s", ctrlKey: true });
     expect(api.createNote).not.toHaveBeenCalled();
   },
 );
+
+it("offers Save as note for a plugin that creates no notes and links to the new note", async () => {
+  manifest({ id: "summary" });
+  vi.mocked(api.createNote).mockResolvedValue({ id: "fresh" } as never);
+  render(
+    wrap(
+      <CommandResult
+        value={{ type: "text", text: "Plain result" }}
+        origin={{ plugin: "summary", command: "show" }}
+      />,
+    ),
+  );
+  fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+  expect(
+    (await screen.findByRole("link", { name: "Open note" })).getAttribute(
+      "href",
+    ),
+  ).toBe("/n/fresh");
+  expect(api.createNote).toHaveBeenCalledWith(
+    "Plain result",
+    expect.any(String),
+  );
+});
+
+it("runs the highlighted slash command on Enter and moves with the arrows", () => {
+  manifest(
+    {
+      id: "decision-journal",
+      contributes: {
+        commands: [
+          { id: "record", title: "Record decision", where: ["slash"] },
+        ],
+      },
+    },
+    {
+      id: "packs",
+      contributes: {
+        commands: [{ id: "packs", title: "Context packs", where: ["slash"] }],
+      },
+    },
+  );
+  const choose = vi.fn();
+  render(
+    wrap(
+      <>
+        <textarea aria-label="Body" />
+        <SlashCommands query="" onChoose={choose} />
+      </>,
+    ),
+  );
+  const body = screen.getByLabelText("Body");
+  const options = screen.getAllByRole("option");
+  expect(options.map((o) => o.getAttribute("aria-selected"))).toEqual([
+    "true",
+    "false",
+  ]);
+  fireEvent.keyDown(body, { key: "ArrowDown" });
+  expect(screen.getAllByRole("option")[1].getAttribute("aria-selected")).toBe(
+    "true",
+  );
+  const enter = new KeyboardEvent("keydown", {
+    key: "Enter",
+    bubbles: true,
+    cancelable: true,
+  });
+  body.dispatchEvent(enter);
+  expect(enter.defaultPrevented).toBe(true);
+  expect(choose).toHaveBeenCalledWith(
+    expect.objectContaining({ plugin: "packs", id: "packs" }),
+  );
+});
+
+it("lists a command that is both a note action and a palette command once, on the open note", async () => {
+  manifest({
+    id: "decision-journal",
+    contributes: {
+      commands: [
+        {
+          id: "record",
+          title: "Record decision",
+          where: ["palette", "slash", "note-actions"],
+        },
+        { id: "journal", title: "Decision journal", where: ["palette"] },
+      ],
+    },
+  });
+  const run = vi.spyOn(api, "command").mockResolvedValue({});
+  render(wrap(<PaletteCommands noteId="note-1" onResult={() => {}} />));
+  expect(
+    screen.getAllByRole("button", { name: /Record decision/ }),
+  ).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: /Record decision/ }));
+  await waitFor(() =>
+    expect(run).toHaveBeenCalledWith("decision-journal", "record", {
+      note_id: "note-1",
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /Decision journal/,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Decision journal/ }));
+  await waitFor(() =>
+    expect(run).toHaveBeenLastCalledWith("decision-journal", "journal", {}),
+  );
+});

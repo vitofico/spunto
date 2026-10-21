@@ -1,4 +1,5 @@
 import DOMPurify from "dompurify";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { SchemaForm, validSchema } from "./SchemaForm";
@@ -149,10 +150,10 @@ export function NoteReference({ id, reason }: { id: string; reason?: string }) {
   });
   if (query.isError) return <span className="muted">Note unavailable</span>;
   return (
-    <a className={styles.noteRef} href={`/n/${encodeURIComponent(id)}`}>
+    <Link className={styles.noteRef} href={`/n/${encodeURIComponent(id)}`}>
       {query.data?.body.slice(0, 100) ?? "Open note"}
       {reason && <small className="muted"> · {reason}</small>}
-    </a>
+    </Link>
   );
 }
 type Callbacks = {

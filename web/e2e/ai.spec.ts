@@ -64,6 +64,7 @@ const ask = {
   switch: "on",
   state: "enabled",
   permissions: ["notes.read", "notes.create", "ai.chat", "ai.embed"],
+  creates: "machine",
   ai_route: { chat: "local" },
   contributes: {
     commands: [
@@ -416,7 +417,9 @@ test("live related panel and Ask form preserve the save-answer action", async ({
   await page
     .getByLabel("Question", { exact: true })
     .fill("Where did I have coffee?");
-  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Ask your notes", exact: true })
+    .click();
   await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Save as note", exact: true }),

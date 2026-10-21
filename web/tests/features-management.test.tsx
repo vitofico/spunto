@@ -11,11 +11,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
 import { SettingsPage } from "../src/features/Settings";
 import {
+  DailySlip,
   EntryMeta,
   NotePanel,
   ReviewLine,
   SuggestionLine,
 } from "../src/features/Slots";
+import { ToastProvider } from "../src/components/core/Toast";
 import type { Note, Plugin } from "../src/lib/types";
 const plugin = {
   id: "tasks",
@@ -442,6 +444,90 @@ describe("quiet slots", () => {
     fireEvent.click(screen.getByRole("button", { name: "+3" }));
     expect(screen.getAllByRole("button", { name: /^#label/ })).toHaveLength(6);
   });
+  it("names each pill's plugin for assistive tech and dismisses the whole row", async () => {
+    const manifest = {
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [{ ...plugin, state: undefined }],
+    };
+    client.setQueryData(["manifest"], manifest);
+    vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+    const decide = vi
+      .spyOn(api, "decideSuggestion")
+      .mockResolvedValue({} as never);
+    const suggestions = [0, 1].map((i) => ({
+      id: `s${i}`,
+      plugin: "tasks",
+      status: "pending",
+      action: "add_label",
+      payload: { path: `label${i}` },
+      reason: "Seen in similar notes",
+    }));
+    const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
+    wrap(<SuggestionLine note={note} />);
+    expect(
+      screen.getByRole("button", {
+        name: /^#label0.*suggested by Tasks: Seen in similar notes$/,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Dismiss #label1" }),
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss 2 suggestions" }),
+    );
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+    expect(decide).toHaveBeenCalledWith("s0", "dismiss");
+    expect(decide).toHaveBeenCalledWith("s1", "dismiss");
+  });
+  it("archives the daily slip with feedback and refreshes the slip", async () => {
+    const manifest = {
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [
+        { ...plugin, state: undefined, contributes: { slip: { title: "" } } },
+      ],
+    };
+    client.setQueryData(["manifest"], manifest);
+    vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+    const created = "2025-10-21T08:00:00Z";
+    vi.spyOn(api, "request")
+      .mockResolvedValueOnce({
+        slip: {
+          plugin_id: "tasks",
+          note_id: "old",
+          payload: null,
+          note: { id: "old", body: "An old thought", created_at: created },
+          updated_at: created,
+        },
+      })
+      .mockResolvedValue({ slip: null });
+    const flags = vi.spyOn(api, "flags").mockResolvedValue({} as never);
+    wrap(
+      <ToastProvider>
+        <DailySlip />
+      </ToastProvider>,
+    );
+    expect(await screen.findByText("An old thought")).toBeTruthy();
+    expect(
+      screen.getByText(
+        `From your notes · ${new Date(created).toLocaleDateString(undefined, {
+          dateStyle: "long",
+        })}`,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Open" }).getAttribute("href"),
+    ).toBe("/n/old");
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await waitFor(() =>
+      expect(flags).toHaveBeenCalledWith("old", { archived: true }),
+    );
+    expect(await screen.findByText("Archived")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByText("An old thought")).toBeNull(),
+    );
+  });
 });
 
 describe("review and result safety", () => {
@@ -500,11 +586,26 @@ describe("review and result safety", () => {
       .spyOn(api, "createNote")
       .mockRejectedValueOnce(new Error("Connection interrupted"))
       .mockResolvedValueOnce({ id: "new" } as Note);
-    wrap(<CommandResult value={{ type: "text", text: "Keep this result" }} />);
-    fireEvent.click(screen.getByRole("button", { name: "Save as note" }));
+    vi.spyOn(api, "manifest").mockResolvedValue({
+      ui: 1,
+      plugins_rev: 1,
+      plugins: [{ ...plugin, state: "enabled", switch: "on" }],
+    });
+    wrap(
+      <CommandResult
+        value={{ type: "text", text: "Keep this result" }}
+        origin={{ plugin: plugin.id, command: "show" }}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Save as note" }),
+    );
     await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "Save as note" }));
     await screen.findByRole("button", { name: "Saved as note" });
+    expect(
+      screen.getByRole("link", { name: "Open note" }).getAttribute("href"),
+    ).toBe("/n/new");
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[0][1]).toBe(create.mock.calls[1][1]);
     expect(create.mock.calls[0][0]).toBe("Keep this result");

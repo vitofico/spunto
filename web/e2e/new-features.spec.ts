@@ -98,6 +98,14 @@ async function uiCommand(
   return response.json();
 }
 
+// A returned form submits with its command's manifest title.
+const formTitles: Record<string, string> = {
+  "record-decision": "Record decision",
+  "review-decision": "Review decision",
+  edit: "Edit context pack",
+  sources: "Pack sources",
+};
+
 async function run(
   page: Page,
   dialog: Locator,
@@ -105,7 +113,10 @@ async function run(
   command: string,
 ) {
   return uiCommand(page, plugin, command, () =>
-    dialog.getByRole("button", { name: "Run", exact: true }).click(),
+    dialog
+      .getByRole("button", { name: formTitles[command], exact: true })
+      .last()
+      .click(),
   );
 }
 
@@ -372,7 +383,7 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await expect(
     dialog.getByText(/A revised goal, kept by the owner/),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "Copy", exact: true }).click();
+  await dialog.getByRole("button", { name: "Copy text", exact: true }).click();
   await expect(
     dialog.getByRole("button", { name: "Copied", exact: true }),
   ).toBeVisible();

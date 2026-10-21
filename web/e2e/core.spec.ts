@@ -222,7 +222,7 @@ test("all plugins off is complete; capture, label completion and keyboard palett
     .fill("second");
   await page
     .getByRole("dialog", { name: "Search and commands" })
-    .getByRole("button", { name: "A second #project/spunto" })
+    .getByRole("option", { name: "A second #project/spunto" })
     .click();
   await expect(page).toHaveURL(/\/n\//);
   await expect(

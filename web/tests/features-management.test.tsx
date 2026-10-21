@@ -124,7 +124,7 @@ describe("plugin lifecycle controls", () => {
       .spyOn(api, "exportNotes")
       .mockRejectedValue(new Error("Synthetic export failure"));
     wrap(<SettingsPage section="data" />);
-    expect(await screen.findByLabelText("Markdown ZIP")).toBeTruthy();
+    expect(await screen.findByLabelText("Choose a Markdown ZIP")).toBeTruthy();
     expect(screen.queryByText(/Blinko/)).toBeNull();
     expect(document.querySelector('a[href*="blinko-import"]')).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Export notes" }));

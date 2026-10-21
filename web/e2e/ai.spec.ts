@@ -419,7 +419,7 @@ test("live related panel and Ask form preserve the save-answer action", async ({
   await page.getByText("Related · 1 item").click();
   await expect(page.getByText("Coffee neighbor")).toBeVisible();
   await page.keyboard.press("Meta+k");
-  await page.getByRole("button", { name: /Ask your notes/ }).click();
+  await page.getByRole("option", { name: /Ask your notes/ }).click();
   await page
     .getByLabel("Question", { exact: true })
     .fill("Where did I have coffee?");

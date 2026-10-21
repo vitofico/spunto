@@ -189,7 +189,7 @@ test("workspace selection survives reload while labels, drafts and viewer contro
   ).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(
-    page.getByRole("button", { name: "New note", exact: true }),
+    page.getByRole("option", { name: "New note", exact: true }),
   ).toHaveCount(0);
   await page.keyboard.press("Escape");
   state.noteSpaces.length = 0;

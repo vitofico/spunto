@@ -60,9 +60,46 @@ it("palette rows are chosen with the arrows and opened with Enter", async () => 
         ?.textContent,
     ).toMatch(/^Go to Trash/),
   );
+  // Rows are options and only the highlighted one is selected; its ↵ hint follows it.
+  expect(screen.getAllByRole("option", { selected: true })).toEqual([
+    document.getElementById(input.getAttribute("aria-activedescendant")!),
+  ]);
   fireEvent.keyDown(input, { key: "Enter" });
   expect(close).toHaveBeenCalled();
   expect(window.location.pathname).toBe("/trash");
+});
+
+it("plugin commands that load after the palette opens are options too", async () => {
+  let load!: () => void;
+  vi.spyOn(api, "manifest").mockReturnValue(
+    new Promise((resolve) => {
+      load = () =>
+        resolve({
+          ui: 1,
+          plugins_rev: 1,
+          plugins: [
+            {
+              id: "ask",
+              name: "Ask your notes",
+              state: "enabled",
+              switch: "on",
+              contributes: {
+                commands: [
+                  { id: "ask", title: "Ask your notes", where: ["palette"] },
+                ],
+              },
+            },
+          ],
+        } as unknown as Awaited<ReturnType<typeof api.manifest>>);
+    }),
+  );
+  wrap(<Palette onClose={() => {}} />);
+  // Everything else the palette asks for has settled before the commands arrive.
+  await act(() => new Promise((settle) => setTimeout(settle, 50)));
+  await act(async () => load());
+  expect(
+    await screen.findByRole("option", { name: /^Ask your notes/ }),
+  ).toBeTruthy();
 });
 
 it("palette leaves out groups with nothing to offer", async () => {

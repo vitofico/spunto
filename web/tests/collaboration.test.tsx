@@ -854,7 +854,7 @@ it("palette Edit opens the note editor when Share is also available", async () =
     { wrapper: Wrapper },
   );
   await screen.findByRole("button", { name: "Share" });
-  fireEvent.click(screen.getByRole("button", { name: /^Edit note/ }));
+  fireEvent.click(screen.getByRole("option", { name: /^Edit note/ }));
   await screen.findByLabelText("Edit note");
   expect(screen.queryByRole("dialog", { name: "Share this note" })).toBeNull();
 });

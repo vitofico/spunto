@@ -294,7 +294,7 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
     });
   wrap(<Palette onClose={() => {}} />);
   fireEvent.click(
-    await screen.findByRole("button", {
+    await screen.findByRole("option", {
       name: /Ask your notes/,
     }),
   );

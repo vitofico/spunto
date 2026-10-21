@@ -701,6 +701,14 @@ kbd {
   cursor: default;
   opacity: 1;
 }
+/* An open task's box takes the theme's field edge and surface, not the browser's
+   grey; a ticked one keeps the native box filled with the accent. */
+.note-body input[type="checkbox"]:not(:checked) {
+  appearance: none;
+  border: 1.5px solid var(--field);
+  border-radius: var(--r-4);
+  background: var(--raised);
+}
 .note-body table {
   display: block;
   max-width: 100%;
@@ -1008,8 +1016,18 @@ mark[data-match] {
   overflow-wrap: anywhere;
 }
 .palette-row:focus,
-.palette [data-active] {
+.palette [aria-selected="true"] {
   background: var(--sunken);
+}
+.palette-row > :is(kbd, .muted) {
+  margin-left: auto;
+}
+/* ↵ opens the highlighted row, so its hint follows the highlight. */
+.palette [aria-selected="true"]::after {
+  content: "↵";
+  content: "↵" / "";
+  font: var(--t-overline-size) var(--f-mono);
+  color: var(--ink-3);
 }
 .palette-row q {
   color: var(--ink);

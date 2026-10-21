@@ -852,6 +852,7 @@ export function PluginCommands({
   if (!commands.length) return null;
   return (
     <div
+      className={slash ? styles.slash : undefined}
       role={slash ? "listbox" : undefined}
       aria-label={slash ? "Commands" : undefined}
     >

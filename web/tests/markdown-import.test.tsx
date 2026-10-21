@@ -51,7 +51,7 @@ it("requires an uploaded preview before queueing and shows the finished vocabula
   expect(
     screen.queryByRole("button", { name: "Import these notes" }),
   ).toBeNull();
-  fireEvent.change(screen.getByLabelText("Markdown ZIP"), {
+  fireEvent.change(screen.getByLabelText("Choose a Markdown ZIP"), {
     target: {
       files: [
         new File(["synthetic zip"], "vault.zip", { type: "application/zip" }),
@@ -67,6 +67,8 @@ it("requires an uploaded preview before queueing and shows the finished vocabula
   expect(fetch.mock.calls[0][1].body).toBeInstanceOf(FormData);
   fireEvent.click(submit);
   await screen.findByText("Import queued.");
+  // The server's line says it once; the page adds no second queued message.
+  expect(screen.queryByText(/runs in the background/)).toBeNull();
   expect(route).toHaveBeenCalledWith("markdown-import", "import", "POST", {
     archive_id: "synthetic-preview",
   });
@@ -75,6 +77,30 @@ it("requires an uploaded preview before queueing and shows the finished vocabula
     screen.getByRole("button", { name: "Refresh import report" }),
   );
   await screen.findByText("Created 2 notes; skipped 0 owner edits.");
+});
+it("leaves out the attachment size when there is nothing to count", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          archive_id: "synthetic-preview",
+          report: {
+            notes: 2,
+            attachments: 0,
+            attachment_bytes: 0,
+            missing_links: 0,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    ),
+  );
+  mount();
+  fireEvent.change(screen.getByLabelText("Choose a Markdown ZIP"), {
+    target: { files: [new File(["synthetic zip"], "vault.zip")] },
+  });
+  expect(await screen.findByText("2 notes and 0 attachments.")).toBeTruthy();
 });
 it("surfaces upload errors without enabling an import", async () => {
   vi.stubGlobal(
@@ -93,7 +119,7 @@ it("surfaces upload errors without enabling an import", async () => {
     ),
   );
   mount();
-  fireEvent.change(screen.getByLabelText("Markdown ZIP"), {
+  fireEvent.change(screen.getByLabelText("Choose a Markdown ZIP"), {
     target: { files: [new File(["invalid"], "bad.zip")] },
   });
   await waitFor(() =>

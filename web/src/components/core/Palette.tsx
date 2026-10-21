@@ -58,7 +58,8 @@ export function Palette({
     const all = rows();
     all.forEach((row, at) => {
       row.id = "palette-option-" + at;
-      row.toggleAttribute("data-active", at === index);
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(at === index));
       row.tabIndex = -1;
     });
     const current = all[index];
@@ -67,7 +68,14 @@ export function Palette({
       input.current?.setAttribute("aria-activedescendant", current.id);
     else input.current?.removeAttribute("aria-activedescendant");
   }
-  useLayoutEffect(() => paint(active));
+  useLayoutEffect(() => {
+    paint(active);
+    // Plugin rows can arrive after this render; they are options too.
+    const observer = new MutationObserver(() => paint(active));
+    if (list.current)
+      observer.observe(list.current, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  });
   useEffect(() => setActive(query.trim() ? 0 : -1), [query]);
   useEffect(() => {
     const previous = restoreFocus ?? (document.activeElement as HTMLElement);
@@ -200,6 +208,8 @@ export function Palette({
           <div
             ref={list}
             id="palette-options"
+            role="listbox"
+            aria-label="Results"
             onMouseMove={(e) => {
               const row = (e.target as HTMLElement).closest("button");
               const index = row ? rows().indexOf(row) : -1;
@@ -215,7 +225,6 @@ export function Palette({
                   <span>
                     Search for <q>{query.trim()}</q>
                   </span>
-                  <kbd>↵</kbd>
                 </button>
               </div>
             )}

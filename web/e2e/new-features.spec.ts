@@ -159,7 +159,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   const suffix = `${Date.now().toString(36)}-${info.project.name}`;
   let dialog = await palette(page, "Record decision");
   await uiCommand(page, "decision-journal", "record-decision", () =>
-    dialog.getByRole("button", { name: /^Record decision/ }).click(),
+    dialog.getByRole("option", { name: /^Record decision/ }).click(),
   );
   await dialog
     .getByLabel("Decision title", { exact: true })
@@ -202,7 +202,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await page.goto(`/n/${rootId}`);
   dialog = await palette(page, "Review decision");
   await uiCommand(page, "decision-journal", "review-decision", () =>
-    dialog.getByRole("button", { name: /^Review decision/ }).click(),
+    dialog.getByRole("option", { name: /^Review decision/ }).click(),
   );
   await dialog
     .getByLabel("What happened, or why reopen?", { exact: true })
@@ -227,7 +227,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await page.goto(`/n/${outcomeId}`);
   dialog = await palette(page, "Review decision");
   await uiCommand(page, "decision-journal", "review-decision", () =>
-    dialog.getByRole("button", { name: /^Review decision/ }).click(),
+    dialog.getByRole("option", { name: /^Review decision/ }).click(),
   );
   await dialog
     .getByLabel("What happened, or why reopen?", { exact: true })
@@ -285,7 +285,7 @@ test("context packs curate sources, expose staleness and keep a private note cop
   const source: Note = await seeded.json();
   let dialog = await palette(page, "Context packs");
   await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("button", { name: /^Context packs/ }).click(),
+    dialog.getByRole("option", { name: /^Context packs/ }).click(),
   );
   await uiCommand(page, "context-packs", "edit", () =>
     dialog

@@ -65,9 +65,10 @@ export function MarkdownImport() {
         exports preserve their metadata; other vaults use supported front
         matter. Notes you edited here are kept.
       </p>
-      <label>
-        Markdown ZIP{" "}
+      <label className={styles.filePicker}>
+        Choose a Markdown ZIP
         <input
+          className="sr-only"
           type="file"
           accept=".zip,application/zip"
           disabled={busy}
@@ -87,8 +88,10 @@ export function MarkdownImport() {
         <div>
           <p>
             {plural(preview.report.notes, "note")} and{" "}
-            {plural(preview.report.attachments, "attachment")} (
-            {formatBytes(preview.report.attachment_bytes)}).
+            {plural(preview.report.attachments, "attachment")}
+            {preview.report.attachment_bytes > 0 &&
+              ` (${formatBytes(preview.report.attachment_bytes)})`}
+            .
           </p>
           {preview.report.missing_links > 0 && (
             <p>
@@ -101,18 +104,13 @@ export function MarkdownImport() {
           </button>
         </div>
       )}
-      {queued && (
-        <p>
-          The import runs in the background and its notes appear as they arrive.
-          Refresh the report for the totals.
-        </p>
-      )}
+      {/* The server's report says what happens next, such as "Import queued." */}
+      {report ? <VocabularyOutput value={report} /> : null}
       {(queued || report !== undefined) && (
         <button disabled={refresh.isPending} onClick={() => refresh.mutate()}>
           Refresh import report
         </button>
       )}
-      {report ? <VocabularyOutput value={report} /> : null}
       {error && (
         <p className="error" role="alert">
           {error.message}

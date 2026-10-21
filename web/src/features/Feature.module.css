@@ -38,10 +38,12 @@
   min-width: 0;
   overflow-wrap: break-word;
 }
-/* Secondary buttons: the same pill as the rest of the app, with a field edge as their boundary. */
+/* Secondary buttons: the same pill as the rest of the app, with a field edge as their boundary.
+   A file picker is its label drawn as one, around a visually hidden input. */
 .section :where(button:not(:global(.primary)):not(:global(.button))),
 .modal :where(button:not(:global(.primary)):not(:global(.button))),
-.status :where(button:not(:global(.primary)):not(:global(.button))) {
+.status :where(button:not(:global(.primary)):not(:global(.button))),
+.filePicker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -59,9 +61,21 @@
 @media (hover: hover) {
   .section :where(button:not(:global(.primary)):not(:disabled):hover),
   .modal :where(button:not(:global(.primary)):not(:disabled):hover),
-  .status :where(button:not(:global(.primary)):not(:disabled):hover) {
+  .status :where(button:not(:global(.primary)):not(:disabled):hover),
+  .filePicker:not(:has(:disabled)):hover {
     background: var(--sunken);
   }
+}
+.filePicker {
+  cursor: pointer;
+}
+.filePicker:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: var(--s-2);
+}
+.filePicker:has(:disabled) {
+  opacity: 0.5;
+  cursor: default;
 }
 .section h1 {
   font: var(--t-title) var(--f-serif);
@@ -134,7 +148,6 @@
 /* A plugin row is one link: the name's link covers the row, the switch sits above it. */
 .rowLink {
   position: relative;
-  border-radius: var(--r-8);
 }
 .rowLink a::after {
   content: "";
@@ -649,7 +662,15 @@
   background: var(--sunken);
 }
 .command small {
+  margin-left: auto;
   color: var(--ink-3);
+}
+/* Inside the composer the slash menu keeps off its edge and lines up with its text. */
+.slash {
+  padding: 0 var(--s-8) var(--s-8);
+}
+.slash .command {
+  padding-inline: var(--s-12);
 }
 .result {
   padding: var(--s-12) 0;
@@ -783,7 +804,8 @@
   .section :where(button:not(:global(.primary))),
   .modal :where(button:not(:global(.primary))),
   .status :where(button:not(:global(.primary))),
-  .segments button {
+  .segments button,
+  .filePicker {
     min-height: 44px;
   }
   /* A link on its own beside buttons, or on its own line, is a whole target too. */

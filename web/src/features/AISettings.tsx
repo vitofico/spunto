@@ -394,15 +394,12 @@ export function AISettings() {
   const ai = query.data;
   return (
     <>
-      <h1>AI</h1>
+      <h1>{ai && !ai.profiles.length ? "AI is off." : "AI"}</h1>
       {query.isPending && <p role="status">Loading AI settings…</p>}
       {ai && !ai.profiles.length && (
-        <div className="empty">
-          <h2>AI is off.</h2>
-          <p>
-            Everything else works. <AIOffHint />
-          </p>
-        </div>
+        <p className="muted">
+          Everything else works. <AIOffHint />
+        </p>
       )}
       {ai && !!ai.profiles.length && (
         <>

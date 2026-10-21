@@ -151,7 +151,7 @@ export function NoteReference({ id, reason }: { id: string; reason?: string }) {
   if (query.isError) return <span className="muted">Note unavailable</span>;
   return (
     <Link className={styles.noteRef} href={`/n/${encodeURIComponent(id)}`}>
-      {query.data?.body.slice(0, 100) ?? "Open note"}
+      {query.data ? query.data.title || "Untitled note" : "Open note"}
       {reason && <small className="muted"> · {reason}</small>}
     </Link>
   );

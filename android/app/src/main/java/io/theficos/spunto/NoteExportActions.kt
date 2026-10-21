@@ -30,9 +30,8 @@ internal suspend fun readNoteForExport(model:SpuntoViewModel,id:String):Exportab
  if(!model.container.appLock.state.value.unlocked) return null
  val credentials=model.container.auth.config.first()
  val result=model.container.database.withTransaction {
-  val stored=model.repository.dao.get(id) ?: return@withTransaction null
-  val note=stored.note()
-  val draft=model.repository.dao.draftSnapshot(id)?.takeIf { it.unsavedOver(stored) }?.body
+  val note=model.repository.dao.get(id)?.note() ?: return@withTransaction null
+  val draft=model.repository.dao.draftSnapshot(id)?.takeIf { it.unsavedOver(note.updatedAt) }?.body
   if(draft!=null && draft!=note.body) return@withTransaction null
   val replica=model.repository.dao.state()
   ExportableNote(note,noteExportStamp(note,draft,credentials,replica?.serverUrl,replica?.epoch))
@@ -55,9 +54,10 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
  val credentials by model.auth.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null)
  val draft by model.repository.draft(note.id).collectAsState(initial=null)
+ val unsaved=draft?.takeIf { it.unsavedOver(note.updatedAt) }?.body
  // A different registration cannot consume the previous note/account's picker result.
  key(note.id,credentials,replica?.serverUrl,replica?.epoch) {
-  NoteExportActionsForOwner(model,note,enabled && (draft==null || draft?.body==note.body),noteExportStamp(note,draft?.body,credentials,replica?.serverUrl,replica?.epoch),content)
+  NoteExportActionsForOwner(model,note,enabled && (unsaved==null || unsaved==note.body),noteExportStamp(note,unsaved,credentials,replica?.serverUrl,replica?.epoch),content)
  }
 }
 @Composable private fun NoteExportActionsForOwner(model:SpuntoViewModel,note:Note,enabled:Boolean,stamp:NoteExportStamp,content:@Composable (()->Unit,()->Unit,Boolean)->Unit) {

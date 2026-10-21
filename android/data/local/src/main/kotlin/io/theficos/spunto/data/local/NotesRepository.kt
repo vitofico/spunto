@@ -25,7 +25,7 @@ class EditorLease internal constructor(val noteId:String?,val draftId:String) {
  internal var committedBody:String?=null
 }
 /** Unsaved words only when written after the note's last change; an older draft was saved already or overtaken by a sync. */
-fun DraftEntity.unsavedOver(note:NoteEntity?)=body.isNotEmpty() && (note==null || updatedAt>note.updatedAt)
+fun DraftEntity.unsavedOver(noteUpdatedAt:Long?)=body.isNotEmpty() && (noteUpdatedAt==null || updatedAt>noteUpdatedAt)
 data class EditorWrite internal constructor(val lease:EditorLease,val body:String,internal val sequence:Long)
 
 class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private val onChange: () -> Unit = {}) {

@@ -151,7 +151,7 @@ import kotlinx.coroutines.*
    model.repository.dao.draftSnapshot(draftId) to if(id=="capture") null else model.repository.dao.get(id)
   }
   val stored=current?.body
-  val body=draft?.takeIf { it.unsavedOver(current) }?.body ?: ((stored ?: initial)+if(startNewParagraph && stored!=null) "\n\n" else "")
+  val body=draft?.takeIf { it.unsavedOver(current?.updatedAt) }?.body ?: ((stored ?: initial)+if(startNewParagraph && stored!=null) "\n\n" else "")
   // The caret opens where the reader tapped (A5) unless a draft changed the text; otherwise at the end.
   value=TextFieldValue(body,TextRange(caret?.takeIf { body==(stored ?: initial) }?.coerceIn(0,body.length) ?: body.length))
   committed=stored ?: initial

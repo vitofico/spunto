@@ -128,9 +128,9 @@ class NotesRepositoryTest {
   // A draft an older build left behind loses to the web edit a later sync brought in.
   repo.dao.putDraft(DraftEntity(id,"Phone words, edited",10))
   repo.putNote(repo.dao.get(id)!!.note().copy(body="Edited on the web",serverRev=3,updatedAt=20,pending=false))
-  assertFalse(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)))
+  assertFalse(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)!!.updatedAt))
   // Words typed after the note's last change, then not saved (the app was killed), still win.
-  repo.dao.putDraft(DraftEntity(id,"Typed after the sync",30));assertTrue(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)))
+  repo.dao.putDraft(DraftEntity(id,"Typed after the sync",30));assertTrue(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)!!.updatedAt))
   assertTrue(DraftEntity("capture","Unsent capture",1).unsavedOver(null));assertFalse(DraftEntity("capture","",1).unsavedOver(null))
  }
  @Test fun readAwaitsCommitAndOldEditorCallbacksAreFenced()=runBlocking {

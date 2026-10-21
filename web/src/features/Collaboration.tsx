@@ -11,15 +11,9 @@ import {
   type AccessGrant,
 } from "../lib";
 import { Dialog } from "./Dialog";
+import { ErrorLine } from "./SettingsParts";
 import styles from "./Feature.module.css";
 
-function ErrorLine({ error }: { error: Error | null }) {
-  return error ? (
-    <p className="error" role="alert">
-      {error.message}
-    </p>
-  ) : null;
-}
 function GrantForm({
   add,
   pending,

@@ -150,6 +150,20 @@ button.primary {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+/* A choice looks like the other fields in every engine (WebKit draws a small popup
+   button otherwise); two triangles in a token colour make its chevron. */
+select.field {
+  appearance: none;
+  padding-right: var(--s-32);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position:
+    calc(100% - 19px) 50%,
+    calc(100% - 14px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
 .row {
   display: flex;
   align-items: center;
@@ -1374,6 +1388,7 @@ mark[data-match] {
   .search-filters input {
     font-size: var(--t-ui-lg-size);
   }
+  select.field,
   .search-filters .field {
     min-height: 44px;
   }

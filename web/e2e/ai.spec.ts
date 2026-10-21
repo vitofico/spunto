@@ -307,6 +307,12 @@ test("model inventory choices and environment reset require Save on mobile", asy
   await expect(
     embedding.locator("option").filter({ hasText: "fixture-embedding-v2" }),
   ).toHaveCount(1);
+  // Phone targets: a model choice and the short "AI" tab are at least 44 px.
+  expect((await embedding.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect(
+    (await page.getByRole("link", { name: "AI", exact: true }).boundingBox())!
+      .width,
+  ).toBeGreaterThanOrEqual(44);
   await embedding.selectOption(
     JSON.stringify(["local", "fixture-embedding-v2"]),
   );

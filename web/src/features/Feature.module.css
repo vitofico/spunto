@@ -40,7 +40,8 @@
 }
 /* Secondary buttons: the same pill as the rest of the app, with a field edge as their boundary. */
 .section :where(button:not(:global(.primary)):not(:global(.button))),
-.modal :where(button:not(:global(.primary)):not(:global(.button))) {
+.modal :where(button:not(:global(.primary)):not(:global(.button))),
+.status :where(button:not(:global(.primary)):not(:global(.button))) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -57,7 +58,8 @@
 }
 @media (hover: hover) {
   .section :where(button:not(:global(.primary)):not(:disabled):hover),
-  .modal :where(button:not(:global(.primary)):not(:disabled):hover) {
+  .modal :where(button:not(:global(.primary)):not(:disabled):hover),
+  .status :where(button:not(:global(.primary)):not(:disabled):hover) {
     background: var(--sunken);
   }
 }
@@ -746,6 +748,8 @@
   .nav a {
     white-space: nowrap;
     min-height: 44px;
+    min-width: 44px;
+    text-align: center;
   }
   .themes {
     --theme-gap: var(--s-8);
@@ -777,7 +781,16 @@
     gap: var(--s-12);
   }
   .section :where(button:not(:global(.primary))),
-  .modal :where(button:not(:global(.primary))) {
+  .modal :where(button:not(:global(.primary))),
+  .status :where(button:not(:global(.primary))),
+  .segments button {
+    min-height: 44px;
+  }
+  /* A link on its own beside buttons, or on its own line, is a whole target too. */
+  .row > a,
+  .status > a {
+    display: inline-flex;
+    align-items: center;
     min-height: 44px;
   }
   .connection,

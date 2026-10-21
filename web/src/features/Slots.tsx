@@ -775,6 +775,7 @@ export function PaletteCommands({
       where={noteId ? ["note-actions", "palette"] : ["palette"]}
       noteId={noteId}
       onResult={onResult}
+      inPalette
     />
   );
 }
@@ -785,6 +786,7 @@ export function PluginCommands({
   pluginId,
   onChoose,
   onResult,
+  inPalette,
 }: {
   query?: string;
   where?: string | string[];
@@ -792,6 +794,8 @@ export function PluginCommands({
   pluginId?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
+  /** Rows look and line up like the palette's own rows. */
+  inPalette?: boolean;
 }) {
   const manifest = usePlugins();
   const places = Array.isArray(where) ? where : [where];
@@ -891,13 +895,13 @@ export function PluginCommands({
   if (!commands.length) return null;
   return (
     <div
-      className={slash ? styles.slash : undefined}
+      className={slash ? styles.slash : inPalette ? "palette-group" : undefined}
       role={slash ? "listbox" : undefined}
       aria-label={slash ? "Commands" : undefined}
     >
       {commands.map((c, index) => (
         <button
-          className={styles.command}
+          className={inPalette ? "palette-row" : styles.command}
           key={`${c.plugin}/${c.id}`}
           role={slash ? "option" : undefined}
           aria-selected={slash ? index === highlighted : undefined}
@@ -906,7 +910,7 @@ export function PluginCommands({
           onClick={() => choose(c)}
         >
           <span>{c.title}</span>
-          <small>{c.name}</small>
+          <small className="muted">{c.name}</small>
         </button>
       ))}
       {command.isError && (

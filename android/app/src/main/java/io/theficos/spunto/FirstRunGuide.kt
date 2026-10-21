@@ -72,7 +72,7 @@ private val guideSteps=listOf(
     }
     // Short screens and enlarged text give the explanation and actions one scroll area.
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s24)) {
-     GuideContent(step,current)
+     GuideContent(step,if(step==guideSteps.lastIndex && onConnect==null) current.copy(caption="This phone is already connected, so your notes sync.") else current)
      if(compact) actions()
     }
     if(!compact) actions()

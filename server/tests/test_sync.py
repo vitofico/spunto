@@ -230,6 +230,28 @@ async def test_pull_pages_disabled_plugin_rows_private_notes_gzip_and_tombstones
     ).status_code == 422
 
 
+async def test_final_pull_page_passes_sequence_numbers_without_rows(server):
+    headers = await signed(server)
+    await Notes(server.services.store, OWNER).create("Synthetic synced note")
+    async with server.services.store.write() as conn:  # what a plugin switch does
+        await conn.execute("UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='change_seq'")
+    page = (await server.client.get("/api/v1/sync/pull", headers=headers)).json()
+    wait = (
+        await server.client.get(
+            "/api/v1/changes/wait",
+            params={"cursor": page["cursor"], "plugins_rev": page["plugins_rev"], "timeout": 0},
+            headers=headers,
+        )
+    ).json()
+    assert wait["changed"] is False and wait["cursor"] == page["cursor"]
+    again = (
+        await server.client.get(
+            "/api/v1/sync/pull", params={"cursor": page["cursor"]}, headers=headers
+        )
+    ).json()
+    assert again["items"] == [] and again["cursor"] == page["cursor"]
+
+
 async def test_sync_requires_device_and_epoch_restore_recovers_without_loss(server):
     headers = await signed(server)
     assert (await server.client.get("/api/v1/sync/pull")).status_code == 403

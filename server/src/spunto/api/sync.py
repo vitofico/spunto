@@ -438,8 +438,12 @@ async def pull(
                 break
             items.append(item)
             size += item_size
-        new_seq = items[-1]["change_seq"] if items else seq
         has_more = len(changes) > len(items)
+        new_seq = items[-1]["change_seq"] if items else seq
+        if not has_more:
+            # Plugin switches spend a change_seq without a row; a cursor left behind them
+            # makes /changes/wait report "changed" forever and the phone sync in a loop.
+            new_seq = max(new_seq, int(meta["change_seq"]))
     payload = {
         "epoch": epoch,
         "cursor": f"{epoch}.{new_seq}",

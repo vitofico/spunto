@@ -36,7 +36,7 @@ import io.theficos.spunto.plugins.dictation.voice.*
 import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -68,7 +68,6 @@ import kotlinx.coroutines.*
  var startingVoice by remember {mutableStateOf(false)}
  var value by remember(id) { mutableStateOf(TextFieldValue(initial,TextRange(initial.length))) }
  val labelCounts by model.labels.collectAsState()
- val networkOnline by model.online.collectAsState()
  val focus=remember { FocusRequester() }
  val preferences=model.container.preferences
  var language by remember { mutableStateOf(preferences.getString("dictation-language",if(java.util.Locale.getDefault().language=="it") "it-IT" else "en-US")!!) }
@@ -170,24 +169,43 @@ import kotlinx.coroutines.*
  }
  val latestText by rememberUpdatedState(value.text)
  val latestReady by rememberUpdatedState(ready)
- val latestSaved by rememberUpdatedState(saved)
  val latestSaving by rememberUpdatedState(saving)
+ val latestPendingRecording by rememberUpdatedState(pendingRecording)
+ val latestRecoveries by rememberUpdatedState(recoveries)
+ val latestRecordingSaved by rememberUpdatedState(onRecordingSaved)
+ val owner=LocalLifecycleOwner.current
  LaunchedEffect(id,draftId) { if(id!="capture") while(true) { delay(60_000); if(ready && !saved && !latestSaving && latestText!=committed) { val body=latestText;val write=model.repository.editorWrite(lease,body);if(commitEditor(write)) committed=body } } }
  DisposableEffect(editorLease) {
   onFinishReady {
+   check(latestReady) {"Wait for this note to finish loading."}
+   check(!startingVoice && !saving) {"Wait for the current recording or save to finish."}
+   check(latestRecoveries.isEmpty() || latestPendingRecording!=null || voice.state.value.recording!=null) {"Recover or discard the unfinished recording before finishing."}
+   val tappedRevision=ownerRevision
    closing=true
+   saving=true
    try {
     val active=session.state.value.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)
+    val keepRecording=recordingActive(voice.state.value.phase) || voice.state.value.recording!=null || latestPendingRecording!=null
     voice.onForegroundChanged(false);if(voice.hasSession) voice.stop()
     val body=if(voice.hasSession) voice.textSnapshot().text else if(active) session.stopForSave() else latestText
-    if(latestReady && !latestSaved) check(model.repository.finishEditor(model.repository.editorWrite(editorLease,body))) {"Editor is no longer active."}
-    else model.repository.abandonEditor(editorLease)
-   } catch(error:Exception) {closing=false;throw error}
+    if(keepRecording) {
+     check(ownerRevision==tappedRevision) {"The editor changed. Save the current text with this recording."}
+     val clipId=recoveredId?:voice.state.value.recording?.id?:latestPendingRecording?.id?:error("Recording could not be finalized. Recover or discard it before finishing.")
+     val noteId=voice.retain(clipId,model.repository.editorWrite(editorLease,body))
+     retainedId=clipId;recoveredId=null;saved=true
+     latestRecordingSaved(noteId)
+    } else {
+     if(latestReady && !saved) check(model.repository.finishEditor(model.repository.editorWrite(editorLease,body))) {"Editor is no longer active."}
+     else model.repository.abandonEditor(editorLease)
+     saved=true
+    }
+   } catch(error:Exception) {closing=false;voice.onForegroundChanged(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED));throw error}
+   finally {saving=false}
   }
   onDispose {
    onFinishReady(null)
    if(editorLease!==latestLease) model.repository.abandonEditor(editorLease)
-   else if(latestReady && !latestSaved) {
+   else if(latestReady && !saved) {
     val active=session.state.value.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)
     session.stopAndKeep()
     voice.onForegroundChanged(false)
@@ -203,7 +221,6 @@ import kotlinx.coroutines.*
    } else model.repository.abandonEditor(editorLease)
   }
  }
- val owner=LocalLifecycleOwner.current
  DisposableEffect(owner) { val observer=LifecycleEventObserver { _,event -> if(event==Lifecycle.Event.ON_STOP) {session.stopAndKeep();voice.onForegroundChanged(false)} else if(event==Lifecycle.Event.ON_START) voice.onForegroundChanged(true) }; owner.lifecycle.addObserver(observer); onDispose { owner.lifecycle.removeObserver(observer); session.stopAndKeep();voice.onForegroundChanged(false) } }
  val listening=dictation.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)
  fun ownerValue(new:TextFieldValue) {
@@ -220,10 +237,6 @@ import kotlinx.coroutines.*
     if(value.text.isEmpty()) Text("What's on your mind?",color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodyLarge)
     BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=MaterialTheme.typography.bodyLarge.copy(color=MaterialTheme.colorScheme.onSurface),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
    }
-  if(id!="capture" && value.text.take(value.selection.start).endsWith("/") && networkOnline) {
-   val commands=model.container.manifest.plugins().filter { model.container.manifest.enabled(it.string("id")) }.flatMap { plugin -> (plugin["contributes"] as? kotlinx.serialization.json.JsonObject)?.objects("commands").orEmpty().filter { command -> (command["where"] as? kotlinx.serialization.json.JsonArray)?.any { it.jsonPrimitive.content=="slash" }==true }.take(3).map { plugin to it } }
-   Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp)) { commands.take(6).forEach { (plugin,command) -> TextButton(onClick={if(id!="capture") model.pluginCommand(plugin.string("id"),command.string("id"),kotlinx.serialization.json.buildJsonObject { put("note_id",id) })}) { Text(command.string("title")) } } }
-  }
   if(prefix!=null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
    labelCounts.filter { it.key.startsWith(prefix,true) }.sortedByDescending { it.count }.take(3).forEach { label -> SuggestionChip(onClick={val caret=value.selection.start; val start=caret-prefix.length; val text=value.text.replaceRange(start,caret,label.path+" "); ownerValue(TextFieldValue(text,TextRange(start+label.path.length+1)))},label={Text("#${label.path}")}) }
    if(prefix.isNotEmpty() && labelCounts.none { it.key.equals(prefix,true) }) Text("New label #$prefix",style=MaterialTheme.typography.labelMedium)
@@ -233,7 +246,7 @@ import kotlinx.coroutines.*
     if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,listening,startingVoice) {if(listening) session.stopAndKeep() else micTap()}
     if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty()) {Text("Record voice memo")}
    },save={
-   ComposerSaveAction(enabled=ready && !closing && !saving && (value.text.isNotBlank() || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty),saving=saving,startingVoice=startingVoice,onSave={
+   if(showSaveAction) ComposerSaveAction(enabled=ready && !closing && !saving && (value.text.isNotBlank() || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty),saving=saving,startingVoice=startingVoice,onSave={
     if(startingVoice || saving) return@ComposerSaveAction
     val tappedRevision=ownerRevision
     val tappedWrite=model.repository.editorWrite(lease,value.text)
@@ -277,7 +290,7 @@ import kotlinx.coroutines.*
    }
   }
   if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT<33) Text("Voice recording needs Android 13 or newer. You can still type, or use dictation when available.",style=MaterialTheme.typography.bodySmall)
-  VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't discard this clip. It is kept on this phone."}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't recover this clip. Your recording and text are kept."}}})
+  VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't discard this clip. It is kept on this phone."}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't recover this clip. Your recording and text are kept."}}},saveAction=if(showSaveAction) "Save" else "Done")
   pendingRecording?.let {row ->AttachmentPlayer(model,row.id,"Recording ${recordingTime(row.durationMs)}",AttachmentEntity(row.id,row.noteId.orEmpty(),row.finalPath,"audio/ogg",kind="recording",durationMs=row.durationMs,byteSize=row.byteSize,sha256=row.sha256,serverUrl=row.serverUrl,status="local-only"))}
   if(recordingNeedsPermission) Row {Text("Allow microphone permission to record.",Modifier.weight(1f));TextButton(onClick={permissionAction="recording";if(permanent) context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}"))) else permission.launch(Manifest.permission.RECORD_AUDIO)}) {Text(if(permanent) "Open settings" else "Allow")}}
   if(dictationEnabled && !voice.hasSession && (listening || dictation.message.isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.message.startsWith("Didn't catch")))) {

@@ -66,7 +66,7 @@ class PluginNotes:
                 "SELECT l.path,count(DISTINCT n.id) AS count FROM label l "  # noqa: S608
                 "JOIN note_label nl ON nl.label_id=l.id JOIN note n ON n.id=nl.note_id "
                 f"WHERE ({visibility}) AND n.trashed_at IS NULL AND n.machine=0 "
-                "GROUP BY l.id ORDER BY count DESC,l.key LIMIT ?",
+                "GROUP BY l.id,l.path,l.key ORDER BY count DESC,l.key LIMIT ?",
                 (limit,),
             )
         self.ctx.check("notes.read")

@@ -58,6 +58,11 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  var readingSize by remember { mutableStateOf(normalizedReadingSize(model.container.preferences.getString("reading-size","M").orEmpty())) }
  val auth by model.auth.collectAsState(); val reauth by model.reauthenticate.collectAsState(); val sync by model.status.collectAsState(); val message by model.message.collectAsState(); val pending by model.pending.collectAsState()
  var navigationOpen by remember { mutableStateOf(false) }
+ var noteBack by remember(route) {mutableStateOf<(() -> Unit)?>(null)}
+ var filtersOpen by remember { mutableStateOf(false) }
+ var createdFrom by rememberSaveable(route) { mutableStateOf("") }
+ var createdTo by rememberSaveable(route) { mutableStateOf("") }
+ val filterable=route in setOf("timeline","archive","trash","search") || route.startsWith("label:") || route.startsWith("view:")
  val navigationLabels by model.labels.collectAsState()
  val replicaState by model.repository.dao.observeState().collectAsState(initial=null)
  val manifest=model.manifest.collectAsState().value
@@ -77,8 +82,9 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
   }
  }
  fun navigateBack() {
+  if(route.startsWith("note:") && noteBack!=null) {noteBack?.invoke();return}
   route=when(route) {
-   "appearance","plugins","devices","status","labels","data","profile" -> "settings"
+   "appearance","plugins","devices","status","labels","data","profile","ai" -> "settings"
    else -> "timeline"
   }
  }
@@ -113,26 +119,32 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
   }
   Scaffold(topBar={TopAppBar(title={
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=Modifier.semantics {contentDescription="Choose labels and views"}) {Text("${navigationTitle(route,navigationLabels,manifest)} ▾",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
-   else Text(if(route.startsWith("note:")) "Note" else route.substringBefore(':').replaceFirstChar {it.uppercase()})
+   else Text(if(route.startsWith("note:")) "Note" else if(route=="ask") "Ask your notes" else route.substringBefore(':').replaceFirstChar {it.uppercase()})
   },navigationIcon={if(!isLabelsNavigationRoute(route)) TextButton(onClick=::navigateBack) {Text("Back")}},actions={
-   TextButton(onClick={route="search"}) {Text("Search")}
+   if((isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={route="ask"},modifier=Modifier.semantics {contentDescription="Ask your notes"}) {Text("Ask")}
+   if(route!="search" && !route.startsWith("note:")) IconButton(onClick={route="search"}) {Icon(painterResource(R.drawable.ic_search),contentDescription="Search",modifier=Modifier.size(24.dp))}
+   if(filterable) IconButton(onClick={filtersOpen=true}) {
+    BadgedBox(badge={if(createdFrom.isNotBlank() || createdTo.isNotBlank()) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=if(createdFrom.isNotBlank() || createdTo.isNotBlank()) "Filters applied" else "Filter notes",modifier=Modifier.size(24.dp))}
+   }
    if(route=="timeline") IconButton(onClick={route="settings"},modifier=Modifier.size(48.dp)) {
     Icon(painterResource(R.drawable.ic_settings),contentDescription="Settings",modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
    }
   })}) { padding ->
    Column(Modifier.fillMaxSize().padding(padding)) {
+    if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
     if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest),onRoute={requested ->navigationOpen=false;route=requested},onSettings={navigationOpen=false;route="settings"},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message)
     if(auth?.serverUrl?.startsWith("http://")==true) Text("Not encrypted · This server uses plain HTTP.",Modifier.fillMaxWidth().padding(12.dp),style=MaterialTheme.typography.bodySmall)
     if(!online && auth!=null) Text("Offline. Notes stay on this phone.",Modifier.padding(horizontal=20.dp),style=MaterialTheme.typography.bodySmall)
     if(pending>0 || sync is SyncStatus.Waiting) SyncStatusNotice(pending,sync is SyncStatus.Waiting) {model.synchronize()}
     if(message.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalAlignment=Alignment.CenterVertically) { Text(message,Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium); TextButton(onClick={model.message.value=""},modifier=Modifier.semantics {contentDescription="Dismiss message"}) { Text("×") } }
     when {
-     route=="timeline" -> Timeline(model,onNote={route="note:$it"},onReview={route="review"})
-     route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={route="timeline"},onNote={route="note:$it"})
-     route=="search" -> SearchScreen(model,onNote={route="note:$it"})
+     route=="timeline" -> Timeline(model,onNote={route="note:$it"},onReview={route="review"},from=createdFrom,to=createdTo)
+     route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={route="timeline"},onNote={route="note:$it"},onBackReady={noteBack=it})
+     route=="search" -> SearchScreen(model,onNote={route="note:$it"},from=createdFrom,to=createdTo)
+     route=="ask" -> AskScreen(model,onNote={route="note:$it"})
      route=="labels" -> LabelsScreen(model) { route="label:$it" }
      route=="settings" -> SettingsLanding(onRoute={route=it},onConnect={route="login"},isConnected=auth!=null)
-     route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route) { route="note:$it" }
+     route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote={ route="note:$it" })
      route=="review" -> ReviewScreen(model) { route="note:$it" }
      route=="appearance" -> AppearanceScreen(requestedTheme,mode,black,wallpaper,{ choice ->
       val selected=resolveThemeSelection(choice,null,appearanceManifest?.catalog)
@@ -148,6 +160,7 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
      route=="devices" -> DevicesScreen(model,onLogin={route="login"})
      route=="data" || route=="profile" -> OwnerWebSettingsScreen(model,route)
      route=="status" -> StatusScreen(model)
+     route=="ai" -> AISettingsScreen(model)
     }
     val remote by model.remote.collectAsState()
     if(online && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,{route="note:$it"},{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})
@@ -166,9 +179,8 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
   TextButton(onClick=onSync,modifier=Modifier.heightIn(min=48.dp)) {Text("Sync")}
  }
 }
-@Composable fun Timeline(model:SpuntoViewModel,onNote:(String)->Unit,onReview:()->Unit) {
+@Composable fun Timeline(model:SpuntoViewModel,onNote:(String)->Unit,onReview:()->Unit,from:String="",to:String="") {
  val manifest=model.manifest.collectAsState().value
- var from by remember { mutableStateOf("") };var to by remember { mutableStateOf("") };var dates by remember { mutableStateOf(false) }
  val range=remember(from,to) { runCatching { CreatedRange.parse(from,to) } }
  val spec=remember(range.getOrNull(),range.isSuccess) { TimelineSpec(created=range.getOrDefault(CreatedRange()),valid=range.isSuccess) }
  val paging=remember(spec) { model.repository.paging(spec) }
@@ -179,7 +191,6 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
   item { Composer(model,onPlainCaptureSave={body,ref ->model.repository.create(body,sourceRef=ref)},onSave={model.saveLocal(it)}) }
   if(proposals>=3) item { TextButton(onClick=onReview) { Text("$proposals suggestions · Review") } }
-  item { CreatedDateControls(from,to,dates,{from=it},{to=it},{dates=!dates},range.isFailure) }
   outputs.filter { it.kind=="annotation" && payload(it.payload).string("kind")=="slip" && model.container.manifest.enabled(payload(it.payload).string("plugin")) && notes.any { note -> note.id==it.noteId && !note.privateNote && !note.trashed } }.take(1).forEach { output -> item { Surface(color=MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(16.dp)) { Text("From your notes",style=MaterialTheme.typography.labelSmall); notes.firstOrNull { it.id==output.noteId }?.let { Markdown(it.body.take(600));Row { TextButton(onClick={onNote(it.id)}) { Text("Open") };TextButton(onClick={model.flags(it.id,archived=true)}) { Text("Archive") } } } ?: RenderOutput(model,payload(output.payload),onNote) } } } }
   if(page.itemCount==0) item { if(from.isNotBlank() || to.isNotBlank()) Text("No notes in this date range.") else { Text("A quiet place for loose ideas.",style=MaterialTheme.typography.titleLarge); Text("Share anything to spunto from any app, or select text and choose Save to spunto.",color=MaterialTheme.colorScheme.onSurfaceVariant) } }
   items(page.itemCount,key={index -> page.peek(index)?.id ?: index}) { index -> page[index]?.note()?.let { NoteEntry(model,it,onNote) } }
@@ -211,10 +222,14 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  }
 }
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun NoteScreen(model:SpuntoViewModel,id:String,onClose:()->Unit,onNote:(String)->Unit) {
+@Composable fun NoteScreen(model:SpuntoViewModel,id:String,onClose:()->Unit,onNote:(String)->Unit,onBackReady:((()->Unit)?)->Unit={}) {
  val manifest=model.manifest.collectAsState().value
  val note by model.repository.observe(id).collectAsState(null)
- var editing by remember(id) { mutableStateOf(false) }; var history by remember(id) { mutableStateOf(false) }; var about by remember(id) { mutableStateOf(false) }; var commandResult by remember(id) { mutableStateOf<JsonObject?>(null) }
+ var editing by remember(id) { mutableStateOf(false) }
+ var actions by remember(id) { mutableStateOf(false) }
+ var history by remember(id) { mutableStateOf(false) }
+ var about by remember(id) { mutableStateOf(false) }
+ var commandResult by remember(id) { mutableStateOf<JsonObject?>(null) }
  val editorScope=rememberCoroutineScope()
  var finishing by remember(id) {mutableStateOf(false)}
  var restoring by remember(id) {mutableStateOf(false)}
@@ -224,40 +239,87 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  var recordingTarget by remember(id) {mutableStateOf<String?>(null)}
  val value=note?.takeIf {it.id==id} ?: run { Text("Note unavailable.");return }
  val online by model.online.collectAsState()
- LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
- LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-  item { if(editing) Composer(model,id,value.body,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},onSave={editing=false}) else Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it}) { model.toggleTask(value,it) } }
-  item { FlowRow(horizontalArrangement=Arrangement.spacedBy(4.dp)) { TextButton(enabled=!finishing && !restoring && (!editing || finishEditor!=null),onClick={
-   if(finishing || restoring) return@TextButton
-   if(!editing) editing=true else { finishing=true;editorScope.launch {
-    try { finishEditor?.invoke();editing=false }
-    catch(error:kotlinx.coroutines.CancellationException) {throw error}
-    catch(error:Exception) {model.message.value="Couldn't save on this phone. Your draft is still here."}
-    finally {finishing=false}
-   } }
-  }) { Text(if(finishing) "Saving…" else if(editing) "Read" else "Edit") }; TextButton(onClick={about=true}) { Text("About this note") }; TextButton(onClick={history=!history}) { Text("History") } } }
-  item { NoteExportActions(model,value,enabled=!editing && !finishing && !restoring) }
-  item { FlowRow(horizontalArrangement=Arrangement.spacedBy(4.dp)) { TextButton(onClick={model.flags(id,pinned=!value.pinned)}) { Text(if(value.pinned) "Unpin" else "Pin") }; TextButton(onClick={model.flags(id,archived=!value.archived)}) { Text(if(value.archived) "Unarchive" else "Archive") }; TextButton(onClick={model.flags(id,trashed=!value.trashed);onClose()}) { Text(if(value.trashed) "Restore" else "Trash") } } }
-  item { Row(horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) { Text("Private · Plugins never read this note",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium); Switch(checked=value.privateNote,onCheckedChange={model.flags(id,privateNote=it)},modifier=Modifier.semantics {contentDescription="Private note"}) } }
-  if(!editing) item { Suggestions(model,id,onNote) }
-  if(online) item { NoteCommands(model,id) { commandResult=it } }
-  item { NoteAttachments(model,id,value.body) }
-  if(history) revisionHistoryItems(revisions,online,historyResult,editing || finishing || restoring) { revision ->
-   if(!editing && !finishing && !restoring) { restoring=true;editorScope.launch {
-    try {model.repository.restoreHistory(id,revision)}
-    catch(error:kotlinx.coroutines.CancellationException) {throw error}
-    catch(error:Exception) {model.message.value="Couldn't restore this revision. Your note and draft stay on this phone."}
-    finally {restoring=false}
-   } }
+ fun finishEditing() {
+  if(finishing || restoring) return
+  val finish=finishEditor ?: return
+  finishing=true
+  editorScope.launch {
+   try {finish();editing=false}
+   catch(error:kotlinx.coroutines.CancellationException) {throw error}
+   catch(error:Exception) {model.message.value=if(error is IllegalArgumentException || error is IllegalStateException) error.message?.takeIf(String::isNotBlank) ?: "Couldn't save on this phone. Your draft is still here." else "Couldn't save on this phone. Your draft is still here."}
+   finally {finishing=false}
   }
  }
- if(about) ModalBottomSheet(onDismissRequest={about=false},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) { Text("About this note",style=MaterialTheme.typography.titleLarge); Text("Created ${noteTime(value.createdAt)}\nUpdated ${noteTime(value.updatedAt)}");value.sourceUrl?.let { Text(it) };PluginPanels(model,value,onNote);Spacer(Modifier.height(32.dp)) } }
+ DisposableEffect(id,editing,finishEditor,finishing,restoring) {
+  onBackReady(if(editing) ({finishEditing()}) else null)
+  onDispose {onBackReady(null)}
+ }
+ BackHandler(editing) {finishEditing()}
+ LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
+ Column(Modifier.fillMaxSize()) {
+  Surface(tonalElevation=1.dp) {
+   Row(Modifier.fillMaxWidth().padding(start=20.dp,end=8.dp,top=4.dp,bottom=4.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+    Column(Modifier.weight(1f)) {
+     Text(if(editing) "Editing" else noteTime(value.createdAt),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+     val details=if(editing) "Changes save on this phone" else listOfNotNull(if(value.privateNote) "Private" else null,if(value.pinned) "Pinned" else null,if(value.archived) "Archived" else null,if(value.trashed) "In trash" else null).joinToString(" · ")
+     if(details.isNotBlank()) Text(details,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+    }
+    FilledTonalButton(enabled=!finishing && !restoring && (!editing || finishEditor!=null),onClick={if(editing) finishEditing() else editing=true}) {Text(if(finishing) "Saving…" else if(editing) "Done" else "Edit")}
+    if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription="More note actions",modifier=Modifier.size(24.dp))}
+   }
+  }
+  LazyColumn(Modifier.weight(1f).fillMaxWidth().imePadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+   item {
+    if(editing) Composer(model,id,value.body,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,onSave={editing=false})
+    else Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it}) {model.toggleTask(value,it)}
+   }
+   if(!editing) item {Suggestions(model,id,onNote)}
+   item {NoteAttachments(model,id,value.body)}
+  }
+ }
+ if(actions) ModalBottomSheet(onDismissRequest={actions=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
+  Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal=20.dp).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+   Text("Note actions",style=MaterialTheme.typography.headlineSmall)
+   if(online && !value.trashed) NoteCommands(model,id,privateNote=value.privateNote) {actions=false;commandResult=it}
+   if(value.privateNote) Text("AI and network tools are unavailable for private notes.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   NoteAction("About this note") {actions=false;about=true}
+   NoteAction("History") {actions=false;history=true}
+   HorizontalDivider()
+   NoteAction(if(value.pinned) "Unpin" else "Pin") {model.flags(id,pinned=!value.pinned);actions=false}
+   NoteAction(if(value.archived) "Unarchive" else "Archive") {model.flags(id,archived=!value.archived);actions=false}
+   Row(Modifier.fillMaxWidth().padding(vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+    Column(Modifier.weight(1f)) {Text("Private note",style=MaterialTheme.typography.bodyLarge);Text("Excluded from AI and network plugins",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+    Switch(checked=value.privateNote,onCheckedChange={model.flags(id,privateNote=it)},modifier=Modifier.semantics {contentDescription="Private note"})
+   }
+   HorizontalDivider()
+   NoteExportActions(model,value,enabled=!editing && !finishing && !restoring)
+   HorizontalDivider()
+   NoteAction(if(value.trashed) "Restore from trash" else "Move to trash",destructive=!value.trashed) {model.flags(id,trashed=!value.trashed);actions=false;onClose()}
+  }
+ }
+ if(history) ModalBottomSheet(onDismissRequest={history=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
+  LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+   item {TextButton(onClick={history=false}) {Text("Close history")}}
+   revisionHistoryItems(revisions,online,historyResult,editing || finishing || restoring) {revision ->
+    if(!editing && !finishing && !restoring) {restoring=true;editorScope.launch {
+     try {model.repository.restoreHistory(id,revision)}
+     catch(error:kotlinx.coroutines.CancellationException) {throw error}
+     catch(error:Exception) {model.message.value="Couldn't restore this revision. Your note and draft stay on this phone."}
+     finally {restoring=false}
+    }}
+   }
+  }
+ }
+ if(about) ModalBottomSheet(onDismissRequest={about=false},scrimColor=MaterialTheme.colorScheme.scrim) {Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {Text("About this note",style=MaterialTheme.typography.titleLarge);Text("Created ${noteTime(value.createdAt)}\nUpdated ${noteTime(value.updatedAt)}");value.sourceUrl?.let {Text(it)};PluginPanels(model,value,onNote);Spacer(Modifier.height(32.dp))}}
  recordingTarget?.takeIf {target ->recordingAttachmentLinks(value.body).any {it.second==target}}?.let {target ->
   val attachments by model.repository.dao.attachments(id).collectAsState(emptyList())
   val label=recordingAttachmentLinks(value.body).first {it.second==target}.first
   ModalBottomSheet(onDismissRequest={recordingTarget=null}) {Column(Modifier.padding(20.dp)) {AttachmentPlayer(model,target.substringAfterLast('/'),label,attachments.firstOrNull {it.kind=="recording" && it.remoteId==target.substringAfterLast('/')});Spacer(Modifier.height(32.dp))}}
  }
- commandResult?.takeIf { online && model.container.manifest.enabled(it.string("plugin_id")) }?.let { result -> CommandResultSheet(model,result,onNote,{commandResult=it},{commandResult=null}) }
+ commandResult?.takeIf {online && model.container.manifest.enabled(it.string("plugin_id"))}?.let {result ->CommandResultSheet(model,result,onNote,{commandResult=it},{commandResult=null})}
+}
+@Composable private fun NoteAction(label:String,destructive:Boolean=false,onClick:()->Unit) {
+ TextButton(onClick=onClick,modifier=Modifier.fillMaxWidth(),contentPadding=PaddingValues(horizontal=12.dp,vertical=12.dp),colors=ButtonDefaults.textButtonColors(contentColor=if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)) {Text(label,Modifier.fillMaxWidth(),style=MaterialTheme.typography.bodyLarge)}
 }
 
 internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,online:Boolean,result:HistoryRefreshResult?,editing:Boolean,onRestore:(RevisionEntity)->Unit) {
@@ -265,9 +327,8 @@ internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,o
  if(revisions.isEmpty()) item { Text("No saved revisions on this phone yet.") }
  items(revisions,key={it.id}) { rev -> Column { Text((if(rev.version>0) "Version "+rev.version+" · " else "Local revision · ")+noteTime(rev.at));Text(if(rev.historySource=="server") rev.changeKind.replace('_',' ') else "Saved on this phone",style=MaterialTheme.typography.bodySmall);Markdown(rev.body);TextButton(onClick={onRestore(rev)},enabled=!editing) { Text("Restore this revision") };HorizontalDivider() } }
 }
-@Composable fun FilteredTimeline(model:SpuntoViewModel,route:String,onNote:(String)->Unit) {
+@Composable fun FilteredTimeline(model:SpuntoViewModel,route:String,from:String="",to:String="",onNote:(String)->Unit) {
  val manifest by model.manifest.collectAsState()
- var from by remember(route) { mutableStateOf("") };var to by remember(route) { mutableStateOf("") };var dates by remember(route) { mutableStateOf(false) }
  val range=remember(from,to) { runCatching { CreatedRange.parse(from,to) } }
  val today=LocalDate.now(ZoneOffset.UTC)
  val spec=remember(route,manifest,range.getOrNull(),range.isSuccess,today) {
@@ -282,22 +343,14 @@ internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,o
  val paging=remember(spec) { model.repository.paging(spec) }
  val page=paging.collectAsLazyPagingItems()
  LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-  item { CreatedDateControls(from,to,dates,{from=it},{to=it},{dates=!dates},range.isFailure) }
   if(page.itemCount==0) item { Text(if(from.isNotBlank() || to.isNotBlank()) "No notes in this date range." else "Nothing here yet.") }
   items(page.itemCount,key={index -> page.peek(index)?.id ?: index}) { index -> page[index]?.note()?.let { NoteEntry(model,it,onNote) } }
  }
 }
-@Composable internal fun CreatedDateControls(from:String,to:String,expanded:Boolean,onFrom:(String)->Unit,onTo:(String)->Unit,onExpand:()->Unit,invalid:Boolean) {
- Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-  Row { TextButton(onClick=onExpand) { Text(if(from.isNotBlank() || to.isNotBlank()) "Dates · Filtered" else "Dates") };if(from.isNotBlank() || to.isNotBlank()) TextButton(onClick={onFrom("");onTo("")}) { Text("Clear dates") } }
-  if(expanded) { OutlinedTextField(from,onFrom,Modifier.fillMaxWidth(),label={Text("Created from · YYYY-MM-DD")},singleLine=true,isError=invalid);OutlinedTextField(to,onTo,Modifier.fillMaxWidth(),label={Text("Created to · YYYY-MM-DD")},singleLine=true,isError=invalid) }
-  if(invalid) Text("Use dates in YYYY-MM-DD, with From on or before To.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
- }
-}
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun SearchScreen(model:SpuntoViewModel,onNote:(String)->Unit) {
+@Composable fun SearchScreen(model:SpuntoViewModel,onNote:(String)->Unit,from:String="",to:String="") {
  var query by remember { mutableStateOf("") }; var results by remember { mutableStateOf<List<Note>>(emptyList()) }; var meaning by remember { mutableStateOf<Set<String>>(emptySet()) }
- var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }; var dates by remember { mutableStateOf(false) }; var from by remember { mutableStateOf("") }; var to by remember { mutableStateOf("") }
+ var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }
  val labels by model.labels.collectAsState(); val auth by model.auth.collectAsState(); val sync by model.status.collectAsState()
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
@@ -313,14 +366,12 @@ internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,o
  }
  Column(Modifier.padding(20.dp)) {
   OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text("Search notes")},singleLine=true)
-  TextButton(onClick={dates=!dates}) { Text("Date filter") }
-  if(dates) { OutlinedTextField(from,{from=it},label={Text("From · YYYY-MM-DD")},singleLine=true);OutlinedTextField(to,{to=it},label={Text("To · YYYY-MM-DD")},singleLine=true) }
   if(!online) Text("Offline. Searching this phone by keyword.",style=MaterialTheme.typography.bodySmall)
   if(online && query.trim().split(Regex("\\s+")).size>=3 && model.container.manifest.enabled("ask")) TextButton(enabled=!asking,onClick={asking=true; model.ask(query,onComplete={asking=false}) { if(model.online.value && model.container.manifest.enabled("ask")) answer=it.jsonObject }}) { Text(if(asking) "Reading your notes…" else "Ask your notes") }
   if(query.isEmpty()) labels.take(8).forEach { TextButton(onClick={query="#${it.path}"}) { Text("#${it.path}") } }
   LazyColumn(verticalArrangement=Arrangement.spacedBy(16.dp)) { items(results,key={it.id}) { note -> if(note.id in meaning) Text("≈ similar meaning",style=MaterialTheme.typography.bodySmall); NoteEntry(model,note,onNote) }; if(query.isNotEmpty() && results.isEmpty()) item { Text("No notes match this search.") } }
  }
- answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) { RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote); if(online && model.container.manifest.enabled("ask") && output.string("answer_id").isNotEmpty()) Button(onClick={model.request("/api/v1/plugins/ask/commands/save-answer","POST",buildJsonObject { put("answer_id",output.string("answer_id")) }) { model.synchronize();answer=null }}) { Text("Save as note") };TextButton(onClick={answer=null}) { Text("Close") } } } }
+ answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) { RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote);TextButton(onClick={answer=null}) { Text("Close") } } } }
 }
 @Composable fun LabelsScreen(model:SpuntoViewModel,onLabel:(String)->Unit) {
  val auth by model.auth.collectAsState()

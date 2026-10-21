@@ -164,6 +164,27 @@ class NewFeatureWorkflowTest {
         } else emptyList()
     }
 
+    @Test fun linkChooserSearchesTitlesAndKeepsIdentifiersInternal() {
+        enable("links")
+        val source = runBlocking {api.post("/api/v1/notes", buildJsonObject {put("body", "Native link source $suffix")})}
+        val title = "Native link destination $suffix"
+        val destination = runBlocking {api.post("/api/v1/notes", buildJsonObject {put("body", title)})}
+        val sourceId = source["id"]!!.jsonPrimitive.content
+        val destinationId = destination["id"]!!.jsonPrimitive.content
+        val flow = Workflow("links", "link", buildJsonObject {put("note_id", sourceId);put("query", suffix)})
+        compose.onNodeWithText("Target note ID").assertDoesNotExist()
+        compose.onNodeWithText("Source choices").assertDoesNotExist()
+        compose.onNodeWithText(destinationId, substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Choose Link to").performScrollTo().performClick()
+        compose.onNodeWithText("Find an option").performTextInput("destination")
+        compose.onNodeWithText("1. $title").performClick()
+        flow.submit()
+        val proposal = outputComponents(flow.output()).single {it["type"]?.jsonPrimitive?.content == "pill"}["suggestion_id"]!!.jsonPrimitive.content
+        assertFalse(note(sourceId)["body"]!!.jsonPrimitive.content.contains("/n/"))
+        runBlocking {api.post("/api/v1/suggestions/$proposal/accept", empty)}
+        assertTrue(note(sourceId)["body"]!!.jsonPrimitive.content.contains("[$title](/n/$destinationId)"))
+    }
+
     @Test fun contextPackFormsCreateEditAndKeepPrivateSnapshot() {
         enable("context-packs")
         val flow = Workflow("context-packs", "edit")

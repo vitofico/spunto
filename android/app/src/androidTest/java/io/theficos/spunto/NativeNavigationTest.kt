@@ -21,10 +21,11 @@ class NativeNavigationTest {
  private val container get()=(compose.activity.application as SpuntoApplication).container
  private fun waitForCapture(text:String?=null) {
   val editable=hasContentDescription("Note text") and isEnabled()
-  compose.waitUntil(10_000) {compose.onAllNodes(if(text==null) editable else editable and hasText(text)).fetchSemanticsNodes().isNotEmpty()}
+  compose.waitUntil(10_000) {compose.onAllNodes(if(text==null) editable else editable and hasText(text)).fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
  }
  private fun openSheet() {
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
+  compose.waitUntil(10_000) {compose.onAllNodesWithText("Labels and views").fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
   compose.onNodeWithText("Labels and views").assertIsDisplayed()
  }
  private fun labelFilterMatcher()=hasSetTextAction() and hasText("Find a label") and hasAnyAncestor(isDialog())
@@ -35,6 +36,26 @@ class NativeNavigationTest {
  }
  private fun sheetList()=compose.onNode(hasScrollAction() and hasAnyAncestor(isDialog()))
  private fun assertDraft(body:String) {runBlocking {assertEquals(body,container.repository.draft("capture").first()?.body)}}
+
+ @Test fun dateFiltersStayOffTheTimelineAndApplyOnlyAfterConfirmation() {
+  waitForCapture()
+  compose.onNodeWithText("Dates").assertDoesNotExist()
+  compose.onNodeWithText("Date filter").assertDoesNotExist()
+  compose.onNodeWithContentDescription("Filter notes").performClick()
+  compose.onNodeWithText("Filter notes").assertIsDisplayed()
+  compose.onNodeWithText("Last 7 days").performClick()
+  compose.onNodeWithText("Cancel").performScrollTo().performClick()
+  compose.onNodeWithContentDescription("Filter notes").assertIsDisplayed().performClick()
+  compose.onNodeWithText("Today").performClick()
+  compose.onNodeWithText("Apply filters").performScrollTo().performClick()
+  compose.onNodeWithContentDescription("Filters applied").assertIsDisplayed()
+  compose.onNodeWithText("Filter notes").assertDoesNotExist()
+  compose.onNodeWithText("Clear dates").assertDoesNotExist()
+  compose.onNodeWithContentDescription("Filters applied").performClick()
+  compose.onNodeWithText("Clear dates").performScrollTo().performClick()
+  compose.onNodeWithText("Apply filters").performScrollTo().performClick()
+  compose.onNodeWithContentDescription("Filter notes").assertIsDisplayed()
+ }
 
  @Test fun timelineTitleSearchAndDismissKeepActualRouteAndCaptureDraft() {
   val appContainer=container

@@ -82,11 +82,22 @@ fun validSchema(value:JsonElement?):Boolean {
  when(component.string("type")) {
   "text" -> Text(component.string("text"))
   "markdown" -> Markdown(component.string("text").ifEmpty { component.string("markdown") },machine=true,onLink={ if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) })
-  "notes" -> Column { ((component["ids"] ?: component["items"]) as? JsonArray)?.forEach { item -> val id=if(item is JsonObject) item.string("id") else item.jsonPrimitive.content; val reason=(item as? JsonObject)?.string("reason").orEmpty();if(noteReference!=null) noteReference(id,reason) else TextButton(onClick={onNote(id)}) { Text(reason.ifEmpty { "Open note" }) } } }
+  "notes" -> Column {
+   val entries=((component["ids"] ?: component["items"]) as? JsonArray).orEmpty()
+   if(entries.isEmpty()) Text("No notes to show yet.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   entries.forEach { item -> val id=if(item is JsonObject) item.string("id") else item.jsonPrimitive.content; val reason=(item as? JsonObject)?.string("reason").orEmpty();if(noteReference!=null) noteReference(id,reason) else TextButton(onClick={onNote(id)}) { Text(reason.ifEmpty { "Open note" }) } }
+  }
   "pill" -> if(proposalPill!=null) proposalPill(component) else SuggestionChip(onClick={onSuggestion(component.string("suggestion_id"))},label={Text(component.string("label"))})
   "command" -> if(online) TextButton(onClick={onCommand(component.string("id"),component["args"] as? JsonObject ?: JsonObject(emptyMap()))}) { Text(component.string("title")) }
   "form" -> SchemaForm(component["schema"]!!.jsonObject,initial=formInitial,preferDefaults=true,readOnly=!online || onForm==null,readOnlyMessage=if(!online) "Changes need a connection." else "Open on the web",saveLabel="Run",hiddenFields=formHidden+commandFormHiddenFields(component["schema"]!!.jsonObject),onSave={onForm?.invoke(it)})
-  "diff" -> Column(verticalArrangement=Arrangement.spacedBy(8.dp)) { Text("Based on version ${component["base_version"]}",style=MaterialTheme.typography.bodySmall);component.objects("hunks").forEach { hunk -> if(hunk["lines"] is JsonArray) Text((hunk["lines"] as JsonArray).joinToString("\n") { it.jsonPrimitive.content },fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace) else { Text("Before",style=MaterialTheme.typography.labelLarge);Text((hunk["old_lines"] as? JsonArray)?.joinToString("\n") { it.jsonPrimitive.content }.orEmpty(),fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace);Text("After",style=MaterialTheme.typography.labelLarge);Text((hunk["new_lines"] as? JsonArray)?.joinToString("\n") { it.jsonPrimitive.content }.orEmpty(),fontFamily=androidx.compose.ui.text.font.FontFamily.Monospace) } } }
+  "diff" -> Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+   Text("Based on version ${component["base_version"]}",style=MaterialTheme.typography.bodySmall)
+   component.objects("hunks").forEachIndexed { index,hunk ->
+    if(index>0) HorizontalDivider()
+    val (before,after)=diffHunkTexts(hunk)
+    TextChangePreview(before,after,allowFullText=false)
+   }
+  }
  }
 }
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -96,6 +107,7 @@ fun validSchema(value:JsonElement?):Boolean {
  var error by remember(schema,initial) { mutableStateOf("") }
  Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
   if(readOnly) Text(readOnlyMessage)
+  schema.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
   fields.forEach { (key,raw) ->
    val field=raw as? JsonObject ?: return@forEach
    if(key in hiddenFields) return@forEach
@@ -105,7 +117,7 @@ fun validSchema(value:JsonElement?):Boolean {
    if(field.string("x-scope")=="device") Text("This phone only",style=MaterialTheme.typography.labelSmall)
    val choices=field["enum"] as? JsonArray
    when {
-    choices!=null -> Column { Text(label);FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) { choices.forEach { choice -> FilterChip(selected=value==choice,onClick={if(!readOnly) values[key]=choice},enabled=!readOnly,label={Text(choice.jsonPrimitive.content)}) } } }
+    choices!=null -> {FormChoiceField(label,choices,value,!readOnly,language=key=="language") {values[key]=it};field.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}}
     field.string("type")=="boolean" -> Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text(label); Switch(checked=value.jsonPrimitive.booleanOrNull ?: false,onCheckedChange={values[key]=JsonPrimitive(it)},enabled=!readOnly) }
     else -> OutlinedTextField(value=if(value is JsonArray) value.joinToString(", ") { it.jsonPrimitive.content } else value.jsonPrimitive.content,onValueChange={text -> values[key]=JsonPrimitive(text)},label={Text(label)},enabled=!readOnly,minLines=if(field.string("type")=="string" && ((field["maxLength"] as? JsonPrimitive)?.intOrNull ?: 0)>280) 3 else 1,modifier=Modifier.fillMaxWidth(),supportingText={Text(field.string("description"))})
    }

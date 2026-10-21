@@ -7,12 +7,51 @@ import pytest
 from conftest import PUBLIC_URL
 
 import spunto.plugins as bundled
+from spunto.ai.errors import AIError
+from spunto.ai.vectors import VectorUnavailable
 from spunto.api import plugins
+from spunto.api.errors import Problem
 from spunto.auth import tokens
 from spunto.host import Plugin, read_manifest
 
 pytestmark = pytest.mark.anyio
 ORIGIN = {"Origin": PUBLIC_URL}
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "code", "guidance"),
+    [
+        (
+            AIError("provider", "ai_provider_http_error", status=401),
+            503,
+            "ai_provider_http_error",
+            "credentials",
+        ),
+        (
+            AIError("provider", "ai_provider_http_error", status=404),
+            503,
+            "ai_provider_http_error",
+            "not found",
+        ),
+        (AIError("validation", "ai_invalid_output"), 422, "ai_invalid_output", "invalid answer"),
+        (
+            AIError("unavailable", "ai_capability_unbound"),
+            503,
+            "ai_capability_unbound",
+            "Choose a model",
+        ),
+        (VectorUnavailable(), 503, "vectors_unavailable", "still preparing"),
+    ],
+)
+async def test_plugin_ai_failures_include_safe_actionable_guidance(failure, status, code, guidance):
+    async def fail():
+        raise failure
+
+    with pytest.raises(Problem) as error:
+        await plugins._call(fail())
+    assert error.value.status == status
+    assert error.value.code == code
+    assert guidance in error.value.detail
 
 
 @pytest.fixture

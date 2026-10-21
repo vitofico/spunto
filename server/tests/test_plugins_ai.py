@@ -13,7 +13,7 @@ from spunto.ai.errors import AIError
 from spunto.ai.gateway import Gateway
 from spunto.ai.output import parse_output
 from spunto.ai.profiles import Profile
-from spunto.ai.vectors import VectorIndex
+from spunto.ai.vectors import VectorIndex, VectorUnavailable
 from spunto.auth.tokens import Principal
 from spunto.core.notes import Notes
 from spunto.core.plugin_notes import PluginNotes
@@ -139,6 +139,29 @@ async def seed(host):
     vocabulary = await notes.create("Spunto project uses SQLite #project/Spunto")
     target = await notes.create("Spunto uses SQLite for notes")
     return notes, vocabulary, target
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [VectorUnavailable(), AIError("provider", "ai_provider_unreachable")],
+)
+async def test_labels_keep_working_while_optional_neighbors_are_unavailable(
+    ai_host, monkeypatch, failure
+):
+    host, provider = ai_host
+    notes, _, target = await seed(host)
+
+    async def unavailable(**kwargs):
+        raise failure
+
+    monkeypatch.setattr(host.vectors, "nearest", unavailable)
+    result = await host.invoke_command(
+        "label-suggestions", "suggest-now", {"note_id": target["id"]}, principal=OWNER
+    )
+    assert "1 suggestions to review" in result["text"]
+    assert (await notes.get(target["id"]))["body"] == target["body"]
+    assert any("Suggest up to three" in str(request) for request in provider.requests)
+    assert host.states["label-suggestions"]["state"] == "enabled"
 
 
 async def test_label_output_limits_canonical_names_and_new_ancestor_case():

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from spunto.ai.errors import AIError
+from spunto.ai.vectors import VectorUnavailable
 from spunto.api.deps import PrincipalDep, ServicesDep, SessionDep
 from spunto.api.errors import Problem, problem_response
 from spunto.host import ContextError, ManifestError
@@ -75,8 +76,13 @@ async def _call(awaitable):
         raise
     except AIError as error:
         status = {"validation": 422, "refused": 403}.get(error.category, 503)
+        raise Problem(status, error.code, error.detail) from None
+    except VectorUnavailable:
         raise Problem(
-            status, error.code, "The configured AI profile could not complete this action."
+            503,
+            "vectors_unavailable",
+            "The note search index is still preparing. "
+            "Check indexing in Settings → AI and try again.",
         ) from None
     except KeyError:
         raise Problem(404, "not_found", "That plugin action is unavailable.") from None

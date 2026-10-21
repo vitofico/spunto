@@ -168,12 +168,130 @@ async def test_title_summary_and_tidy_are_proposals_with_ordinary_history(wave):
     assert len(provider.requests) == count
 
 
+async def test_tidy_preview_focuses_on_changed_lines_and_keeps_full_proposal(wave):
+    host, provider, notes = wave
+    before = [f"Synthetic unchanged line {index}." for index in range(24)]
+    after = [*before]
+    after[12] = "Synthetic corrected sentence."
+    note = await notes.create("\n".join(before))
+    provider.override = json.dumps({"body": "\n".join(after), "meaning_preserved": True})
+    result = await host.invoke_command("tidy", "tidy", {"note_id": note["id"]}, principal=OWNER)
+    hunks = result["items"][0]["hunks"]
+    assert len(hunks) == 1
+    assert hunks[0]["old_start"] == hunks[0]["new_start"] == 11
+    assert hunks[0]["old_lines"] == before[10:15]
+    assert hunks[0]["new_lines"] == after[10:15]
+    assert result["items"][1]["label"] == "Apply changes"
+    await decide(host.store, OWNER, result["items"][1]["suggestion_id"], "accept")
+    assert (await notes.get(note["id"]))["body"] == "\n".join(after)
+
+
+@pytest.mark.parametrize("many_changes", [False, True])
+async def test_tidy_preview_keeps_final_newlines_and_native_hunk_budget(wave, many_changes):
+    host, provider, notes = wave
+    if many_changes:
+        before, after = [], []
+        for index in range(101):
+            before.append(f"Sentence {index}")
+            after.append(f"Sentence {index}.")
+            context = [f"Same {index}.{line}" for line in range(5)]
+            before.extend(context)
+            after.extend(context)
+        original, proposed = "\n".join(before), "\n".join(after)
+    else:
+        original, proposed = "Synthetic sentence.", "Synthetic sentence.\n"
+    note = await notes.create(original)
+    provider.override = json.dumps({"body": proposed, "meaning_preserved": True})
+    result = await host.invoke_command("tidy", "tidy", {"note_id": note["id"]}, principal=OWNER)
+    preview = result["items"][0]
+    assert preview["type"] == "diff" and 1 <= len(preview["hunks"]) <= 100
+    assert preview["hunks"][0]["old_lines"] != preview["hunks"][0]["new_lines"]
+    if not many_changes:
+        assert preview["hunks"][0]["new_lines"] == ["Synthetic sentence.", ""]
+    await decide(host.store, OWNER, result["items"][1]["suggestion_id"], "accept")
+    assert (await notes.get(note["id"]))["body"] == proposed
+
+
+async def test_links_choose_notes_by_title_and_search_with_revision_guards(wave):
+    host, _, notes = wave
+    source = await notes.create("Source note for links")
+    destination = await notes.create("# Synthetic chosen target\nUseful evidence")
+    await notes.create("# Synthetic chosen target\nDifferent note, same title")
+    result = await host.invoke_command(
+        "links", "link", {"note_id": source["id"], "query": "chosen"}, principal=OWNER
+    )
+    validate_output(result)
+    schema = result["items"][1]["schema"]
+    assert "target_id" not in schema["properties"]
+    choices = schema["properties"]["target"]["enum"]
+    assert len(choices) == len(set(choices)) == 3
+    assert all("Synthetic chosen target" in choice for choice in choices[1:])
+    assert all(destination["id"] not in choice for choice in choices)
+    args = {key: value["default"] for key, value in schema["properties"].items()}
+    index = next(
+        index
+        for index, choice in enumerate(args["source_choices"], 1)
+        if choice.startswith(destination["id"])
+    )
+    args["target"] = choices[index]
+    await notes.edit(destination["id"], "Changed target words", destination["version"])
+    with pytest.raises(Problem, match="note changed"):
+        await host.invoke_command("links", "link", args, principal=OWNER)
+    assert not await review(host)
+    await notes.edit(source["id"], "Changed source words", source["version"])
+    with pytest.raises(Problem, match="This note changed"):
+        await host.invoke_command("links", "link", args, principal=OWNER)
+
+
+async def test_links_direct_target_compatibility_and_duplicate_protection(wave):
+    host, _, notes = wave
+    source = await notes.create("Source note for linking")
+    destination = await notes.create("Destination note")
+    args = {"note_id": source["id"], "target_id": destination["id"]}
+    result = await host.invoke_command("links", "link", args, principal=OWNER)
+    await decide(host.store, OWNER, result["suggestion_id"], "accept")
+    assert "[Destination note]" in (await notes.get(source["id"]))["body"]
+    result = await host.invoke_command("links", "link", args, principal=OWNER)
+    assert result["text"] == "This note already links to the selected note."
+    assert len(links.targets((await notes.get(source["id"]))["body"])) == 1
+
+
+async def test_link_captions_escape_markdown_and_do_not_publish_private_titles(wave):
+    host, _, notes = wave
+    source = await notes.create("Public source")
+    for private in (False, True):
+        destination = await notes.create(r"A \[bracket\] and backslash \\", private=private)
+        result = await host.invoke_command(
+            "links",
+            "link",
+            {"note_id": source["id"], "target_id": destination["id"]},
+            principal=OWNER,
+        )
+        await decide(host.store, OWNER, result["suggestion_id"], "accept")
+        body = (await notes.get(source["id"]))["body"]
+        assert destination["id"] in links.targets(body)
+        if private:
+            assert f"[Linked note](/n/{destination['id']})" in body
+        else:
+            assert r"[A \[bracket\] and backslash \\]" in body
+
+
 async def test_private_machine_and_stale_sources_never_mutate(wave):
     host, provider, notes = wave
     private = await notes.create("synthetic secret", private=True)
     machine = await ctx(host, "develop").notes.create("synthetic prior output")
     for id in (private["id"], machine["id"]):
         assert (await translate.translate(ctx(host, "translate"), id, "it"))["type"] == "text"
+        result = await host.invoke_command(
+            "title-summary", "summarize", {"note_id": id}, principal=OWNER
+        )
+        assert result["text"] == "This note is unavailable for Title and summary."
+    trashed = await notes.create("synthetic trashed note")
+    await notes.flags(trashed["id"], {"trashed": True})
+    result = await host.invoke_command(
+        "title-summary", "summarize", {"note_id": trashed["id"]}, principal=OWNER
+    )
+    assert result["text"] == "This note is unavailable for Title and summary."
     assert not provider.requests
     note = await notes.create("synthetic sentence")
 
@@ -226,6 +344,50 @@ async def test_gardener_cluster_atomic_and_refusal_permanent(wave):
     with pytest.raises(Problem):
         await decide(host.store, OWNER, proposal["id"], "accept")
     assert (await notes.get(a["id"]))["labels"] == []
+
+
+@pytest.mark.parametrize("invalid", ["wrong_types", "label_spaces"])
+async def test_gardener_validation_retry_spells_schema_and_can_abstain(wave, invalid):
+    host, provider, notes = wave
+    first = await notes.create("Synthetic first unlabeled evidence")
+    second = await notes.create("Synthetic second unlabeled evidence")
+    attempts = 0
+
+    async def answer():
+        nonlocal attempts
+        attempts += 1
+        provider.override = json.dumps(
+            {"proposals": []}
+            if attempts > 1
+            else {"proposals": "No useful improvements"}
+            if invalid == "wrong_types"
+            else {
+                "proposals": [
+                    {
+                        "old": None,
+                        "new": "has spaces",
+                        "note_ids": [first["id"], second["id"]],
+                        "reason": "Synthetic shared theme.",
+                    }
+                ]
+            }
+        )
+
+    provider.callback = answer
+    result = await host.invoke_command("label-gardener", "review-now", principal=OWNER)
+    assert "0 tag proposals added to Review" in result["text"]
+    chats = [request for request in provider.requests if "messages" in request]
+    assert len(chats) == 2
+    assert "Required schema" in chats[1]["messages"][0]["content"]
+    assert "without # or spaces" in chats[0]["messages"][1]["content"]
+    assert 'Return {"proposals":[]}' in chats[0]["messages"][1]["content"]
+    assert not await review(host)
+    assert (await notes.get(first["id"]))["body"] == first["body"]
+    assert (await notes.get(second["id"]))["body"] == second["body"]
+    stats = (await host.gateway.status())["stats"]
+    assert any(
+        row["plugin_id"] == "label-gardener" and row["outcome"] == "retried_ok" for row in stats
+    )
 
 
 async def test_cluster_accept_ordinary_edits_and_history_scope(wave):

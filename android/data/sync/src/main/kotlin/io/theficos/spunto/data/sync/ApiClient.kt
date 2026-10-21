@@ -28,17 +28,14 @@ import java.util.concurrent.TimeUnit
 @Serializable data class ReconcileResponse(val epoch:String,@SerialName("restore_ids") val restoreIds:List<String>)
 class ApiException(val status:Int,val code:String):Exception("HTTP $status: $code")
 private val defaultApiHttpClient=OkHttpClient.Builder().callTimeout(40,TimeUnit.SECONDS).readTimeout(35,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
-private val extendedCommandPaths=setOf(
- "/api/v1/plugins/ask/commands/ask",
- "/api/v1/plugins/label-suggestions/commands/suggest-now",
- "/api/v1/plugins/label-gardener/commands/review-now",
-)
+// Generation can outlive an ordinary sync request, including operator-installed tools.
+private val pluginCommandPath=Regex("/api/v1/plugins/[a-z][a-z0-9-]{1,23}/commands/[a-z][a-z0-9-]{0,127}")
 class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,private val authority:suspend ()->Boolean={true}) {
  fun guarded(check:suspend ()->Boolean)=ApiClient(config,client,check)
  private suspend fun checkAuthority() {check(authority()) {"credentials_changed"}}
  private val client=client.newBuilder().followRedirects(false).followSslRedirects(false).build()
  private val extendedCommandClient by lazy { this.client.newBuilder().readTimeout(240,TimeUnit.SECONDS).callTimeout(240,TimeUnit.SECONDS).build() }
- private fun requestClient(path:String,method:String):OkHttpClient = if(method=="POST" && path in extendedCommandPaths) extendedCommandClient else client
+ private fun requestClient(path:String,method:String):OkHttpClient = if(method=="POST" && pluginCommandPath.matches(path) || method=="POST" && path=="/api/v1/ai/check") extendedCommandClient else client
  private val json=Json { ignoreUnknownKeys=true }
  init { val url=config.serverUrl.toHttpUrl(); require(url.scheme=="https" || config.httpConsent) { "Confirm the unencrypted connection before connecting." }; require(url.encodedPath=="/" && url.username.isEmpty() && url.password.isEmpty()) { "Use the server's root URL." } }
  suspend fun request(path:String, method:String="GET", body:JsonElement?=null, query:Map<String,String> = emptyMap()):JsonElement = withContext(Dispatchers.IO) {

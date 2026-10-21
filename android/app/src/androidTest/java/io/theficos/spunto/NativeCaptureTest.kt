@@ -32,7 +32,7 @@ class NativeCaptureTest {
    compose.waitUntil(10_000) { compose.onAllNodes(hasContentDescription("Note text") and hasText("") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
    val committed=runBlocking { withTimeout(10_000) { repository.notes.first { notes -> notes.any { it.body==fixture } }.single { it.body==fixture } } }
    assertEquals(fixture,committed.body)
-   compose.onNodeWithText("Search",useUnmergedTree=true).performClick()
+   compose.onNodeWithContentDescription("Search").performClick()
    compose.onNodeWithText("Search notes",useUnmergedTree=true).assertExists()
    compose.onNode(hasSetTextAction() and hasText("Search notes")).performTextInput(unique)
    compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Note,",substring=true).fetchSemanticsNodes().any { node -> node.config[androidx.compose.ui.semantics.SemanticsProperties.ContentDescription].any { it.contains(fixture) } } }

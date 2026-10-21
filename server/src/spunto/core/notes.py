@@ -987,6 +987,9 @@ class Notes:
         if len(query) > 500:
             raise Problem(422, "validation_failed", "query must have at most 500 characters.")
         match, inline = search_query(query)
+        if not match and not inline and query.strip():
+            # Punctuation alone has no words to match; listing every note would read as hits.
+            return {"hits": [], "next_cursor": None, "semantic": "off"}
         match = fold(match)
         conditions, args = self._filters([*(labels or []), *inline], from_date, to_date)
         conditions.append("n.trashed_at IS NULL")
@@ -1214,14 +1217,19 @@ class Notes:
             "semantic": "off",
         }
 
-    async def labels(self, prefix: str | None = None, limit: int = 500) -> dict:
+    async def labels(
+        self, prefix: str | None = None, limit: int = 500, *, include_archived: bool = True
+    ) -> dict:
+        """Labels with note counts. The web rail leaves archived notes out, so its
+        counts match the label views, which never show archived notes."""
         visibility, args = self._visibility()
+        archived = "" if include_archived else "AND n.archived_at IS NULL "
         async with self.store.read() as conn:
             rows = await conn.execute_fetchall(
                 "SELECT n.id,l.key,l.path FROM label l JOIN note_label nl ON "  # noqa: S608
                 "nl.label_id=l.id "  # noqa: S608
                 "JOIN note n ON nl.note_id=n.id WHERE n.trashed_at IS NULL "
-                f"AND ({visibility}) ORDER BY l.id",  # noqa: S608
+                f"{archived}AND ({visibility}) ORDER BY l.id",  # noqa: S608
                 args,
             )
         counts, displays = {}, {}

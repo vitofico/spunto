@@ -208,6 +208,15 @@ async def test_domain_search_unicode_literal_input_and_namespace_filters(domain)
     ]
 
 
+async def test_domain_search_with_only_punctuation_matches_nothing(domain):
+    labelled = await domain.create("Garden plan #home")
+    await domain.create("Another note")
+    for query in ("%_*?", "***", "#", " - "):
+        assert (await domain.search(query))["hits"] == []
+    assert len((await domain.search(""))["hits"]) == 2
+    assert [n["id"] for n in (await domain.search("#home ***"))["hits"]] == [labelled["id"]]
+
+
 async def test_domain_relevance_paging_keeps_original_matches_when_bm25_corpus_changes(domain):
     original = [
         await domain.create(body)
@@ -414,6 +423,28 @@ async def test_rest_private_external_notes_and_label_counts_are_hidden_until_tok
         private["id"],
         external["id"],
     }
+
+
+async def test_rest_label_counts_leave_out_archived_notes_like_label_views(signed_in, domain):
+    server = signed_in
+    await post_note(server, "Live #keep/child")
+    archived = await post_note(server, "Old #keep")
+    only_archived = await post_note(server, "Old too #gone")
+    for note in (archived, only_archived):
+        flagged = await server.client.post(
+            "/api/v1/notes/" + note["id"] + "/flags", json={"archived": True}, headers=ORIGIN
+        )
+        assert flagged.status_code == 200
+    rail = (await server.client.get("/api/v1/labels")).json()
+    assert rail["labels"] == [
+        {"path": "keep", "count": 1, "own_count": 0},
+        {"path": "keep/child", "count": 1, "own_count": 1},
+    ]
+    view = (await server.client.get("/api/v1/notes", params={"label": "keep"})).json()
+    assert len(view["notes"]) == rail["labels"][0]["count"]
+    # Plugins and agents still see the whole vocabulary, archived notes included.
+    vocabulary = {label["path"]: label["count"] for label in (await domain.labels())["labels"]}
+    assert vocabulary == {"gone": 1, "keep": 2, "keep/child": 1}
 
 
 async def test_rest_tokens_are_shown_once_owner_managed_and_revocable(signed_in):

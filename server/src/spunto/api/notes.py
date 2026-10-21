@@ -293,7 +293,7 @@ async def list_labels(
     prefix: str | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 500,
 ):
-    return await Notes(services.store, principal).labels(prefix, limit)
+    return await Notes(services.store, principal).labels(prefix, limit, include_archived=False)
 
 
 class Rename(Input):

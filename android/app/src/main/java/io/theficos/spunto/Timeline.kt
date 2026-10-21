@@ -117,12 +117,12 @@ internal fun entryDescription(note:Note,time:String):String {
 @Composable private fun DailySlip(model:SpuntoViewModel,output:PluginOutputEntity,note:Note,onNote:(String)->Unit,onHide:()->Unit) {
  val feedback=LocalFeedback.current
  Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
-  Column(Modifier.fillMaxWidth().clickable(onClickLabel="Open note") { onNote(note.id) }.padding(start=16.dp,bottom=8.dp)) {
+  Column(Modifier.fillMaxWidth().clickable(onClickLabel="Open note") { onNote(note.id) }.padding(start=SpuntoSpacing.s16,bottom=SpuntoSpacing.s8)) {
    Row(verticalAlignment=Alignment.CenterVertically) {
-    Text("From your notes · ${Instant.ofEpochMilli(note.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("d MMMM yyyy"))}".uppercase(),Modifier.weight(1f).padding(top=12.dp),style=SpuntoType.overline,color=SpuntoColors.ink3)
+    Text("From your notes · ${Instant.ofEpochMilli(note.createdAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("d MMMM yyyy"))}".uppercase(),Modifier.weight(1f).padding(top=SpuntoSpacing.s12),style=SpuntoType.overline,color=SpuntoColors.ink3)
     IconButton(onClick={ onHide();model.request("/api/v1/slip/dismiss","POST",buildJsonObject { put("plugin_id",payload(output.payload).string("plugin"));put("note_id",note.id) }) },modifier=Modifier.semantics { contentDescription="Not today" }) { Text("×",color=SpuntoColors.ink3) }
    }
-   Box(Modifier.padding(end=16.dp)) { Markdown(note.body.take(600)) }
+   Box(Modifier.padding(end=SpuntoSpacing.s16)) { Markdown(note.body.take(600)) }
    TextButton(onClick={ model.flags(note.id,archived=true);feedback.show("Archived","Undo") { model.flags(note.id,archived=false) } },modifier=Modifier.heightIn(min=48.dp)) { Text("Archive") }
   }
  }
@@ -135,15 +135,15 @@ internal fun entryDescription(note:Note,time:String):String {
  val snapshot=page.itemSnapshotList.items
  val notes=remember(snapshot) { snapshot.map { it.note() } }
  val rows=remember(notes,grouped) { timelineRows(notes,grouped) }
- LazyColumn(Modifier.fillMaxSize(),state=listState,contentPadding=PaddingValues(start=20.dp,end=20.dp,bottom=20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+ LazyColumn(Modifier.fillMaxSize(),state=listState,contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s20)) {
   lead()
   // Paging reports NotLoading before the first page arrives, so wait until the list has been read once.
-  if(page.itemCount==0 && page.loadState.refresh is LoadState.NotLoading && page.loadState.source.refresh is LoadState.NotLoading && page.itemSnapshotList.isEmpty() && page.loadState.append.endOfPaginationReached) item(key="empty") { Column(verticalArrangement=Arrangement.spacedBy(8.dp),content=empty) }
+  if(page.itemCount==0 && page.loadState.refresh is LoadState.NotLoading && page.loadState.source.refresh is LoadState.NotLoading && page.itemSnapshotList.isEmpty() && page.loadState.append.endOfPaginationReached) item(key="empty") { Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),content=empty) }
   rows.forEach { row ->
    val note=notes[row.index]
    if(row.header!=null) stickyHeader(key="h:${note.id}",contentType="header") {
     // Drawn above the entries that scroll under it.
-    Text(row.header.uppercase(),Modifier.zIndex(1f).fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top=12.dp,bottom=4.dp).semantics { heading();contentDescription=row.header },style=SpuntoType.overline,color=SpuntoColors.ink3)
+    Text(row.header.uppercase(),Modifier.zIndex(1f).fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top=SpuntoSpacing.s12,bottom=SpuntoSpacing.s4).semantics { heading();contentDescription=row.header },style=SpuntoType.overline,color=SpuntoColors.ink3)
    } else item(key=note.id,contentType="entry") {
     if(row.index<page.itemCount) page[row.index] // tells the pager how far the reader has got, so the next page loads
     NoteEntry(model,note,onNote,entryTime(note.createdAt,row.group),onActions={ actionsFor=note.id },restore=restore)
@@ -171,7 +171,7 @@ internal fun entryDescription(note:Note,time:String):String {
     if(note.trashed) CustomAccessibilityAction("Restore") { model.flags(note.id,trashed=false);true } else CustomAccessibilityAction("Move to trash") { trash();true },
     onActions?.let { CustomAccessibilityAction("More actions") { it();true } },
    )
-  },verticalArrangement=Arrangement.spacedBy(8.dp)) {
+  },verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
    // Meta line (03 §5.1): pin glyph, time, sync ring, the one plugin token; sans in ink-3.
    Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
     if(note.pinned) Icon(painterResource(R.drawable.ic_pin),contentDescription=null,modifier=Modifier.size(14.dp),tint=SpuntoColors.ink3)
@@ -198,7 +198,7 @@ internal fun entryDescription(note:Note,time:String):String {
  // Swipe right archives; the visible route is the long-press sheet and the accessibility action.
  val swipe=rememberSwipeToDismissBoxState(confirmValueChange={ if(it==SwipeToDismissBoxValue.StartToEnd) archive(true);false })
  SwipeToDismissBox(swipe,enableDismissFromEndToStart=false,backgroundContent={
-  Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+  Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
    Icon(painterResource(R.drawable.ic_archive),contentDescription=null,tint=MaterialTheme.colorScheme.onPrimaryContainer);Text("Archive",color=MaterialTheme.colorScheme.onPrimaryContainer)
   }
  }) { entry() }
@@ -241,6 +241,6 @@ internal fun entryDescription(note:Note,time:String):String {
    else -> Text("Nothing here yet.",color=SpuntoColors.ink3)
   }
  }) {
-  if(trash && page.itemCount>0) item(key="trash-line") { Text("Deleted notes stay here for 30 days.",Modifier.padding(top=12.dp),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
+  if(trash && page.itemCount>0) item(key="trash-line") { Text("Deleted notes stay here for 30 days.",Modifier.padding(top=SpuntoSpacing.s12),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
  }
 }

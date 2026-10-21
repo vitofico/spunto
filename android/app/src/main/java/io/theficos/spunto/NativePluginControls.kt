@@ -15,6 +15,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoColors
 import io.theficos.spunto.core.design.monoFont
 import kotlinx.serialization.json.*
@@ -26,9 +27,9 @@ import java.time.format.DateTimeFormatter
 /** One compact row (03 §6.4): name and tags, one sentence, one grey facts line; "Settings" and the switch on the right; a state line only when there is one. */
 @Composable internal fun NativePluginRow(plugin:NativePluginFacts,online:Boolean,busy:Boolean,onToggle:(Boolean)->Unit,onSettings:()->Unit,onReview:()->Unit,onWeb:(String)->Unit) {
  val quiet=MaterialTheme.colorScheme.onSurfaceVariant
- Column(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
-  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-   Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+ Column(Modifier.fillMaxWidth().padding(vertical=SpuntoSpacing.s8)) {
+  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+   Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
     val tags=listOfNotNull("Android".takeIf {plugin.raw.pluginText("kind")=="device"},"Default with AI".takeIf {plugin.raw.pluginText("default")=="on-with-ai"})
     Text(plugin.name+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall)
     if(plugin.description.isNotBlank()) Text(plugin.description,style=MaterialTheme.typography.bodyMedium,color=quiet,maxLines=2,overflow=TextOverflow.Ellipsis)
@@ -71,7 +72,7 @@ import java.time.format.DateTimeFormatter
 internal fun plural(count:Long,noun:String)="$count $noun${if(count==1L) "" else "s"}"
 
 @Composable internal fun NativePluginPermissionDialog(plugin:NativePluginFacts,online:Boolean,busy:Boolean,error:String,onDismiss:()->Unit,onAccept:()->Unit,onWeb:(String)->Unit) {
- AlertDialog(onDismissRequest={if(!busy) onDismiss()},title={PluginHeading(if(plugin.permissionReviewRequired) "${plugin.name} now also wants to…" else "Turn on ${plugin.name}?")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+ AlertDialog(onDismissRequest={if(!busy) onDismiss()},title={PluginHeading(if(plugin.permissionReviewRequired) "${plugin.name} now also wants to…" else "Turn on ${plugin.name}?")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   Text(plugin.description)
   PluginHeading("It will");plugin.permissionLines.forEach {Text(pluginWillSentence(it))}
   PluginHeading("AI and where note text goes");pluginDestinationFacts(plugin).forEach {Text(it)}

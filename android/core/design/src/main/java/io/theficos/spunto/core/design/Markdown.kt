@@ -112,7 +112,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
 @Composable private fun MarkdownBlock(current:Node,body:String,tasks:Set<Int>,machine:Boolean,links:MarkdownLinks,onToggle:((Int)->Unit)?) {
  when(current) {
   is Heading -> TappableText(inline(current,links),if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
-  is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current,line=1),Modifier.padding(12.dp)) }
+  is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current,line=1),Modifier.padding(SpuntoSpacing.s12)) }
   is IndentedCodeBlock -> TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current))
   is ThematicBreak -> HorizontalDivider()
   is HtmlBlock -> Unit
@@ -125,7 +125,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
      val checked=taskMarker.find(body.lines()[line])?.groupValues?.get(1)?.equals("x",true)==true
      val text=inline(requireNotNull(paragraph),links).let { it.subSequence(4.coerceAtMost(it.length),it.length) }
      // The whole row is one checkbox for touch and TalkBack; the box itself takes no clicks of its own.
-     Row(Modifier.fillMaxWidth().heightIn(min=48.dp).toggleable(checked,enabled=onToggle!=null,role=Role.Checkbox) { onToggle?.invoke(line) },horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+     Row(Modifier.fillMaxWidth().heightIn(min=48.dp).toggleable(checked,enabled=onToggle!=null,role=Role.Checkbox) { onToggle?.invoke(line) },horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
       Checkbox(checked=checked,onCheckedChange=null)
       MarkdownText(text,machine,if(checked) SpuntoColors.ink3 else MaterialTheme.colorScheme.onSurface,Modifier.weight(1f))
      }
@@ -134,7 +134,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
      if(paragraph!=null) MarkdownText(inline(paragraph,links),machine,modifier=Modifier.weight(1f),tap=links.tap(paragraph))
     }
     var extra=paragraph?.next
-    while(extra!=null) { val child=extra;Box(Modifier.padding(start=24.dp)) { MarkdownBlock(child,body,tasks,machine,links,onToggle) };extra=child.next }
+    while(extra!=null) { val child=extra;Box(Modifier.padding(start=SpuntoSpacing.s24)) { MarkdownBlock(child,body,tasks,machine,links,onToggle) };extra=child.next }
     item=item.next
    }
   }

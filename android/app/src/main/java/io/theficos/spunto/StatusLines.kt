@@ -34,7 +34,7 @@ import kotlinx.coroutines.delay
  }
 }
 @Composable private fun StatusLine(text:String,action:String?=null,warn:Boolean=false,dismiss:Boolean=false,onAction:()->Unit={}) {
- Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=20.dp,end=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+ Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
   if(warn) Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
   Text(text,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=if(dismiss) 3 else 1,overflow=TextOverflow.Ellipsis)
   if(action!=null) {
@@ -50,8 +50,8 @@ internal fun notesCount(count:Int)=if(count==1) "1 note" else "$count notes"
 @Composable internal fun RefusedChangeNotice(model:SpuntoViewModel,id:String,code:String) {
  val nav=LocalNavigator.current; val feedback=LocalFeedback.current
  Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
-  Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+  Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
     Text(refusedChangeMessage(code),style=MaterialTheme.typography.bodyMedium)
    }

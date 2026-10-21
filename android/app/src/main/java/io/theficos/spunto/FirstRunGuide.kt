@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoType
 
 internal const val firstRunGuideCompletedKey="completed-v1"
@@ -60,9 +61,9 @@ private val guideSteps=listOf(
  Surface(Modifier.fillMaxSize()) {
   BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
    val compact=maxHeight<600.dp || LocalDensity.current.fontScale>1.3f
-   Column(Modifier.widthIn(max=560.dp).fillMaxWidth().fillMaxHeight().padding(horizontal=24.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+   Column(Modifier.widthIn(max=560.dp).fillMaxWidth().fillMaxHeight().padding(horizontal=SpuntoSpacing.s24,vertical=SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
     // The one progress indicator; the last step offers no Skip, only its own actions.
-    Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+    Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
      Text("Getting started · ${step+1} of ${guideSteps.size}",Modifier.weight(1f).semantics {contentDescription="Getting started, step ${step+1} of ${guideSteps.size}";liveRegion=LiveRegionMode.Polite},style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
      if(step<guideSteps.lastIndex) TextButton(onClick={leave(onSkip)},modifier=Modifier.heightIn(min=48.dp)) {Text("Skip")}
     }
@@ -70,7 +71,7 @@ private val guideSteps=listOf(
      GuideActions(step,compact,onBack={step--},onNext={if(step==guideSteps.lastIndex) leave(onStart) else step++},onConnect=if(onConnect!=null) ({leave(onConnect)}) else null)
     }
     // Short screens and enlarged text give the explanation and actions one scroll area.
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(24.dp)) {
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s24)) {
      GuideContent(step,current)
      if(compact) actions()
     }
@@ -81,28 +82,28 @@ private val guideSteps=listOf(
 }
 
 @Composable private fun GuideContent(step:Int,current:GuideStep) {
- Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(20.dp)) {
+ Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s20)) {
   Text(current.title,style=MaterialTheme.typography.titleLarge,modifier=Modifier.semantics {heading()})
   Text(current.body,style=MaterialTheme.typography.bodyMedium)
   // A light quote, not a card: the example reads like note text and the caption says what it shows.
-  Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+  Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
    Box(Modifier.width(2.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
-   Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+   Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Text(current.example,style=SpuntoType.reading)
     Text(current.caption,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
   }
-  Spacer(Modifier.height(4.dp))
+  Spacer(Modifier.height(SpuntoSpacing.s4))
  }
 }
 
 @Composable private fun GuideActions(step:Int,compact:Boolean,onBack:()->Unit,onNext:()->Unit,onConnect:(()->Unit)?) {
- Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+ Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
   if(step==guideSteps.lastIndex && onConnect!=null) OutlinedButton(onClick=onConnect,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Connect to a server")}
   if(compact) {
    Button(onClick=onNext,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(if(step==guideSteps.lastIndex) "Start writing" else "Next")}
    TextButton(enabled=step>0,onClick=onBack,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Back")}
-  } else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+  } else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
    TextButton(enabled=step>0,onClick=onBack,modifier=Modifier.heightIn(min=48.dp)) {Text("Back")}
    Button(onClick=onNext,modifier=Modifier.weight(1f).heightIn(min=48.dp)) {Text(if(step==guideSteps.lastIndex) "Start writing" else "Next")}
   }

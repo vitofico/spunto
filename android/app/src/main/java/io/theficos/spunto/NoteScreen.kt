@@ -61,7 +61,7 @@ import kotlinx.serialization.json.*
  var recordingTarget by remember(id) {mutableStateOf<String?>(null)}
  val nav=LocalNavigator.current
  LaunchedEffect(id) { if(model.historyFor.value==id) model.historyFor.value=null }
- val value=note?.takeIf {it.id==id} ?: run { if(loaded.second) Text("This note isn't on this phone.",Modifier.padding(20.dp),color=MaterialTheme.colorScheme.onSurfaceVariant);return }
+ val value=note?.takeIf {it.id==id} ?: run { if(loaded.second) Text("This note isn't on this phone.",Modifier.padding(SpuntoSpacing.s20),color=MaterialTheme.colorScheme.onSurfaceVariant);return }
  val online by model.online.collectAsState()
  val refused by model.repository.refused.collectAsState(emptyMap())
  fun finishEditing() {
@@ -85,7 +85,7 @@ import kotlinx.serialization.json.*
   if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription="More note actions",modifier=Modifier.size(24.dp))}
  }
  LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
- LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+ LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
   item {
    val meta=listOfNotNull(noteDay(value.createdAt),if(value.privateNote) "Private" else null,if(value.archived) "Archived" else null,if(value.trashed) "In trash" else null).joinToString(" · ")
    Text(meta.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {contentDescription=meta})
@@ -108,7 +108,7 @@ import kotlinx.serialization.json.*
  }
  if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={commandResult=it},onTrashed=onClose)
  if(history) ModalBottomSheet(onDismissRequest={history=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
-  LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding(),contentPadding=PaddingValues(start=20.dp,end=20.dp,bottom=24.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+  LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
    revisionHistoryItems(revisions,online,historyResult,editing || finishing || restoring,value.body) {revision ->
     if(!editing && !finishing && !restoring) {restoring=true;editorScope.launch {
      try {model.repository.restoreHistory(id,revision);history=false}
@@ -119,11 +119,11 @@ import kotlinx.serialization.json.*
    }
   }
  }
- if(about) ModalBottomSheet(onDismissRequest={about=false},scrimColor=MaterialTheme.colorScheme.scrim) {Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {Text("About this note",style=MaterialTheme.typography.titleLarge);Text("Created ${noteTime(value.createdAt)}\nUpdated ${noteTime(value.updatedAt)}");value.sourceUrl?.let {Text(it)};PluginPanels(model,value,onNote);Spacer(Modifier.height(32.dp))}}
+ if(about) ModalBottomSheet(onDismissRequest={about=false},scrimColor=MaterialTheme.colorScheme.scrim) {Column(Modifier.padding(SpuntoSpacing.s20).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {Text("About this note",style=MaterialTheme.typography.titleLarge);Text("Created ${noteTime(value.createdAt)}\nUpdated ${noteTime(value.updatedAt)}");value.sourceUrl?.let {Text(it)};PluginPanels(model,value,onNote);Spacer(Modifier.height(SpuntoSpacing.s32))}}
  recordingTarget?.takeIf {target ->recordingAttachmentLinks(value.body).any {it.second==target}}?.let {target ->
   val attachments by model.repository.dao.attachments(id).collectAsState(emptyList())
   val label=recordingAttachmentLinks(value.body).first {it.second==target}.first
-  ModalBottomSheet(onDismissRequest={recordingTarget=null}) {Column(Modifier.padding(20.dp)) {AttachmentPlayer(model,target.substringAfterLast('/'),label,attachments.firstOrNull {it.kind=="recording" && it.remoteId==target.substringAfterLast('/')});Spacer(Modifier.height(32.dp))}}
+  ModalBottomSheet(onDismissRequest={recordingTarget=null}) {Column(Modifier.padding(SpuntoSpacing.s20)) {AttachmentPlayer(model,target.substringAfterLast('/'),label,attachments.firstOrNull {it.kind=="recording" && it.remoteId==target.substringAfterLast('/')});Spacer(Modifier.height(SpuntoSpacing.s32))}}
  }
  commandResult?.takeIf {online && model.container.manifest.enabled(it.string("plugin_id"))}?.let {result ->CommandResultSheet(model,result,onNote,{commandResult=it},{commandResult=null})}
 }
@@ -135,9 +135,9 @@ import kotlinx.serialization.json.*
  val feedback=LocalFeedback.current
  val context=LocalContext.current
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
-  Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom=16.dp)) {
+  Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom=SpuntoSpacing.s16)) {
    NoteExportActions(model,note,enabled=true) {share,save,available ->
-    Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),horizontalArrangement=Arrangement.SpaceEvenly) {
+    Row(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),horizontalArrangement=Arrangement.SpaceEvenly) {
      ActionTile(if(note.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin,if(note.pinned) "Unpin" else "Pin") {model.flags(note.id,pinned=!note.pinned);onDismiss()}
      ActionTile(R.drawable.ic_copy,"Copy") {
       val clip=ClipData.newPlainText(note.title,note.body)
@@ -151,8 +151,8 @@ import kotlinx.serialization.json.*
      }
     }
     if(online && !note.trashed) NoteCommands(model,note.id,privateNote=note.privateNote) {onDismiss();onCommandResult(it)}
-    HorizontalDivider(Modifier.padding(vertical=4.dp),color=MaterialTheme.colorScheme.outlineVariant)
-    Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+    HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
+    Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
      Column(Modifier.weight(1f)) {Text("Private",style=MaterialTheme.typography.bodyLarge);Text("Kept out of AI and network plugins",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
      Switch(checked=note.privateNote,onCheckedChange=null)
     }
@@ -167,14 +167,14 @@ import kotlinx.serialization.json.*
  }
 }
 @Composable private fun ActionTile(icon:Int,label:String,enabled:Boolean=true,onClick:()->Unit) {
- Column(Modifier.widthIn(min=72.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(vertical=8.dp).alpha(if(enabled) 1f else .38f),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+ Column(Modifier.widthIn(min=72.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(vertical=SpuntoSpacing.s8).alpha(if(enabled) 1f else .38f),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
   Icon(painterResource(icon),contentDescription=null,modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurface)
   Text(label,style=MaterialTheme.typography.labelMedium)
  }
 }
 /** One sheet row in Inter, 56 dp tall, text on the same 20 dp edge as the tiles and switch above it. */
 @Composable internal fun NoteSheetRow(label:String,trailing:String?=null,enabled:Boolean=true,destructive:Boolean=false,onClick:()->Unit) {
- Row(Modifier.fillMaxWidth().heightIn(min=56.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(horizontal=20.dp).alpha(if(enabled) 1f else .38f),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+ Row(Modifier.fillMaxWidth().heightIn(min=56.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(horizontal=SpuntoSpacing.s20).alpha(if(enabled) 1f else .38f),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
   Text(label,Modifier.weight(1f),style=MaterialTheme.typography.bodyLarge,color=if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
   trailing?.let {Text(it,style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
  }
@@ -194,8 +194,8 @@ import kotlinx.serialization.json.*
   feedback.show(message,"Undo") {model.flags(copy.id,trashed=false)}
  }
  Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
-  Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-   Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+  Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
     Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
     Text("Edited on two devices. Both versions are kept",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
     TextButton(onClick={comparing=!comparing},modifier=Modifier.heightIn(min=48.dp)) {Text(if(comparing) "Hide" else "Compare")}
@@ -206,7 +206,7 @@ import kotlinx.serialization.json.*
     else {
      ConflictVersion("The original",saved.body,copy.body)
      ConflictVersion("This copy",copy.body,saved.body)
-     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+     FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
       Button(onClick={settle("Kept this copy; it moved into the original",true)},modifier=Modifier.heightIn(min=48.dp)) {Text("Keep this copy")}
       OutlinedButton(onClick={settle("Copy moved to trash",false)},modifier=Modifier.heightIn(min=48.dp)) {Text("Keep the original")}
       TextButton(onClick={model.keepBothConflict(copy.id);comparing=false;feedback.show("Both notes stay","Open the original") {nav.open("note:$originalId")}},modifier=Modifier.heightIn(min=48.dp)) {Text("Keep both")}
@@ -218,7 +218,7 @@ import kotlinx.serialization.json.*
 }
 @Composable private fun ConflictVersion(label:String,body:String,other:String) {
  val otherLines=remember(other) {other.lines().map(String::trim).toSet()}
- Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
   Text(label.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {heading()})
   body.lines().forEach {line ->
    val only=line.isNotBlank() && line.trim() !in otherLines
@@ -237,7 +237,7 @@ internal fun changeKindName(kind:String)=when(kind) {"create" -> "Created";"edit
 /** One line per revision; tap to read it. Server versions keep their number; versions only on this phone have none yet, so numbers never shift after a sync. */
 internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,online:Boolean,result:HistoryRefreshResult?,editing:Boolean,current:String?=null,onRestore:(RevisionEntity)->Unit) {
  item {
-  Text("History",style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(bottom=8.dp).semantics {heading()})
+  Text("History",style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(bottom=SpuntoSpacing.s8).semantics {heading()})
   if(!online || result is HistoryRefreshResult.Cached) Text("Showing history saved on this phone.",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
   if(editing) Text("Finish editing before restoring a version.",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
  }
@@ -270,7 +270,7 @@ internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,o
  val links=remember(body) {recordingAttachmentLinks(body).distinctBy {it.second}}
  val linked=links.associate {it.second.substringAfterLast('/') to it.first}
  val localRecordings=attachments.filter {it.kind=="recording" && (it.marker.isNotEmpty() && it.marker in body || it.remoteId in linked)}
- Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   Regex("!\\[[^]]*]\\((/a/[^)]+)\\)").findAll(body).forEach { match -> if(auth!=null) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(model.container.context).data(auth!!.serverUrl+match.groupValues[1]).memoryCacheKey(model.container.replicaId+":"+auth!!.serverUrl+match.groupValues[1]).diskCacheKey(model.container.replicaId+":"+auth!!.serverUrl+match.groupValues[1]).addHeader("Authorization","Bearer ${auth!!.token}").build(),contentDescription="Note image",modifier=Modifier.fillMaxWidth().heightIn(max=360.dp)) }
   attachments.forEach { item ->
    val local=java.io.File(item.localPath)

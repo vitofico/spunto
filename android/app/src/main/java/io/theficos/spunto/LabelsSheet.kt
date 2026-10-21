@@ -31,14 +31,14 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
 @Composable private fun SheetRow(title:String,selected:Boolean,modifier:Modifier=Modifier,count:Int?=null,depth:Int=0,description:String?=null,glyph:Int?=null,onLongClick:(()->Unit)?=null,longClickLabel:String?=null,onClick:()->Unit) {
  val ink=if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
  Row(modifier.fillMaxWidth().padding(start=(depth.coerceAtMost(4)*16).dp).heightIn(min=48.dp).clip(CircleShape).background(if(selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-  .combinedClickable(role=Role.Button,onLongClickLabel=longClickLabel,onLongClick=onLongClick,onClick=onClick).semantics {this.selected=selected;description?.let {contentDescription=it}}.padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-  glyph?.let {Icon(painterResource(it),contentDescription=null,modifier=Modifier.padding(end=16.dp).size(24.dp),tint=ink)}
-  Text(title,Modifier.weight(1f).padding(end=8.dp),style=MaterialTheme.typography.bodyLarge,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis)
+  .combinedClickable(role=Role.Button,onLongClickLabel=longClickLabel,onLongClick=onLongClick,onClick=onClick).semantics {this.selected=selected;description?.let {contentDescription=it}}.padding(horizontal=SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
+  glyph?.let {Icon(painterResource(it),contentDescription=null,modifier=Modifier.padding(end=SpuntoSpacing.s16).size(24.dp),tint=ink)}
+  Text(title,Modifier.weight(1f).padding(end=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis)
   count?.let {Text(it.toString(),style=MaterialTheme.typography.labelMedium,color=if(selected) ink else SpuntoColors.ink3)}
  }
 }
 @Composable private fun SheetOverline(text:String,action:(@Composable ()->Unit)?=null) =
- Row(Modifier.fillMaxWidth().padding(top=16.dp,start=12.dp).heightIn(min=32.dp),verticalAlignment=Alignment.CenterVertically) {
+ Row(Modifier.fillMaxWidth().padding(top=SpuntoSpacing.s16,start=SpuntoSpacing.s12).heightIn(min=32.dp),verticalAlignment=Alignment.CenterVertically) {
   Text(text.uppercase(),Modifier.weight(1f).semantics {heading();contentDescription=text},style=SpuntoType.overline,color=SpuntoColors.ink3);action?.invoke()
  }
 
@@ -55,8 +55,8 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
  val rows=remember(snapshot.labels,query,snapshot.route) {labelSheetRows(snapshot.labels,query,snapshot.route.takeIf {it.startsWith("label:")}?.removePrefix("label:"))}
  // Fully open from the start, and one scrolling column, so large font sizes still reach every row.
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),scrimColor=MaterialTheme.colorScheme.scrim) {
-  LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding(),contentPadding=PaddingValues(start=8.dp,end=8.dp,bottom=24.dp)) {
-   item(key="find") {OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),placeholder={Text("Find a label")},singleLine=true)}
+  LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s8,end=SpuntoSpacing.s8,bottom=SpuntoSpacing.s24)) {
+   item(key="find") {OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),placeholder={Text("Find a label")},singleLine=true)}
    items(listOfNotNull(Triple("timeline","All notes",R.drawable.ic_notes),Triple("archive","Archive",R.drawable.ic_archive),Triple("trash","Trash",R.drawable.ic_trash),Triple("review","Review",R.drawable.ic_inbox).takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title,glyph) ->
     val count=when(route) {"timeline" -> allNotes;"review" -> reviewWaiting;else -> null}
     SheetRow(title,snapshot.route==route,count=count,description=count?.let {"$title, ${notesCount(it)}"}.takeIf {route=="timeline"},glyph=glyph) {onRoute(route)}
@@ -68,10 +68,10 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
     }
    }
    item(key="labels") {SheetOverline("Labels")}
-   if(rows.isEmpty()) item(key="no-labels") {Text(if(snapshot.labels.isEmpty()) "Labels grow as you write. Type # in a note." else "No labels match this search.",Modifier.padding(horizontal=12.dp,vertical=8.dp),style=MaterialTheme.typography.bodyMedium,color=SpuntoColors.ink3)}
+   if(rows.isEmpty()) item(key="no-labels") {Text(if(snapshot.labels.isEmpty()) "Labels grow as you write. Type # in a note." else "No labels match this search.",Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyMedium,color=SpuntoColors.ink3)}
    labelTreeItems(rows,onLabel={key ->if(latest.labels.any {it.key==key}) onRoute("label:$key")},onManageLabel={path ->if(managementAvailable && latest.labels.any {it.path==path}) onManageLabels(path)},managementAvailable=managementAvailable)
-   item(key="manage") {Text(if(managementAvailable && rows.isNotEmpty()) "Long-press a label to rename, merge or remove it in the web app." else managementMessage,Modifier.padding(horizontal=12.dp,vertical=12.dp),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
-   item(key="settings") {HorizontalDivider(Modifier.padding(horizontal=12.dp),color=MaterialTheme.colorScheme.outlineVariant);SheetRow("Settings",false) {onSettings()}}
+   item(key="manage") {Text(if(managementAvailable && rows.isNotEmpty()) "Long-press a label to rename, merge or remove it in the web app." else managementMessage,Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s12),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
+   item(key="settings") {HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s12),color=MaterialTheme.colorScheme.outlineVariant);SheetRow("Settings",false) {onSettings()}}
   }
  }
 }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 internal data class ExportableNote(val note:Note,val stamp:NoteExportStamp)
 /** Read the saved local revision, never the editor buffer, under the current replica authority. */
@@ -47,7 +48,7 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
 
 /** [content] gets Share and Save actions and whether they can run now; by default two text buttons. */
 @Composable internal fun NoteExportActions(model:SpuntoViewModel,note:Note,enabled:Boolean,content:@Composable (share:()->Unit,save:()->Unit,available:Boolean)->Unit={share,save,available ->
- Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {TextButton(onClick=share,enabled=available) {Text("Share")};TextButton(onClick=save,enabled=available) {Text("Save Markdown")}}
+ Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {TextButton(onClick=share,enabled=available) {Text("Share")};TextButton(onClick=save,enabled=available) {Text("Save Markdown")}}
 }) {
  val credentials by model.auth.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null)

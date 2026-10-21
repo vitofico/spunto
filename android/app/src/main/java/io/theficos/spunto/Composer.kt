@@ -315,9 +315,9 @@ import kotlinx.coroutines.*
   language=when(language) {"it-IT" -> "en-US";"en-US" -> if(autoAvailable) "auto" else "it-IT";else -> "it-IT"};device.update(language=language)
   if(restart) start() else session.clearNotice()
  }}
- Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
   Surface(shape=MaterialTheme.shapes.medium,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent) {
-   Column(Modifier.fillMaxWidth().padding(if(boxed) 16.dp else 0.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+   Column(Modifier.fillMaxWidth().padding(if(boxed) SpuntoSpacing.s16 else 0.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Box(Modifier.fillMaxWidth().heightIn(min=if(boxed) 96.dp else 48.dp)) {
      if(value.text.isEmpty()) Text(placeholder,color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
      BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
@@ -352,7 +352,7 @@ import kotlinx.coroutines.*
   ComposerToolbar(tools={
    if(prefix!=null && (suggestions.isNotEmpty() || newLabel!=null)) {
     suggestions.forEach {label -> SuggestionChip(onClick={val caret=value.selection.start;insertAtCaret(label.path+" ",caret-prefix.length,caret)},label={Text("#${label.path}")})}
-    if(newLabel!=null) Text("New label #$newLabel",Modifier.padding(horizontal=8.dp),style=MaterialTheme.typography.labelMedium,color=SpuntoColors.ink3)
+    if(newLabel!=null) Text("New label #$newLabel",Modifier.padding(horizontal=SpuntoSpacing.s8),style=MaterialTheme.typography.labelMedium,color=SpuntoColors.ink3)
    } else if(listening || dictation.phase==DictationPhase.NeedsLanguage) {
     IconButton(onClick={session.stopAndKeep();focus.requestFocus();keyboard?.show()}) {Icon(painterResource(R.drawable.ic_keyboard),contentDescription="Back to typing",modifier=Modifier.size(24.dp))}
     TextButton(onClick=switchLanguage,modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription="Dictation language, ${languageName(language)}. Switch"}) {Text(languageName(language))}
@@ -371,7 +371,7 @@ import kotlinx.coroutines.*
 }
 private fun languageName(tag:String)=when(tag) {"it-IT" -> "Italian";"en-US" -> "English";else -> "Auto"}
 @Composable private fun DictationNotice(message:String,action:String?=null,onAction:()->Unit={}) {
- Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+ Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
   Text(message,Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
   if(action!=null) TextButton(onClick=onAction,modifier=Modifier.heightIn(min=48.dp)) {Text(action)}
  }
@@ -379,7 +379,7 @@ private fun languageName(tag:String)=when(tag) {"it-IT" -> "Italian";"en-US" -> 
 
 /** Keep the primary action visible while optional capture tools can scroll. */
 @Composable internal fun ComposerToolbar(tools:@Composable RowScope.()->Unit,save:@Composable ()->Unit) {
- Row(Modifier.fillMaxWidth().padding(start=4.dp,end=8.dp,bottom=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+ Row(Modifier.fillMaxWidth().padding(start=SpuntoSpacing.s4,end=SpuntoSpacing.s8,bottom=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
   Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically,content=tools)
   save()
  }

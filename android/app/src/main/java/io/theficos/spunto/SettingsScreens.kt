@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoType
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.SyncStatus
@@ -43,10 +44,10 @@ import kotlinx.serialization.json.*
   val url=target.url ?: return feedback.show(target.message)
   try {context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))} catch(_:ActivityNotFoundException) {feedback.show("No browser is available to open the web app.")}
  }
- LazyColumn(contentPadding=PaddingValues(bottom=24.dp)) {
+ LazyColumn(contentPadding=PaddingValues(bottom=SpuntoSpacing.s24)) {
   item {
    // Appearance and Plugins open their own pages, so their rows lead the page without a heading that repeats them.
-   Spacer(Modifier.height(8.dp))
+   Spacer(Modifier.height(SpuntoSpacing.s8))
    SettingsRow("Appearance",appearance,onClick={onRoute("appearance")})
    SettingsRow("Plugins",when {plugins.valid -> "${plugins.onCount} of ${plugins.rows.size} on";auth==null -> "Connect your server to choose plugins";else -> "Sync to load your plugins"},onClick={onRoute("plugins")})
   }
@@ -67,7 +68,7 @@ import kotlinx.serialization.json.*
    val running=status==SyncStatus.Running
    SettingsRow("Sync now",syncSummary(if(auth==null) SyncStatus.SignedOut else status,pending,online,logs.firstOrNull {it.outcome=="complete"}?.at),enabled=auth!=null && online && !needsSignIn && !running,onClick={model.synchronize()}) {if(running) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)}
    SettingsRow("Sync activity","Recent sync attempts, for troubleshooting",onClick={activity=!activity},expanded=activity)
-   if(activity) Column(Modifier.padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+   if(activity) Column(Modifier.padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     if(logs.isEmpty()) Text("No sync activity yet.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     logs.take(20).forEach {log -> Text("${noteTime(log.at)} · ${log.outcome.replace('_',' ')}${log.reason?.takeIf {it.isNotBlank()}?.let {" · ${it.replace('_',' ')}"}.orEmpty()}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
     if(logs.isNotEmpty()) TextButton(onClick={context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Spunto sync log",logs.joinToString("\n") {"${noteTime(it.at)} ${it.outcome} ${it.reason.orEmpty()}"}))},modifier=Modifier.heightIn(min=48.dp)) {Text("Copy diagnostic log")}
@@ -92,13 +93,13 @@ internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pendin
  if(online) " This phone also leaves Devices in the web app." else " This phone stays listed under Devices in the web app until you remove it there."
 
 @Composable internal fun SettingsSection(title:String) {
- Text(title.uppercase(),Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,top=24.dp,bottom=4.dp).semantics {heading()},style=SpuntoType.overline,color=MaterialTheme.colorScheme.onSurfaceVariant)
+ Text(title.uppercase(),Modifier.fillMaxWidth().padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s24,bottom=SpuntoSpacing.s4).semantics {heading()},style=SpuntoType.overline,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }
 /** A title and a one-line summary in ink-2; tappable when [onClick] is set. [expanded] makes it a disclosure. */
 @Composable internal fun SettingsRow(title:String,summary:String?=null,enabled:Boolean=true,onClick:(()->Unit)?=null,expanded:Boolean?=null,trailing:(@Composable ()->Unit)?=null) {
  val clickable=if(onClick==null) Modifier else Modifier.clickable(enabled=enabled,onClickLabel=null,onClick=onClick).semantics {if(expanded!=null) stateDescription=if(expanded) "Expanded" else "Collapsed"}
- Row(Modifier.fillMaxWidth().heightIn(min=56.dp).then(clickable).padding(horizontal=20.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-  Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+ Row(Modifier.fillMaxWidth().heightIn(min=56.dp).then(clickable).padding(horizontal=SpuntoSpacing.s20,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
+  Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
    val alpha=if(enabled) 1f else .5f
    Text(title,style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurface.copy(alpha=alpha))
    summary?.takeIf {it.isNotBlank()}?.let {Text(it,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=alpha))}
@@ -107,8 +108,8 @@ internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pendin
  }
 }
 @Composable internal fun SettingsSwitchRow(title:String,summary:String?,checked:Boolean,enabled:Boolean=true,onChange:(Boolean)->Unit) {
- Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(checked,enabled=enabled,role=androidx.compose.ui.semantics.Role.Switch,onValueChange=onChange).padding(horizontal=20.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-  Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+ Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(checked,enabled=enabled,role=androidx.compose.ui.semantics.Role.Switch,onValueChange=onChange).padding(horizontal=SpuntoSpacing.s20,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
+  Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
    val alpha=if(enabled) 1f else .5f
    Text(title,style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurface.copy(alpha=alpha))
    summary?.let {Text(it,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=alpha))}
@@ -146,16 +147,16 @@ internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pendin
 @Composable internal fun NativePluginCatalogList(projection:NativePluginCatalog,ai:JsonObject,online:Boolean,busy:Boolean,undo:PluginUndo?,onToggle:(NativePluginFacts,Boolean)->Unit,onSettings:(String)->Unit,onReview:(String)->Unit,onUndo:()->Unit,onWeb:(String)->Unit) {
  var onlyOn by rememberSaveable {mutableStateOf(false)}
  val quiet=MaterialTheme.colorScheme.onSurfaceVariant
- LazyColumn(contentPadding=PaddingValues(horizontal=20.dp,vertical=16.dp)) {
+ LazyColumn(contentPadding=PaddingValues(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s16)) {
   item {
-   Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+   Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Text("Everything beyond notes, labels and search. Switch one on and it takes its place; switch it off and it leaves the screen, while its data and any notes it wrote stay.",style=MaterialTheme.typography.bodyMedium)
     Text("New plugins are added by whoever runs the server.",style=MaterialTheme.typography.bodySmall,color=quiet)
     Row(verticalAlignment=Alignment.CenterVertically) {
      Text(if(ai.isNotEmpty()) pluginAiSummary(ai).joinToString(" · ") else "AI model summary unavailable.",Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=quiet)
      TextButton(onClick={onWeb("/settings/ai")},enabled=online,modifier=Modifier.heightIn(min=48.dp)) {Text("AI settings")}
     }
-    FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {FilterChip(!onlyOn,{onlyOn=false},label={Text("All ${projection.rows.size}")});FilterChip(onlyOn,{onlyOn=true},label={Text("On ${projection.onCount}")})}
+    FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {FilterChip(!onlyOn,{onlyOn=false},label={Text("All ${projection.rows.size}")});FilterChip(onlyOn,{onlyOn=true},label={Text("On ${projection.onCount}")})}
     if(!online) Text("Changes need a connection.",style=MaterialTheme.typography.bodySmall,color=quiet)
     if(!projection.valid) Text("Plugin catalog unavailable. Connect to refresh it.",style=MaterialTheme.typography.bodySmall,color=quiet)
     NativePluginUndo(undo,projection.rows.firstOrNull {it.id==undo?.pluginId}?.name ?: "Plugin",online,busy,onUndo)
@@ -164,7 +165,7 @@ internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pendin
   pluginGroups.forEach {group ->
    val total=projection.rows.filter {it.category==group};val entries=total.filter {!onlyOn || it.wantedOn}
    if(entries.isNotEmpty()) {
-    item(key="group:$group") {Text("${group.replaceFirstChar {it.uppercase()}} · ${total.count {it.wantedOn}} of ${total.size} on".uppercase(),Modifier.padding(top=24.dp,bottom=4.dp).semantics {heading()},style=SpuntoType.overline,color=quiet)}
+    item(key="group:$group") {Text("${group.replaceFirstChar {it.uppercase()}} · ${total.count {it.wantedOn}} of ${total.size} on".uppercase(),Modifier.padding(top=SpuntoSpacing.s24,bottom=SpuntoSpacing.s4).semantics {heading()},style=SpuntoType.overline,color=quiet)}
     items(entries,key={it.id}) {plugin -> NativePluginRow(plugin,online,busy,{onToggle(plugin,it)},{onSettings(plugin.id)},{onReview(plugin.id)},onWeb)}
    }
   }
@@ -200,27 +201,27 @@ internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pendin
  val commandPending by commandOwner.pending.collectAsState()
  LaunchedEffect(auth,id,epoch,plugin?.raw?.pluginText("api"),plugin?.raw?.pluginText("version"),plugin?.removed) {commandOwner.reset();actions.select(id)}
  DisposableEffect(actions,id) {onDispose {commandOwner.reset();actions.closePage()}}
- if(plugin==null) {Text("This plugin is unavailable. Sync to refresh your plugins.",Modifier.padding(20.dp));return}
+ if(plugin==null) {Text("This plugin is unavailable. Sync to refresh your plugins.",Modifier.padding(SpuntoSpacing.s20));return}
  val quiet=MaterialTheme.colorScheme.onSurfaceVariant
- LazyColumn(contentPadding=PaddingValues(horizontal=20.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+ LazyColumn(contentPadding=PaddingValues(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   item {
-   Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+   Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
     Text(plugin.name,Modifier.weight(1f).semantics {heading()},style=MaterialTheme.typography.titleLarge)
     if(!plugin.removed && plugin.pin==EnvironmentPin.Unmanaged && plugin.valid) PluginSwitch(plugin,online,busy) {on -> if(on) enable.review(plugin.id) else model.pluginToggle(plugin,false)}
    }
-   Text(plugin.description,Modifier.padding(top=4.dp),style=MaterialTheme.typography.bodyMedium)
-   Text(listOf(plugin.category.replaceFirstChar {it.uppercase()},plugin.origin,plugin.raw.pluginText("version").orEmpty()).filter {it.isNotBlank()}.joinToString(" · "),Modifier.padding(top=4.dp),style=MaterialTheme.typography.bodySmall,color=quiet)
+   Text(plugin.description,Modifier.padding(top=SpuntoSpacing.s4),style=MaterialTheme.typography.bodyMedium)
+   Text(listOf(plugin.category.replaceFirstChar {it.uppercase()},plugin.origin,plugin.raw.pluginText("version").orEmpty()).filter {it.isNotBlank()}.joinToString(" · "),Modifier.padding(top=SpuntoSpacing.s4),style=MaterialTheme.typography.bodySmall,color=quiet)
    if(plugin.permissionReviewRequired) TextButton(onClick={enable.review(plugin.id)},enabled=online && !busy && plugin.canEnable,modifier=Modifier.heightIn(min=48.dp)) {Text("Review updated permissions")}
-   if(!online) Text("Changes need a connection.",Modifier.padding(top=4.dp),style=MaterialTheme.typography.bodySmall,color=quiet)
+   if(!online) Text("Changes need a connection.",Modifier.padding(top=SpuntoSpacing.s4),style=MaterialTheme.typography.bodySmall,color=quiet)
   }
   if(!plugin.removed && plugin.id=="dictation") item {DictationSettings(model,readOnly=!online)}
-  if(!plugin.removed && page.id==plugin.id) item {Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+  if(!plugin.removed && page.id==plugin.id) item {Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
    if(page.loading && page.page.schema.isEmpty()) Text("Loading settings…",style=MaterialTheme.typography.bodySmall,color=quiet)
    if(page.error.isNotEmpty()) Text(page.error,style=MaterialTheme.typography.bodySmall,color=quiet)
    NativePluginSettingsValues(plugin,page.page,online,model::pluginWeb)
   }}
   // Facts read as quiet body text under their headings; buttons keep their own colour.
-  item {CompositionLocalProvider(LocalContentColor provides quiet) {ProvideTextStyle(MaterialTheme.typography.bodyMedium) {Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {NativePluginDetailFacts(plugin,online,commandPending,{command ->
+  item {CompositionLocalProvider(LocalContentColor provides quiet) {ProvideTextStyle(MaterialTheme.typography.bodyMedium) {Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {NativePluginDetailFacts(plugin,online,commandPending,{command ->
    if(online && plugin.activeContribution) commandOwner.start({deliver,complete ->
     runCommand(model,plugin.id,command.pluginText("id").orEmpty(),JsonObject(emptyMap()),deliver,onComplete=complete,scope=commandScope)
    },{model.remote.value=it})
@@ -233,12 +234,12 @@ internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pendin
  val context=model.container.context; val scope=rememberCoroutineScope();val feedback=LocalFeedback.current
  val device=remember { DeviceSpeechPreferences(context) }; val settings by device.settings.collectAsState(SpeechPreferences())
  val quiet=MaterialTheme.colorScheme.onSurfaceVariant
- Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+ Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
   PluginHeading("On this phone")
   if(!PlatformSpeechEngine.onDeviceAvailable(context)) {
    Text("This phone has no on-device recognizer. The mic stays hidden until you allow online recognition.",style=MaterialTheme.typography.bodyMedium)
    var consent by remember { mutableStateOf(false) }
-   Row(horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) { Text("Use online recognition",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium); Switch(settings.onlineConsent,{if(it) consent=true else scope.launch { device.update(online=false) }},enabled=!readOnly,colors=spuntoSwitchColors(),modifier=Modifier.semantics {contentDescription="Use online recognition"}) }
+   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16),verticalAlignment=Alignment.CenterVertically) { Text("Use online recognition",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium); Switch(settings.onlineConsent,{if(it) consent=true else scope.launch { device.update(online=false) }},enabled=!readOnly,colors=spuntoSwitchColors(),modifier=Modifier.semantics {contentDescription="Use online recognition"}) }
    if(consent && !readOnly) AlertDialog(onDismissRequest={consent=false},title={Text("Use online recognition?")},text={Text("Audio goes to the phone's speech provider, usually Google. It does not go to your Spunto server.")},confirmButton={TextButton(onClick={scope.launch { device.update(online=true) };consent=false}) { Text("Allow on this phone") }},dismissButton={TextButton(onClick={consent=false}) { Text("Cancel") }})
   } else Text("Audio stays on this phone. Dictation keeps no recordings.",style=MaterialTheme.typography.bodyMedium,color=quiet)
   Text("Language",style=MaterialTheme.typography.bodyMedium)

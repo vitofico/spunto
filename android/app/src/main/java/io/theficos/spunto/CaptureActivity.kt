@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoColors
 import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.design.SpuntoType
@@ -45,9 +46,9 @@ class CaptureActivity:LockedActivity() {
     if(!launchState.selectionStarted) {launchState.selectionStarted=true;model.task {try {launchState.selectionId=model.repository.create(body,sourceKind="selection",sourceRef=referrer?.host)} catch(error:Exception) {launchState.selectionError="Couldn't save this selection. Your existing notes and drafts are kept.";throw error}}}
     setProtectedContent { SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(shape=MaterialTheme.shapes.large) {
      val id=launchState.selectionId
-     if(id==null) Column(Modifier.padding(20.dp)) {Text(launchState.selectionError.ifEmpty {"Saving selection…"});if(launchState.selectionError.isNotEmpty()) TextButton(onClick={finish()}) {Text("Close")}}
+     if(id==null) Column(Modifier.padding(SpuntoSpacing.s20)) {Text(launchState.selectionError.ifEmpty {"Saving selection…"});if(launchState.selectionError.isNotEmpty()) TextButton(onClick={finish()}) {Text("Close")}}
      else if(!launchState.opened) TextButton(onClick={launchState.opened=true}) {Text("Saved to spunto · Add a thought")}
-     else Column(Modifier.padding(20.dp)) {Text("Add a thought");Composer(model,id,body,startNewParagraph=true,onRecordingSaved={finish()},onSave={finish()})}
+     else Column(Modifier.padding(SpuntoSpacing.s20)) {Text("Add a thought");Composer(model,id,body,startNewParagraph=true,onRecordingSaved={finish()},onSave={finish()})}
     } } } }
     while(launchState.selectionId==null && launchState.selectionError.isEmpty()) delay(50)
     if(launchState.selectionError.isNotEmpty()) return@launch
@@ -63,7 +64,7 @@ class CaptureActivity:LockedActivity() {
    val error by model.message.collectAsState()
    SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) {
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(Modifier.fillMaxWidth().wrapContentHeight(),shape=MaterialTheme.shapes.extraLarge,color=MaterialTheme.colorScheme.background) {
-     Column(Modifier.padding(20.dp).imePadding(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+     Column(Modifier.padding(SpuntoSpacing.s20).imePadding(),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
       val sharing=shared.isNotEmpty() || image!=null
       // A share (03 A3): what came in, sunken and quoted on save; an optional thought; up to three recent labels.
       // A3 puts Save in the header row: the composer's bar docks there instead of under the field.
@@ -72,7 +73,7 @@ class CaptureActivity:LockedActivity() {
       else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text("Close") } }
       if(error.isNotEmpty()) Text(error)
       if(shared.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
-       Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+       Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
         val title=intent.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf {source!=null && it.isNotBlank()}
         Text(title ?: shared,style=SpuntoType.reading,maxLines=if(title!=null) 2 else 4,overflow=TextOverflow.Ellipsis)
         (source?.let {Uri.parse(it).host} ?: referrer?.host)?.let {Text(it,style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)}
@@ -82,7 +83,7 @@ class CaptureActivity:LockedActivity() {
       val labels by model.labels.collectAsState()
       var chosen by remember { mutableStateOf(emptySet<String>()) }
       CompositionLocalProvider(LocalBottomBar provides header.takeIf { sharing }) { Composer(model,draftId=shareKey,initial="",autoFocus=!sharing,autoDictate=intent.getBooleanExtra("dictate",false),canSaveEmpty=sharing,allowVoiceCapture=!sharing,tools=!sharing,placeholder=if(sharing) "Add a thought (optional)" else "What's on your mind?",onPlainCaptureSave=if(!sharing) {body,ref ->model.repository.create(body,sourceRef=ref);finish();null} else null,onRecordingSaved={finish()},onSave={comment -> saveShare(comment,shared,source,image,shareKey,chosen.joinToString(" ") {"#$it"})}) }
-      if(sharing) Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+      if(sharing) Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
        labels.filter {'/' !in it.key}.sortedByDescending {it.count}.take(3).forEach {label -> FilterChip(selected=label.path in chosen,onClick={chosen=if(label.path in chosen) chosen-label.path else chosen+label.path},label={Text("#${label.path}")})}
       }
 

@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import io.theficos.spunto.data.sync.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 internal data class AiStatus(val ai:JsonObject,val loading:Boolean,val error:String)
 /** The server's AI status, fetched while online; offline it falls back to the profiles cached with the plugin catalog. */
@@ -39,6 +40,6 @@ internal data class AiStatus(val ai:JsonObject,val loading:Boolean,val error:Str
   else -> aiCapabilityCards(ai).forEach {card -> SettingsRow(card.title,aiCardSummary(card))}
  }
  if(ai["indexing"]!=null && !off) SettingsRow("AI search",aiIndexDescription(ai))
- if(status.error.isNotBlank()) Text(status.error,Modifier.padding(horizontal=20.dp,vertical=4.dp),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+ if(status.error.isNotBlank()) Text(status.error,Modifier.padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s4),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
  SettingsRow("AI models","Choose models and run a check in the web app",enabled=online,onClick={onWeb("/settings/ai")})
 }

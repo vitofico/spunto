@@ -29,6 +29,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoTheme
 import kotlinx.coroutines.launch
 
@@ -95,9 +96,9 @@ abstract class LockedActivity: FragmentActivity() {
       } }
       Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
        Text("Spunto is locked", style = MaterialTheme.typography.headlineLarge)
-       Spacer(Modifier.height(16.dp)); Text("Unlock with a strong biometric or this phone's PIN, pattern or password.")
+       Spacer(Modifier.height(SpuntoSpacing.s16)); Text("Unlock with a strong biometric or this phone's PIN, pattern or password.")
        if(error.isNotEmpty()) Text(error)
-       Spacer(Modifier.height(20.dp)); Button(onClick = { authenticate(null) }) { Text("Unlock Spunto") }
+       Spacer(Modifier.height(SpuntoSpacing.s20)); Button(onClick = { authenticate(null) }) { Text("Unlock Spunto") }
        TextButton(onClick = { authenticate(null, credentialOnly = true) }) { Text("Use screen lock") }
        TextButton(onClick = { finish() }) { Text("Close") }
       }}

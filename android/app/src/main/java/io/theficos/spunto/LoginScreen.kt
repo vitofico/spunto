@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import io.theficos.spunto.data.sync.ApiClient
 import io.theficos.spunto.data.sync.AuthConfig
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 @Composable fun LoginScreen(model:SpuntoViewModel,reauth:Boolean=false,onDone:()->Unit) {
  val auth by model.auth.collectAsState(); val problem by model.signInProblem.collectAsState(); val notes by model.notes.collectAsState(); val signingIn by model.reauthenticate.collectAsState()
@@ -82,7 +83,7 @@ import io.theficos.spunto.data.sync.AuthConfig
  Surface(Modifier.fillMaxSize()) {
   if(warning) PlainHttpWarning(url.orEmpty(),onConnect={consent=true;warning=false;busy=true;model.login(url.orEmpty(),password,code,name.trim(),true).invokeOnCompletion {busy=false}},onBack={warning=false})
   else LoginPage(actions={
-   problem?.takeIf {it.field==SignInField.Form}?.let {Text(it.message,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(bottom=12.dp).semantics {liveRegion=LiveRegionMode.Polite})}
+   problem?.takeIf {it.field==SignInField.Form}?.let {Text(it.message,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(bottom=SpuntoSpacing.s12).semantics {liveRegion=LiveRegionMode.Polite})}
    Button(onClick=::submit,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) { Text(if(busy) "Signing in…" else if(code.isNotBlank()) "Pair this phone" else "Sign in") }
   }) {
    Text(if(reauth) "Sign in again" else "Connect to spunto",style=MaterialTheme.typography.headlineLarge)
@@ -96,7 +97,7 @@ import io.theficos.spunto.data.sync.AuthConfig
     TextButton(onClick={runCatching {val root=url!!.toHttpUrl();val target=root.resolve(browserPath);require(target!=null && target.host==root.host && target.scheme==root.scheme && target.port==root.port);context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(target.toString())))}.onFailure {model.signInProblem.value=serverUrlProblem(server) ?: SignInProblem(SignInField.Server,"Couldn't open this server in your browser.")}}) {Text("Sign in in browser")}
    }
    if(hosted || pasteCode || code.isNotEmpty()) SignInTextField(code,{if(it.trimStart().startsWith("{")) parsed(it) else {code=it;edited(SignInField.Code)}},"Pairing code",problem,SignInField.Code,keyboard=KeyboardOptions(autoCorrectEnabled=false,imeAction=ImeAction.Go),onGo=::submit)
-   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     TextButton(onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) scan=true else permission.launch(Manifest.permission.CAMERA)},modifier=Modifier.heightIn(min=48.dp)) { Text("Scan pairing code") }
     if(!(hosted || pasteCode || code.isNotEmpty())) TextButton(onClick={pasteCode=true},modifier=Modifier.heightIn(min=48.dp)) { Text("Paste a code") }
    }
@@ -115,12 +116,12 @@ import io.theficos.spunto.data.sync.AuthConfig
 @Composable internal fun PairingQrSheet(onDismiss:()->Unit,content:@Composable ()->Unit) {
  val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=sheetState,scrimColor=MaterialTheme.colorScheme.scrim) {
-  Column(Modifier.fillMaxWidth().heightIn(max=640.dp).padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+  Column(Modifier.fillMaxWidth().heightIn(max=640.dp).padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
     Text("Scan pairing QR",Modifier.weight(1f),style=MaterialTheme.typography.titleLarge)
     TextButton(onClick=onDismiss,modifier=Modifier.heightIn(min=48.dp)) {Text("Cancel")}
    }
-   Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+   Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom=SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
     content()
     Text("You can also cancel and paste the pairing code in the form.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
@@ -131,8 +132,8 @@ import io.theficos.spunto.data.sync.AuthConfig
 @Composable internal fun LoginPage(actions:(@Composable ColumnScope.()->Unit)?=null,content:@Composable ColumnScope.()->Unit) {
  Box(Modifier.fillMaxSize().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
   Column(Modifier.widthIn(max=560.dp).fillMaxWidth()) {
-   Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp),content=content)
-   actions?.let {Column(Modifier.fillMaxWidth().padding(start=24.dp,end=24.dp,bottom=16.dp),content=it)}
+   Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16),content=content)
+   actions?.let {Column(Modifier.fillMaxWidth().padding(start=SpuntoSpacing.s24,end=SpuntoSpacing.s24,bottom=SpuntoSpacing.s16),content=it)}
   }
  }
 }

@@ -57,15 +57,15 @@ import java.time.*
  }
  val terms=remember(query) { searchTerms(query) }
  Column(Modifier.fillMaxSize()) {
-  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=20.dp).focusRequester(focus),placeholder={Text("Search notes")},singleLine=true,
+  OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20).focusRequester(focus),placeholder={Text("Search notes")},singleLine=true,
    trailingIcon={ if(query.isNotEmpty()) IconButton(onClick={query=""},modifier=Modifier.semantics { contentDescription="Clear search" }) { Text("×",style=MaterialTheme.typography.titleMedium) } },
    keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={ saveSearch(query);focusManager.clearFocus() }))
-  LazyColumn(Modifier.fillMaxSize(),state=rememberLazyListState(),contentPadding=PaddingValues(start=20.dp,end=20.dp,top=8.dp,bottom=20.dp)) {
-   if(!online) item(key="offline") { Text("Offline. Searching this phone by keyword.",Modifier.padding(vertical=8.dp),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
+  LazyColumn(Modifier.fillMaxSize(),state=rememberLazyListState(),contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s8,bottom=SpuntoSpacing.s20)) {
+   if(!online) item(key="offline") { Text("Offline. Searching this phone by keyword.",Modifier.padding(vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
    if(online && query.trim().split(Regex("\\s+")).size>=3 && model.container.manifest.enabled("ask")) item(key="ask") { TextButton(enabled=!asking,onClick={asking=true; model.ask(query,onComplete={asking=false}) { if(model.online.value && model.container.manifest.enabled("ask")) answer=it.jsonObject }},modifier=Modifier.heightIn(min=48.dp)) { Text(if(asking) "Reading your notes…" else "Ask your notes") } }
    if(query.isEmpty() && recent.isNotEmpty()) {
     item(key="recent") {
-     Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically) {
+     Row(Modifier.fillMaxWidth().padding(top=SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
       Text("RECENT SEARCHES",Modifier.weight(1f).semantics { heading();contentDescription="Recent searches" },style=SpuntoType.overline,color=SpuntoColors.ink3)
       TextButton(onClick={ recent=emptyList();preferences.edit().remove("recent-searches").apply() },modifier=Modifier.heightIn(min=48.dp).semantics { contentDescription="Clear recent searches" }) { Text("Clear") }
      }
@@ -74,27 +74,27 @@ import java.time.*
    }
    if(query.isEmpty() && labels.isNotEmpty()) item(key="labels") {
     // Before typing: the labels in most use, as shortcuts (L1).
-    Column(Modifier.padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.padding(vertical=SpuntoSpacing.s8),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
      Text("LABELS",Modifier.semantics { heading();contentDescription="Labels" },style=SpuntoType.overline,color=SpuntoColors.ink3)
-     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { labels.forEach { label -> SuggestionChip(onClick={query="#${label.path} "},label={ Text("#${label.path}") },modifier=Modifier.heightIn(min=48.dp)) } }
+     FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) { labels.forEach { label -> SuggestionChip(onClick={query="#${label.path} "},label={ Text("#${label.path}") },modifier=Modifier.heightIn(min=48.dp)) } }
     }
    }
    items(results,key={ it.id }) { note -> SearchResult(note,terms,note.id in meaning) { saveSearch(query);onNote(note.id) } }
    if(query.isNotBlank() && results.isEmpty()) item(key="none") {
-    Column(Modifier.padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.padding(vertical=SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
      Text("No notes match ‘${query.trim()}’.",style=MaterialTheme.typography.bodyLarge)
      Text("Try fewer words. Search ignores accents, so perche finds perché.",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
     }
    }
   }
  }
- answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) { RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote);TextButton(onClick={answer=null}) { Text("Close") } } } }
+ answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.padding(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) { RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote);TextButton(onClick={answer=null}) { Text("Close") } } } }
 }
 
 /** One result (03 A7): the first line in the reading face, a snippet with the matches marked, then date and labels. */
 @Composable private fun SearchResult(note:Note,terms:List<String>,similar:Boolean,onOpen:()->Unit) {
  val mark=SpanStyle(background=SpuntoColors.highlight,color=MaterialTheme.colorScheme.onSurface)
- Column(Modifier.fillMaxWidth().clickable(onClickLabel="Open") { onOpen() }.padding(vertical=12.dp).semantics(mergeDescendants=true) {},verticalArrangement=Arrangement.spacedBy(4.dp)) {
+ Column(Modifier.fillMaxWidth().clickable(onClickLabel="Open") { onOpen() }.padding(vertical=SpuntoSpacing.s12).semantics(mergeDescendants=true) {},verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
   Text(marked(note.title.ifBlank { "Untitled" },terms,mark),style=SpuntoType.reading,maxLines=2,overflow=TextOverflow.Ellipsis)
   searchSnippet(note.body,terms)?.let { Text(marked(it,terms,mark),style=SpuntoType.readingSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=3,overflow=TextOverflow.Ellipsis) }
   Text(listOfNotNull(noteTime(note.createdAt),labels(note.body).map { "#${it.path}" }.distinct().take(3).joinToString(" ").ifEmpty { null },"≈ similar meaning".takeIf { similar }).joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)

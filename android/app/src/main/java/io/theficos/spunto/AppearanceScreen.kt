@@ -44,21 +44,21 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
  val selectedAccent=selectedCard?.accents?.firstOrNull { it.id==accent }?.id
  val accentChoices=themeAccentChoices(selectedCard)
  val instance=boundedThemeText(instanceName,80)
- LazyColumn(contentPadding=PaddingValues(bottom=24.dp)) {
+ LazyColumn(contentPadding=PaddingValues(bottom=SpuntoSpacing.s24)) {
   item {
    SettingsSection("Theme")
-   BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp)) {
+   BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8)) {
     // A hair under the exact share, so rounding never pushes the last card of a row onto the next.
-    val gap=12.dp;val columns=if(maxWidth<300.dp) 2 else 3;val width=(maxWidth-gap*(columns-1))/columns-1.dp
+    val gap=SpuntoSpacing.s12;val columns=if(maxWidth<300.dp) 2 else 3;val width=(maxWidth-gap*(columns-1))/columns-1.dp
     FlowRow(Modifier.selectableGroup(),horizontalArrangement=Arrangement.spacedBy(gap),verticalArrangement=Arrangement.spacedBy(gap),maxItemsInEachRow=columns) {
      catalog.cards.forEach { card -> ThemeChoiceCard(card,theme==card.id && card.available,if(card.available) resolveThemeSelection(card.id,if(theme==card.id) accent else null,catalog).mode(dark) else null,Modifier.width(width)) { onTheme(card.id) } }
     }
    }
    if(onUseInstance!=null) SettingsSwitchRow("Only on this phone",if(themeOverride) "Other devices use $instance." else "Every device uses $instance. Change it for all devices in the web app.",themeOverride) { if(it) onTheme(theme) else onUseInstance() }
-   else if(themeOverride) Text("Other devices use $instance.",Modifier.padding(horizontal=20.dp,vertical=8.dp),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   else if(themeOverride) Text("Other devices use $instance.",Modifier.padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
    if(accentChoices.isNotEmpty() && onAccent!=null) {
-    Text("Accent",Modifier.padding(start=20.dp,end=20.dp,top=8.dp),style=MaterialTheme.typography.bodyLarge)
-    FlowRow(Modifier.padding(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) { accentChoices.forEach { choice -> FilterChip(selected=selectedAccent==choice.id,onClick={onAccent(choice.id)},label={Text(choice.name)}) } }
+    Text("Accent",Modifier.padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge)
+    FlowRow(Modifier.padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) { accentChoices.forEach { choice -> FilterChip(selected=selectedAccent==choice.id,onClick={onAccent(choice.id)},label={Text(choice.name)}) } }
    }
   }
   item {
@@ -69,35 +69,35 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
   }
   item {
    SettingsSection("Reading")
-   Text("Face",Modifier.padding(start=20.dp,end=20.dp,top=8.dp),style=MaterialTheme.typography.bodyLarge)
+   Text("Face",Modifier.padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge)
    Segmented(listOf("serif" to "Serif","sans" to "Sans"),normalizedReadingFace(readingFace),onReadingFace)
-   Text("Text size",Modifier.padding(start=20.dp,end=20.dp,top=8.dp),style=MaterialTheme.typography.bodyLarge)
+   Text("Text size",Modifier.padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge)
    Segmented(listOf("S" to "S","M" to "M","L" to "L"),normalizedReadingSize(readingSize),onReadingSize)
-   Text("A thought worth keeping, in your own words.",Modifier.padding(horizontal=20.dp,vertical=16.dp),style=spuntoType(readingFace,readingSize).reading)
+   Text("A thought worth keeping, in your own words.",Modifier.padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s16),style=spuntoType(readingFace,readingSize).reading)
   }
  }
 }
 @Composable private fun Segmented(choices:List<Pair<String,String>>,selected:String,onSelect:(String)->Unit) {
- SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp)) {
+ SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8)) {
   choices.forEachIndexed { index,(value,label) -> SegmentedButton(selected=selected==value,onClick={onSelect(value)},shape=SegmentedButtonDefaults.itemShape(index,choices.size)) { Text(label) } }
  }
 }
 /** A small page in the theme's own colours: a time, a line of reading text, a label, a dashed proposal and five swatches; a failed pack shows its reason and cannot be chosen. */
 @Composable private fun ThemeChoiceCard(card:ThemeCard,chosen:Boolean,palette:Map<String,String>?,modifier:Modifier,onClick:()->Unit) {
- val shape=RoundedCornerShape(12.dp)
+ val shape=RoundedCornerShape(SpuntoRadius.r12)
  val choice=if(card.available) Modifier.selectable(chosen,role=Role.RadioButton,onClick=onClick) else Modifier.semantics(mergeDescendants=true) { disabled() }
  Column(modifier.then(choice),verticalArrangement=Arrangement.spacedBy(6.dp)) {
   if(palette!=null) {
    fun c(role:String)=tokenColor(palette.getValue(role))
    val dashed=c("ink-2")
-   Column(Modifier.fillMaxWidth().clip(shape).background(c("paper")).border(if(chosen) 2.dp else 1.dp,if(chosen) MaterialTheme.colorScheme.primary else c("rule"),shape).padding(10.dp).clearAndSetSemantics {},verticalArrangement=Arrangement.spacedBy(4.dp)) {
+   Column(Modifier.fillMaxWidth().clip(shape).background(c("paper")).border(if(chosen) 2.dp else 1.dp,if(chosen) MaterialTheme.colorScheme.primary else c("rule"),shape).padding(10.dp).clearAndSetSemantics {},verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
     Text("14:32",style=MaterialTheme.typography.labelSmall,color=c("ink-3"))
     Text("A loose idea",style=SpuntoType.readingSmall,color=c("ink"),maxLines=1,overflow=TextOverflow.Ellipsis)
-    FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+    FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
      Text("#idea",style=SpuntoType.readingSmall,color=c("accent"))
-     Text("#later",Modifier.drawBehind { drawRoundRect(dashed,cornerRadius=CornerRadius(4.dp.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),2.dp.toPx())))) }.padding(horizontal=4.dp),style=SpuntoType.readingSmall,color=dashed)
+     Text("#later",Modifier.drawBehind { drawRoundRect(dashed,cornerRadius=CornerRadius(SpuntoRadius.r4.toPx()),style=Stroke(1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),2.dp.toPx())))) }.padding(horizontal=SpuntoSpacing.s4),style=SpuntoType.readingSmall,color=dashed)
     }
-    Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) { listOf("paper","ink","accent","accent-soft","highlight").forEach { role -> Box(Modifier.size(10.dp).background(c(role),CircleShape).border(1.dp,c("rule"),CircleShape)) } }
+    Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) { listOf("paper","ink","accent","accent-soft","highlight").forEach { role -> Box(Modifier.size(10.dp).background(c(role),CircleShape).border(1.dp,c("rule"),CircleShape)) } }
    }
   } else Box(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceVariant).padding(10.dp)) {
    Text("Unavailable · ${boundedThemeText(card.reason ?: "Colour pack is unavailable.")}",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=4,overflow=TextOverflow.Ellipsis)

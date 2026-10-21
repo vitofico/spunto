@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.security.MessageDigest
+import io.theficos.spunto.core.design.SpuntoSpacing
 
 private const val RECORDING_CACHE_LIMIT=40_000_000L
 private val recordingCacheMutex=Mutex()
@@ -65,7 +66,7 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
  Row {
   TextButton(onClick=onToggle,enabled=!loading,modifier=Modifier.semantics {contentDescription=if(playing) "Pause recording" else "Play recording"}) {Text(if(loading) "Loading…" else if(playing) "Pause" else "Play")}
   TextButton(onClick=onStop,modifier=Modifier.semantics {contentDescription="Stop playback"}) {Text("Stop")}
-  Text("${recordingTime(elapsed)} / ${recordingTime(duration)}",Modifier.padding(12.dp).semantics {contentDescription="Playback elapsed ${recordingTime(elapsed)}, duration ${recordingTime(duration)}"})
+  Text("${recordingTime(elapsed)} / ${recordingTime(duration)}",Modifier.padding(SpuntoSpacing.s12).semantics {contentDescription="Playback elapsed ${recordingTime(elapsed)}, duration ${recordingTime(duration)}"})
  }
 }
 
@@ -140,7 +141,7 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
  }
  val error=load.error.ifEmpty {playbackError}
  Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer) {
-  Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+  Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
    Text(label,style=MaterialTheme.typography.labelLarge)
    RecordingPlaybackControls(playing,load.loading || preparing,elapsed,duration,{play()},{loader.stop()})
    attachment?.let {item ->Text(when(item.status) {"local-only"->"Kept on this phone · Save to attach";"uploaded"->"Saved recording";"paused"->"Sync paused · Voice memos is off";"failed"->"Upload failed · Your clip stays on this phone";"uploading"->"Uploading recording";else->"Recording waiting to sync"},style=MaterialTheme.typography.bodySmall)}

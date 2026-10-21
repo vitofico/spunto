@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,7 +91,12 @@ import kotlinx.serialization.json.*
  val activeSelection=if(appearanceManifest!=null) {
   if(themeOverride) resolveThemeSelection(theme,accent,appearanceManifest.catalog) else appearanceManifest.instance
  } else snapshot ?: resolveThemeSelection(requestedTheme,requestedAccent)
- LaunchedEffect(activeSelection) { CaptureSurfaces.palette(model.container.context,activeSelection.light,activeSelection.dark) }
+ LaunchedEffect(activeSelection,wallpaper) {
+  // 03 A11: the widget takes the wallpaper's paper and accent only when the app does.
+  val context=model.container.context;val (day,night)=if(wallpaper && android.os.Build.VERSION.SDK_INT>=31) dynamicLightColorScheme(context) to dynamicDarkColorScheme(context) else null to null
+  fun Map<String,String>.over(scheme:ColorScheme?)=scheme?.let { this+mapOf("paper" to it.background,"accent" to it.primary).mapValues { (_,color) -> "#%06X".format(color.toArgb() and 0xFFFFFF) } } ?: this
+  CaptureSurfaces.palette(context,activeSelection.light.over(day),activeSelection.dark.over(night))
+ }
  LaunchedEffect(appearanceManifest,themeOverride,requestedTheme,requestedAccent,activeSelection) {
   if(appearanceManifest!=null) storeSelectedThemeSnapshot(model.container.preferences,SelectedThemeSnapshot(themeOverride,requestedTheme,requestedAccent,manifestFingerprint,activeSelection))
  }

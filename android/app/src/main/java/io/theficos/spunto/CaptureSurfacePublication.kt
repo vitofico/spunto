@@ -8,11 +8,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 /** Selection and the synchronous widget write must share the current manifest's publication lock. */
-internal fun ManifestCache.withCaptureSurfacePublication(notes:List<Note>,outputs:List<PluginOutputEntity>,updateManifest:()->Unit,cacheSlip:(String?,String?)->Unit) {
+internal fun ManifestCache.withCaptureSurfacePublication(notes:List<Note>,outputs:List<PluginOutputEntity>,updateManifest:()->Unit,cacheSlip:(String?,String?,Long?)->Unit) {
  withCurrentPublication {
   updateManifest()
   val slip=outputs.firstOrNull { output -> val annotation=runCatching { Json.parseToJsonElement(output.payload).jsonObject }.getOrNull();output.kind=="annotation" && annotation?.string("kind")=="slip" && enabled(annotation.string("plugin")) && notes.any { it.id==output.noteId && !it.privateNote && !it.trashed } }
   val note=notes.firstOrNull { it.id==slip?.noteId }
-  cacheSlip(note?.id,note?.body?.take(280))
+  cacheSlip(note?.id,note?.body?.take(280),note?.createdAt)
  }
 }

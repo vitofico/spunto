@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget picker's preview (Android 12+): the 4×1 pill as the home screen draws it in Carta. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:padding="4dp">
+ <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:background="@drawable/capture_widget_pill" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="20dp" android:paddingEnd="16dp">
+  <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_pencil" android:tint="@color/capture_widget_ink_2" android:importantForAccessibility="no" />
+  <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp" android:text="@string/capture_widget_write" android:textColor="@color/capture_widget_ink_2" android:textSize="16sp" android:maxLines="1" />
+  <ImageView android:layout_width="22dp" android:layout_height="22dp" android:src="@drawable/ic_mic" android:tint="@color/capture_widget_accent" android:importantForAccessibility="no" />
+ </LinearLayout>
+</LinearLayout>

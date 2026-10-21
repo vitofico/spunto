@@ -1101,7 +1101,7 @@ SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces$apply$2;->invokeSuspe
 SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;-><clinit>()V
 SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;-><init>()V
 SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;->apply(Landroid/content/Context;ZZ)V
-SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;->cacheSlip(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;)V
+SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;->cacheSlip(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)V
 SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;->intent$default(Lio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;Landroid/content/Context;ZILjava/lang/Object;)Landroid/content/Intent;
 SPLio/theficos/spunto/plugins/quickcapture/CaptureSurfaces;->intent(Landroid/content/Context;Z)Landroid/content/Intent;
 SPLio/theficos/spunto/plugins/quickcapture/CaptureWidget;-><clinit>()V

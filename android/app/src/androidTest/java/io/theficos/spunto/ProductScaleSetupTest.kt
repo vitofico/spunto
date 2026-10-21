@@ -79,11 +79,11 @@ class ProductScaleSetupTest {
     val privatePreferences=object:ContextWrapper(context) {override fun getSharedPreferences(name:String,mode:Int):SharedPreferences=super.getSharedPreferences("scale-$nonce-$name",mode)}
     val cache=ManifestCache(privatePreferences,fence);require(cache.adopt(committed.owner)!=null)
     var slipId:String?=null
-    cache.withCaptureSurfacePublication(fixture.notes,repository.dao.outputs().first(),updateManifest={},cacheSlip={id,_ ->slipId=id})
+    cache.withCaptureSurfacePublication(fixture.notes,repository.dao.outputs().first(),updateManifest={},cacheSlip={id,_,_ ->slipId=id})
     require(slipId==fixture.id(11)) {"Private/trashed/inactive slip became eligible."}
     val members=repository.dao.filteredNotes(timelineQuery(TimelineSpec(kind=TimelineKind.PLUGIN,pluginId="scale-live",filter=buildJsonObject {put("member","focus")})))
     require(members.map {it.id}==listOf(fixture.id(11)))
-    fence.invalidate();cache.withCaptureSurfacePublication(fixture.notes,fixture.outputs,updateManifest={},cacheSlip={id,_ ->slipId=id})
+    fence.invalidate();cache.withCaptureSurfacePublication(fixture.notes,fixture.outputs,updateManifest={},cacheSlip={id,_,_ ->slipId=id})
     require(slipId==null) {"Invalidated publication retained a slip."}
    }
    require(AuthStore(context).config.first()==null && repository.dao.outbox().isEmpty())

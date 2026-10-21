@@ -19,6 +19,10 @@ import androidx.glance.layout.*
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import kotlinx.coroutines.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 // Carta, until the app hands over its theme.
 private val cartaLight=mapOf("paper" to "#F8F5F0","ink" to "#221D18","ink-2" to "#5B544C","ink-3" to "#6E6860","accent" to "#9F4C2A")
@@ -29,11 +33,12 @@ object CaptureSurfaces {
  fun refreshWidgets(context:Context) {CoroutineScope(Dispatchers.IO).launch {CaptureWidget().updateAll(context)}}
  fun enabled(context:Context,id:String)=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE).getBoolean(id,true)
  fun intent(context:Context,dictate:Boolean=false)=Intent().setClassName(context.packageName,"io.theficos.spunto.CaptureActivity").putExtra("dictate",dictate).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
- fun cacheSlip(context:Context,id:String?,text:String?) {
+ /** The day's slip for the taller widget, with the day its note was written for the overline. */
+ fun cacheSlip(context:Context,id:String?,text:String?,writtenAt:Long?=null) {
   val prefs=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
-  val safeId=if(lockedPreviews(context)) null else id;val safeText=if(lockedPreviews(context)) null else text
-  if(prefs.getString("slip-id",null)==safeId && prefs.getString("slip-text",null)==safeText) return
-  prefs.edit().putString("slip-id",safeId).putString("slip-text",safeText).apply()
+  val safeId=if(lockedPreviews(context)) null else id;val safeText=if(lockedPreviews(context)) null else text;val safeAt=if(safeId==null) 0L else writtenAt ?: 0L
+  if(prefs.getString("slip-id",null)==safeId && prefs.getString("slip-text",null)==safeText && prefs.getLong("slip-at",0L)==safeAt) return
+  prefs.edit().putString("slip-id",safeId).putString("slip-text",safeText).putLong("slip-at",safeAt).apply()
   CoroutineScope(Dispatchers.IO).launch { CaptureWidget().updateAll(context) }
  }
  /** The app's theme as the widget draws it; the widget then follows the system's day or night (03 A11). */
@@ -57,6 +62,9 @@ object CaptureSurfaces {
   CoroutineScope(Dispatchers.IO).launch { CaptureWidget().updateAll(context) }
  }
 }
+/** "FROM YOUR NOTES · 19 MARCH 2025", as the timeline's slip writes it; a slip saved before its date was kept shows no date. */
+internal fun slipOverline(writtenAt:Long,zone:ZoneId=ZoneId.systemDefault(),locale:Locale=Locale.getDefault())=
+ ("From your notes"+if(writtenAt>0) " · "+DateTimeFormatter.ofPattern("d MMMM yyyy",locale).format(Instant.ofEpochMilli(writtenAt).atZone(zone)) else "").uppercase(locale)
 /** 03 A11: a paper "Write a note" pill with a mic when dictation is on; a taller widget adds the day's slip. */
 class CaptureWidget : GlanceAppWidget() {
  override val sizeMode=SizeMode.Exact
@@ -85,7 +93,7 @@ class CaptureWidget : GlanceAppWidget() {
   if(slipId!=null && LocalSize.current.height>=110.dp) {
    Spacer(GlanceModifier.height(8.dp))
    Column(GlanceModifier.fillMaxWidth().defaultWeight().cornerRadius(16.dp).background(color("paper")).padding(horizontal=20.dp,vertical=10.dp).clickable(actionStartActivity(Intent().setClassName(context.packageName,"io.theficos.spunto.MainActivity").putExtra("noteId",slipId)))) {
-    Text("FROM YOUR NOTES",style=TextStyle(color=color("ink-3"),fontSize=11.sp,fontWeight=FontWeight.Medium))
+    Text(slipOverline(slip.getLong("slip-at",0L)),style=TextStyle(color=color("ink-3"),fontSize=11.sp,fontWeight=FontWeight.Medium))
     Spacer(GlanceModifier.height(4.dp))
     Text(slip.getString("slip-text","").orEmpty(),style=TextStyle(color=color("ink"),fontSize=15.sp,fontFamily=FontFamily.Serif),maxLines=2)
    }

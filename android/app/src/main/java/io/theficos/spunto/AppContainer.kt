@@ -69,7 +69,7 @@ class ReplicaContainer internal constructor(val context:Context,val replicaId:St
       val raw=manifest.value.toString()
       if(raw!=previous) {io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.apply(context,manifest.enabled("quick-capture"),manifest.enabled("dictation"));if(!manifest.enabled("dictation")) context.getSystemService(android.content.pm.ShortcutManager::class.java).removeDynamicShortcuts(listOf("dictate"));previous=raw}
      }
-    },cacheSlip={id,text ->io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.cacheSlip(context,id,text)})
+    },cacheSlip={id,text,writtenAt ->io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.cacheSlip(context,id,text,writtenAt)})
    }
   }
  }

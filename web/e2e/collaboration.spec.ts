@@ -181,9 +181,9 @@ test("workspace selection survives reload while labels, drafts and viewer contro
   await page.getByLabel("Current space").selectOption(team.id);
   await expect(page.getByText("Studio note", { exact: true })).toBeVisible();
   await expect(page.getByLabel("New note")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Pin", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Actions for/ })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("link", { name: "studio 1", exact: false }),
   ).toBeVisible();

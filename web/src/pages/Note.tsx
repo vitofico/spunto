@@ -1,308 +1,589 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useNote,
   useDraftEditor,
-  useFlags,
   useHistory,
-  useRestoreRevision,
   api,
-  queryClient,
+  createIdempotencyKey,
+  invalidateContent,
   type Note,
+  type Revision,
   useWorkspaceRole,
 } from "../lib";
+import { compactDiff, diffLines } from "../lib/text";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { ShareNote } from "../features/Collaboration";
-import { Editor } from "../components/core/Editor";
-import { NoteBody, toggleRenderedCheckbox } from "../components/core/NoteCard";
+import { Editor, sourceOffset } from "../components/core/Editor";
+import {
+  NoteBody,
+  Provenance,
+  failure,
+  toggleRenderedCheckbox,
+  useNoteFlag,
+} from "../components/core/NoteCard";
+import { Icon } from "../components/core/Icon";
+import { MoreMenu } from "../components/core/Menu";
+import { useConfirm } from "../components/core/ConfirmDialog";
+import { useToast } from "../components/core/Toast";
 import { SuggestionLine, NotePanel } from "../features/Slots";
+/** App marks whether the history entry before this one is inside Spunto. */
+function cameFromApp() {
+  try {
+    return sessionStorage.getItem("spunto:in-app-nav") === "1";
+  } catch {
+    return false;
+  }
+}
+/** The way back, named by where it goes: the previous in-app page, else All notes. */
+function Back() {
+  const inApp = cameFromApp();
+  return (
+    <Link
+      href="/"
+      className="button icon-button back"
+      aria-label={inApp ? "Back" : "All notes"}
+      onClick={(event) => {
+        if (!inApp) return;
+        event.preventDefault();
+        history.back();
+      }}
+    >
+      <Icon name="back" />
+    </Link>
+  );
+}
+function Diff({ before, after }: { before: string; after: string }) {
+  return (
+    <div className="diff">
+      {compactDiff(diffLines(before, after)).map((line, index) =>
+        line.kind === "skip" ? (
+          <div key={index} className="diff-skip">
+            {line.count === 1
+              ? "1 unchanged line"
+              : `${line.count} unchanged lines`}
+          </div>
+        ) : line.kind === "del" ? (
+          <del key={index}>
+            <span className="sr-only">Removed: </span>
+            {line.text || " "}
+          </del>
+        ) : line.kind === "add" ? (
+          <ins key={index}>
+            <span className="sr-only">Added: </span>
+            {line.text || " "}
+          </ins>
+        ) : (
+          <div key={index}>{line.text || " "}</div>
+        ),
+      )}
+    </div>
+  );
+}
+type Choice = { label: string; run: () => Promise<void>; primary?: boolean };
+/** "Edited on two devices": the saved text against the other version, and three ways out. */
+function Conflict({
+  saved,
+  mine,
+  mineName,
+  choices,
+}: {
+  saved: string | null;
+  mine: string;
+  mineName: string;
+  choices: Choice[];
+}) {
+  const [comparing, setComparing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <section
+      className="notice conflict-notice"
+      aria-label="Edited on two devices"
+    >
+      <p>
+        Edited on two devices. Both versions are kept ·{" "}
+        <button
+          className="link-button"
+          aria-expanded={comparing}
+          onClick={() => setComparing(!comparing)}
+        >
+          Compare
+        </button>
+      </p>
+      {comparing &&
+        (saved === null ? (
+          <p className="muted">Opening the saved version…</p>
+        ) : (
+          <>
+            <p className="diff-legend">
+              <del>Only in the saved version</del>
+              <ins>Only in {mineName}</ins>
+            </p>
+            <Diff before={saved} after={mine} />
+            <div className="row">
+              {choices.map((choice) => (
+                <button
+                  key={choice.label}
+                  className={"button" + (choice.primary ? " primary" : "")}
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      await choice.run();
+                    } catch (reason) {
+                      setError(failure(reason));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          </>
+        ))}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
+  const [confirm, dialog] = useConfirm();
+  const toast = useToast();
+  return (
+    <>
+      {revisions.map((revision, index) => (
+        <div className="history-item" key={revision.version}>
+          <div className="row">
+            <span>
+              {revision.version === note.version
+                ? "Current version"
+                : `Version ${revision.version}`}{" "}
+              · {new Date(revision.changed_at).toLocaleString()}
+            </span>
+            {revision.version !== note.version && (
+              <button
+                className="button"
+                onClick={async () => {
+                  if (
+                    !(await confirm({
+                      title: "Restore this version?",
+                      body: "The current text stays in history.",
+                      confirmLabel: "Restore",
+                    }))
+                  )
+                    return;
+                  try {
+                    await api.restoreRevision(note.id, revision.version);
+                    await invalidateContent();
+                    toast.show({ message: "Version restored" });
+                  } catch (error) {
+                    toast.show({ message: failure(error) });
+                  }
+                }}
+              >
+                Restore
+              </button>
+            )}
+          </div>
+          <Diff
+            before={revisions[index + 1]?.body ?? ""}
+            after={revision.body}
+          />
+        </div>
+      ))}
+      {dialog}
+    </>
+  );
+}
 function NoteEditor({ note }: { note: Note }) {
-  const [editing, setEditing] = useState(false);
+  const trashed = note.trashed;
+  const [editing, setEditing] = useState(
+    () =>
+      !trashed && (history.state as { edit?: boolean } | null)?.edit === true,
+  );
+  const [caret, setCaret] = useState<number>();
+  const [everSaved, setEverSaved] = useState(false);
   const [, navigate] = useLocation();
-  const draft = useDraftEditor({ note, draftKey: "note:" + note.id });
+  const draft = useDraftEditor({
+    note,
+    draftKey: "note:" + note.id,
+    enabled: !trashed,
+  });
   const [reviewBase, setReviewBase] = useState<Note | null>(null);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [reviewBusy, setReviewBusy] = useState(false);
+  const flag = useNoteFlag();
+  const toast = useToast();
+  const [confirm, dialog] = useConfirm();
+  const revisions = useHistory(note.id);
+  const historyRef = useRef<HTMLDetailsElement>(null);
+  const name = note.title || "Untitled note";
+  useDocumentTitle(name);
+  useEffect(() => {
+    if (draft.state === "saving") setEverSaved(true);
+  }, [draft.state]);
   useEffect(() => {
     if (!draft.conflict) {
       setReviewBase(null);
       return;
     }
     let cancelled = false;
-    setReviewBase(null);
-    void api
-      .note(note.id)
-      .then((latest) => {
+    void api.note(note.id).then(
+      (latest) => {
         if (!cancelled) setReviewBase(latest);
-      })
-      .catch((error) => {
-        if (!cancelled) setReviewError(error.message);
-      });
+      },
+      () => {},
+    );
     return () => {
       cancelled = true;
     };
   }, [draft.conflict, note.id]);
-  const flags = useFlags();
-  const history = useHistory(note.id);
-  const restore = useRestoreRevision();
+  const copyId =
+    draft.conflict && draft.conflict !== note.id ? draft.conflict : null;
+  const trashCopy = async (id: string) => {
+    await api.flags(id, { trashed: true });
+    await invalidateContent();
+  };
+  // Replacing keeps App's history depth marker (history.state) on the entry.
+  const replace = (to: string) =>
+    navigate(to, { replace: true, state: history.state });
+  const leaveNote = () => (cameFromApp() ? history.back() : replace("/"));
+  const status =
+    draft.state === "saving"
+      ? "Saving…"
+      : draft.state === "error" && draft.error
+        ? draft.error.status === 0
+          ? "Can’t reach the server. Your changes are kept on this device."
+          : draft.error.message
+        : draft.conflict
+          ? ""
+          : draft.dirty
+            ? "Unsaved changes on this device"
+            : everSaved
+              ? "Saved"
+              : "";
+  const menu = trashed
+    ? [
+        {
+          label: "Restore",
+          onSelect: () => void flag(note, "trashed", false),
+        },
+        {
+          label: "Delete forever",
+          danger: true,
+          onSelect: async () => {
+            if (
+              !(await confirm({
+                title: "Delete this note forever?",
+                body: "It can’t be restored afterwards.",
+                confirmLabel: "Delete forever",
+                danger: true,
+              }))
+            )
+              return;
+            try {
+              await api.deleteNote(note.id);
+              await invalidateContent();
+              replace("/trash");
+            } catch (error) {
+              toast.show({ message: failure(error) });
+            }
+          },
+        },
+      ]
+    : [
+        {
+          label: note.pinned ? "Unpin" : "Pin",
+          onSelect: () => void flag(note, "pinned", !note.pinned),
+        },
+        {
+          label: note.private ? "Let AI and agents read it" : "Make private",
+          onSelect: () =>
+            void api
+              .flags(note.id, { private: !note.private })
+              .then(invalidateContent, (error) =>
+                toast.show({ message: failure(error) }),
+              ),
+        },
+        {
+          label: note.archived ? "Unarchive" : "Archive",
+          onSelect: () =>
+            void flag(note, "archived", !note.archived).then(
+              (done) => done && !note.archived && leaveNote(),
+            ),
+        },
+        {
+          label: "Revision history",
+          onSelect: () => {
+            const details = historyRef.current;
+            if (!details) return;
+            details.open = true;
+            details.scrollIntoView({ block: "start" });
+            details.querySelector("summary")?.focus();
+          },
+        },
+        {
+          label: "Move to trash",
+          onSelect: () =>
+            void flag(note, "trashed", true).then(
+              (done) => done && leaveNote(),
+            ),
+        },
+      ];
   return (
     <div className="note-page">
-      <Link href="/">← All notes</Link>
+      <Back />
       <header className="note-header">
-        <time dateTime={note.created_at}>
-          {new Date(note.created_at).toLocaleString(undefined, {
-            dateStyle: "long",
-            timeStyle: "short",
-          })}
-        </time>
-        <div className="row">
-          {note.private && <span>Private</span>}
-          {note.origin === "agent" && <span>via agent</span>}
-          {note.machine && (
-            <span>✧ Written by {note.source.ref ?? "a plugin"}</span>
+        <div className="note-meta">
+          <time dateTime={note.created_at}>
+            {new Date(note.created_at).toLocaleString(undefined, {
+              dateStyle: "long",
+              timeStyle: "short",
+            })}
+          </time>
+          {note.private && (
+            <span className="chip">
+              <Icon name="lock" /> private
+            </span>
           )}
+          <Provenance note={note} />
+        </div>
+        <div className="row note-tools">
           <ShareNote id={note.id} />
-          <button
-            className="button"
-            data-edit-note
-            onClick={() => setEditing(!editing)}
-          >
-            {editing ? "Read" : "Edit"}
-          </button>
+          {!trashed && !editing && !draft.conflict && (
+            <button
+              className="button"
+              data-edit-note
+              onClick={() => {
+                setCaret(undefined);
+                setEditing(true);
+              }}
+            >
+              <Icon name="edit" /> Edit
+            </button>
+          )}
+          <MoreMenu label="More actions" items={menu} />
         </div>
       </header>
-      {note.conflict_of && (
+      {trashed && (
         <p className="notice">
-          Two edits couldn’t be combined. Your text is safe in this copy.{" "}
-          <Link href={"/n/" + note.conflict_of}>Open the original</Link>
+          In trash ·{" "}
+          <button
+            className="link-button"
+            onClick={() => void flag(note, "trashed", false)}
+          >
+            Restore
+          </button>
         </p>
       )}
-      {draft.conflict && (
-        <p className="notice">
-          Your earlier save is preserved on the server. The draft below may
-          contain later text kept only on this device.{" "}
-          <Link href={"/n/" + draft.conflict}>Open the preserved note</Link>
-        </p>
+      {note.conflict_of && !trashed && (
+        <CopyConflict note={note} original={note.conflict_of} />
       )}
       {draft.conflict && (
-        <section className="card stack" aria-label="Review conflicting edits">
-          <h2 className="page-title">Latest saved text</h2>
-          {reviewBase ? (
-            <>
-              <NoteBody note={reviewBase} />
-              <p className="muted">
-                Review the saved text above and your local draft below. Saving
-                reviewed text replaces the original note and keeps its history.
-              </p>
-              <button
-                className="button primary"
-                disabled={reviewBusy}
-                onClick={async () => {
-                  setReviewBusy(true);
-                  setReviewError(null);
-                  try {
-                    const latest = await api.note(note.id);
-                    if (latest.version !== reviewBase.version) {
-                      setReviewBase(latest);
-                      setReviewError(
-                        "The saved note changed again. Review its latest text before saving.",
-                      );
-                      return;
-                    }
-                    if (!draft.resumeReviewed(latest)) {
-                      setReviewError(
-                        "Review could not resume yet. Keep your draft open and try again.",
-                      );
-                      return;
-                    }
-                    await draft.save();
-                  } catch (error) {
-                    setReviewError(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not save reviewed text.",
-                    );
-                  } finally {
-                    setReviewBusy(false);
-                  }
-                }}
-              >
-                Save reviewed text
-              </button>
-            </>
-          ) : (
-            <div>
-              <p className="muted">Opening latest saved text…</p>
-              {reviewError && (
-                <button
-                  className="button"
-                  onClick={() => {
-                    setReviewError(null);
-                    void api
-                      .note(note.id)
-                      .then(setReviewBase)
-                      .catch((error) => setReviewError(error.message));
-                  }}
-                >
-                  Try again
-                </button>
-              )}
-            </div>
-          )}
-          {reviewError && (
-            <p className="error" role="alert">
-              {reviewError}
-            </p>
-          )}
-        </section>
+        <Conflict
+          saved={reviewBase?.body ?? null}
+          mine={draft.body}
+          mineName="yours"
+          choices={[
+            {
+              label: "Keep mine",
+              primary: true,
+              run: async () => {
+                const latest = await api.note(note.id);
+                if (!draft.resumeReviewed(latest))
+                  throw new Error("Keep this page open and try again.");
+                if (!(await draft.save())) return;
+                if (copyId) await trashCopy(copyId);
+              },
+            },
+            {
+              label: "Keep saved",
+              run: async () => {
+                const latest = await api.note(note.id);
+                if (!draft.discard(latest))
+                  throw new Error("Keep this page open and try again.");
+                setEditing(false);
+                if (copyId) await trashCopy(copyId);
+              },
+            },
+            {
+              label: "Keep both",
+              run: async () => {
+                let kept: string;
+                if (copyId) {
+                  const copy = await api.note(copyId);
+                  if (copy.body !== draft.body)
+                    await api.updateNote(copyId, draft.body, copy.version);
+                  kept = copyId;
+                } else
+                  kept = (
+                    await api.createNote(draft.body, createIdempotencyKey())
+                  ).id;
+                draft.discard(await api.note(note.id));
+                setEditing(false);
+                await invalidateContent();
+                toast.show({
+                  message: "Your version is a separate note",
+                  actionLabel: "Open",
+                  onAction: () => navigate("/n/" + kept),
+                });
+              },
+            },
+          ]}
+        />
       )}
       {editing || draft.conflict ? (
         <Editor
           note
           body={draft.body}
           setBody={draft.setBody}
-          onSave={() =>
+          onSave={() => {
+            if (!draft.dirty) return setEditing(false);
             void draft.save().then((saved) => {
               if (saved) setEditing(false);
-            })
-          }
+            });
+          }}
           upload={draft.uploadAttachment}
           busy={draft.state === "saving"}
           saveDisabled={!!draft.conflict}
-          error={draft.error?.message}
+          caret={caret}
           autoFocus
         />
       ) : (
         <div
+          className={trashed ? undefined : "note-read"}
           onClick={(e) => {
-            if (!(e.target as HTMLElement).closest("a,input,button"))
-              setEditing(true);
+            const target = e.target as HTMLElement;
+            if (
+              trashed ||
+              target.closest("a,input,button,summary") ||
+              window.getSelection()?.isCollapsed === false
+            )
+              return;
+            setCaret(
+              sourceOffset(e.currentTarget, e.clientX, e.clientY, draft.body),
+            );
+            setEditing(true);
           }}
         >
           <NoteBody
             note={note}
-            onCheckbox={(offset) => {
-              draft.setBody(toggleRenderedCheckbox(draft.body, offset));
-              void draft.save();
-            }}
+            body={
+              draft.body.length === note.body.length ? draft.body : undefined
+            }
+            onCheckbox={
+              trashed
+                ? undefined
+                : (offset) => {
+                    draft.setBody(toggleRenderedCheckbox(draft.body, offset));
+                    // A second tick during the first save goes out right after it.
+                    void draft.save().then(() => draft.save());
+                  }
+            }
           />
         </div>
       )}
-      <p className="saved-line" role="status">
-        {draft.state === "saving"
-          ? "Saving…"
-          : draft.state === "error"
-            ? "Can’t reach the server. Your changes are kept on this device."
-            : draft.dirty
-              ? "Unsaved changes on this device"
-              : "Saved"}
+      <p
+        className={"saved-line" + (draft.state === "error" ? " error" : "")}
+        role="status"
+      >
+        {status}
       </p>
       {draft.storageFailed && (
         <p className="error" role="alert">
           Device storage is full or unavailable; keep this tab open until saved.
         </p>
       )}
-      <SuggestionLine note={note} />
-      <div className="note-actions">
-        <button
-          className="button"
-          onClick={() =>
-            flags.mutate({ id: note.id, flags: { pinned: !note.pinned } })
-          }
-        >
-          {note.pinned ? "Unpin" : "Pin"}
-        </button>
-        <button
-          className="button"
-          onClick={() =>
-            flags.mutate({ id: note.id, flags: { private: !note.private } })
-          }
-        >
-          {note.private ? "Make public to configured tools" : "Make private"}
-        </button>
-        <button
-          className="button"
-          onClick={() =>
-            flags.mutate({ id: note.id, flags: { archived: !note.archived } })
-          }
-        >
-          {note.archived ? "Unarchive" : "Archive"}
-        </button>
-        <button
-          className="button"
-          onClick={() =>
-            flags.mutate({ id: note.id, flags: { trashed: !note.trashed } })
-          }
-        >
-          {note.trashed ? "Restore" : "Move to trash"}
-        </button>
-        {note.trashed && (
-          <button
-            className="button danger"
-            onClick={async () => {
-              if (confirm("Delete this note forever? This cannot be undone.")) {
-                await api.deleteNote(note.id);
-                await queryClient.invalidateQueries({ queryKey: ["notes"] });
-                navigate("/trash");
-              }
-            }}
-          >
-            Delete forever
-          </button>
-        )}
-      </div>
+      {!trashed && <SuggestionLine note={note} />}
       {note.private && (
         <p className="muted">
           Private notes stay out of AI and agent tools unless their token
           explicitly includes them.
         </p>
       )}
-      {flags.error && (
-        <p className="error" role="alert">
-          {flags.error.message}
-        </p>
-      )}
-      <details className="history">
+      <details className="history" ref={historyRef}>
         <summary>Revision history</summary>
-        {history.isPending ? (
+        {revisions.isPending ? (
           <p className="muted">Loading history…</p>
-        ) : history.error ? (
-          <p className="error">{history.error.message}</p>
+        ) : revisions.error ? (
+          <p className="error">{revisions.error.message}</p>
         ) : (
-          history.data?.map((revision) => (
-            <div className="history-item" key={revision.version}>
-              <div className="row">
-                <span>
-                  Version {revision.version} ·{" "}
-                  {new Date(revision.changed_at).toLocaleString()}
-                </span>
-                <button
-                  className="button"
-                  disabled={restore.isPending}
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "Restore this revision? The current text stays in history.",
-                      )
-                    )
-                      restore.mutate({
-                        id: note.id,
-                        version: revision.version,
-                      });
-                  }}
-                >
-                  Restore this version
-                </button>
-              </div>
-              <pre>{revision.body}</pre>
-            </div>
-          ))
+          <History note={note} revisions={revisions.data ?? []} />
         )}
-        {restore.error && <p className="error">{restore.error.message}</p>}
       </details>
-      <aside className="note-panel">
+      <div className="note-panel">
         <NotePanel note={note} />
-      </aside>
+      </div>
+      {dialog}
     </div>
+  );
+}
+/** A conflicted copy holds an edit that could not join its original; compare and settle it here. */
+function CopyConflict({ note, original }: { note: Note; original: string }) {
+  const [, navigate] = useLocation();
+  const toast = useToast();
+  const [saved, setSaved] = useState<Note | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void api.note(original).then(
+      (value) => {
+        if (!cancelled) setSaved(value);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [original]);
+  const settle = async (message: string) => {
+    await api.flags(note.id, { trashed: true });
+    await invalidateContent();
+    navigate("/n/" + original, { replace: true, state: history.state });
+    toast.show({
+      message,
+      actionLabel: "Undo",
+      onAction: () =>
+        void api
+          .flags(note.id, { trashed: false })
+          .then(invalidateContent)
+          .catch((error) => toast.show({ message: failure(error) })),
+    });
+  };
+  return (
+    <Conflict
+      saved={saved?.body ?? null}
+      mine={note.body}
+      mineName="this copy"
+      choices={[
+        {
+          label: "Keep this copy",
+          primary: true,
+          run: async () => {
+            const latest = await api.note(original);
+            await api.updateNote(original, note.body, latest.version);
+            await settle("Kept this copy; it moved into the original");
+          },
+        },
+        {
+          label: "Keep the original",
+          run: () => settle("Copy moved to trash"),
+        },
+        {
+          label: "Keep both",
+          run: async () =>
+            toast.show({
+              message: "Both notes stay",
+              actionLabel: "Open the original",
+              onAction: () => navigate("/n/" + original),
+            }),
+        },
+      ]}
+    />
   );
 }
 export default function NotePage({ id }: { id: string }) {
@@ -318,7 +599,7 @@ export default function NotePage({ id }: { id: string }) {
     </p>
   ) : role === "viewer" ? (
     <div className="note-page">
-      <Link href="/">← All notes</Link>
+      <Back />
       <p className="muted">Can view</p>
       <NoteBody note={note.data} />
     </div>

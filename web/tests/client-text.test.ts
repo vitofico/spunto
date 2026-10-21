@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import labels from "../../spec/fixtures/labels.json";
 import folds from "../../spec/fixtures/fold.json";
-import { fold, labelTokens, toggleCheckbox } from "../src/lib/text";
+import {
+  compactDiff,
+  diffLines,
+  fold,
+  labelTokens,
+  toggleCheckbox,
+} from "../src/lib/text";
 import { problem, safeError } from "../src/lib/errors";
 describe("shared text fixtures", () => {
   for (const fixture of labels)
@@ -29,4 +35,23 @@ it("sanitizes all untrusted server details and browser errors", () => {
     secret,
   );
   expect(safeError(new Error(secret)).message).not.toContain(secret);
+});
+describe("line diffs for conflicts and history", () => {
+  it("marks only the lines that changed and folds long unchanged runs", () => {
+    expect(diffLines("a\nb\nc", "a\nB\nc")).toEqual([
+      { kind: "same", text: "a" },
+      { kind: "del", text: "b" },
+      { kind: "add", text: "B" },
+      { kind: "same", text: "c" },
+    ]);
+    const before = ["1", "2", "3", "4", "5", "6", "7"].join("\n");
+    const after = before.replace("7", "seven");
+    expect(compactDiff(diffLines(before, after))).toEqual([
+      { kind: "skip", count: 4 },
+      { kind: "same", text: "5" },
+      { kind: "same", text: "6" },
+      { kind: "del", text: "7" },
+      { kind: "add", text: "seven" },
+    ]);
+  });
 });

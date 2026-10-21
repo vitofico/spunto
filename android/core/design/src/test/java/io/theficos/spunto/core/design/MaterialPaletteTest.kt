@@ -35,4 +35,19 @@ class MaterialPaletteTest {
   assertEquals("#0F1114",blackPalette("ardesia",builtInTokens.getValue("ardesia").getValue("dark"))["raised"])
   assertEquals("#0E110F",blackPalette("salvia",builtInTokens.getValue("salvia").getValue("dark"))["raised"])
  }
+ @Test fun tonalElevationAddsNoAccentTint() {
+  for((id,modes) in builtInTokens) for((mode,values) in modes) for(black in listOf(false,true)) {
+   val scheme=paletteColorScheme(values,mode=="dark",black,id)
+   assertEquals("$id $mode",scheme.surface,scheme.surfaceTint)
+  }
+ }
+ @Test fun rolesMaterialHasNoSlotForComeFromThePalette() {
+  val carta=builtInTokens.getValue("carta").getValue("light")
+  val roles=spuntoColorRoles(carta)
+  assertEquals(tokenColor("#6E6860"),roles.ink3);assertEquals(tokenColor("#CCC7BE"),roles.ruleStrong);assertEquals(tokenColor("#F5E4B0"),roles.highlight);assertEquals(tokenColor("#CD9130"),roles.warn)
+  assertEquals(tokenColor("#E4DFD7"),roles.chrome);assertEquals(tokenColor("#F8F5F0"),roles.chromePill)
+  val pack=carta.filterKeys { it in themeColorRoles }
+  assertEquals(roles,spuntoColorRoles(pack,carta))
+  assertEquals(tokenColor(carta.getValue("sunken")),spuntoColorRoles(pack).chrome);assertEquals(tokenColor(carta.getValue("paper")),spuntoColorRoles(pack).chromePill)
+ }
 }

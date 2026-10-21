@@ -116,7 +116,7 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
   primary=c("accent"),onPrimary=c("on-accent"),primaryContainer=c("accent-soft"),onPrimaryContainer=c("accent-strong"),inversePrimary=c("paper"),
   secondary=c("accent-strong"),onSecondary=c("on-accent"),secondaryContainer=c("accent-soft"),onSecondaryContainer=c("ink"),
   tertiary=c("accent"),onTertiary=c("on-accent"),tertiaryContainer=c("accent-soft"),onTertiaryContainer=c("ink"),
-  background=paper,onBackground=c("ink"),surface=paper,onSurface=c("ink"),surfaceVariant=c("sunken"),onSurfaceVariant=c("ink-2"),surfaceTint=c("accent"),
+  background=paper,onBackground=c("ink"),surface=paper,onSurface=c("ink"),surfaceVariant=c("sunken"),onSurfaceVariant=c("ink-2"),surfaceTint=paper,
   inverseSurface=c("ink"),inverseOnSurface=c("paper"),outline=c("field"),outlineVariant=c("rule"),
   error=c("danger"),onError=c("paper"),errorContainer=c("sunken"),onErrorContainer=c("danger"),
   surfaceContainer=c("raised"),surfaceContainerLow=c("raised"),surfaceContainerLowest=c("raised"),surfaceContainerHigh=c("sunken"),surfaceContainerHighest=c("sunken"),surfaceBright=c("raised"),surfaceDim=c("sunken"),scrim=if(dark) Color.Black.copy(alpha=.5f) else c("ink").copy(alpha=.32f)
@@ -136,8 +136,8 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
  val scheme=paletteColorScheme(values,dark,black,selected)
  val dynamic=if((wallpaper || theme.isEmpty() && preferences.getBoolean("wallpaper",false)) && Build.VERSION.SDK_INT >= 31) {
   val d=if(dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-  val neutral=d.copy(onSurface=c("ink"),onBackground=c("ink"),onSurfaceVariant=c("ink-2"),outline=c("field"),outlineVariant=scheme.outlineVariant,scrim=scheme.scrim)
-  if(black) neutral.copy(background=Color.Black,surface=Color.Black,surfaceVariant=Color.Black,surfaceContainer=scheme.surfaceContainer,surfaceContainerLowest=scheme.surfaceContainerLowest,surfaceContainerLow=scheme.surfaceContainerLow,surfaceContainerHigh=Color.Black,surfaceContainerHighest=Color.Black,surfaceBright=scheme.surfaceBright,surfaceDim=Color.Black) else neutral
+  val neutral=d.copy(onSurface=c("ink"),onBackground=c("ink"),onSurfaceVariant=c("ink-2"),outline=c("field"),outlineVariant=scheme.outlineVariant,scrim=scheme.scrim,surfaceTint=d.surface)
+  if(black) neutral.copy(background=Color.Black,surface=Color.Black,surfaceTint=Color.Black,surfaceVariant=Color.Black,surfaceContainer=scheme.surfaceContainer,surfaceContainerLowest=scheme.surfaceContainerLowest,surfaceContainerLow=scheme.surfaceContainerLow,surfaceContainerHigh=Color.Black,surfaceContainerHighest=Color.Black,surfaceBright=scheme.surfaceBright,surfaceDim=Color.Black) else neutral
  } else scheme
  val view=LocalView.current
  if(!LocalSpuntoTheme.current && !view.isInEditMode) SideEffect {
@@ -148,7 +148,8 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
  }
  val face=readingFace.ifEmpty { preferences.getString("reading-face","serif").orEmpty() };val size=readingSize.ifEmpty { preferences.getString("reading-size","M").orEmpty() }
  val type=remember(face,size) { spuntoType(face,size) }
- CompositionLocalProvider(LocalSpuntoTheme provides true,LocalSpuntoType provides type) {
+ val roles=remember(values,selected,dark) { spuntoColorRoles(values,builtInTokens[selected]?.get(if(dark) "dark" else "light")) }
+ CompositionLocalProvider(LocalSpuntoTheme provides true,LocalSpuntoType provides type,LocalSpuntoColors provides roles) {
   MaterialTheme(colorScheme=dynamic,typography=spuntoMaterialTypography,content=content)
  }
 }

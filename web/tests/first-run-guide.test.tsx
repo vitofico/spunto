@@ -22,7 +22,7 @@ it("teaches four steps with static marked examples and focuses each heading", ()
   expect(
     screen.getByRole("button", { name: "Back" }).hasAttribute("disabled"),
   ).toBe(true);
-  expect(screen.getByText("Example · never saved")).toBeTruthy();
+  expect(screen.getByText("Example")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   expect(screen.getByRole("heading").textContent).toBe(
     "Labels live in your words.",
@@ -47,6 +47,13 @@ it("leaves persistence to the host and exposes an explicit Skip action", () => {
   fireEvent.click(screen.getByRole("button", { name: "Skip" }));
   expect(skip).toHaveBeenCalledOnce();
   expect(hasCompletedGuide()).toBe(false);
+});
+
+it("skips on Escape", () => {
+  const skip = vi.fn();
+  render(<FirstRunGuide onSkip={skip} onFinish={vi.fn()} />);
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(skip).toHaveBeenCalledOnce();
 });
 
 it("stores only a browser-wide completion marker", () => {

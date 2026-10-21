@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuthPage from "../src/pages/Auth";
 import { api } from "../src/lib/api";
+import { ApiError } from "../src/lib/errors";
 
 const auth = vi.hoisted(() => ({
   login: vi.fn().mockResolvedValue(undefined),
@@ -172,4 +173,47 @@ it("waits for trustworthy options and can retry instead of guessing password-onl
     .setup()
     .click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByLabelText("Username")).toBeTruthy();
+});
+
+it("keeps the password field focused, selected and marked after a wrong password", async () => {
+  auth.login.mockRejectedValueOnce(new ApiError(401, "wrong_password"));
+  render(<AuthPage />);
+  const password = (await screen.findByLabelText(
+    "Password",
+  )) as HTMLInputElement;
+  const message = document.getElementById("auth-message")!;
+  // The message line exists before any error, so nothing moves when one appears.
+  expect(message.textContent).toBe("");
+  const user = userEvent.setup();
+  await user.type(password, "wrong horse");
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(await screen.findByText("That password didn’t work.")).toBe(message);
+  expect(password.getAttribute("aria-invalid")).toBe("true");
+  await waitFor(() => expect(document.activeElement).toBe(password));
+  expect(password.selectionStart).toBe(0);
+  expect(password.selectionEnd).toBe("wrong horse".length);
+});
+
+it("says how long to wait when the server backs off", async () => {
+  auth.login.mockRejectedValueOnce(
+    new ApiError(429, "rate_limited", undefined, undefined, 42),
+  );
+  render(<AuthPage />);
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Password"), "guess");
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(
+    await screen.findByText("Too many tries. Try again in 42 seconds."),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Sign in" }).hasAttribute("disabled"),
+  ).toBe(true);
+  expect(screen.getByLabelText("Password").hasAttribute("aria-invalid")).toBe(
+    false,
+  );
+});
+
+it("shows the plain-HTTP band where the password is typed", async () => {
+  render(<AuthPage band={<div className="banner">Not encrypted</div>} />);
+  expect(await screen.findByText("Not encrypted")).toBeTruthy();
 });

@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { formatShortcut } from "../../lib/platform";
 import styles from "./FirstRunGuide.module.css";
 
 export const GUIDE_COMPLETED_KEY = "spunto:guide:v1";
@@ -25,7 +26,8 @@ const steps = [
     title: "A quiet place for loose ideas.",
     body: "Write a thought, a link or a checklist. There’s no title or folder to choose. Save when you’re ready.",
     example: <p>Remember the tiny bookshop by the station.</p>,
-    hint: "Use Save, or press ⌘ / Ctrl + Enter, to add your note.",
+    hint: () =>
+      `Use Save, or press ${formatShortcut("mod+enter")}, to add your note.`,
   },
   {
     name: "Labels",
@@ -76,6 +78,17 @@ export function FirstRunGuide({
   useLayoutEffect(() => {
     heading.current?.focus();
   }, [step]);
+  // Escape skips, like Skip, unless something on top (a dialog) handles it.
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.querySelector("dialog[open]")) return;
+      event.preventDefault();
+      onSkip();
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onSkip]);
   return (
     <main className={styles.guide} aria-label="Getting started with Spunto">
       <header className={styles.header}>
@@ -100,10 +113,12 @@ export function FirstRunGuide({
         </h1>
         <p className={styles.body}>{current.body}</p>
         <figure className={styles.example}>
-          <figcaption>Example · never saved</figcaption>
+          <figcaption>Example</figcaption>
           <div>{current.example}</div>
         </figure>
-        <p className={styles.hint}>{current.hint}</p>
+        <p className={styles.hint}>
+          {typeof current.hint === "function" ? current.hint() : current.hint}
+        </p>
         <nav className={styles.actions} aria-label="Guide steps">
           <button
             className="button"

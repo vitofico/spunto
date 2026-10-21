@@ -1,11 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearch } from "wouter";
 import { useAuth } from "../lib";
+import { ApiError } from "../lib/errors";
 import { api } from "../lib/api";
 import type { AuthOptions } from "../lib/types";
 import { startSSO } from "../lib/query";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 
-export default function AuthPage({ setup = false }: { setup?: boolean }) {
+const seconds = (count: number) =>
+  `${count} ${count === 1 ? "second" : "seconds"}`;
+export default function AuthPage({
+  setup = false,
+  band,
+}: {
+  setup?: boolean;
+  /** The plain-HTTP band: shown here too, where the password is typed. */
+  band?: ReactNode;
+}) {
   const auth = useAuth();
   const search = useSearch();
   const [options, setOptions] = useState<AuthOptions | null>(null);
@@ -20,6 +31,25 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // While the server's back-off lasts, the button waits and the line counts down.
+  const [waitUntil, setWaitUntil] = useState(0);
+  const [now, setNow] = useState(Date.now);
+  const passwordField = useRef<HTMLInputElement>(null);
+  const codeField = useRef<HTMLInputElement>(null);
+  // The field the last error is about, marked invalid and focused to retype.
+  const [invalid, setInvalid] = useState<"code" | "password" | null>(null);
+  const waiting = Math.ceil((waitUntil - now) / 1000);
+  useEffect(() => {
+    if (waitUntil <= Date.now()) return;
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= waitUntil) {
+        clearInterval(timer);
+        setError(null);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [waitUntil]);
   useEffect(() => {
     let cancelled = false;
     if (!setup) {
@@ -47,19 +77,29 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
     hosted && options.registration_enabled === true && register;
   const oidc =
     !setup && (options?.mode === "oidc" || options?.oidc_enabled === true);
+  useDocumentTitle(
+    setup ? "Set up" : registering ? "Create your account" : "Sign in",
+  );
+  const message =
+    waiting > 0
+      ? `Too many tries. Try again in ${seconds(waiting)}.`
+      : (error ?? auth.error?.message ?? null);
   return (
     <main className="auth">
       <form
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!passwordEnabled) return;
+          if (!passwordEnabled || waiting > 0) return;
           setError(null);
+          setInvalid(null);
           if (registering && password !== confirmation) {
             setError("The passwords do not match.");
+            setInvalid("password");
             return;
           }
           if (new TextEncoder().encode(password).length > 1024) {
             setError("That password is too long. Use a shorter passphrase.");
+            setInvalid("password");
             return;
           }
           setBusy(true);
@@ -72,9 +112,37 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
             setPassword("");
             setConfirmation("");
           } catch (failure) {
+            if (
+              failure instanceof ApiError &&
+              failure.code === "rate_limited" &&
+              failure.retryAfter
+            ) {
+              setNow(Date.now());
+              setWaitUntil(Date.now() + failure.retryAfter * 1000);
+            }
             setError(
               failure instanceof Error ? failure.message : "Could not sign in.",
             );
+            const code = failure instanceof ApiError ? failure.code : "";
+            const field =
+              code === "wrong_setup_code"
+                ? codeField
+                : code === "wrong_password" || code === "unauthenticated"
+                  ? passwordField
+                  : null;
+            setInvalid(
+              field === codeField
+                ? "code"
+                : field === passwordField
+                  ? "password"
+                  : null,
+            );
+            // Keep the owner in the field with the old attempt selected to retype.
+            const target = (field ?? passwordField).current;
+            requestAnimationFrame(() => {
+              target?.focus();
+              target?.select();
+            });
           } finally {
             setBusy(false);
           }
@@ -114,7 +182,10 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
             <label>
               Setup code
               <input
+                ref={codeField}
                 className="field"
+                aria-invalid={invalid === "code" || undefined}
+                aria-describedby="auth-message"
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
                 autoComplete="off"
@@ -135,6 +206,7 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
               : "Use your username and password to open your notes."}
           </p>
         ) : null}
+        {band}
         {hosted && register && !options.registration_enabled && (
           <p className="muted">
             Username/password signup is disabled on this server. Sign in to an
@@ -170,8 +242,11 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
             <label>
               {setup ? "Choose your password" : "Password"}
               <input
+                ref={passwordField}
                 className="field"
                 type="password"
+                aria-invalid={invalid === "password" || undefined}
+                aria-describedby="auth-message"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={
@@ -198,12 +273,11 @@ export default function AuthPage({ setup = false }: { setup?: boolean }) {
                 />
               </label>
             )}
-            {(error || auth.error) && (
-              <p className="error" role="alert">
-                {error ?? auth.error?.message}
-              </p>
-            )}
-            <button className="button primary" disabled={busy}>
+            {/* Always rendered, so a message never pushes the button down. */}
+            <p id="auth-message" className="error auth-message" role="alert">
+              {message}
+            </p>
+            <button className="button primary" disabled={busy || waiting > 0}>
               {busy
                 ? "Signing in…"
                 : setup

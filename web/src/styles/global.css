@@ -339,6 +339,9 @@ kbd {
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
+.banner-short {
+  display: none;
+}
 .composer {
   position: relative;
   border: 1px solid var(--field);
@@ -815,6 +818,15 @@ mark[data-match] {
   width: 100%;
   min-height: 44px;
 }
+/* One line kept free under the field, so an error never moves the button. */
+.auth .auth-message {
+  line-height: var(--t-meta-line);
+  min-height: calc(var(--t-meta-size) * var(--t-meta-line));
+  margin-top: calc(-1 * var(--s-12));
+}
+.auth .banner {
+  margin: 0;
+}
 .auth-state {
   display: flex;
   flex-direction: column;
@@ -1026,6 +1038,12 @@ mark[data-match] {
 @media (max-width: 599px) {
   .column {
     padding: var(--s-24) var(--s-20) var(--s-64);
+  }
+  .banner-long {
+    display: none;
+  }
+  .banner-short {
+    display: inline;
   }
   .topbar {
     padding: 0 var(--s-16);

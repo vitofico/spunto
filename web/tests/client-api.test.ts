@@ -77,7 +77,9 @@ it("checks the fresh configured upload cap before sending multipart bytes", asyn
   const file = new File([new Uint8Array(1_000_001)], "synthetic.png", {
     type: "image/png",
   });
-  await expect(api.uploadAttachment(file)).rejects.toBeInstanceOf(ApiError);
+  await expect(api.uploadAttachment(file)).rejects.toThrow(
+    "This file is too large. The server accepts files up to 1 MB.",
+  );
   expect(fetcher).toHaveBeenCalledOnce();
 });
 it("uses the legacy decimal cap for absent or malformed resource facts", async () => {
@@ -123,7 +125,7 @@ it("lists provider models and saves versioned choices through the workspace API"
   expect(options.credentials).toBe("same-origin");
   expect(JSON.parse(options.body as string)).toEqual(choices);
 });
-it("keeps only safe error codes and conflict IDs, never raw bodies or details", async () => {
+it("keeps the client's sentence for draft and sign-in codes, never the raw body", async () => {
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(
       JSON.stringify({
@@ -143,6 +145,54 @@ it("keeps only safe error codes and conflict IDs, never raw bodies or details", 
   expect(error.message).not.toContain("secrets");
   expect(error.conflictId).toBe("00000000-0000-4000-8000-000000000002");
   expect(error.retryable).toBe(false);
+});
+
+it("shows a problem document's detail, but not a detail from any other body", async () => {
+  const fail = (headers: Record<string, string>) =>
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          code: "forbidden",
+          detail: "Viewers can't change this space's notes.",
+        }),
+        { status: 403, headers },
+      ),
+    );
+  fail({ "Content-Type": "application/problem+json" });
+  const problem = (await request("/api/v1/notes/id").catch(
+    (error) => error,
+  )) as ApiError;
+  expect(problem.message).toBe("Viewers can't change this space's notes.");
+  fail({ "Content-Type": "application/json" });
+  const proxy = (await request("/api/v1/notes/id").catch(
+    (error) => error,
+  )) as ApiError;
+  expect(proxy.message).toBe("This action is not permitted.");
+});
+
+it("names an unreachable server and carries the back-off from Retry-After", async () => {
+  vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(
+    new TypeError("Failed to fetch"),
+  );
+  const offline = (await request("/api/v1/notes").catch(
+    (error) => error,
+  )) as ApiError;
+  expect(offline.message).toMatch(/^Can’t reach the server/);
+  vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+    new Response(JSON.stringify({ code: "rate_limited", detail: "Wait." }), {
+      status: 429,
+      headers: {
+        "Content-Type": "application/problem+json",
+        "Retry-After": "4",
+      },
+    }),
+  );
+  const limited = (await request("/api/v1/auth/login", {
+    method: "POST",
+    body: { password: "x" },
+  }).catch((error) => error)) as ApiError;
+  expect(limited.code).toBe("rate_limited");
+  expect(limited.retryAfter).toBe(4);
 });
 
 it("normalizes embedded note plugin IDs and nested slip notes consistently", async () => {

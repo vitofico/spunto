@@ -88,7 +88,7 @@ async function check(
       )
     )
       unauthorized();
-    throw problem(response.status, body);
+    throw problem(response.status, body, response);
   }
 }
 export const generatedClient = createClient<paths>({
@@ -540,7 +540,13 @@ export const api = {
       limit <= 1_000_000_000
         ? limit
         : 5_000_000;
-    if (file.size > maximum) throw new ApiError(422, "validation_failed");
+    if (file.size > maximum)
+      throw new ApiError(
+        422,
+        "validation_failed",
+        undefined,
+        `This file is too large. The server accepts files up to ${Math.max(1, Math.floor(maximum / 1_000_000))} MB.`,
+      );
     const form = new FormData();
     form.append("file", file);
     return request<Attachment>("/api/v1/attachments", {

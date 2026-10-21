@@ -91,8 +91,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible,
-[role="link"][tabindex]:focus-visible {
+select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: var(--s-2);
 }
@@ -360,7 +359,7 @@ kbd {
 }
 .editor-wrap textarea,
 .highlight {
-  font: var(--t-body-weight) var(--body-size) / var(--t-body-line)
+  font: var(--t-body-weight) var(--body-size) / var(--body-line)
     var(--body-face);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -451,45 +450,176 @@ kbd {
   background: var(--raised);
   z-index: 5;
 }
-.autocomplete button {
-  display: block;
+.autocomplete [role="option"] {
   padding: var(--s-8) var(--s-12);
-  width: 100%;
-  text-align: left;
   color: var(--accent);
   border-radius: var(--r-8);
+  cursor: pointer;
 }
-.autocomplete button.active {
+.autocomplete [role="option"].active {
   background: var(--sunken);
 }
-.day {
-  margin: var(--s-32) 0 var(--s-20);
+.autocomplete .muted {
+  margin-right: var(--s-4);
 }
+.day {
+  margin: var(--s-32) 0 var(--s-12);
+}
+/* Entries are passages, not cards: 20px apart across one hairline (03 §5.1). */
 .entry {
   position: relative;
-  margin: 0 0 var(--s-24);
-  padding: 0 0 var(--s-24);
+  padding: var(--s-8) 0 var(--s-12);
   border-bottom: 1px solid var(--rule);
   overflow-wrap: anywhere;
 }
 .entry-main {
-  display: block;
   color: var(--ink);
-  border-radius: var(--r-4);
+  cursor: pointer;
 }
-.entry-main:hover {
-  text-decoration: none;
-}
+/* The time hangs in the 64px gutter, centred on the first line of text. */
 .entry .time {
   position: absolute;
   left: calc(-1 * var(--s-64));
-  top: var(--s-4);
+  top: calc(
+    var(--s-8) +
+      (
+        var(--body-size) * var(--body-line) - var(--t-meta-size) *
+          var(--t-meta-line)
+      ) /
+      2
+  );
   font: var(--t-meta) var(--f-sans);
   font-variant-numeric: tabular-nums;
   color: var(--ink-3);
+  border-radius: var(--r-4);
+}
+.entry .time .icon {
+  width: 16px;
+  height: 16px;
+}
+@media (hover: hover) {
+  .entry a.time:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+}
+.entry.queued .entry-main {
+  animation: arrive var(--dur-flash) var(--ease-out);
+}
+@keyframes arrive {
+  from {
+    background: var(--highlight);
+  }
+}
+/* Shown only when a capture is still unsent after a moment. */
+.entry .waiting {
+  animation: hold 1.5s step-end;
+}
+@keyframes hold {
+  from {
+    visibility: hidden;
+  }
+}
+.entry > .more {
+  position: absolute;
+  top: var(--s-4);
+  right: calc(-1 * var(--s-48) + var(--s-8));
+}
+@media (hover: hover) and (min-width: 600px) {
+  .entry > .more:not([data-open]) .icon-button {
+    opacity: 0;
+    transition: opacity var(--dur-1) var(--ease-out);
+  }
+  .entry:is(:hover, :focus-within) > .more .icon-button {
+    opacity: 1;
+  }
+}
+.more {
+  position: relative;
+}
+.icon-button {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-4));
+  z-index: 30;
+  min-width: 180px;
+  padding: var(--s-4);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-14);
+  box-shadow: var(--e2);
+  display: flex;
+  flex-direction: column;
+}
+.menu [role="menuitem"] {
+  text-align: left;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-8);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.menu [role="menuitem"].danger {
+  color: var(--danger);
+}
+.menu [role="menuitem"]:focus-visible {
+  outline: none;
+  background: var(--sunken);
+}
+@media (hover: hover) {
+  .menu [role="menuitem"]:hover {
+    background: var(--sunken);
+  }
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+.chip .icon {
+  width: 14px;
+  height: 14px;
+}
+.agent-glyph {
+  font-family: var(--f-mono);
+}
+.entry-meta .conflict::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--warn);
+}
+.clamp[data-clamped] {
+  max-height: calc(8 * var(--body-size) * var(--body-line));
+  overflow: hidden;
+}
+.clamp[data-overflow] {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 2 * var(--body-size) * var(--body-line)),
+    transparent
+  );
+}
+.show-more {
+  margin-top: var(--s-4);
+  padding: var(--s-4) 0;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--f-sans);
+}
+@media (hover: hover) {
+  .show-more:hover {
+    color: var(--ink);
+  }
 }
 .note-body {
-  font: var(--t-body-weight) var(--body-size) / var(--t-body-line)
+  font: var(--t-body-weight) var(--body-size) / var(--body-line)
     var(--body-face);
   overflow-wrap: anywhere;
 }
@@ -539,6 +669,24 @@ kbd {
 .note-body li + li {
   margin-top: 0.25em;
 }
+/* Task lists: the box hangs where a bullet would be; done items fade to ink-3. */
+.note-body li:has(> input[type="checkbox"], > p > input[type="checkbox"]) {
+  list-style: none;
+}
+.note-body li:has(> input:checked, > p > input:checked) {
+  color: var(--ink-3);
+}
+.note-body input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0 var(--s-8) 0 calc(-18px - var(--s-8));
+  vertical-align: -3px;
+  cursor: pointer;
+}
+.note-body input[type="checkbox"]:disabled {
+  cursor: default;
+  opacity: 1;
+}
 .note-body table {
   display: block;
   max-width: 100%;
@@ -577,27 +725,6 @@ kbd {
 .entry-meta:empty {
   display: none;
 }
-.entry-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-4);
-  opacity: 0;
-  margin-top: var(--s-8);
-  transition: opacity var(--dur-1) var(--ease-out);
-}
-.entry:focus-within .entry-actions {
-  opacity: 1;
-}
-@media (hover: hover) {
-  .entry:hover .entry-actions {
-    opacity: 1;
-  }
-}
-.entry-actions button {
-  font-size: var(--t-meta-size);
-  padding: var(--s-4) var(--s-8);
-  min-height: 28px;
-}
 /* The one empty state: a serif headline, one sans line, at most one action. */
 .empty {
   margin: var(--s-64) 0 var(--s-48);
@@ -617,15 +744,35 @@ kbd {
   padding-left: var(--s-20);
   line-height: 2;
 }
+.back {
+  margin-left: calc(-1 * var(--s-8));
+  color: var(--ink-2);
+}
 .note-header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--s-12);
   align-items: center;
-  margin: var(--s-32) 0 var(--s-24);
-  font-size: var(--t-meta-size);
+  margin: var(--s-16) 0 var(--s-24);
+  font: var(--t-meta) var(--f-sans);
   color: var(--ink-3);
+}
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+  min-width: 0;
+}
+.note-tools {
+  gap: var(--s-4);
+  font: var(--t-ui) var(--f-sans);
+}
+.note-tools .button .icon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--s-4);
 }
 .note-header > .row,
 .history-item > .row,
@@ -633,11 +780,70 @@ kbd {
   flex-wrap: wrap;
   min-width: 0;
 }
-.note-actions {
+.note-read {
+  cursor: text;
+}
+.link-button {
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+}
+@media (hover: hover) {
+  .link-button:hover {
+    text-decoration: underline;
+  }
+}
+.conflict-notice > p:first-child {
+  margin: 0;
+}
+.conflict-notice > .row {
+  margin-top: var(--s-12);
+  flex-wrap: wrap;
+}
+.diff-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-4);
-  margin: var(--s-20) 0;
+  gap: var(--s-12);
+  font: var(--t-meta) var(--f-sans);
+  margin: var(--s-12) 0 var(--s-8);
+}
+.diff {
+  font: var(--t-mono-size) / var(--t-mono-line) var(--f-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: var(--r-8);
+  background: var(--raised);
+  color: var(--ink-2);
+  padding: var(--s-8) 0;
+}
+.diff > * {
+  display: block;
+  padding: 0 var(--s-12);
+}
+.diff del,
+.diff-legend del {
+  text-decoration: none;
+  background: var(--sunken);
+  color: var(--ink-3);
+  box-shadow: inset 2px 0 var(--rule-strong);
+}
+.diff ins,
+.diff-legend ins {
+  text-decoration: none;
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.diff-legend :is(del, ins) {
+  padding: 0 var(--s-8);
+  border-radius: var(--r-4);
+}
+.diff-skip {
+  color: var(--ink-3);
+  font-family: var(--f-sans);
+  font-size: var(--t-meta-size);
 }
 .note-editor .editor-wrap,
 .note-editor textarea {
@@ -661,12 +867,14 @@ kbd {
   padding: var(--s-16) 0;
   border-bottom: 1px solid var(--rule);
 }
-.history-item pre {
+.history-item > .row {
+  justify-content: space-between;
+  margin-bottom: var(--s-8);
   font-size: var(--t-meta-size);
-  white-space: pre-wrap;
+  color: var(--ink-2);
+}
+.history-item .diff {
   max-height: 180px;
-  overflow: auto;
-  overflow-wrap: anywhere;
 }
 .search-form {
   display: flex;
@@ -1014,7 +1222,8 @@ mark[data-match] {
     top: 74px;
     width: 240px;
   }
-  .note-column {
+  /* Room for the side panel only when a plugin put something in it. */
+  .note-column:has(.note-panel > *) {
     margin-left: max(
       var(--s-48),
       calc((100vw - 248px - var(--column-width) - 288px) / 2)
@@ -1025,8 +1234,12 @@ mark[data-match] {
 @media (max-width: 1279px) {
   .entry .time {
     position: static;
-    display: block;
+    display: inline-block;
     margin-bottom: var(--s-8);
+  }
+  .entry > .more {
+    top: 0;
+    right: 0;
   }
   .note-panel {
     margin-top: var(--s-32);
@@ -1114,12 +1327,47 @@ mark[data-match] {
   }
   .button,
   button.primary,
-  .entry-actions .button,
   .rail nav a,
-  .palette-row {
+  .palette-row,
+  .menu [role="menuitem"],
+  .autocomplete [role="option"],
+  .history summary {
     min-height: 44px;
   }
-  .field {
+  .icon-button {
+    width: 44px;
+  }
+  .menu [role="menuitem"] {
+    display: flex;
+    align-items: center;
+  }
+  /* Padding, not flex, so the summary keeps its disclosure marker. */
+  .history summary {
+    padding-block: var(--s-12);
+  }
+  /* The time row holds the 44px menu button, so the button takes no extra height. */
+  .entry .time {
+    margin-bottom: var(--s-16);
+  }
+  .entry > .more {
+    top: calc(var(--s-8) - 14px);
+  }
+  .entry .time,
+  .note-meta .chip,
+  .show-more {
+    min-height: 24px;
+  }
+  .note-body li:has(> input[type="checkbox"], > p > input[type="checkbox"]) {
+    min-height: 44px;
+    padding-block: var(--s-8);
+  }
+  .note-body
+    li
+    + li:has(> input[type="checkbox"], > p > input[type="checkbox"]) {
+    margin-top: 0;
+  }
+  .field,
+  .search-filters input {
     font-size: var(--t-ui-lg-size);
   }
   .search-filters .field {
@@ -1134,12 +1382,6 @@ mark[data-match] {
   }
   .search-filters .date-filter .field {
     width: 100%;
-  }
-  .entry-actions .button {
-    padding: var(--s-8) var(--s-12);
-  }
-  .entry-actions {
-    opacity: 1;
   }
   .composer-tools {
     padding: var(--s-4) var(--s-8) var(--s-8);
@@ -1161,10 +1403,13 @@ mark[data-match] {
     margin-top: var(--s-24);
   }
   .note-header {
-    align-items: flex-start;
+    align-items: center;
   }
   .note-header .row {
     flex-wrap: wrap;
+  }
+  .show-more {
+    min-height: 44px;
   }
   .label-title {
     flex-wrap: wrap;
@@ -1199,8 +1444,9 @@ mark[data-match] {
   .skip-link,
   .banner,
   .composer,
-  .entry-actions,
-  .note-actions,
+  .more,
+  .back,
+  .show-more,
   .note-panel {
     display: none !important;
   }
@@ -1214,14 +1460,26 @@ mark[data-match] {
   }
 }
 
-:root[data-reading="sans"] {
-  --body-face: var(--f-sans);
+:root {
+  --body-line: var(--t-body-line);
 }
 :root[data-size="s"] {
   --body-size: 1rem;
 }
 :root[data-size="l"] {
   --body-size: 1.1875rem;
+}
+/* Inter runs larger than Literata: 16.5/27 at M, scaled by 16/17 or 19/17 (03 §11.2). */
+:root[data-reading="sans"] {
+  --body-face: var(--f-sans);
+  --body-size: 1.03125rem;
+  --body-line: 1.6364;
+}
+:root[data-reading="sans"][data-size="s"] {
+  --body-size: 0.9706rem;
+}
+:root[data-reading="sans"][data-size="l"] {
+  --body-size: 1.1526rem;
 }
 
 .icon {

@@ -125,13 +125,14 @@ class NotesRepositoryTest {
   val editor=repo.beginEditor(id);assertTrue(repo.persistEditor(repo.editorWrite(editor,"Phone words, edited")))
   assertEquals("Phone words, edited",repo.dao.draftSnapshot(id)!!.body)
   assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, edited")));assertNull(repo.dao.draftSnapshot(id))
-  // A draft an older build left behind loses to the web edit a later sync brought in.
-  repo.dao.putDraft(DraftEntity(id,"Phone words, edited",10))
-  repo.putNote(repo.dao.get(id)!!.note().copy(body="Edited on the web",serverRev=3,updatedAt=20,pending=false))
-  assertFalse(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)!!.updatedAt))
-  // Words typed after the note's last change, then not saved (the app was killed), still win.
-  repo.dao.putDraft(DraftEntity(id,"Typed after the sync",30));assertTrue(repo.dao.draftSnapshot(id)!!.unsavedOver(repo.dao.get(id)!!.updatedAt))
-  assertTrue(DraftEntity("capture","Unsent capture",1).unsavedOver(null));assertFalse(DraftEntity("capture","",1).unsavedOver(null))
+  // A draft an older build left behind loses to the web edit a later sync brought in, whatever the clocks say.
+  repo.dao.putDraft(DraftEntity(id,"Phone words, edited",Long.MAX_VALUE))
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Edited on the web",serverRev=3,pending=false))
+  assertNull(repo.dao.unsavedDraft(id))
+  // Words typed but never saved (the app was killed first) still win, even when older than the note.
+  repo.dao.putDraft(DraftEntity(id,"Edited on the web, then typed",0));assertEquals("Edited on the web, then typed",repo.dao.unsavedDraft(id)!!.body)
+  repo.dao.putDraft(DraftEntity("capture","Unsent capture",1));assertEquals("Unsent capture",repo.dao.unsavedDraft("capture")!!.body)
+  repo.dao.putDraft(DraftEntity("capture","",1));assertNull(repo.dao.unsavedDraft("capture"))
  }
  @Test fun readAwaitsCommitAndOldEditorCallbacksAreFenced()=runBlocking {
   val id=uuidV7();repo.putNote(Note(id,"A",serverRev=1))

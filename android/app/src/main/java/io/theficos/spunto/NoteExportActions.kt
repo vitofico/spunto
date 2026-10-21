@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.room.withTransaction
 import io.theficos.spunto.core.model.Note
-import io.theficos.spunto.data.local.unsavedOver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -31,7 +30,7 @@ internal suspend fun readNoteForExport(model:SpuntoViewModel,id:String):Exportab
  val credentials=model.container.auth.config.first()
  val result=model.container.database.withTransaction {
   val note=model.repository.dao.get(id)?.note() ?: return@withTransaction null
-  val draft=model.repository.dao.draftSnapshot(id)?.takeIf { it.unsavedOver(note.updatedAt) }?.body
+  val draft=model.repository.dao.unsavedDraft(id)?.body
   if(draft!=null && draft!=note.body) return@withTransaction null
   val replica=model.repository.dao.state()
   ExportableNote(note,noteExportStamp(note,draft,credentials,replica?.serverUrl,replica?.epoch))
@@ -53,8 +52,7 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
 }) {
  val credentials by model.auth.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null)
- val draft by model.repository.draft(note.id).collectAsState(initial=null)
- val unsaved=draft?.takeIf { it.unsavedOver(note.updatedAt) }?.body
+ val unsaved=remember(note.id) {model.repository.dao.observeUnsavedDraft(note.id)}.collectAsState(initial=null).value?.body
  // A different registration cannot consume the previous note/account's picker result.
  key(note.id,credentials,replica?.serverUrl,replica?.epoch) {
   NoteExportActionsForOwner(model,note,enabled && (unsaved==null || unsaved==note.body),noteExportStamp(note,unsaved,credentials,replica?.serverUrl,replica?.epoch),content)

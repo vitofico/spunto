@@ -148,13 +148,12 @@ import kotlinx.coroutines.*
   // Room's observed note can lag a completed restore. Open from one saved snapshot,
   // keeping an unsent draft ahead of the saved body without replacing active typing.
   val (draft,current)=model.container.database.withTransaction {
-   model.repository.dao.draftSnapshot(draftId) to if(id=="capture") null else model.repository.dao.get(id)
+   model.repository.dao.unsavedDraft(draftId,id) to if(id=="capture") null else model.repository.dao.get(id)?.body
   }
-  val stored=current?.body
-  val body=draft?.takeIf { it.unsavedOver(current?.updatedAt) }?.body ?: ((stored ?: initial)+if(startNewParagraph && stored!=null) "\n\n" else "")
+  val body=draft?.body ?: ((current ?: initial)+if(startNewParagraph && current!=null) "\n\n" else "")
   // The caret opens where the reader tapped (A5) unless a draft changed the text; otherwise at the end.
-  value=TextFieldValue(body,TextRange(caret?.takeIf { body==(stored ?: initial) }?.coerceIn(0,body.length) ?: body.length))
-  committed=stored ?: initial
+  value=TextFieldValue(body,TextRange(caret?.takeIf { body==(current ?: initial) }?.coerceIn(0,body.length) ?: body.length))
+  committed=current ?: initial
   ready=true
   androidx.compose.runtime.withFrameNanos { }
   if(autoDictate && mic) micTap() else if(autoFocus && !focusSpent) { focusSpent=true; focus.requestFocus(); keyboard?.show() }

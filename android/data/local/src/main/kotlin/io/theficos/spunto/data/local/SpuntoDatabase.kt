@@ -82,6 +82,14 @@ interface SpuntoDao {
  @Query("SELECT * FROM drafts WHERE id=:id") suspend fun draftSnapshot(id:String):DraftEntity?
  @Query("DELETE FROM drafts WHERE id=:id AND body=:body AND updatedAt=:updatedAt") suspend fun clearDraftSnapshot(id:String,body:String,updatedAt:Long)
  @Query("DELETE FROM drafts WHERE id=:id AND body=:body") suspend fun clearDraft(id: String, body: String)
+ /**
+  * A draft holding words the note never saved. Older builds kept a draft after saving it; once a sync
+  * replaced that text, the history holds it, so such a draft never reopens over the newer note.
+  */
+ @Query("SELECT * FROM drafts d WHERE d.id=:draftId AND d.body<>'' AND NOT EXISTS (SELECT 1 FROM revisions r WHERE r.noteId=:noteId AND r.body=d.body)")
+ suspend fun unsavedDraft(draftId:String,noteId:String=draftId):DraftEntity?
+ @Query("SELECT * FROM drafts d WHERE d.id=:id AND d.body<>'' AND NOT EXISTS (SELECT 1 FROM revisions r WHERE r.noteId=:id AND r.body=d.body)")
+ fun observeUnsavedDraft(id:String):Flow<DraftEntity?>
  @Insert suspend fun putRevision(revision: RevisionEntity)
  @Query("SELECT * FROM revisions WHERE noteId=:id ORDER BY at DESC") fun history(id: String): Flow<List<RevisionEntity>>
  @Query("SELECT * FROM revisions WHERE noteId=:id ORDER BY lastEditAt DESC, at DESC, id DESC LIMIT 1") suspend fun latestRevision(id:String):RevisionEntity?

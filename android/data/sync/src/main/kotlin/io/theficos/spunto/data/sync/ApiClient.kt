@@ -26,7 +26,8 @@ import java.util.concurrent.TimeUnit
 @Serializable data class PushResult(@SerialName("op_id") val opId:String="",val status:String,val version:Int?=null,val note:JsonObject?=null,val body:String?=null,@SerialName("conflict_id") val conflictId:String?=null,val code:String?=null,val original:PushResult?=null)
 @Serializable data class PushResponse(val epoch:String,val results:List<PushResult>)
 @Serializable data class ReconcileResponse(val epoch:String,@SerialName("restore_ids") val restoreIds:List<String>)
-class ApiException(val status:Int,val code:String):Exception("HTTP $status: $code")
+/** [detail] is the problem document's safe sentence; [retryAfter] the seconds a rate limit asks to wait. */
+class ApiException(val status:Int,val code:String,val detail:String="",val retryAfter:Long?=null):Exception("HTTP $status: $code")
 private val defaultApiHttpClient=OkHttpClient.Builder().callTimeout(40,TimeUnit.SECONDS).readTimeout(35,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
 // Generation can outlive an ordinary sync request, including operator-installed tools.
 private val pluginCommandPath=Regex("/api/v1/plugins/[a-z][a-z0-9-]{1,23}/commands/[a-z][a-z0-9-]{0,127}")
@@ -46,7 +47,7 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
   if(method!="GET") builder.method(method,(body?:JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
   val result=requestClient(path,method).newCall(builder.build()).awaitDecodedResponse { response ->
    val text=response.body?.string().orEmpty()
-   if(!response.isSuccessful) { val code=runCatching { json.parseToJsonElement(text).jsonObject["code"]?.jsonPrimitive?.content }.getOrNull()?:"request_failed"; throw ApiException(response.code,code) }
+   if(!response.isSuccessful) { val problem=runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull(); val field={ name:String -> runCatching { problem?.get(name)?.jsonPrimitive?.content }.getOrNull() }; throw ApiException(response.code,field("code")?:"request_failed",field("detail").orEmpty(),response.header("Retry-After")?.toLongOrNull()) }
    if(text.isBlank()) JsonObject(emptyMap()) else json.parseToJsonElement(text)
   }
   checkAuthority();result

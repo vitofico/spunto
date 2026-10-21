@@ -122,7 +122,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   val url=pluginWebUrl(config.serverUrl,config.httpConsent,path) ?: return
   container.context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
  }
- fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException && (e.code.startsWith("ai_") || e.code.startsWith("plugin_")) -> pluginCommandErrorMessage(e.status,e.code); e is ApiException -> "Request failed · ${e.code}"; e is IllegalArgumentException -> e.message.orEmpty(); else -> "Server unreachable. Your notes stay on this phone." } } }
+ fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException && (e.code.startsWith("ai_") || e.code.startsWith("plugin_")) -> pluginCommandErrorMessage(e.status,e.code); e is ApiException -> e.detail.ifBlank { "The server couldn't finish this. Try again." }; e is IllegalArgumentException -> e.message.orEmpty(); else -> "Server unreachable. Your notes stay on this phone." } } }
  fun synchronize()=task { val result=container.sync.sync(); if(result==SyncStatus.NeedsSignIn) reauthenticate.value=true; refreshPluginManager()?.join() }
  suspend fun saveLocal(body:String,id:String?=null):String { android.os.Trace.beginSection("spunto.local-save");return try { repository.save(body,id) } finally { android.os.Trace.endSection() } }
  fun save(body:String,id:String?=null,done:(String)->Unit={})=task { val noteId=saveLocal(body,id);repository.clearDraft(id?:"capture",body);done(noteId) }
@@ -131,7 +131,10 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  fun flags(id:String,pinned:Boolean?=null,archived:Boolean?=null,trashed:Boolean?=null,privateNote:Boolean?=null)=task { repository.setFlags(id,pinned,archived,trashed,privateNote) }
  fun toggleTask(note:Note,line:Int)=task { val lines=note.body.lines().toMutableList(); lines[line]=lines[line].replaceFirst(Regex("\\[[ xX]]"),if(lines[line].contains("[ ]")) "[x]" else "[ ]"); repository.update(note.id,lines.joinToString("\n")) }
  fun decide(id:String,decision:String)=task { repository.decideSuggestion(id,decision) }
- fun login(server:String,password:String,code:String,name:String,consent:Boolean)=task {
+ /** The sign-in form's problem; sign-in failures never reach [message] or [reauthenticate]. */
+ internal val signInProblem=MutableStateFlow<SignInProblem?>(null)
+ fun login(server:String,password:String,code:String,name:String,consent:Boolean)=viewModelScope.launch { signInProblem.value=null; try { signIn(server,password,code,name,consent);message.value="" } catch(e:CancellationException) { throw e } catch(e:Exception) { signInProblem.value=signInProblem(e,code.isNotBlank()) } }
+ private suspend fun signIn(server:String,password:String,code:String,name:String,consent:Boolean) {
   val previous=container.auth.config.first()
   require(previous==null || previous.replicaId==container.replicaId) {"The account changed. Continue from the current account."}
   if(reauthenticate.value && notes.value.isNotEmpty()) require(previous?.serverUrl?.trimEnd('/')==server.trimEnd('/')) {"Sign in again to the same server. Sign out before connecting another instance."}

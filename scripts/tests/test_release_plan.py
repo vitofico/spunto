@@ -57,7 +57,13 @@ class ReleasePlanTest(unittest.TestCase):
             for key, value in os.environ.items()
             if not key.startswith(("GIT_", "GH_", "GITHUB_", "ANDROID_RELEASE_"))
         }
-        self.environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+        # Commits and pushes start detached housekeeping that can still be writing
+        # into a repository while cleanup removes it.
+        quiet = self.directory / "gitconfig"
+        quiet.write_text(
+            "[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n[receive]\n\tautogc = false\n"
+        )
+        self.environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=str(quiet))
         self.git(
             self.directory, "init", "--bare", "--initial-branch=main", str(self.remote)
         )

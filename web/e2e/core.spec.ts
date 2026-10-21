@@ -483,6 +483,13 @@ test("Back to a scrolled timeline keeps the place and leaves the composer alone"
     })
     .toBe(true);
   await expect(page.getByLabel("New note")).not.toBeFocused();
+  // Focus is back on the card that was opened, and the list didn't move for it.
+  await expect(card.locator("a.time")).toBeFocused();
+  expect(
+    (await place()).every(
+      (value, index) => Math.abs(value - before[index]) <= 2,
+    ),
+  ).toBe(true);
 });
 
 test("label dialogs return focus to Label actions on Cancel and Escape", async ({

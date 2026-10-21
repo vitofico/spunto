@@ -324,6 +324,7 @@ function focusEntry(entry: HTMLElement) {
   entry.focus();
 }
 let entryDepth = -1;
+let lastLocation = "";
 const scrollPositions = new Map<string, number>();
 if (typeof history !== "undefined") history.scrollRestoration = "manual";
 /** The number this history entry was given, when Back or a reload returns to it. */
@@ -342,6 +343,8 @@ const returningScrolled = (location: string) =>
  */
 function useHistoryEntries(location: string) {
   useLayoutEffect(() => {
+    const opened = /^\/n\/([^/]+)$/.exec(lastLocation)?.[1];
+    lastLocation = location;
     const state: unknown = history.state;
     const saved = savedDepth();
     const returning = Number.isInteger(saved);
@@ -376,7 +379,16 @@ function useHistoryEntries(location: string) {
       height = now;
       if (restoring && target && steady < 3 && tries++ < 60)
         frame = requestAnimationFrame(restore);
-      else restoring = false;
+      else {
+        restoring = false;
+        // Back from a note gives focus to its card, without moving the list.
+        if (target && opened)
+          document
+            .querySelector<HTMLElement>(
+              `article.entry[data-note-id="${CSS.escape(opened)}"] a.time`,
+            )
+            ?.focus({ preventScroll: true });
+      }
     };
     const stop = () => {
       restoring = false;

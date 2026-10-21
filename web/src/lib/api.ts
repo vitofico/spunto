@@ -44,6 +44,19 @@ let unauthorized: (reason?: string) => void = () => {};
 export function onUnauthorized(callback: (reason?: string) => void) {
   unauthorized = callback;
 }
+const settledListeners = new Set<() => void>();
+/** Runs after any request settles, once the caller's own handlers have run (sync state). */
+export function onRequestSettled(listener: () => void) {
+  settledListeners.add(listener);
+  return () => {
+    settledListeners.delete(listener);
+  };
+}
+function settled() {
+  setTimeout(() => {
+    for (const listener of settledListeners) listener();
+  });
+}
 const responseGenerations = new WeakMap<Response, number>();
 async function check(
   response: Response,
@@ -145,6 +158,8 @@ async function result<T>(call: Promise<{ data?: unknown }>) {
     return normalizeWire(value.data) as T;
   } catch (error) {
     throw safeError(error);
+  } finally {
+    settled();
   }
 }
 export interface RequestOptions {
@@ -212,6 +227,8 @@ export async function request<T = unknown>(
   } catch (error) {
     if (options.signal?.aborted) throw error;
     throw safeError(error);
+  } finally {
+    settled();
   }
 }
 const segment = encodeURIComponent;

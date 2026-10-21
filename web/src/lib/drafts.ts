@@ -380,3 +380,13 @@ export class DraftController {
     return this.flight;
   };
 }
+/** Saves this owner has sent or queued and the server has not confirmed yet ("2 notes waiting"). */
+export function waitingDrafts(storage: Storage, owner: string) {
+  const prefix = draftStorageKey(owner, "");
+  let count = 0;
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix) && load(storage, key)?.pending) count++;
+  }
+  return count;
+}

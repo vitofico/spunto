@@ -1,10 +1,12 @@
 import {
+  Component,
   lazy,
   Suspense,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { Link, Route, Switch, useLocation } from "wouter";
@@ -16,6 +18,7 @@ import {
   api,
   useLiveChanges,
   useOwner,
+  useSyncState,
   useHosted,
   useWorkspaceIssue,
 } from "./lib";
@@ -31,19 +34,82 @@ import {
   hasCompletedGuide,
   markGuideCompleted,
 } from "./components/core/FirstRunGuide";
-const SharedNotesPage = lazy(() => import("./pages/SharedNotes"));
-const NotePage = lazy(() => import("./pages/Note"));
-const SearchPage = lazy(() => import("./pages/Search"));
-const AuthPage = lazy(() => import("./pages/Auth"));
-const SettingsPage = lazy(() =>
-  import("./features/Settings").then((m) => ({ default: m.SettingsPage })),
-);
-const ReviewPage = lazy(() =>
-  import("./features/Review").then((m) => ({ default: m.ReviewPage })),
-);
-const StatusPage = lazy(() =>
-  import("./features/Settings").then((m) => ({ default: m.StatusPage })),
-);
+const loadNote = () => import("./pages/Note");
+// React.lazy keeps a failed import for good, so "Try again" builds fresh ones.
+function lazyPages() {
+  return {
+    SharedNotesPage: lazy(() => import("./pages/SharedNotes")),
+    NotePage: lazy(loadNote),
+    SearchPage: lazy(() => import("./pages/Search")),
+    AuthPage: lazy(() => import("./pages/Auth")),
+    SettingsPage: lazy(() =>
+      import("./features/Settings").then((m) => ({ default: m.SettingsPage })),
+    ),
+    ReviewPage: lazy(() =>
+      import("./features/Review").then((m) => ({ default: m.ReviewPage })),
+    ),
+    StatusPage: lazy(() =>
+      import("./features/Settings").then((m) => ({ default: m.StatusPage })),
+    ),
+  };
+}
+let pages = lazyPages();
+const chunkFailure = (error: unknown) =>
+  error instanceof Error &&
+  /dynamically imported module|module script failed|unable to preload/i.test(
+    error.message,
+  );
+/** One automatic reload per 10 s: a deploy renamed the chunks, a fresh page has the new names. */
+function reloadOnce() {
+  try {
+    const last = Number(sessionStorage.getItem("spunto:chunk-reload") ?? 0);
+    if (Date.now() - last < 10000) return false;
+    sessionStorage.setItem("spunto:chunk-reload", String(Date.now()));
+  } catch {
+    return false;
+  }
+  location.reload();
+  return true;
+}
+export class LoadBoundary extends Component<
+  { children: ReactNode; location: string; onRetry: () => void },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    if (chunkFailure(error) && navigator.onLine) reloadOnce();
+  }
+  componentDidMount() {
+    window.addEventListener("online", this.retry);
+  }
+  componentWillUnmount() {
+    window.removeEventListener("online", this.retry);
+  }
+  componentDidUpdate(previous: { location: string }) {
+    if (this.state.failed && previous.location !== this.props.location)
+      this.setState({ failed: false });
+  }
+  retry = () => {
+    if (!this.state.failed) return;
+    this.props.onRetry();
+    this.setState({ failed: false });
+  };
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="empty" role="alert">
+        <h1>Something didn’t load.</h1>
+        <p>Anything you typed is kept on this device.</p>
+        <button className="button primary" onClick={this.retry}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+}
 function Rail({
   collapsed,
   open,
@@ -62,7 +128,7 @@ function Rail({
   const [location] = useLocation();
   const hosted = useHosted();
   const labels = useLabels();
-  const meta = useApiQuery(["meta"], api.meta);
+  const sync = useSync();
   const rail = useRef<HTMLElement>(null);
   useModalFocus(rail, open, close, returnFocus);
   return (
@@ -199,18 +265,30 @@ function Rail({
               <span className="rail-label">Settings</span>
             </Link>
           </nav>
-          <p role="status">
-            {meta.isError
-              ? "Offline"
-              : meta.isPending
-                ? "Connecting…"
-                : "Synced"}
-          </p>
+          <p role="status">{sync.line}</p>
         </div>
       </aside>
       {open && <div className="rail-backdrop" onClick={close} />}
     </>
   );
+}
+const notes = (count: number) => `${count} ${count === 1 ? "note" : "notes"}`;
+function useSync() {
+  const meta = useApiQuery(["meta"], api.meta);
+  const { online, waiting } = useSyncState();
+  const offline = !online || meta.isError;
+  return {
+    offline,
+    line: meta.isPending
+      ? "Connecting…"
+      : offline
+        ? waiting
+          ? `Offline · ${notes(waiting)} waiting`
+          : "Offline"
+        : waiting
+          ? "Saving…"
+          : "Synced",
+  };
 }
 export default function App() {
   const auth = useAuth();
@@ -218,7 +296,29 @@ export default function App() {
   const workspaceIssue = useWorkspaceIssue();
   useInstanceAppearance(auth.status === "authenticated");
   const meta = useApiQuery(["meta"], api.meta);
+  const sync = useSync();
   const [location, navigate] = useLocation();
+  const [, setAttempt] = useState(0);
+  function retryPages() {
+    pages = lazyPages();
+    setAttempt((attempt) => attempt + 1);
+  }
+  const {
+    AuthPage,
+    NotePage,
+    ReviewPage,
+    SearchPage,
+    SettingsPage,
+    SharedNotesPage,
+    StatusPage,
+  } = pages;
+  const signedIn = auth.status === "authenticated";
+  useEffect(() => {
+    if (!signedIn) return;
+    // Fetch the note screen while idle, so opening a note works offline later.
+    const timer = setTimeout(() => void loadNote().catch(() => {}), 2000);
+    return () => clearTimeout(timer);
+  }, [signedIn]);
   const entrySuffix = useLocationProperty(
     () => window.location.search + window.location.hash,
   );
@@ -385,6 +485,24 @@ export default function App() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [location, navigate, palette, help, railOpen, guideOpen]);
+  if (auth.status === "unreachable")
+    return (
+      <main className="auth">
+        <div className="auth-state">
+          <span className="wordmark">
+            spunto<span>.</span>
+          </span>
+          <p role="alert">Can’t reach the server.</p>
+          <button
+            className="button"
+            disabled={auth.reconnecting}
+            onClick={auth.reconnect}
+          >
+            {auth.reconnecting ? "Trying…" : "Try again"}
+          </button>
+        </div>
+      </main>
+    );
   if (auth.status === "loading" || (auth.status === "authenticated" && !owner))
     return (
       <main className="auth">
@@ -395,9 +513,11 @@ export default function App() {
     );
   if (auth.status !== "authenticated")
     return (
-      <Suspense fallback={<main className="auth">Opening your notes…</main>}>
-        <AuthPage setup={auth.status === "setup" || location === "/setup"} />
-      </Suspense>
+      <LoadBoundary location={location} onRetry={retryPages}>
+        <Suspense fallback={<main className="auth">Opening your notes…</main>}>
+          <AuthPage setup={auth.status === "setup" || location === "/setup"} />
+        </Suspense>
+      </LoadBoundary>
     );
   const app = (
     <div
@@ -450,7 +570,7 @@ export default function App() {
             {workspaceIssue}
           </p>
         )}
-        {meta.isError && (
+        {sync.offline && (
           <div className="banner" role="status">
             Can’t reach the server. What you type is kept on this device.
           </div>
@@ -461,72 +581,74 @@ export default function App() {
             network; set up HTTPS before using it elsewhere.
           </div>
         )}
-        <Suspense
-          fallback={
-            <p className="page-status" role="status">
-              Opening…
-            </p>
-          }
-        >
-          <Switch>
-            <Route path="/">
-              <Timeline />
-            </Route>
-            <Route path="/n/:id">
-              {(params) => <NotePage id={params.id} />}
-            </Route>
-            <Route path="/shared/n/:id">
-              {(params) => <SharedNotesPage id={params.id} />}
-            </Route>
-            <Route path="/shared">
-              <SharedNotesPage />
-            </Route>
-            <Route path="/search">
-              <SearchPage />
-            </Route>
-            <Route path="/archive">
-              <Timeline view="archive" />
-            </Route>
-            <Route path="/trash">
-              <Timeline view="trash" />
-            </Route>
-            <Route path="/l/*">
-              {(params) => (
-                <Timeline
-                  key={params["*"]}
-                  label={decodeURIComponent(params["*"] ?? "")}
-                />
-              )}
-            </Route>
-            <Route path="/v/:plugin/:view">
-              {(params) => (
-                <Timeline
-                  key={params.plugin + "/" + params.view}
-                  view={params.plugin + "/" + params.view}
-                />
-              )}
-            </Route>
-            <Route path="/review">
-              <ReviewPage />
-            </Route>
-            <Route path="/settings/*">
-              {(params) => (
-                <SettingsPage section={params["*"]} onShowGuide={showGuide} />
-              )}
-            </Route>
-            <Route path="/settings">
-              <SettingsPage section="appearance" onShowGuide={showGuide} />
-            </Route>
-            <Route path="/status">
-              <StatusPage />
-            </Route>
-            <Route>
-              <p>
-                This page isn’t here. <Link href="/">Go to your notes.</Link>
+        <LoadBoundary location={location} onRetry={retryPages}>
+          <Suspense
+            fallback={
+              <p className="page-status" role="status">
+                Opening…
               </p>
-            </Route>
-          </Switch>
-        </Suspense>
+            }
+          >
+            <Switch>
+              <Route path="/">
+                <Timeline />
+              </Route>
+              <Route path="/n/:id">
+                {(params) => <NotePage id={params.id} />}
+              </Route>
+              <Route path="/shared/n/:id">
+                {(params) => <SharedNotesPage id={params.id} />}
+              </Route>
+              <Route path="/shared">
+                <SharedNotesPage />
+              </Route>
+              <Route path="/search">
+                <SearchPage />
+              </Route>
+              <Route path="/archive">
+                <Timeline view="archive" />
+              </Route>
+              <Route path="/trash">
+                <Timeline view="trash" />
+              </Route>
+              <Route path="/l/*">
+                {(params) => (
+                  <Timeline
+                    key={params["*"]}
+                    label={decodeURIComponent(params["*"] ?? "")}
+                  />
+                )}
+              </Route>
+              <Route path="/v/:plugin/:view">
+                {(params) => (
+                  <Timeline
+                    key={params.plugin + "/" + params.view}
+                    view={params.plugin + "/" + params.view}
+                  />
+                )}
+              </Route>
+              <Route path="/review">
+                <ReviewPage />
+              </Route>
+              <Route path="/settings/*">
+                {(params) => (
+                  <SettingsPage section={params["*"]} onShowGuide={showGuide} />
+                )}
+              </Route>
+              <Route path="/settings">
+                <SettingsPage section="appearance" onShowGuide={showGuide} />
+              </Route>
+              <Route path="/status">
+                <StatusPage />
+              </Route>
+              <Route>
+                <p>
+                  This page isn’t here. <Link href="/">Go to your notes.</Link>
+                </p>
+              </Route>
+            </Switch>
+          </Suspense>
+        </LoadBoundary>
       </main>
       {palette && (
         <Palette

@@ -134,6 +134,63 @@ class NotesRepositoryTest {
   repo.dao.putDraft(DraftEntity("capture","Unsent capture",1));assertEquals("Unsent capture",repo.dao.unsavedDraft("capture")!!.body)
   repo.dao.putDraft(DraftEntity("capture","",1));assertNull(repo.dao.unsavedDraft("capture"))
  }
+ private suspend fun queuedUpdates()=repo.dao.outbox().map { Json.decodeFromString<OutboxOperation>(it.payload) }.filter { it.type=="note.update" }
+ @Test fun editorSavesFromTheVersionItsWordsGrewFromWhenASyncReplacedTheNote()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  val editor=repo.beginEditor(id);assertEquals(null to "Phone words",repo.openEditor(editor))
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Web words",serverRev=2))
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, more")))
+  // Version 1 lets the server merge both edits, or keep the phone's words as a conflicted copy.
+  assertEquals(listOf(1),queuedUpdates().map { it.baseVersion })
+ }
+ @Test fun editorWithNoNewWordsLeavesASyncedEditAlone()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  val editor=repo.beginEditor(id);repo.openEditor(editor)
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Web words",serverRev=2))
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words")))
+  assertEquals("Web words",repo.dao.get(id)!!.body);assertTrue(queuedUpdates().isEmpty());assertNull(repo.dao.draftSnapshot(id))
+ }
+ @Test fun draftRecoveredAfterAKillSavesFromTheVersionItGrewFrom()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  repo.dao.putDraft(DraftEntity(id,"Phone words, unsaved",System.currentTimeMillis()-1_000))
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Web words",serverRev=2))
+  val editor=repo.beginEditor(id);assertEquals("Phone words, unsaved" to "Web words",repo.openEditor(editor))
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, unsaved")))
+  assertEquals(listOf(1),queuedUpdates().map { it.baseVersion })
+ }
+ @Test fun idleEditorTakesInAWebEditAndGrowsFromIt()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  val editor=repo.beginEditor(id);repo.openEditor(editor);val stale=repo.editorWrite(editor,"Phone words")
+  repo.putNote(repo.dao.get(id)!!.note().copy(body="Web words",serverRev=2))
+  // Words typed here and not saved yet keep the editor as it is.
+  assertNull(repo.syncedForEditor(editor,"Phone words, typing"))
+  val synced=repo.syncedForEditor(editor,"Phone words")!!;assertEquals("Web words",synced.body)
+  assertTrue(repo.adoptSynced(repo.editorWrite(editor,synced.body),synced))
+  // A write from before the editor showed the web words can't put the old text back.
+  assertFalse(repo.persistEditor(stale,commit=true));assertEquals("Web words",repo.dao.get(id)!!.body)
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Web words, phone")))
+  assertEquals(listOf(2),queuedUpdates().map { it.baseVersion })
+ }
+ @Test fun editorTakesInTheServerMergeOfItsWords()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"one\ntwo",serverRev=1))
+  val editor=repo.beginEditor(id);repo.openEditor(editor)
+  assertTrue(repo.persistEditor(repo.editorWrite(editor,"one\ntwo phone"),commit=true))
+  // The server merged these words with a web edit as version 3.
+  repo.dao.outbox().forEach { repo.dao.removeOutbox(it.opId) };repo.putNote(repo.dao.get(id)!!.note().copy(body="one web\ntwo phone",serverRev=3,pending=false))
+  val merged=repo.syncedForEditor(editor,"one\ntwo phone")!!
+  assertTrue(repo.adoptSynced(repo.editorWrite(editor,merged.body),merged))
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"one web\ntwo phone, more")))
+  assertEquals(listOf(3),queuedUpdates().map { it.baseVersion })
+ }
+ @Test fun editorOwnSavedWordsBecomeItsNextBase()=runBlocking {
+  val id=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1))
+  val editor=repo.beginEditor(id);repo.openEditor(editor)
+  assertTrue(repo.persistEditor(repo.editorWrite(editor,"Phone words, one"),commit=true))
+  // The server applied it as version 2: the same words, so no other device was involved.
+  repo.dao.outbox().forEach { repo.dao.removeOutbox(it.opId) };repo.putNote(repo.dao.get(id)!!.note().copy(serverRev=2,pending=false))
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, one, two")))
+  assertEquals(listOf(2),queuedUpdates().map { it.baseVersion })
+ }
  @Test fun readAwaitsCommitAndOldEditorCallbacksAreFenced()=runBlocking {
   val id=uuidV7();repo.putNote(Note(id,"A",serverRev=1))
   val editor=repo.beginEditor(id);val stale=repo.editorWrite(editor,"Older partial")

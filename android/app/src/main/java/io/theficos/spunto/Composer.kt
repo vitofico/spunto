@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.room.withTransaction
 import io.theficos.spunto.core.design.*
 import io.theficos.spunto.core.model.LabelCount
 import io.theficos.spunto.core.plugins.*
@@ -43,6 +42,7 @@ import io.theficos.spunto.plugins.dictation.*
 import io.theficos.spunto.plugins.dictation.voice.*
 import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String="What's on your mind?",trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
@@ -147,10 +147,8 @@ import kotlinx.coroutines.*
  LaunchedEffect(id,draftId) {
   // Room's observed note can lag a completed restore. Open from one saved snapshot,
   // keeping an unsent draft ahead of the saved body without replacing active typing.
-  val (draft,current)=model.container.database.withTransaction {
-   model.repository.dao.unsavedDraft(draftId,id) to if(id=="capture") null else model.repository.dao.get(id)?.body
-  }
-  val body=draft?.body ?: ((current ?: initial)+if(startNewParagraph && current!=null) "\n\n" else "")
+  val (draft,current)=model.repository.openEditor(lease)
+  val body=draft ?: ((current ?: initial)+if(startNewParagraph && current!=null) "\n\n" else "")
   // The caret opens where the reader tapped (A5) unless a draft changed the text; otherwise at the end.
   value=TextFieldValue(body,TextRange(caret?.takeIf { body==(current ?: initial) }?.coerceIn(0,body.length) ?: body.length))
   committed=current ?: initial
@@ -187,6 +185,18 @@ import kotlinx.coroutines.*
  val latestRecordingSaved by rememberUpdatedState(onRecordingSaved)
  val owner=LocalLifecycleOwner.current
  LaunchedEffect(id,draftId) { if(id!="capture") while(true) { delay(60_000); if(ready && !saved && !latestSaving && latestText!=committed) { val body=latestText;val write=model.repository.editorWrite(lease,body);if(commitEditor(write)) committed=body } } }
+ var copyNoticed by remember(id,draftId) { mutableStateOf(false) }
+ // A sync that changes this note while every word here is saved (an edit made elsewhere, or the server's merge of these
+ // words) shows here, so later typing grows from it. Words being typed, dictated, recorded or saved are never replaced.
+ LaunchedEffect(id,draftId) { if(id!="capture") model.repository.observe(id).distinctUntilChanged().collect {
+  if(!ready || saved) return@collect
+  val shown=value.text;val synced=model.repository.syncedForEditor(lease,shown)
+  if(lease.noteId!=id && !copyNoticed) { copyNoticed=true;model.message.value="This note changed elsewhere too. Your version is kept as a conflicted copy." }
+  if(synced==null || value.text!=shown || shown!=committed || saving || closing || startingVoice || voice.hasSession || latestPendingRecording!=null || dictation.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)) return@collect
+  val write=model.repository.editorWrite(lease,synced.body)
+  value=TextFieldValue(synced.body,TextRange(value.selection.start.coerceAtMost(synced.body.length)));committed=synced.body
+  model.repository.adoptSynced(write,synced)
+ } }
  DisposableEffect(editorLease) {
   onFinishReady {
    check(latestReady) {"Wait for this note to finish loading."}

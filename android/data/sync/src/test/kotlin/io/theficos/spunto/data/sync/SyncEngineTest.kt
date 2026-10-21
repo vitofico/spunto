@@ -23,7 +23,7 @@ class SyncEngineTest {
  private lateinit var server:MockWebServer
  @Before fun setup() {db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(),SpuntoDatabase::class.java).allowMainThreadQueries().build();repo=NotesRepository(db);server=MockWebServer();server.start()}
  @After fun stop() {server.shutdown();db.close()}
- private fun engine()=SyncEngine(repo,{AuthConfig(server.url("/").toString(),"synthetic","d","Phone",true)})
+ private fun engine(on:NotesRepository=repo)=SyncEngine(on,{AuthConfig(server.url("/").toString(),"synthetic","d","Phone",true)})
  private fun response(body:String,code:Int=200)=MockResponse().setResponseCode(code).setBody(body)
  private fun note(id:String,body:String,version:Int=1)=buildJsonObject {put("id",id);put("body",body);put("version",version);put("created_at","2026-10-14T00:00:00Z");put("updated_at","2026-10-14T00:00:00Z")}
  @Test fun unauthorizedPreservesEntireReplicaAndOutbox()=runBlocking {
@@ -58,6 +58,34 @@ class SyncEngineTest {
   val waiter=launch(Dispatchers.Default) {ChangeWaiter({AuthConfig(server.url("/").toString(),"synthetic","d","Phone",true)},repo,engine()).run()}
   withContext(Dispatchers.IO) {Thread.sleep(1500)};waiter.cancelAndJoin()
   assertEquals(1,pulls);assertEquals("e.4",waits.first());assertTrue(waits.size>1 && waits.drop(1).all {it=="e.5"})
+ }
+ @Test fun openEditorCrossingAWebEditKeepsBothAndTypesIntoTheCopy()=runBlocking {
+  val id=uuidV7();val copy=uuidV7();repo.putNote(Note(id,"Phone words",serverRev=1));repo.dao.putState(SyncStateEntity(epoch="e",cursor="e.0"))
+  val editor=repo.beginEditor(id);repo.openEditor(editor)
+  // Background sync runs on its own repository, as the sync worker does, so it can't reach the editor directly.
+  val worker=NotesRepository(repo.db,repo.replicaId)
+  var pull=buildJsonArray {add(buildJsonObject {put("kind","note");put("change_seq",2);put("data",note(id,"Web words",2))})}
+  val bases=mutableListOf<Int?>()
+  server.dispatcher=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(request.requestUrl!!.encodedPath){
+   "/api/v1/meta"->response("""{"sync_epoch":"e"}""")
+   "/api/v1/notes/$id"->response(note(id,"Web words",2).toString())
+   "/api/v1/sync/push"->{val op=Json.parseToJsonElement(request.body.readUtf8()).jsonObject["ops"]!!.jsonArray.single().jsonObject;synchronized(bases) {bases+=op["base_version"]?.jsonPrimitive?.intOrNull}
+    response(buildJsonObject{put("epoch","e");put("results",buildJsonArray{add(buildJsonObject{put("op_id",op["op_id"]!!);put("status","conflict");put("version",2);put("conflict_id",copy);put("note",JsonObject(note(copy,op["body"]!!.jsonPrimitive.content,1)+mapOf("conflict_of" to JsonPrimitive(id))))})})}.toString())}
+   "/api/v1/sync/pull"->response(buildJsonObject {put("epoch","e");put("cursor","e.2");put("has_more",false);put("plugins_rev",0);put("items",pull)}.toString()).also { pull=JsonArray(emptyList()) }
+   "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+   else->response("{}",404)
+  }}
+  assertTrue(engine(worker).sync() is SyncStatus.Complete);assertEquals("Web words",repo.dao.get(id)!!.body)
+  assertTrue(repo.persistEditor(repo.editorWrite(editor,"Phone words, more"),commit=true))
+  assertTrue(engine(worker).sync() is SyncStatus.Complete)
+  // The idle editor keeps its words and moves onto the copy instead of taking in the web edit.
+  assertNull(repo.syncedForEditor(editor,"Phone words, more"));assertEquals(copy,editor.noteId)
+  assertEquals(listOf<Int?>(1),bases);assertEquals("Web words",repo.dao.get(id)!!.body)
+  assertEquals(listOf(copy to id),repo.conflicts.first().map {it.id to it.conflictOf});assertEquals("Phone words, more",repo.dao.get(copy)!!.body)
+  // Later typing goes to the copy, not over the web edit again.
+  assertTrue(repo.finishEditor(repo.editorWrite(editor,"Phone words, more and more")));assertEquals(copy,editor.noteId)
+  val ops=repo.dao.outbox().map {Json.decodeFromString<OutboxOperation>(it.payload)}
+  assertEquals(listOf(Triple("note.update",copy,1)),ops.map {Triple(it.type,it.noteId,it.baseVersion)});assertEquals("Web words",repo.dao.get(id)!!.body)
  }
  @Test fun conflictIsSurfacedAndKeepingTheCopySettlesItThroughTheOutbox()=runBlocking {
   val id=uuidV7();val copy=uuidV7();repo.putNote(Note(id,"saved",serverRev=1));repo.dao.putState(SyncStateEntity(epoch="e",cursor="e.0"));repo.update(id,"phone")

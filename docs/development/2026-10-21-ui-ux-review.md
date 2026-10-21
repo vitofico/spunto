@@ -94,15 +94,6 @@ applied:
   - "Keep as new note" drops attachments;
   - the phone could warn before saving a note over the server's
     100,000-character limit.
-- **Editing during a sync:** two cases save the phone's text over a newer web
-  edit, which then survives only in server History:
-  - a web edit syncs in while the note is open in the phone's editor (read
-    from the code, not reproduced);
-  - the app is killed with unsaved words, and the note is edited on the web
-    before the phone reopens it (reproduced; same as before this review).
-
-  The editor should send the version it started from, so the server keeps a
-  conflict copy.
 - **Small polish:** `#` autocomplete could use the recent-use order from
   search; dialogs could remember their opener at document level; a folded
   checklist fades its last hidden row to nothing, leaving a blank band above

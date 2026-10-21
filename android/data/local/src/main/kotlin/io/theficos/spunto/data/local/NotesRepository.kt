@@ -18,11 +18,19 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
 
 /** A live editor owns ordered draft writes; retired editors cannot overwrite a restored note. */
-class EditorLease internal constructor(val noteId:String?,val draftId:String) {
+class EditorLease internal constructor(noteId:String?,draftId:String) {
+ /** A conflict moves a live editor onto its copy, so later typing never lands on the original again. */
+ var noteId=noteId; internal set
+ var draftId=draftId; internal set
  internal val sequence=AtomicLong()
  internal var active=true
  internal var accepted=0L
  internal var committedBody:String?=null
+ /** The server version the editor's words grew from, and that version's text here; saves send it so the server merges or keeps both. */
+ internal var base:Int?=null
+ internal var known:String?=null
+ /** Whether [known] holds words this editor saved, rather than text it opened on or took in from a sync. */
+ internal var saved=false
 }
 data class EditorWrite internal constructor(val lease:EditorLease,val body:String,internal val sequence:Long)
 
@@ -34,6 +42,43 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   editors.filter { it.draftId==draftId }.forEach { it.active=false };editors.removeAll {it.draftId==draftId}
   EditorLease(noteId,draftId).also { editors+=it }
  }
+ /**
+  * The words an editor opens with (unsaved draft words, else the note) and the server version they grew from.
+  * A sync that replaced the note after the draft was written left the text the draft grew from in the history.
+  */
+ suspend fun openEditor(lease:EditorLease):Pair<String?,String?> = db.withTransaction {
+  val (noteId,draftId)=synchronized(editors) { lease.noteId to lease.draftId }
+  val note=noteId?.let { dao.get(it) }
+  val draft=dao.unsavedDraft(draftId,noteId?:draftId)
+  val origin=if(draft!=null && noteId!=null) dao.replacedSince(noteId,draft.updatedAt) else null
+  synchronized(editors) { lease.base=origin?.version ?: note?.serverRev;lease.known=origin?.body ?: note?.body }
+  draft?.body to note?.body
+ }
+ /**
+  * What a sync has brought into the note of an editor whose every word is saved (an edit made elsewhere, or the server's
+  * merge of its words), for the editor to show and grow from. [shown] is the editor's text; null leaves it as it is.
+  */
+ suspend fun syncedForEditor(lease:EditorLease,shown:String):Note? = editorMutex.withLock { db.withTransaction {
+  followCopy(lease)
+  val (noteId,known)=synchronized(editors) { lease.noteId to lease.known }
+  noteId?.let { dao.get(it) }?.note()?.takeIf { shown==known && !it.pending && it.body!=shown }
+ } }
+ /** [write] shows [note]'s words in place of the editor's; writes made before it are stale and refused. */
+ suspend fun adoptSynced(write:EditorWrite,note:Note):Boolean = editorMutex.withLock {
+  val lease=write.lease;val current=dao.get(note.id)
+  synchronized(editors) {
+   (lease.active && write.sequence>=lease.accepted && lease.noteId==note.id && current!=null && !current.pending && current.body==write.body && current.serverRev==note.serverRev)
+    .also { if(it) { lease.base=note.serverRev;lease.known=note.body;lease.saved=false;lease.accepted=write.sequence } }
+  }
+ }
+ /** A save that crossed an edit made elsewhere became a conflicted copy, whichever sync answered it: the editor's words go on there. */
+ private suspend fun followCopy(lease:EditorLease) {
+  val (noteId,draftId,known)=synchronized(editors) { Triple(lease.noteId,lease.draftId,lease.known.takeIf { lease.saved }) }
+  val copy=dao.conflictCopy(noteId ?: return,known ?: return) ?: return
+  // The original's draft would reopen these words over it; the copy's draft carries them from here.
+  if(draftId==noteId) dao.draftSnapshot(draftId)?.let { dao.clearDraftSnapshot(it.id,it.body,it.updatedAt) }
+  synchronized(editors) { lease.noteId=copy.id;if(draftId==noteId) lease.draftId=copy.id;lease.base=copy.serverRev;lease.saved=false }
+ }
  fun abandonEditor(lease:EditorLease) { synchronized(editors) {lease.active=false;editors.remove(lease)} }
  fun editorWrite(lease:EditorLease,body:String)=EditorWrite(lease,body,lease.sequence.incrementAndGet())
  /** Allocation occurs before dispatch; delayed callbacks cannot replace a newer accepted write. */
@@ -42,13 +87,19 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   val lease=write.lease
   if(!synchronized(editors) {lease.active} || write.sequence<lease.accepted) return false
   val unavailable=db.withTransaction {
-   val missing=commit && lease.noteId!=null && (dao.get(lease.noteId)==null || dao.tombstone(lease.noteId)!=null)
+   followCopy(lease)
+   val (noteId,draftId)=synchronized(editors) { lease.noteId to lease.draftId }
+   val note=noteId?.let { dao.get(it) }
+   val missing=commit && noteId!=null && (note==null || dao.tombstone(noteId)!=null)
+   // Once the server holds the editor's own words they are the new base; newer text a sync brought in is not.
+   synchronized(editors) { if(note!=null && !note.pending && note.body==lease.known) lease.base=note.serverRev }
    // A disappeared note must not erase the last editor words; only the note/outbox commit is refused.
-   dao.putDraft(DraftEntity(lease.draftId,write.body,System.currentTimeMillis()))
-   if(commit && !missing && lease.noteId!=null) {
-    if(dao.get(lease.noteId)?.body!=write.body) save(write.body,lease.noteId)
+   dao.putDraft(DraftEntity(draftId,write.body,System.currentTimeMillis()))
+   if(commit && !missing && noteId!=null) {
+    // Words the editor never changed must not replace newer text a sync brought in.
+    if(note!!.body!=write.body && write.body!=lease.known) { save(write.body,noteId,baseVersion=lease.base);lease.known=write.body;lease.saved=true }
     // The note holds these words now; a draft left behind would reopen over newer synced text.
-    dao.clearDraft(lease.draftId,write.body)
+    dao.clearDraft(draftId,write.body)
    }
    missing
   }
@@ -134,7 +185,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    synchronized(editors) { editors.filter { it.noteId==id }.forEach { it.active=false };editors.removeAll { it.noteId==id } }
   }
  }
- suspend fun save(body: String,id: String? = null,sourceUrl: String? = null,sourceKind: String = "android",sourceRef: String? = null,historyKind:String="edit"): String {
+ suspend fun save(body: String,id: String? = null,sourceUrl: String? = null,sourceKind: String = "android",sourceRef: String? = null,historyKind:String="edit",baseVersion:Int?=null): String {
   require(body.toByteArray().size <= 1_000_000) { "Note is too large." }
   val noteId = id ?: uuidV7()
   db.withTransaction {
@@ -143,7 +194,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    val refusedCreate=dao.outbox().filter { it.noteId==noteId && it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="note.create" }.onEach { dao.removeOutbox(it.opId) }
    val note = old?.note()?.copy(body=body,title=titleOf(body),updatedAt=now,pending=true,syncError=null,machine=old.machine && old.body==body,updatedViaAgent=false) ?: Note(noteId,body,sourceUrl=sourceUrl,sourceKind=sourceKind,sourceRef=sourceRef,pending=true)
    putNote(note,localEdit=true,historyKind=historyKind)
-   enqueue(OutboxOperation(type=if(old==null || refusedCreate.isNotEmpty()) "note.create" else "note.update",noteId=noteId,body=body,baseVersion=old?.serverRev,createdAt=note.createdAt,sourceUrl=note.sourceUrl,sourceKind=note.sourceKind,sourceRef=note.sourceRef))
+   enqueue(OutboxOperation(type=if(old==null || refusedCreate.isNotEmpty()) "note.create" else "note.update",noteId=noteId,body=body,baseVersion=baseVersion?:old?.serverRev,createdAt=note.createdAt,sourceUrl=note.sourceUrl,sourceKind=note.sourceKind,sourceRef=note.sourceRef))
   }; onChange(); return noteId
  }
  suspend fun setFlags(id: String,pinned: Boolean?=null,archived: Boolean?=null,trashed: Boolean?=null,privateNote: Boolean?=null) {

@@ -51,13 +51,14 @@ it("automatically retries an explicitly queued capture restored after reload", a
   });
   expect(create).toHaveBeenCalledTimes(2);
   const restored = renderHook(useEditor, { wrapper: Wrapper });
-  await waitFor(() =>
-    expect(restored.result.current.body).toBe("queued capture"),
-  );
+  // The capture waits in the outbox; the composer itself is already a fresh draft.
+  await waitFor(() => expect(restored.result.current.submitted).toBe(true));
+  expect(restored.result.current.body).toBe("");
   vi.useFakeTimers();
   await act(async () => {
     window.dispatchEvent(new Event("online"));
     await vi.advanceTimersByTimeAsync(16000);
   });
   expect(create).toHaveBeenCalledTimes(3);
+  expect(create).toHaveBeenLastCalledWith("queued capture", expect.any(String));
 });

@@ -267,7 +267,7 @@ it.each(["raw", "generated"])(
     expect(queryClient.getQueryData(["session"])).toEqual(ownerSession);
   },
 );
-it("fences drafts by account, workspace and credential, clears cached data, and ignores an old save acknowledgement", async () => {
+it("fences drafts by account, workspace and credential, clears cached data, and settles an old save acknowledgement only in storage", async () => {
   seed();
   let complete!: (value: Note) => void;
   vi.spyOn(api, "updateNote").mockImplementation(
@@ -310,11 +310,12 @@ it("fences drafts by account, workspace and credential, clears cached data, and 
     await saving;
   });
   expect(result.current.body).toBe("original");
+  // The server holds exactly the text sent, so the old space keeps no stale draft to replay.
   expect(
     localStorage.getItem(
       draftStorageKey(sessionIdentity(ownerSession), "note:" + note.id),
     ),
-  ).toContain("private draft");
+  ).toBeNull();
   expect(
     sessionIdentity({ ...ownerSession, credential_id: "credential-b" }),
   ).not.toBe(sessionIdentity(ownerSession));
@@ -397,7 +398,7 @@ it("restores mounted pending capture text and the exact idempotency payload afte
   act(() => result.current.editor.setBody("typing after submission"));
   const beforeKey = draftStorageKey(sessionIdentity(ownerSession), "compose");
   const before = localStorage.getItem(beforeKey);
-  expect(JSON.parse(before!).pending.body).toBe("submitted capture");
+  expect(JSON.parse(before!).outbox[0].body).toBe("submitted capture");
   const rotated: Session = {
     ...ownerSession,
     credential_id: "rotated-cookie",

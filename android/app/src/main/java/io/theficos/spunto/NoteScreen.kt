@@ -105,7 +105,7 @@ import kotlinx.serialization.json.*
     if(!editing && !finishing && !restoring) {restoring=true;editorScope.launch {
      try {model.repository.restoreHistory(id,revision);history=false}
      catch(error:kotlinx.coroutines.CancellationException) {throw error}
-     catch(error:Exception) {model.message.value="Couldn't restore this revision. Your note and draft stay on this phone."}
+     catch(error:Exception) {model.message.value="Couldn't restore this version. Your note and draft stay on this phone."}
      finally {restoring=false}
     }}
    }
@@ -231,7 +231,7 @@ internal fun LazyListScope.revisionHistoryItems(revisions:List<RevisionEntity>,o
  item {
   Text("History",style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(bottom=8.dp).semantics {heading()})
   if(!online || result is HistoryRefreshResult.Cached) Text("Showing history saved on this phone.",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
-  if(editing) Text("Finish editing before restoring a revision.",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
+  if(editing) Text("Finish editing before restoring a version.",style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
  }
  if(revisions.isEmpty()) item { Text("No saved revisions on this phone yet.",color=SpuntoColors.ink3) }
  items(revisions,key={it.id}) { rev ->

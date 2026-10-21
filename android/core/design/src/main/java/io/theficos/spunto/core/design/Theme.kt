@@ -15,9 +15,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
@@ -149,10 +146,9 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
    isAppearanceLightNavigationBars=useDarkSystemBarIcons(dynamic.background)
   } }
  }
- CompositionLocalProvider(LocalSpuntoTheme provides true) {
-  MaterialTheme(colorScheme=dynamic, typography=readingTypography(readingFace.ifEmpty { preferences.getString("reading-face","serif").orEmpty() },readingSize.ifEmpty { preferences.getString("reading-size","M").orEmpty() }),content=content)
+ val face=readingFace.ifEmpty { preferences.getString("reading-face","serif").orEmpty() };val size=readingSize.ifEmpty { preferences.getString("reading-size","M").orEmpty() }
+ val type=remember(face,size) { spuntoType(face,size) }
+ CompositionLocalProvider(LocalSpuntoTheme provides true,LocalSpuntoType provides type) {
+  MaterialTheme(colorScheme=dynamic,typography=spuntoMaterialTypography,content=content)
  }
 }
-fun readingTypography(face:String,size:String)=Typography(bodyLarge=androidx.compose.ui.text.TextStyle(fontFamily=if(normalizedReadingFace(face)=="sans") uiFont() else readingFont(),fontSize=readingTextSize(size).sp,lineHeight=readingLineHeight(size).sp),bodyMedium=androidx.compose.ui.text.TextStyle(fontFamily=uiFont(),fontSize=14.sp,lineHeight=21.sp),titleLarge=androidx.compose.ui.text.TextStyle(fontFamily=readingFont(),fontSize=24.sp),labelLarge=androidx.compose.ui.text.TextStyle(fontFamily=uiFont(),fontSize=14.sp))
-fun readingFont(): FontFamily = FontFamily(Font(R.font.literata))
-fun uiFont(): FontFamily = FontFamily(Font(R.font.inter))

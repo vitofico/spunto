@@ -123,14 +123,14 @@ class AppearanceCacheTest {
   compose.setContent {
    if(showContent.value) CompositionLocalProvider(LocalDensity provides Density(1f,1.6f)) {
     SpuntoTheme {
-     val color=MaterialTheme.colorScheme.primary;val typography=MaterialTheme.typography
-     val pixels=with(LocalDensity.current) { typography.bodyLarge.fontSize.toPx() }
-     SideEffect { seen.add(color);prosePixels.add(pixels);assertEquals(19f,typography.bodyLarge.fontSize.value,0f);assertEquals(uiFont(),typography.bodyLarge.fontFamily);assertEquals(14f,typography.bodyMedium.fontSize.value,0f) }
+     val color=MaterialTheme.colorScheme.primary;val typography=MaterialTheme.typography;val reading=SpuntoType.reading
+     val pixels=with(LocalDensity.current) { reading.fontSize.toPx() }
+     SideEffect { seen.add(color);prosePixels.add(pixels);assertEquals(18f*16.5f/17,reading.fontSize.value,.001f);assertEquals(uiFont(),reading.fontFamily);assertEquals(14f,typography.bodyMedium.fontSize.value,0f) }
     }
    }
   }
-  // Android applies a non-linear font-scale curve; keep the actual 19sp contract explicit.
-  compose.runOnIdle { assertEquals(tokenColor(selected.dark.getValue("accent")),seen.first());assertEquals(with(Density(1f,1.6f)) { 19.sp.toPx() },prosePixels.first(),.01f) }
+  // Android applies a non-linear font-scale curve; keep the actual sans L reading size explicit.
+  compose.runOnIdle { assertEquals(tokenColor(selected.dark.getValue("accent")),seen.first());assertEquals(with(Density(1f,1.6f)) { (18f*16.5f/17).sp.toPx() },prosePixels.first(),.01f) }
   var start=0
   compose.runOnIdle { start=seen.size;manifestPreferences.edit().putString("manifest",manifest(pack().copy(status="failed",reason="dark contrast failed"))).commit() }
   val carta=tokenColor(builtInTokens.getValue("carta").getValue("dark").getValue("accent"))

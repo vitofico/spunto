@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.SpuntoTheme
+import io.theficos.spunto.core.design.SpuntoType
 import kotlinx.coroutines.*
 import androidx.lifecycle.lifecycleScope
 import java.io.File
@@ -61,7 +62,7 @@ class CaptureActivity:LockedActivity() {
      Column(Modifier.padding(20.dp).imePadding(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
       Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text("Close") } }
       if(error.isNotEmpty()) Text(error)
-      if(shared.isNotEmpty()) Text(shared.take(500),style=MaterialTheme.typography.bodyLarge)
+      if(shared.isNotEmpty()) Text(shared.take(500),style=SpuntoType.reading)
       if(image!=null) coil.compose.AsyncImage(model=image,contentDescription="Shared image",modifier=Modifier.fillMaxWidth().heightIn(max=180.dp))
       Composer(model,draftId=shareKey,initial="",autoFocus=shared.isEmpty() && image==null,autoDictate=intent.getBooleanExtra("dictate",false),canSaveEmpty=shared.isNotEmpty() || image!=null,allowVoiceCapture=shared.isEmpty() && image==null,onPlainCaptureSave=if(shared.isEmpty() && image==null) {body,ref ->model.repository.create(body,sourceRef=ref);finish()} else null,onRecordingSaved={finish()},onSave={comment -> saveShare(comment,shared,source,image,shareKey)})
 

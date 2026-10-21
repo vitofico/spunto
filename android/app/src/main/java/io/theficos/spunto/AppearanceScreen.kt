@@ -50,7 +50,7 @@ import kotlinx.serialization.json.*
        Text(choice.name+if(chosen) " ✓" else "",style=MaterialTheme.typography.titleLarge)
        if(choice.description.isNotBlank()) Text(choice.description,style=MaterialTheme.typography.bodyMedium)
        Text("14:32 · Today",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-       Text("A quiet place for loose ideas.",style=MaterialTheme.typography.bodyLarge)
+       Text("A quiet place for loose ideas.",style=SpuntoType.reading)
        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         Surface(shape=MaterialTheme.shapes.small,color=MaterialTheme.colorScheme.primaryContainer) { Text("idea",Modifier.padding(horizontal=8.dp,vertical=4.dp),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onPrimaryContainer) }
         val proposalColour=MaterialTheme.colorScheme.onSurfaceVariant
@@ -79,7 +79,7 @@ import kotlinx.serialization.json.*
    FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("serif" to "Serif","sans" to "Sans").forEach { (value,label) -> FilterChip(selected=normalizedReadingFace(readingFace)==value,onClick={onReadingFace(value)},label={Text(label)}) } }
    Text("Text size",style=MaterialTheme.typography.bodyMedium)
    FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("S","M","L").forEach { value -> FilterChip(selected=normalizedReadingSize(readingSize)==value,onClick={onReadingSize(value)},label={Text(value)}) } }
-   Text("A thought worth keeping, in your own words.",Modifier.padding(vertical=12.dp),style=readingTypography(readingFace,readingSize).bodyLarge)
+   Text("A thought worth keeping, in your own words.",Modifier.padding(vertical=12.dp),style=spuntoType(readingFace,readingSize).reading)
   }
   item { Row(horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) { Text("Pure black",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium);Switch(black,onBlack,modifier=Modifier.semantics {contentDescription="Pure black"}) };Row(horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically) { Text("Wallpaper colours",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium);Switch(wallpaper,onWallpaper,modifier=Modifier.semantics {contentDescription="Wallpaper colours"}) } }
  }

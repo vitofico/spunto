@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import io.theficos.spunto.core.design.SpuntoType
 
 internal const val firstRunGuideCompletedKey="completed-v1"
 internal fun firstRunGuidePreferences(context:Context):SharedPreferences = context.applicationContext.getSharedPreferences("first-run-guide",Context.MODE_PRIVATE)
@@ -86,7 +87,7 @@ private val guideSteps=listOf(
   Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer) {
    Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
     Text("Example · not a saved note",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(current.example,style=MaterialTheme.typography.bodyLarge)
+    Text(current.example,style=SpuntoType.reading)
     Text(current.caption,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
   }

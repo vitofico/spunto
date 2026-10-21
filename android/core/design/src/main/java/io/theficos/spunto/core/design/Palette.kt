@@ -87,5 +87,3 @@ fun resolveThemeSelection(theme:String,accent:String?,catalog:ThemeCatalog?=null
 }
 fun normalizedReadingFace(value:String)=if(value=="sans") "sans" else "serif"
 fun normalizedReadingSize(value:String)=if(value in setOf("S","L")) value else "M"
-fun readingTextSize(value:String)=when(normalizedReadingSize(value)) { "S" -> 16; "L" -> 19; else -> 17 }
-fun readingLineHeight(value:String)=when(normalizedReadingSize(value)) { "S" -> 25; "L" -> 30; else -> 27 }

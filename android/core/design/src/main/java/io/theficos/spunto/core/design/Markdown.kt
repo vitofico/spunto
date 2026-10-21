@@ -76,7 +76,7 @@ internal fun markdownBodyStyle(machine:Boolean,ownerStyle:TextStyle):TextStyle =
  if(machine) ownerStyle.copy(fontFamily=uiFont(),fontSize=17.sp,lineHeight=26.sp) else ownerStyle
 @Composable private fun MarkdownText(text:AnnotatedString,machine:Boolean,onLink:((String)->Unit)?) {
  val uri=LocalUriHandler.current
- ClickableText(text,style=markdownBodyStyle(machine,MaterialTheme.typography.bodyLarge).copy(color=MaterialTheme.colorScheme.onSurface),onClick={position -> text.getStringAnnotations("URL",position,position).firstOrNull()?.item?.let { target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } } })
+ ClickableText(text,style=markdownBodyStyle(machine,SpuntoType.reading).copy(color=MaterialTheme.colorScheme.onSurface),onClick={position -> text.getStringAnnotations("URL",position,position).firstOrNull()?.item?.let { target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } } })
 }
 @Composable private fun MarkdownBlock(current:Node,body:String,tasks:Set<Int>,machine:Boolean,onLink:((String)->Unit)?,onToggle:((Int)->Unit)?) {
  when(current) {

@@ -117,10 +117,10 @@ interface SpuntoDao {
  """) fun labels(): Flow<List<LabelCount>>
  /** The "All notes" count beside the sheet row: the notes the label counts above see. */
  @Query("SELECT COUNT(*) FROM notes n WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)") fun noteCount(): Flow<Int>
- /** L1 order: labels on notes edited since [since] first, then by overall use; a use is a note outside the trash that carries the label. */
+ /** L1 order: labels on notes edited since [since] first, then by overall use; a use is a note search can find (not archived or trashed) that carries the label. */
  @Query("""
   SELECT l.key, MIN(l.path) AS path, COUNT(DISTINCT l.noteId) AS count FROM labels l JOIN notes n ON n.id=l.noteId
-  WHERE n.trashed=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
+  WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
   GROUP BY l.key ORDER BY COUNT(DISTINCT CASE WHEN n.updatedAt>=:since THEN l.noteId END) DESC, count DESC, l.key LIMIT :limit
  """) fun labelsByUse(since: Long, limit: Int): Flow<List<LabelCount>>
  @Query("SELECT * FROM sync_state WHERE id=1") suspend fun state(): SyncStateEntity?

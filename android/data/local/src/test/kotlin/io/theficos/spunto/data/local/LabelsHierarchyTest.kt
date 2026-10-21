@@ -90,7 +90,7 @@ class LabelsHierarchyTest {
   dated("Synthetic #Edited",old,updated=now-2*day)
   dated("Synthetic #Kept",old,archived=true)
   repeat(5) {dated("Synthetic #Binned",now,trashed=true)}
-  assertEquals(listOf("Lately" to 2,"Edited" to 1,"Often" to 3,"Middle" to 2,"Kept" to 1),repository.dao.labelsByUse(since,8).first().map {it.path to it.count})
+  assertEquals(listOf("Lately" to 2,"Edited" to 1,"Often" to 3,"Middle" to 2),repository.dao.labelsByUse(since,8).first().map {it.path to it.count})
   assertEquals(listOf("lately","edited"),repository.dao.labelsByUse(since,2).first().map {it.key})
  }
  @Test fun readingHierarchyLeavesPendingPayloadDraftAndRevisionIdentityUntouched()=runBlocking {

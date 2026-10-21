@@ -187,7 +187,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  LaunchedEffect(id,draftId) { if(id!="capture") while(true) { delay(60_000); if(ready && !saved && !latestSaving && latestText!=committed) { val body=latestText;val write=model.repository.editorWrite(lease,body);if(commitEditor(write)) committed=body } } }
  var copyNoticed by remember(id,draftId) { mutableStateOf(false) }
  val copyMessage="This note changed elsewhere too. Your version is kept as a conflicted copy."
- // The note's own conflict line takes over once the editor closes, so the notice doesn't follow you to other notes.
+ // The status line's conflict entry takes over once the editor closes, so this notice doesn't follow you to other notes.
  DisposableEffect(id,draftId) { onDispose { if(model.message.value==copyMessage) model.message.value="" } }
  // A sync that changes this note while every word here is saved (an edit made elsewhere, or the server's merge of these
  // words) shows here, so later typing grows from it. Words being typed, dictated, recorded or saved are never replaced.

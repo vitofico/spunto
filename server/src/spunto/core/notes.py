@@ -1207,7 +1207,7 @@ class Notes:
                 if ranked:
                     # Equal scores (a duplicate, say) put the newer note first; only
                     # the 50 kept candidates are sorted again.
-                    query = f"SELECT id FROM ({query}) ORDER BY score,updated_at DESC,id DESC"  # noqa: S608
+                    query = f"SELECT id FROM ({query}) AS ranked ORDER BY score,updated_at DESC,id DESC"  # noqa: S608
                 candidates = await conn.execute_fetchall(query, args)
             rows = await full_rows(conn, candidates[:limit])
             hits = [

@@ -276,6 +276,14 @@ def _translate(statement: str, parameters: Sequence = ()) -> tuple[str, list, bo
             "note_fts MATCH ?", "note_fts.document @@ to_tsquery('simple',?)"
         )
         statement = statement.replace(" AND note_fts.rank MATCH 'bm25(2.0,1.0,0.5)'", "")
+        if "note_fts.rank AS score" in statement:
+            # FTS5's rank is lower-is-better; negate ts_rank_cd so a score sorts the same way.
+            at = _qmarks(statement.split("note_fts.rank AS score", 1)[0]).count("%s")
+            args.insert(at, query)
+            statement = statement.replace(
+                "note_fts.rank AS score",
+                "-ts_rank_cd(note_fts.document,to_tsquery('simple',?)) AS score",
+            )
         if "ORDER BY note_fts.rank" in statement:
             statement = statement.replace(
                 "ORDER BY note_fts.rank",

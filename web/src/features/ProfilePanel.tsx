@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { api } from "../lib/api";
 import { currentOwner, useAuth, useHosted } from "../lib/query";
-import { draftStorageKey } from "../lib/drafts";
+import { keptDrafts } from "../lib/drafts";
 import type { Session } from "../lib/types";
 import { Dialog } from "./Dialog";
 import { useConfirm } from "../components/core/ConfirmDialog";
@@ -191,25 +191,15 @@ function Password() {
   );
 }
 
-/** Drafts kept on this browser that were never saved; signing out erases them. */
-function unsentDrafts() {
+/** Notes kept only on this browser, drafts and captures waiting to sync; signing out erases them. */
+function unsentNotes() {
   const owner = currentOwner();
-  if (!owner) return 0;
-  const prefix = draftStorageKey(owner, "");
-  let count = 0;
   try {
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index);
-      if (!key?.startsWith(prefix)) continue;
-      const draft = JSON.parse(localStorage.getItem(key) ?? "null") as {
-        body?: unknown;
-      } | null;
-      if (typeof draft?.body === "string" && draft.body.trim()) count++;
-    }
+    return owner ? keptDrafts(localStorage, owner).unsent : 0;
   } catch {
     /* Unreadable storage holds nothing to warn about. */
+    return 0;
   }
-  return count;
 }
 
 function SignOut() {
@@ -218,12 +208,12 @@ function SignOut() {
   const [confirm, dialog] = useConfirm();
   const [pending, setPending] = useState(false);
   const signOut = async () => {
-    const drafts = unsentDrafts();
+    const unsent = unsentNotes();
     if (
-      drafts &&
+      unsent &&
       !(await confirm({
         title: "Sign out?",
-        body: `${plural(drafts, "unsent draft")} on this browser will be erased.`,
+        body: `${plural(unsent, "unsent note")} on this browser will be erased.`,
         confirmLabel: "Sign out and erase",
         danger: true,
       }))

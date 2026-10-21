@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-query";
 import { api, onRequestSettled, onUnauthorized } from "./api";
 import { ApiError } from "./errors";
-import { carryRotatedDrafts, eraseOwnerDrafts, waitingDrafts } from "./drafts";
+import { carryRotatedDrafts, eraseOwnerDrafts, keptDrafts } from "./drafts";
 import type {
   Flags,
   NoteFilters,
@@ -625,7 +625,7 @@ export function useSyncState() {
     subscribeSync,
     () => {
       try {
-        return owner ? waitingDrafts(localStorage, owner) : 0;
+        return owner ? keptDrafts(localStorage, owner).waiting : 0;
       } catch {
         return 0;
       }

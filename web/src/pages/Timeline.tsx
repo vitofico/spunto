@@ -12,6 +12,7 @@ import {
   useRenameLabel,
   useLabels,
   labelTokens,
+  useSyncState,
   useWorkspaceRole,
 } from "../lib";
 import { formatShortcut } from "../lib/platform";
@@ -313,6 +314,7 @@ export default function Timeline({
     draftKey: label ? "composer:" + label : "composer",
     enabled: canEdit,
   });
+  const { online } = useSyncState();
   const [addLabel, setAddLabel] = useState(true);
   const labels = useLabels();
   const remove = useDeleteLabel();
@@ -477,7 +479,12 @@ export default function Timeline({
             onSave={() => void save()}
             upload={draft.uploadAttachment}
             autoFocus={focusComposer}
-            error={draft.error?.message}
+            // Offline, the banner above already says the server can't be reached.
+            error={
+              online || draft.error?.status !== 0
+                ? draft.error?.message
+                : undefined
+            }
             busy={draft.state === "saving"}
           />
           {draft.storageFailed && (

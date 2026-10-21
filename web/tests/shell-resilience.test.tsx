@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 import { LoadBoundary } from "../src/App";
 import { api } from "../src/lib/api";
 import { ApiError } from "../src/lib/errors";
-import { draftStorageKey, waitingDrafts } from "../src/lib/drafts";
+import { draftStorageKey, keptDrafts } from "../src/lib/drafts";
 import { queryClient, useAuth } from "../src/lib/query";
 
 afterEach(() => {
@@ -65,25 +65,37 @@ it("turns a failed page chunk into a calm retry state and reloads at most once",
 });
 
 it("counts only this owner's saves that are still waiting for the server", () => {
-  const pending = (body: string) =>
+  const save = (body: string, key = 1) => ({
+    body,
+    revision: 1,
+    key: `00000000-0000-4000-8000-00000000000${key}`,
+  });
+  localStorage.setItem(
+    draftStorageKey("owner", "note:2"),
+    JSON.stringify({ body: "two", revision: 1, pending: save("two") }),
+  );
+  // Captures queue in the composer's outbox while it already holds new typing.
+  localStorage.setItem(
+    draftStorageKey("owner", "composer"),
     JSON.stringify({
-      body,
-      revision: 1,
-      pending: {
-        body,
-        revision: 1,
-        key: "00000000-0000-4000-8000-000000000001",
-      },
-    });
-  localStorage.setItem(draftStorageKey("owner", "composer"), pending("one"));
-  localStorage.setItem(draftStorageKey("owner", "note:2"), pending("two"));
+      body: "not sent yet",
+      revision: 3,
+      outbox: [save("one", 2), save("three", 3)],
+    }),
+  );
   localStorage.setItem(
     draftStorageKey("owner", "composer:typing"),
-    JSON.stringify({ body: "not sent yet", revision: 3 }),
+    JSON.stringify({ body: "typed only", revision: 3 }),
   );
-  localStorage.setItem(draftStorageKey("other", "composer"), pending("x"));
-  expect(waitingDrafts(localStorage, "owner")).toBe(2);
-  expect(waitingDrafts(localStorage, "nobody")).toBe(0);
+  localStorage.setItem(
+    draftStorageKey("other", "composer"),
+    JSON.stringify({ body: "x", revision: 1, pending: save("x") }),
+  );
+  expect(keptDrafts(localStorage, "owner")).toEqual({ waiting: 3, unsent: 5 });
+  expect(keptDrafts(localStorage, "nobody")).toEqual({
+    waiting: 0,
+    unsent: 0,
+  });
 });
 
 it("reports an unreachable server instead of waiting on a wordmark forever", async () => {

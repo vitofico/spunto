@@ -564,13 +564,22 @@ export class DraftController {
     return this.flight;
   }
 }
-/** Saves this owner has sent or queued and the server has not confirmed yet ("2 notes waiting"). */
-export function waitingDrafts(storage: Storage, owner: string) {
+/**
+ * Writing this owner keeps only on this device: `waiting` counts saves the server has not
+ * confirmed yet, queued captures included ("2 notes waiting"); `unsent` adds drafts never
+ * saved, which is everything signing out erases.
+ */
+export function keptDrafts(storage: Storage, owner: string) {
   const prefix = draftStorageKey(owner, "");
-  let count = 0;
+  let waiting = 0,
+    unsent = 0;
   for (let index = 0; index < storage.length; index++) {
     const key = storage.key(index);
-    if (key?.startsWith(prefix) && load(storage, key)?.pending) count++;
+    const draft = key?.startsWith(prefix) ? load(storage, key) : undefined;
+    if (!draft) continue;
+    const queued = draft.outbox?.length ?? 0;
+    waiting += queued + (draft.pending ? 1 : 0);
+    unsent += queued + (draft.pending || draft.body.trim() ? 1 : 0);
   }
-  return count;
+  return { waiting, unsent };
 }

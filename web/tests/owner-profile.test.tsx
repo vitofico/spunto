@@ -193,7 +193,7 @@ it("offers the password, not an unused display name, on a single-owner server", 
   expect(showGuide).toHaveBeenCalledTimes(1);
 });
 
-it("signs out at once without drafts and warns before erasing unsent drafts", async () => {
+it("signs out at once without drafts and warns before erasing unsent notes", async () => {
   HTMLDialogElement.prototype.showModal = function () {
     this.open = true;
   };
@@ -215,17 +215,32 @@ it("signs out at once without drafts and warns before erasing unsent drafts", as
   logout.mockClear();
   localStorage.setItem(
     draftStorageKey("fixture-owner", "new"),
-    JSON.stringify({ body: "Half a thought" }),
+    JSON.stringify({ body: "Half a thought", revision: 1 }),
   );
   localStorage.setItem(
     draftStorageKey("fixture-owner", "note-1"),
-    JSON.stringify({ body: "   " }),
+    JSON.stringify({ body: "   ", revision: 1 }),
+  );
+  // A capture saved offline waits in the composer's outbox until the server has it.
+  localStorage.setItem(
+    draftStorageKey("fixture-owner", "composer"),
+    JSON.stringify({
+      body: "",
+      revision: 2,
+      outbox: [
+        {
+          body: "Saved offline",
+          revision: 1,
+          key: "00000000-0000-4000-8000-000000000001",
+        },
+      ],
+    }),
   );
   render(view());
   await user.click(screen.getByRole("button", { name: "Sign out" }));
   const dialog = await screen.findByRole("dialog", { name: "Sign out?" });
   expect(dialog.textContent).toContain(
-    "1 unsent draft on this browser will be erased.",
+    "2 unsent notes on this browser will be erased.",
   );
   await user.click(screen.getByRole("button", { name: "Cancel" }));
   expect(logout).not.toHaveBeenCalled();

@@ -252,6 +252,11 @@ test("an unreachable capture waits on the timeline across reload and retries the
   const waiting = page.locator("article.entry.queued");
   await expect(waiting).toContainText("Kept on this device");
   await expect(waiting).toContainText("Waiting to sync");
+  await expect(page.locator(".rail [role=status]")).toHaveText(
+    "Offline · 1 note waiting",
+  );
+  // The offline banner says it once; the composer does not repeat it.
+  await expect(page.locator(".composer .error")).toHaveCount(0);
   await expect.poll(() => state.keys.length).toBeGreaterThan(0);
   const firstKey = state.keys[0];
   await page.reload();

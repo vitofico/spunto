@@ -2,7 +2,7 @@
 
 Status: approved 2026-10-13, as revised by the redesign: a minimal core plus plugins ([`04-redesign.md`](04-redesign.md)) and how plugin output and themes look ([`05-redesign-ux.md`](05-redesign-ux.md)). Inputs: [`research/blinko.md`](research/blinko.md), [`research/landscape.md`](research/landscape.md), [`research/stack.md`](research/stack.md), 04 and 05. Earlier the same day, speech to text (AND-15, dictation) joined the Android scope at the owner's request; the redesign then replaced the deadline-driven MVP with the core and the plugin waves of §5.
 
-Nothing is built yet and no repository changes because of this document. Blinko keeps running on theficos until the owner chooses to cut over (§5.2, §8).
+Nothing is built yet and no repository changes because of this document. Blinko keeps running on the owner's home server until the owner chooses to cut over (§5.2, §8).
 
 Conventions:
 
@@ -15,7 +15,7 @@ Conventions:
 
 ## 1. Problem and vision
 
-Ideas arrive at bad moments: on a walk, halfway through a code review, just before sleep. Today they go into Blinko on theficos, and Blinko got the core loop right: an empty box on top of a stream of cards, `#labels` typed inline, Markdown underneath. Everything around that loop grew sideways. It needs three pods and about 530 MiB of reserved memory, plus an nginx sidecar whose only job is to work around one Ollama bug. Its search vectors live in a second database file that regularly goes missing. Its Android app is a 93 MB web wrapper that cannot save a note without reaching the server. An idle browser tab burns 20 to 60 % of a CPU core. Its AI appends unvalidated model text straight into notes, and its MCP endpoint (the door Claude Code and Codex would use) runs every call as superadmin and leaks internal parameters into tool schemas. The vision is the same capture loop, rebuilt small and with care: Keep-level capture on Android that works offline, Bear-level typography, Memos-level hosting (one container, one volume), AI that quietly organizes and resurfaces but never changes the owner's words without an accept, and a built-in MCP endpoint so coding agents read from and add to the same pile of ideas the owner does. It is built as a minimal core that is a complete notes app on its own, and everything else, most AI features included, is a plugin the owner switches on and off. A plugin can appear only in a few fixed places the core already draws, within limits the code enforces, and three built-in themes set the paper it is all written on. The capture loop stays the heart.
+Ideas arrive at bad moments: on a walk, halfway through a code review, just before sleep. Today they go into Blinko on the owner's home server, and Blinko got the core loop right: an empty box on top of a stream of cards, `#labels` typed inline, Markdown underneath. Everything around that loop grew sideways. It needs three pods and about 530 MiB of reserved memory, plus an nginx sidecar whose only job is to work around one Ollama bug. Its search vectors live in a second database file that regularly goes missing. Its Android app is a 93 MB web wrapper that cannot save a note without reaching the server. An idle browser tab burns 20 to 60 % of a CPU core. Its AI appends unvalidated model text straight into notes, and its MCP endpoint (the door Claude Code and Codex would use) runs every call as superadmin and leaks internal parameters into tool schemas. The vision is the same capture loop, rebuilt small and with care: Keep-level capture on Android that works offline, Bear-level typography, Memos-level hosting (one container, one volume), AI that quietly organizes and resurfaces but never changes the owner's words without an accept, and a built-in MCP endpoint so coding agents read from and add to the same pile of ideas the owner does. It is built as a minimal core that is a complete notes app on its own, and everything else, most AI features included, is a plugin the owner switches on and off. A plugin can appear only in a few fixed places the core already draws, within limits the code enforces, and three built-in themes set the paper it is all written on. The capture loop stays the heart.
 
 ## 2. Product principles
 
@@ -122,7 +122,7 @@ The core has no AI feature of its own. It has the gateway every AI plugin goes t
 - **HOST-5 (core · M0) Safe upgrades.** Schema migrations, and plugin data migrations, run at start immediately after an automatic backup. A server older than its database refuses to start and says why.
 - **HOST-6 (core · M1) Health and status.** `/healthz` and `/readyz` for orchestrators, and an owner-only status page: version, note count, indexing progress, AI health, last backup, validation failures, and each plugin's state, last run, AI calls and failures. A monitor reads it with a `status` token, which reaches nothing else (MCP-2).
 - **HOST-7 (core · M1) Behind a proxy.** Works behind any reverse proxy at a configured public URL, with TLS terminated by the proxy.
-- **HOST-8 (core · M1) theficos deployment.** One pod following the cluster's conventions: pod security settings, default-deny network policy with ingress from Traefik and egress to Ollama and to the destinations of enabled plugins, SOPS-encrypted secret, pinned image, database on a local volume, backups written to the NFS path that borg already covers. Public at `spunto.example.org`.
+- **HOST-8 (core · M1) Deployment on the owner's cluster.** One pod following the cluster's conventions: pod security settings, default-deny network policy with ingress from Traefik and egress to Ollama and to the destinations of enabled plugins, SOPS-encrypted secret, pinned image, database on a local volume, backups written to the NFS path that the off-site backup already covers. Public at `spunto.example.org`.
 - **HOST-9 (core · later) Compose examples:** minimal, with Caddy for TLS, and with a local Ollama.
 - **HOST-10 (core · later) Helm chart and one-click hosting** (PikaPods and similar).
 
@@ -210,7 +210,7 @@ Grouped as in Settings → Plugins; 04 §4 lists each plugin's slots, permission
 
 #### Data
 
-- **DATA-2 (plugin:blinko-import · M2) Import from Blinko.** A command shipped in the image (`spunto plugins run blinko-import --url ... --token ...`) pulls notes from a running Blinko through its REST API. It keeps created and updated times, inline `#tags` (same syntax, nesting included), pinned and archived state; downloads attachments into the volume and rewrites their links; folds Blinko's three note types into one, optionally labelling each with its old type; and skips trash and "Blinko AI" comments by default. A dry run reports counts first. Re-running updates instead of duplicating (keyed by Blinko ID), so it can run repeatedly until the owner cuts over. Embeddings backfill afterwards when `semantic-search` is on (AI-5). The API route is the default because it works against the live theficos instance without database credentials and avoids Blinko's `.bko` backups, which users report failing to import; verify it against Blinko 1.8.8 when building.
+- **DATA-2 (plugin:blinko-import · M2) Import from Blinko.** A command shipped in the image (`spunto plugins run blinko-import --url ... --token ...`) pulls notes from a running Blinko through its REST API. It keeps created and updated times, inline `#tags` (same syntax, nesting included), pinned and archived state; downloads attachments into the volume and rewrites their links; folds Blinko's three note types into one, optionally labelling each with its old type; and skips trash and "Blinko AI" comments by default. A dry run reports counts first. Re-running updates instead of duplicating (keyed by Blinko ID), so it can run repeatedly until the owner cuts over. Embeddings backfill afterwards when `semantic-search` is on (AI-5). The API route is the default because it works against the owner's live instance without database credentials and avoids Blinko's `.bko` backups, which users report failing to import; verify it against Blinko 1.8.8 when building.
 - **WEB-8 (plugin:blinko-import · M2) Blinko import from the UI.** The plugin's settings page runs the same import, dry run first, with the Blinko token set in the environment.
 - **DATA-3 (plugin:markdown-import · M7) Import Markdown.** A zip or folder of `.md` files. Our own export round-trips without loss; Obsidian, Memos and Bear exports import on a best-effort basis, honoring front matter.
 
@@ -231,7 +231,7 @@ No dates: Blinko keeps running, so each milestone ships when it is good. Each on
 | | Ships | Daily use from here | Done when |
 |---|---|---|---|
 | **M0 Skeleton and spikes** | Monorepo, CI, image, config validation, migrations, backup and restore (HOST-1, HOST-2, HOST-4, HOST-5) | none yet | The spikes in 02 pass, plus: a per-token, per-plugin MCP tool list seen correctly by Claude Code and Codex; enabling and disabling a test plugin without restart; on-device dictation in Italian and English on the owner's Android 16 phone (D22) |
-| **M1 Core server and agents** | Notes, labels, revisions, merge, keyword search, REST API, export, tokens with the `status` scope, the seven MCP tools, theficos deployment (CAP-2, CAP-6, CAP-7, CAP-10, LAB-1, LAB-4, LAB-6, SRC-1, SRC-6, AI-9, MCP-1 to MCP-8, HOST-3, HOST-6 to HOST-8, DATA-1, DATA-4) | Agents capture and search over MCP | Criterion 5 (§8), without semantic search |
+| **M1 Core server and agents** | Notes, labels, revisions, merge, keyword search, REST API, export, tokens with the `status` scope, the seven MCP tools, deployment on the owner's cluster (CAP-2, CAP-6, CAP-7, CAP-10, LAB-1, LAB-4, LAB-6, SRC-1, SRC-6, AI-9, MCP-1 to MCP-8, HOST-3, HOST-6 to HOST-8, DATA-1, DATA-4) | Agents capture and search over MCP | Criterion 5 (§8), without semantic search |
 | **M2 Plugin host** | Loader, manifest validation, lifecycle, plugin storage, jobs and schedules, routes, plugin MCP tools, guarded fetch, environment pins (PLG-5); the first plugins, none needing AI: `blinko-import` (DATA-2, WEB-8), `agent-inbox` (MCP-10), `tasks` (SRC-8), `resurface` (SRC-5, SRC-7) | The owner's Blinko library is in and agents read it | The four plugins pass the contract suite; counts match the Blinko spot check (criterion 1, first half) |
 | **M3 Web** | Core screens, the slot renderers, generated settings pages, Review, three themes (CAP-1, CAP-3 to CAP-5, CAP-8, CAP-9, LAB-2, LAB-3, SRC-3, WEB-1 to WEB-6, PLG-1 to PLG-4, PLG-6, THM-1, THM-2) | Daily capture and recall on the desktop | Playwright suite green; bundle under budget; every plugin off leaves a finished-looking app |
 | **M4 AI gateway and wave 1** | Profiles and routing, validation loop, Anthropic adapter, vector index, health check (AI-1, AI-2, AI-4, AI-5, AI-7); `label-suggestions` (AI-3, AI-10, LAB-5), `semantic-search` (SRC-2), `related` (AI-6), `ask` (AI-8) | The first plan's AI, plugin by plugin | The fake-provider suite proves fail-closed for each plugin; the embedding-model check (D17) |
@@ -268,7 +268,7 @@ Within a wave, plugins ship one at a time in the order listed. Cutover from Blin
 
 ### 6.3 Performance and latency targets
 
-Reference hardware: a mid-range phone (Pixel 6a class) for performance, the owner's Android 16 phone for dictation (D22), and the theficos node. Server targets assume 50,000 notes.
+Reference hardware: a mid-range phone (Pixel 6a class) for performance, the owner's Android 16 phone for dictation (D22), and the owner's home server. Server targets assume 50,000 notes.
 
 | Interaction | Target |
 |---|---|
@@ -297,7 +297,7 @@ Bundle size, APK size and image size budgets (§6.6) are checked in CI so they c
 - **Logs never contain note content,** token values or provider keys. Secrets appear in logs only as short fingerprints. Plugins log codes and counts, never free text.
 - **Tokens:** random, shown once, stored hashed, accepted only in the `Authorization` header, scoped read-only, read-write or `status` (monitoring only), revocable, with a last-used time. Device tokens are listed and revocable like access tokens. No access token can switch a plugin on or off; only a web session or the owner's own device can.
 - **Secrets come from the environment.** Provider API keys and plugin secrets (`SPUNTO_PLUGIN_<ID>_<KEY>`) are never stored in the database and never sent to clients. Android never calls the AI provider directly.
-- **Login hardening.** Password hashed with argon2id, and at least 8 characters wherever it is set, the environment included; rate limiting with growing back-off on failed logins; web session cookies `HttpOnly`, `SameSite`, and `Secure` on HTTPS; CSRF protection on cookie-authenticated writes. On theficos the app's own login guards a public hostname (as Blinko's does today), so this is not optional.
+- **Login hardening.** Password hashed with argon2id, and at least 8 characters wherever it is set, the environment included; rate limiting with growing back-off on failed logins; web session cookies `HttpOnly`, `SameSite`, and `Secure` on HTTPS; CSRF protection on cookie-authenticated writes. On the owner's home server the app's own login guards a public hostname (as Blinko's does today), so this is not optional.
 - **Plain HTTP on a LAN works at first run** (D33). When `SPUNTO_PUBLIC_URL` is `http://`, login uses a plain cookie, every screen shows a persistent "Not encrypted" line, and Android connects only after an explicit warning. A request that arrives on a host other than the configured one gets a clear page naming the right address, instead of a login that silently does nothing.
 - **No side doors.** The server never spawns a process from configuration or from user, API or MCP input (Blinko's CVE-2026-23882 came from letting a configuration field run a command).
 - **Guarded fetch** (D30). The server reaches a URL only through one guarded fetch in the core, only for enabled plugins that declare it, and never because of agent input. The fetch blocks private and internal addresses, re-checks every redirect, caps size and time, and sends no cookies. Links in notes from agents or email are fetched only when the owner runs the command.
@@ -315,12 +315,12 @@ Bundle size, APK size and image size budgets (§6.6) are checked in CI so they c
 - **Machine-written notes are marked** (D29). Plugins may write new notes: a digest, a saved answer, a follow-up, a translation. Such a note carries a "via <plugin>" chip, is set in the sans, and is left out of every plugin's AI input and out of resurfacing until the owner edits it, which makes it theirs. Unattended output (schedules, hooks) is capped at five notes a day per plugin.
 - Every structured response is validated (AI-4). A fake provider that returns 200 and ignores the schema is part of the test suite, and every plugin's test passes only if no note, suggestion or annotation changes.
 - AI calls are rate-limited server-wide (a token bucket, as in Quire) with a share per plugin, so a 5,000-note import backfill cannot saturate a shared Ollama.
-- **Per-plugin routing is for speed, not privacy** (D16). Embeddings stay local (`embeddinggemma` on the theficos Ollama). Chat and vision default to Ollama cloud; every other provider stays supported. That one chat recipient serves every plugin, unless the owner routes a heavy, slow job such as a digest to a model that is good enough. Over time label suggestions and digests send essentially every non-private note to the chat recipient, so the private flag, not routing, is the per-note opt-out.
+- **Per-plugin routing is for speed, not privacy** (D16). Embeddings stay local (`embeddinggemma` on the home server's Ollama). Chat and vision default to Ollama cloud; every other provider stays supported. That one chat recipient serves every plugin, unless the owner routes a heavy, slow job such as a digest to a model that is good enough. Over time label suggestions and digests send essentially every non-private note to the chat recipient, so the private flag, not routing, is the per-note opt-out.
 - The embedding model is a setting, not a constant: the docs recommend a multilingual model when notes are not all English, and changing it re-indexes in the background (AI-5).
 
 ### 6.6 Self-host footprint and resource budget
 
-**Target: one container and one volume.** Compare Blinko on theficos today: three pods, about 105 millicores and 528 MiB requested, two persistent locations.
+**Target: one container and one volume.** Compare Blinko on the owner's home server today: three pods, about 105 millicores and 528 MiB requested, two persistent locations.
 
 | Item | Budget |
 |---|---|
@@ -345,7 +345,7 @@ Scale the design must handle comfortably: 50,000 notes, 1,000 labels, 5 GB of at
 - **Attachments are write-once files** named by content, so any file-level backup tool (borg, restic) can copy the volume safely; the database snapshot is the consistency point.
 - **Restore is one documented command,** and CI restores a snapshot and checks note counts on every release.
 - **The Markdown export** (DATA-1) is the human-readable last resort.
-- **On theficos,** the database lives on a local volume (SQLite on the soft-mounted NFS share would risk lock and corruption trouble, as Blinko's vector file does today), and the backup directory points at the NFS path that borg already copies off-site. This also fixes the known gap that local volumes sit outside the borg backups.
+- **On the owner's home server,** the database lives on a local volume (SQLite on the soft-mounted NFS share would risk lock and corruption trouble, as Blinko's vector file does today), and the backup directory points at the NFS path that is already copied off-site. This also fixes the known gap that local volumes sit outside the off-site backups.
 
 ### 6.8 Design quality, accessibility and language
 
@@ -384,8 +384,8 @@ Scale the design must handle comfortably: 50,000 notes, 1,000 labels, 5 GB of at
 
 ## 8. Success criteria
 
-1. **Cutover.** The owner's Blinko library is imported with nothing lost (note counts match; a spot check of 20 notes covering nested tags, attachments, pinned and archived notes passes), and Blinko is decommissioned on theficos when the owner chooses, after M5.
-2. **Footprint.** On theficos the app runs as one pod requesting at most 50 millicores and 128 MiB with the default plugin set on, against Blinko's three pods and 528 MiB.
+1. **Cutover.** The owner's Blinko library is imported with nothing lost (note counts match; a spot check of 20 notes covering nested tags, attachments, pinned and archived notes passes), and Blinko is decommissioned on the owner's home server when the owner chooses, after M5.
+2. **Footprint.** On the owner's home server the app runs as one pod requesting at most 50 millicores and 128 MiB with the default plugin set on, against Blinko's three pods and 528 MiB.
 3. **Daily habit.** The phone is the main capture surface: at least five captures a week from Android for four consecutive weeks, counted from the notes' own source field (no telemetry).
 4. **Speed.** The latency targets in §6.3 are met on the reference phone and in the server benchmark run in CI.
 5. **Agents.** On a clean machine, Claude Code and Codex each connect with the one documented command and, in a single session, save an idea and answer "what did I note about X" using the tools; a default search answer stays under 2,000 tokens.
@@ -424,7 +424,7 @@ The owner settled every decision on 2026-10-13, each at its recommended option u
 | ID | Decision | Chosen | Why |
 |---|---|---|---|
 | D15 | Anthropic support | A native adapter in the AI gateway (M4) | Schema-constrained output without a lossy shim |
-| D16 (revised) | Where note text goes for AI | Embeddings local (`embeddinggemma` on the theficos Ollama); chat and vision default to Ollama cloud; transcription unbound until `voice-memos` needs a Whisper-compatible server; every provider stays supported and per-plugin routing can override | The owner chose Ollama cloud for chat (what Quire and Hermes already use); embeddings are the bulk of the calls and must stay on one stable model, so they run locally |
+| D16 (revised) | Where note text goes for AI | Embeddings local (`embeddinggemma` on the home server's Ollama); chat and vision default to Ollama cloud; transcription unbound until `voice-memos` needs a Whisper-compatible server; every provider stays supported and per-plugin routing can override | The owner chose Ollama cloud for chat (what Quire and Hermes already use); embeddings are the bulk of the calls and must stay on one stable model, so they run locally |
 | D19 | Private notes and MCP | Hidden from MCP by default; per-token opt-in | "Private" means private from every reader the owner did not pick |
 | D22 | Dictation engine | Android's on-device recognizer; the M0 spike confirms the Italian and English packs on the owner's Android 16 phone | Android 16 has it, so no bundled model is needed (AND-16 waits) |
 | D23 | Online recognition where on-device is missing | Ask once per phone; off until accepted | Audio never leaves the phone unannounced |

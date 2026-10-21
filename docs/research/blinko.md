@@ -1,6 +1,6 @@
 # Blinko teardown
 
-Research date: 2026-10-13. Version studied: Blinko 1.8.8 (released 2026-06-20, the current `latest` image), source at `main` as of 2026-08-27. Sources: the repo (`github.com/blinkospace/blinko`, which `blinko-space/blinko` redirects to), docs.blinko.space, the issue tracker, and the theficos manifests in `theficos-cluster/applications/blinko` (local `main` plus the 4 commits on `origin/main` that moved Postgres to 17.11 today).
+Research date: 2026-10-13. Version studied: Blinko 1.8.8 (released 2026-06-20, the current `latest` image), source at `main` as of 2026-08-27. Sources: the repo (`github.com/blinkospace/blinko`, which `blinko-space/blinko` redirects to), docs.blinko.space, the issue tracker, and the Kubernetes manifests of the owner's own Blinko deployment.
 
 ## TL;DR
 
@@ -147,23 +147,23 @@ Blinko is also an **MCP client**: users can register external MCP servers (stdio
 - Env vars: `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_BASE_URL`, plus `TRUST_PROXY` and `DISABLE_SECURE_COOKIE`. The `NEXT*` names are left over from Blinko's Next.js days; it now runs Vite + Express. S3, SSO and AI are configured in the UI.
 - Install paths: `curl | bash` script, `docker run`, Compose, a Helm chart, PikaPods. Upgrade pain: #819 (won't start after upgrade), #852 (vector migration missing), #1075 (sort order scrambled and backup task gone), #971 (`latest` tag briefly missing).
 
-### theficos (from the manifests)
+### A single-node Kubernetes deployment (from the owner's manifests)
 
 | Component | Image | Requests | Limits | Storage |
 |---|---|---|---|---|
-| `blinko` | `blinkospace/blinko:latest`, `imagePullPolicy: Always`, `Recreate`, 1 replica | 50m CPU, 256Mi | 1 CPU, 1Gi | `/app/.blinko` on a 5Gi NFS PV (RWX, `soft,timeo=30,retrans=3`, `/srv/cluster-data/blinko`) |
-| init `wait-for-db` | `postgres:17.11-alpine` (`origin/main`; local `main` still 14) | n/a | n/a | n/a |
-| `blinko-postgres` | `postgres:17.11` (since #46 today; was 14) | 50m CPU, 256Mi | 500m CPU, 512Mi | 5Gi hostpath PVC `blinko-postgresql-data-17`; the PG14 PVC is kept as a rollback |
+| `blinko` | `blinkospace/blinko:latest`, `imagePullPolicy: Always`, `Recreate`, 1 replica | 50m CPU, 256Mi | 1 CPU, 1Gi | `/app/.blinko` on a 5Gi NFS PV (RWX, `soft,timeo=30,retrans=3`) |
+| init `wait-for-db` | `postgres:17.11-alpine` | n/a | n/a | n/a |
+| `blinko-postgres` | `postgres:17.11` (was 14) | 50m CPU, 256Mi | 500m CPU, 512Mi | 5Gi hostpath PVC; the PG14 PVC is kept as a rollback |
 | `ollama-proxy` | `nginxinc/nginx-unprivileged:1-alpine` | 5m CPU, 16Mi | 50m CPU, 32Mi | none |
 | (external) shared Ollama | `ollama` namespace, CPU-only | n/a | n/a | n/a |
 
 - **Totals for Blinko itself**: 3 pods, about 105m CPU and 528Mi requested, about 1.55 CPU and 1.5Gi at the limits, plus two persistent locations (Postgres PVC and the NFS directory).
-- **Env**: `NODE_ENV=production`, `TZ=Europe/Rome`, `NEXTAUTH_URL=https://blinko.example.org`, `NEXTAUTH_SECRET`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL` assembled from them. The SOPS secret holds `NEXTAUTH_SECRET`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
-- **AI wiring** (from the April design spec): chat on `qwen3.5:cloud` through the local Ollama's cloud proxy, embeddings on local `nomic-embed-text`. Entered by hand in the Blinko UI, so it isn't in Git.
+- **Env**: `NODE_ENV=production`, `TZ`, `NEXTAUTH_URL` (the public URL), `NEXTAUTH_SECRET`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `DATABASE_URL` assembled from them. The SOPS secret holds `NEXTAUTH_SECRET`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
+- **AI wiring**: chat on `qwen3.5:cloud` through the local Ollama's cloud proxy, embeddings on local `nomic-embed-text`. Entered by hand in the Blinko UI, so it isn't in Git.
 - **The nginx proxy exists only for #1126** (rewriting `/embed` to `/api/embed`). The upstream workaround is to set the Ollama base URL to `.../api`, but then model-list sync breaks, so the proxy is still the cleaner fix.
-- **Ingress**: Traefik + cert-manager on `blinko.example.org`, default-deny NetworkPolicies. Authentik forward auth was removed on 2026-04-13 (Traefik can't reference a middleware in another namespace), so Blinko's own login is the only gate on a public hostname. The open-registration report (#803) is still open; the current code does check the "allow register" flag, so treat it as unconfirmed, but note that the first account to register on an empty DB becomes `superadmin`.
+- **Ingress**: Traefik + cert-manager on a public hostname, default-deny NetworkPolicies, and no forward-auth proxy in front, so Blinko's own login is the only gate. The open-registration report (#803) is still open; the current code does check the "allow register" flag, so treat it as unconfirmed, but note that the first account to register on an empty DB becomes `superadmin`.
 - **Risks in this setup**: `:latest` plus `Always` means a pod restart can pull a new version and run migrations unattended. The libSQL vector file sits on a soft-mounted NFS share, and SQLite on NFS is a known source of lock and corruption trouble.
-- Live usage was not measured: this machine's kubectl context points at a different cluster, so all numbers come from the manifests.
+- Live usage was not measured, so all numbers come from the manifests.
 
 ## 8. Mobile and Android
 
@@ -239,7 +239,7 @@ Blinko is also an **MCP client**: users can register external MCP servers (stdio
 2. **Social and federation features**: Blinko Hub, follows, RSS, guest comments, notifications, public comment threads.
 3. **Plugin system and marketplace.**
 4. **Decoration**: music player and Spotify, analytics dashboard, 3D or shader backgrounds, confetti, tilt effects, the emoji agent, custom font uploads.
-5. **Multi-user, roles, internal sharing and 13 OAuth providers.** Single user, with an optional OIDC login later (Authentik already exists on theficos).
+5. **Multi-user, roles, internal sharing and 13 OAuth providers.** Single user, with an optional OIDC login later (for example through Authentik).
 6. **The agent that can create, update and delete notes on its own**, scheduled AI tasks, Tavily web search, and the built-in MCP *client* (spawning stdio commands configured from the UI).
 7. **AI output posted as comments.** Suggestions should be accepted into the note or dismissed.
 8. **Several overlapping AI frameworks.** One thin client covering OpenAI-compatible and Ollama.
@@ -254,7 +254,7 @@ Blinko is also an **MCP client**: users can register external MCP servers (stdio
 3. **Validated structured AI output** (the Ollama-cloud lesson from quire): request JSON against a schema, validate it, retry or fall back, and never write unvalidated model text into a note. Tag suggestions are pending until accepted, or applied only after validation against the tag grammar.
 4. **Tags as real entities with safe rename**: escaped, boundary-aware rewrite inside one transaction, and clients refresh their tag list from a sync cursor instead of a stale cache (#1102).
 5. **Zero idle cost**: no perpetual animations, a JS bundle budget, an APK budget (#1222).
-6. **Small, GitOps-friendly self-hosting**: one container, SQLite by default (Postgres optional), one volume, every setting including AI providers and keys set by env or secret, a pinned image tag, and a backup before migrations run. Aim for one pod on theficos with no sidecar proxies.
+6. **Small, GitOps-friendly self-hosting**: one container, SQLite by default (Postgres optional), one volume, every setting including AI providers and keys set by env or secret, a pinned image tag, and a backup before migrations run. Aim for one pod on the owner's home server with no sidecar proxies.
 7. **A sturdy embedding pipeline**: a resumable background queue with batching and progress that survives restarts and large libraries (#1232, #663). Embed clean chunk text (no timestamps). Detect the dimension by probing the model instead of guessing from its name.
 8. **Honest provider checks**: "test connection" runs the real chat **and** embedding calls the app will make (#1210). Native Ollama paths tested in CI against a real Ollama (#1126).
 9. **MCP designed for coding agents**: a few well-described tools (`search_notes` returning snippets and IDs, `get_note`, `create_note`, `append_to_note`, `list_tags`, `add_tags`), no internal parameters, read-only and read-write token scopes, stateless HTTP so restarts don't drop sessions, and copy-paste setup docs for Claude Code and Codex.
@@ -269,4 +269,4 @@ Blinko is also an **MCP client**: users can register external MCP servers (stdio
 - Docs: https://docs.blinko.space/llms.txt and the pages for Blinko vs Note, Tags, AI Setting, AI Tag, AI Search, AI Post Processing, AI Writing, Daily Review, Android Share, Android Shortcuts, Blinko Hub, Access Token, Install
 - Issues: #646, #579, #852, #1126, #1232, #663, #1094, #988, #1210, #1248, #799, #885, #611, #629, #644, #258, #509, #217, #260, #1222 (PR #1255), #207, #612, #569, #898, #948, #672, #1219, #613, #1049, #926, #690, #1193, #1102, #1128, #1243, #692, #803, #819, #1075, #1077, #927, #971, #1178, #1052, #1179, #1070 (PR #1250), #989, #236, #245
 - Docker Hub tags API for image sizes; GitHub release 1.8.8 assets for APK and AppImage sizes
-- theficos: `theficos-cluster/applications/blinko/*` on `main` and `origin/main` (commits a11ab8f, f7ffecf, f7ee449, 744478a) and the Blinko + Ollama design spec from commit 56f2549
+- The owner's Blinko deployment manifests and its Blinko + Ollama design spec, in the owner's private cluster repository

@@ -1,8 +1,7 @@
 # Stack research: what the notes app can reuse
 
 Surveyed 2026-10-13, read-only, from `quire` (main at `eebaf0f`), `galley` (main at
-`7a74760`) and `theficos-cluster` (main at `9a43573`, plus the uncommitted
-`applications/galley/` and `applications/galley-cloud/` folders on disk).
+`7a74760`) and the owner's private cluster repository.
 
 ## Why this document exists
 
@@ -170,15 +169,14 @@ conventions, the bin wrapper and the review-gate idea do.
   ADRs in `docs/decisions/ADR-NNNN-<slug>.md`; `CHANGELOG.md`; gitignored
   `internal/` for planning. AGPL-3.0 + CLA + `TRADEMARKS.md`.
 
-## 3. theficos-cluster (how apps get deployed)
+## 3. The owner's cluster conventions (how apps get deployed)
 
-- **Platform:** single-node MicroK8s; one Kustomize folder per app in
-  `applications/<app>/`; deployed on the node with `make deploy APP=<name>`
-  (`scripts/deploy/10-deploy.sh`, which supports `--dry-run` and `--diff`).
+- **Platform:** single-node MicroK8s; one Kustomize folder per app, deployed on the
+  node by a deploy script that supports `--dry-run` and `--diff`.
 - **Ingress:** Traefik with `cert-manager.io/cluster-issuer: letsencrypt-prod`,
   `router.entrypoints: websecure`, `router.tls: "true"`; hosts are
-  `<app>.example.org` (DNS at deSEC). Path routing uses Traefik `Middleware`
-  `stripPrefix`; the longer prefix wins across Ingress objects.
+  `<app>.example.org`. Path routing uses Traefik `Middleware` `stripPrefix`; the
+  longer prefix wins across Ingress objects.
 - **Pod security (required for app pods):** `automountServiceAccountToken: false`,
   `seccompProfile: RuntimeDefault`, drop all capabilities, no privilege escalation,
   `runAsNonRoot` and `readOnlyRootFilesystem` where the image allows.
@@ -186,34 +184,29 @@ conventions, the bin wrapper and the review-gate idea do.
   the app port, explicit app-to-database rules.
 - **Secrets:** SOPS + age. A per-app `secret.yaml` is encrypted, kept out of
   `kustomization.yaml`, and decrypted and applied by the deploy script.
-- **Images:** private `ghcr.io/vitofico/*`; each namespace needs the
-  `github-packages-repo` pull secret copied in. Galley uses a moving `stable` tag
-  with `imagePullPolicy: Always` and pins a CalVer tag to roll back; Quire uses
-  `latest`.
+- **Images:** private GHCR images; each namespace needs a registry pull secret
+  copied in. Galley uses a moving `stable` tag with `imagePullPolicy: Always` and
+  pins a CalVer tag to roll back; Quire uses `latest`.
 - **Storage:** Postgres runs per app on `microk8s-hostpath` PVCs (Quire:
   `postgres:16-alpine` StatefulSet; Blinko: `postgres:14` Deployment). App files go
-  on NFS PersistentVolumes at `/srv/cluster-data/<app>` (RWX, `Retain`). The
-  October upgrade plan (`docs/upgrade-plan-2026-10.md`) records that hostpath PVCs
-  are **outside the borg backups**, so a new app should ship with a `pg_dump` hook
-  from day one.
-- **Authentik** (2026.2.7, `auth.example.org`): apps integrate through native
-  OIDC (Immich, Nextcloud, Galley), not through a forward-auth proxy. Galley's
-  provider and application are created by an idempotent API script
-  (`scripts/helpers/authentik-galley-setup.sh`) that reads the client secret from
-  the in-cluster Secret, so the plaintext never leaves the cluster.
-- **LLMs:** one shared Ollama (`ollama/ollama:0.32.14`, 20 Gi hostpath for models)
-  at `http://ollama.ollama.svc.cluster.local:11434/v1`. Quire and Hermes use cloud
-  models through it (`gpt-oss:120b-cloud`, fallback `gemma4:31b-cloud`), Quire with
-  an API key from its Secret. Every consumer namespace needs an `allow-from-<ns>`
-  policy in the `ollama` namespace (and an egress rule on its own side if it
-  restricts egress). Galley's model proxy uses the same Ollama as a named upstream.
-- **Blinko today:** `blinkospace/blinko:latest` on port 1111 at
-  `blinko.example.org`, NextAuth, Postgres 14 (move to 17 planned before
-  PG14's 12 November end of life), data on NFS at `/srv/cluster-data/blinko`. An
-  nginx sidecar rewrites `/embed` to Ollama's `/api/embed` to work around an
-  upstream Blinko bug, which shows that an embedding model is already pulled on the
-  cluster and that the existing notes live in a Postgres the new app could import
-  from.
+  on NFS PersistentVolumes (RWX, `Retain`) that the off-site backup covers.
+  Hostpath PVCs are **outside the off-site backups**, so a new app should ship with
+  a `pg_dump` hook from day one.
+- **Authentik:** apps integrate through native OIDC (Immich, Nextcloud, Galley),
+  not through a forward-auth proxy. Galley's provider and application are created
+  by an idempotent API script that reads the client secret from the in-cluster
+  Secret, so the plaintext never leaves the cluster.
+- **LLMs:** one shared Ollama at `http://ollama.ollama.svc.cluster.local:11434/v1`.
+  Quire and Hermes use cloud models through it (`gpt-oss:120b-cloud`, fallback
+  `gemma4:31b-cloud`), Quire with an API key from its Secret. Every consumer
+  namespace needs an `allow-from-<ns>` policy in the `ollama` namespace (and an
+  egress rule on its own side if it restricts egress). Galley's model proxy uses
+  the same Ollama as a named upstream.
+- **Blinko today:** `blinkospace/blinko:latest` on port 1111, NextAuth, Postgres 14,
+  data on NFS. An nginx sidecar rewrites `/embed` to Ollama's `/api/embed` to work
+  around an upstream Blinko bug, which shows that an embedding model is already
+  pulled on the cluster and that the existing notes live in a Postgres the new app
+  could import from.
 
 ## 4. Reusable pieces at a glance
 
@@ -232,7 +225,7 @@ conventions, the bin wrapper and the review-gate idea do.
 | Server image with migrate-on-start, readable compose failures | Quire `server/Dockerfile`, `docker-compose.yml` | Docker |
 | Image release to ghcr with CalVer + `stable` | Galley `release.yml` | YAML |
 | Secret scanning, audit, Trivy | Galley `security.yml`, Quire `detect-secrets` | YAML |
-| Cluster manifests (ingress, netpol, SOPS, pod security) | `theficos-cluster/applications/galley` as the template | YAML |
+| Cluster manifests (ingress, netpol, SOPS, pod security) | Galley's manifests in the owner's cluster repository as the template | YAML |
 | Agent rules and decision records | Galley `AGENTS.md` + `docs/decisions/` | Markdown |
 
 Things neither repo has yet, whichever stack is chosen: vector search (for
@@ -244,7 +237,7 @@ MCP transport with authentication, and Android login through OIDC.
 All three assume the same deployment shape, because it is what makes self-hosting
 easy: **one server image that serves the API, the built web app and the MCP
 endpoint, plus one Postgres**, shipped as a two-service `docker compose` file and as
-a Kustomize folder for theficos. They differ in which language the server is
+a Kustomize folder for the owner's cluster. They differ in which language the server is
 written in and how the Android app is built.
 
 ### A. Quire-shaped: native Kotlin app + Python server + TypeScript web
@@ -261,7 +254,7 @@ written in and how the Android app is built.
   approach, built into the server image; TypeScript types generated from FastAPI's
   OpenAPI schema.
 - **Reuses:** almost all of Quire (Android, server, AI, auth, Docker, CI, F-Droid);
-  Galley's web patterns and MCP conventions; theficos manifests.
+  Galley's web patterns and MCP conventions; the owner's cluster manifests.
 - **Main risk:** three languages and three toolchains for one person, and API
   contracts written three times (Pydantic, hand-written Kotlin DTOs, generated TS).
   Contract drift is the failure mode; generating clients from OpenAPI reduces it
@@ -297,7 +290,7 @@ written in and how the Android app is built.
   source of the API contract and an OpenAPI document generated from it for the
   Kotlin client.
 - **Reuses:** Quire for everything Android; Galley for everything server, web and
-  MCP; theficos manifests. Two languages instead of three, and the web, server and
+  MCP; the owner's cluster manifests. Two languages instead of three, and the web, server and
   MCP share types for free.
 - **Main risk:** the server-side pieces Quire has already debugged in Python (the
   `json_schema` fallback and retry, `NativeAuth` with argon2id, migrate-on-start,
@@ -330,4 +323,4 @@ surfaces.
 
 **Takeaway:** whichever stack wins, the Android sync model and the LLM client come
 from Quire, the MCP conventions and web scaffolding come from Galley, and the
-deployment is a copy of `applications/galley` adapted to one image plus Postgres.
+deployment is a copy of Galley's cluster manifests adapted to one image plus Postgres.

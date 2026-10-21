@@ -42,5 +42,5 @@ FTS5's rank ordering before fetching the returned notes removed that cost while 
 and stable cursor candidates.
 
 These are local service/ASGI measurements: no socket, reverse proxy, TLS or network latency is
-included. They do not measure the theficos node or Android reference hardware. Re-run on the
+included. They do not measure the deployment node or Android reference hardware. Re-run on the
 deployment runtime before making claims about those environments.

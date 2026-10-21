@@ -2,7 +2,7 @@
 
 Status: revised 2026-10-13 to match the approved redesign: a small core plus plugins ([`04-redesign.md`](04-redesign.md)) and how plugin output and themes look ([`05-redesign-ux.md`](05-redesign-ux.md)). Inputs: [`01-requirements.md`](01-requirements.md), [`research/landscape.md`](research/landscape.md), [`research/blinko.md`](research/blinko.md), 04 and 05. Mockups: [`design/mockups.html`](design/mockups.html) for the core screens and [`design/redesign.html`](design/redesign.html) for plugins and themes (open them in a browser; they show an Android phone and a desktop browser, in light and dark). Dictation is the `dictation` device plugin, on by default; see F7, A13 and mockup A9.
 
-Nothing is built yet. This document fixes how the app looks, moves and behaves; it does not change any code or the theficos cluster. It rests on decisions the owner has settled, listed with their reasons in §13.
+Nothing is built yet. This document fixes how the app looks, moves and behaves; it does not change any code or the owner's cluster. It rests on decisions the owner has settled, listed with their reasons in §13.
 
 Conventions: features that belong to a plugin carry its id in `code` (`ask`, `resurface`); everything else is core. The old (M), (S) and (C) scope marks are gone: the milestones of 01 §5.2 decide the order. A- and W-numbers name the Android and web screens of §5.2 and §5.3; in a "Mockup frames" column, or written as "mockup A9", they are frames in `mockups.html` (§12). R-numbers are frames in `redesign.html`.
 

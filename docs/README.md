@@ -2,7 +2,7 @@
 
 Spunto is a self-hosted notes app with optional AI, Android, web and MCP clients, and plugins that appear in fixed, budgeted places. Local mode uses one SQLite database and an owner password. The approved [2026-10-18 hosted revision](decisions/2026-10-18-multi-user.md) adds username/password sign-in, optional OIDC, shared PostgreSQL, personal/shared spaces and revocable note grants. Labels remain the main organization tool; there is no project entity, live CRDT editing or billing. [Hosted operation](hosted.md) describes the current behavior and the separate private Spunto Cloud composition.
 
-Completed milestones and remaining delivery/physical-phone gates are recorded in [the delivery record](development/full-product.md). Import and retrieval acceptance use synthetic fixtures. The earlier single-owner deployment and signed Android `2026.10.16.1` receipts are historical evidence, not proof of hosted cutover or real IdP/physical-phone acceptance. APK/container publication and offsite recovery verification remain separate gates.
+Completed milestones and remaining delivery/physical-phone gates are recorded in [the delivery record](development/full-product.md). Import and retrieval acceptance use synthetic fixtures. The signed Android `2026.10.16.1` receipts are historical evidence, not proof of hosted cutover or real IdP/physical-phone acceptance. APK/container publication and offsite recovery verification remain separate gates.
 
 **Read first:** the hosted decision and guide for the multi-account revision; `01-requirements.md` and `02-spec.md` for the original core and local mode; `03-design.md` for the interface, with the mockups open beside it. Historical approved documents 01–05 remain unchanged. `04` and `05` explain the core-plus-plugins design; the research files are background.
 
@@ -38,6 +38,6 @@ Completed milestones and remaining delivery/physical-phone gates are recorded in
 | `design/redesign.html` | Plugin slots, the plugin manager, AI flows and the three themes, frames R1 to R24 |
 | `research/blinko.md` | Teardown of Blinko 1.8.8, the app Spunto replaces |
 | `research/landscape.md` | Survey of note apps, capture, AI features, design and how other apps expose MCP |
-| `research/stack.md` | What Spunto can reuse from Quire, Galley and the theficos cluster |
+| `research/stack.md` | What Spunto can reuse from Quire, Galley and the owner's cluster |
 
 Requirement IDs (CAP-1, PLG-3) are defined in 01; original decisions (D1 to D33, U1 to U5) are recorded in 01 §9 and 02 §17. The 2026-10-18 decision supersedes the single-owner/SQLite-only restrictions for hosted mode. Other original requirements and the core-plus-plugins design continue to apply.

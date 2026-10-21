@@ -20,7 +20,7 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
-        # Verified theficos Traefik namespace/pod labels.
+        # Traefik's namespace/pod labels; match them to your installation.
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: traefik

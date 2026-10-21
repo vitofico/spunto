@@ -18,7 +18,7 @@ spec:
       enableServiceLinks: false
       # The hostpath PVC and locally imported amd64 image live on this node.
       nodeSelector:
-        kubernetes.io/hostname: node-1
+        kubernetes.io/hostname: node-1  # replace with your node's name
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -43,7 +43,7 @@ spec:
             - name: SPUNTO_OWNER_PASSWORD_HASH_FILE
               value: /run/secrets/owner_password_hash
             - name: TZ
-              value: Europe/Rome
+              value: UTC  # replace with your time zone
             - name: SPUNTO_BACKUP_DIR
               value: /backups
             - name: SPUNTO_ATTACHMENTS_DIR
@@ -54,7 +54,7 @@ spec:
               value: openai
             - name: SPUNTO_AI_OLLAMA_BASE_URL
               value: http://ollama.ollama.svc.cluster.local:11434/v1
-            # The owner approved cloud chat; embeddings remain on the cluster node.
+            # Chat uses an Ollama Cloud model; embeddings remain on the cluster node.
             - name: SPUNTO_AI_OLLAMA_CHAT_MODEL
               value: gpt-oss:20b-cloud
             # Local embeddings; the gateway checks the model's vector dimensions.

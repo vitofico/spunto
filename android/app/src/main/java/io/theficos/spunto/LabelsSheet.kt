@@ -64,7 +64,6 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
 
 @Composable fun SettingsLanding(onRoute:(String)->Unit,onConnect:()->Unit,isConnected:Boolean) {
  LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-  item {Text("Settings",style=MaterialTheme.typography.titleLarge)}
   items(listOf("appearance" to "Appearance","plugins" to "Plugins","ai" to "AI models","devices" to "Devices","status" to "Status","labels" to "Labels","data" to "Export","profile" to "Profile"),key={it.first}) {(route,title) ->
    TextButton(onClick={onRoute(route)},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(title,Modifier.fillMaxWidth())}
   }

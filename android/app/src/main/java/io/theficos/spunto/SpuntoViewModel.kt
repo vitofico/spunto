@@ -3,8 +3,12 @@ package io.theficos.spunto
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import io.theficos.spunto.core.model.*
+import io.theficos.spunto.data.local.NoteEntity
 import io.theficos.spunto.data.local.RevisionEntity
+import io.theficos.spunto.data.local.TimelineSpec
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.*
 import kotlinx.coroutines.*
@@ -19,6 +23,14 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  val labels=repository.labels().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val outputs=repository.outputs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val pending=repository.pendingCount.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),0)
+ private val pages=object:LinkedHashMap<TimelineSpec,Pair<Job,Flow<PagingData<NoteEntity>>>>(8,.75f,true) {
+  override fun removeEldestEntry(eldest:MutableMap.MutableEntry<TimelineSpec,Pair<Job,Flow<PagingData<NoteEntity>>>>)=(size>4).also { if(it) eldest.value.first.cancel() }
+ }
+ /** Lists reopen at their scroll position after a note or a rotation because loaded pages outlive the screen; the four latest filters stay cached. */
+ fun paging(spec:TimelineSpec):Flow<PagingData<NoteEntity>> {
+  val day=spec.copy(now=spec.now-Math.floorMod(spec.now,86_400_000L)) // filters resolve "days" against UTC midnight only
+  return pages.getOrPut(day) { val job=Job(viewModelScope.coroutineContext[Job]);job to repository.paging(day).cachedIn(viewModelScope+job) }.second
+ }
  val auth=container.auth.config.map {it?.takeIf {config ->config.replicaId==container.replicaId}}.stateIn(viewModelScope,SharingStarted.Eagerly,null)
  val status=container.sync.state
  val online=combine(auth,status,container.connected) { auth,status,connected -> auth!=null && connected && status !is SyncStatus.Waiting && status!=SyncStatus.NeedsSignIn }.stateIn(viewModelScope,SharingStarted.Eagerly,false)

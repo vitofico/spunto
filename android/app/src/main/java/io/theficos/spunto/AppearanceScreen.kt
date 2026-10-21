@@ -33,7 +33,6 @@ import kotlinx.serialization.json.*
  val accentChoices=themeAccentChoices(selectedCard)
  LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
   item {
-   Text("Appearance",style=MaterialTheme.typography.titleLarge)
    Text(if(themeOverride) "Theme on this phone" else "Using the instance theme",style=MaterialTheme.typography.bodyMedium)
    if(themeOverride) Text("Other devices use ${boundedThemeText(instanceName,80)}.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
    if(onUseInstance!=null) Row(verticalAlignment=Alignment.CenterVertically) {

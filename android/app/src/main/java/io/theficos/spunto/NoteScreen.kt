@@ -58,6 +58,10 @@ import kotlinx.serialization.json.*
   onDispose {onBackReady(null)}
  }
  BackHandler(editing) {finishEditing()}
+ TopBarActions {
+  IconToggleButton(checked=value.pinned,onCheckedChange={model.flags(id,pinned=it)},enabled=!restoring,colors=IconButtonDefaults.iconToggleButtonColors(checkedContentColor=MaterialTheme.colorScheme.onSurface)) {Icon(painterResource(if(value.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin),contentDescription="Pin note",modifier=Modifier.size(24.dp))}
+  if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription="More note actions",modifier=Modifier.size(24.dp))}
+ }
  LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
  Column(Modifier.fillMaxSize()) {
   Surface(tonalElevation=1.dp) {
@@ -68,7 +72,6 @@ import kotlinx.serialization.json.*
      if(details.isNotBlank()) Text(details,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
     }
     FilledTonalButton(enabled=!finishing && !restoring && (!editing || finishEditor!=null),onClick={if(editing) finishEditing() else editing=true}) {Text(if(finishing) "Saving…" else if(editing) "Done" else "Edit")}
-    if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription="More note actions",modifier=Modifier.size(24.dp))}
    }
   }
   LazyColumn(Modifier.weight(1f).fillMaxWidth().imePadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {

@@ -105,7 +105,7 @@ class DistributionScreenshotsTest {
   compose.onNodeWithContentDescription("More note actions").assertIsDisplayed()
   compose.onNodeWithText("Edit").assertIsDisplayed()
   capture("3.png")
-  compose.onNodeWithText("Back",useUnmergedTree=true).performClick()
+  compose.onNodeWithContentDescription("Back",useUnmergedTree=true).performClick()
   hideKeyboard(awaitVisible=true)
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
   waitForDisplayed(hasText("Labels and views"))

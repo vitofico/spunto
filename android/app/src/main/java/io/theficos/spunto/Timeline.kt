@@ -28,7 +28,7 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  val manifest=model.manifest.collectAsState().value
  val range=remember(from,to) { runCatching { CreatedRange.parse(from,to) } }
  val spec=remember(range.getOrNull(),range.isSuccess) { TimelineSpec(created=range.getOrDefault(CreatedRange()),valid=range.isSuccess) }
- val paging=remember(spec) { model.repository.paging(spec) }
+ val paging=model.paging(spec)
  val page=paging.collectAsLazyPagingItems()
  val outputs by model.outputs.collectAsState()
  val notes by model.notes.collectAsState()
@@ -79,7 +79,7 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
    else -> { val parts=route.split(':',limit=3);val view=resolveViewRoute(manifest,route);TimelineSpec(kind=TimelineKind.PLUGIN,pluginId=parts.getOrNull(1).orEmpty(),filter=view?.filter ?: JsonObject(emptyMap()),created=created,valid=range.isSuccess && view!=null) }
   }
  }
- val paging=remember(spec) { model.repository.paging(spec) }
+ val paging=model.paging(spec)
  val page=paging.collectAsLazyPagingItems()
  LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
   if(page.itemCount==0) item { Text(if(from.isNotBlank() || to.isNotBlank()) "No notes in this date range." else "Nothing here yet.") }

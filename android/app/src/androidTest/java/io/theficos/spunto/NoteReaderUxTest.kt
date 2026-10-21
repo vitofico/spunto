@@ -57,7 +57,7 @@ class NoteReaderUxTest {
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    val backEdit=changed+" saved through the visible Back button"
    compose.onNodeWithContentDescription("Note text").performTextReplacement(backEdit)
-   compose.onNodeWithText("Back").performClick()
+   compose.onNodeWithContentDescription("Back").performClick()
    compose.waitUntil(10_000) {runBlocking {repository.dao.get(id)?.body==backEdit} && compose.onAllNodesWithText("Edit").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("More note actions").assertIsDisplayed()
    assertEquals(capture,runBlocking {repository.dao.draftSnapshot("capture")})

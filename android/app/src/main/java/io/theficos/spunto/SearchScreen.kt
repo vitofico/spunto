@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.*
@@ -21,7 +22,7 @@ import java.time.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun SearchScreen(model:SpuntoViewModel,onNote:(String)->Unit,from:String="",to:String="") {
- var query by remember { mutableStateOf("") }; var results by remember { mutableStateOf<List<Note>>(emptyList()) }; var meaning by remember { mutableStateOf<Set<String>>(emptySet()) }
+ var query by rememberSaveable { mutableStateOf("") }; var results by remember { mutableStateOf<List<Note>>(emptyList()) }; var meaning by remember { mutableStateOf<Set<String>>(emptySet()) }
  var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }
  val labels by model.labels.collectAsState(); val auth by model.auth.collectAsState(); val sync by model.status.collectAsState()
  val manifest=model.manifest.collectAsState().value

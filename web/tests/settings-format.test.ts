@@ -22,6 +22,11 @@ it("turns setting keys and enum values into labels", () => {
   expect(humanize("min_age_days")).toBe("Minimum age days");
   expect(humanize("urls")).toBe("URLs");
   expect(choiceLabel("sunday")).toBe("Sunday");
+  expect(choiceLabel("weekly_digest")).toBe("Weekly digest");
+  expect(choiceLabel("SOURCE-ONLY mvi3-chromium")).toBe(
+    "SOURCE-ONLY mvi3-chromium",
+  );
+  expect(choiceLabel("Use a single file.")).toBe("Use a single file.");
   expect(choiceLabel("it")).toBe(
     new Intl.DisplayNames(undefined, { type: "language" }).of("it"),
   );

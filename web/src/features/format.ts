@@ -42,7 +42,10 @@ export function humanize(key: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** An enum value as a choice: "sunday" → "Sunday"; language codes by name ("it" → "Italian"). */
+/**
+ * An enum value as a choice: "sunday" → "Sunday"; language codes by name ("it" → "Italian").
+ * Only identifier-like values are reworded; others, such as note titles, stay as written.
+ */
 export function choiceLabel(choice: unknown) {
   if (typeof choice !== "string") return String(choice);
   if (/^[a-z]{2}$/.test(choice)) {
@@ -55,7 +58,7 @@ export function choiceLabel(choice: unknown) {
       return choice.toUpperCase();
     }
   }
-  return humanize(choice);
+  return /^[a-z0-9]+([_-][a-z0-9]+)*$/.test(choice) ? humanize(choice) : choice;
 }
 
 /** "Chrome on macOS" from a browser's user agent; anything unrecognised stays as it is. */

@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -34,7 +35,11 @@ import java.time.*
  var shown by rememberSaveable { mutableStateOf(listOf<String>()) }
  var results by remember { mutableStateOf(shown.mapNotNull { id -> model.notes.value.firstOrNull { it.id==id } }) }
  var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }
- val labels by model.labels.collectAsState(); val auth by model.auth.collectAsState()
+ // L1: labels used most in the last 30 days first, then by overall use; S2: the last searches on this phone.
+ val labels by remember { model.repository.dao.labelsByUse(System.currentTimeMillis()-30*86_400_000L,8) }.collectAsState(emptyList()); val auth by model.auth.collectAsState()
+ val preferences=model.container.preferences
+ var recent by remember { mutableStateOf(recentSearches(preferences.getString("recent-searches",null))) }
+ fun saveSearch(text:String) { recent=rememberSearch(recent,text);preferences.edit().putString("recent-searches",JsonArray(recent.map(::JsonPrimitive)).toString()).apply() }
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
  val localNotes by model.notes.collectAsState()
@@ -54,18 +59,27 @@ import java.time.*
  Column(Modifier.fillMaxSize()) {
   OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=20.dp).focusRequester(focus),placeholder={Text("Search notes")},singleLine=true,
    trailingIcon={ if(query.isNotEmpty()) IconButton(onClick={query=""},modifier=Modifier.semantics { contentDescription="Clear search" }) { Text("×",style=MaterialTheme.typography.titleMedium) } },
-   keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={ focusManager.clearFocus() }))
+   keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={ saveSearch(query);focusManager.clearFocus() }))
   LazyColumn(Modifier.fillMaxSize(),state=rememberLazyListState(),contentPadding=PaddingValues(start=20.dp,end=20.dp,top=8.dp,bottom=20.dp)) {
    if(!online) item(key="offline") { Text("Offline. Searching this phone by keyword.",Modifier.padding(vertical=8.dp),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
    if(online && query.trim().split(Regex("\\s+")).size>=3 && model.container.manifest.enabled("ask")) item(key="ask") { TextButton(enabled=!asking,onClick={asking=true; model.ask(query,onComplete={asking=false}) { if(model.online.value && model.container.manifest.enabled("ask")) answer=it.jsonObject }},modifier=Modifier.heightIn(min=48.dp)) { Text(if(asking) "Reading your notes…" else "Ask your notes") } }
+   if(query.isEmpty() && recent.isNotEmpty()) {
+    item(key="recent") {
+     Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically) {
+      Text("RECENT SEARCHES",Modifier.weight(1f).semantics { heading();contentDescription="Recent searches" },style=SpuntoType.overline,color=SpuntoColors.ink3)
+      TextButton(onClick={ recent=emptyList();preferences.edit().remove("recent-searches").apply() },modifier=Modifier.heightIn(min=48.dp).semantics { contentDescription="Clear recent searches" }) { Text("Clear") }
+     }
+    }
+    items(recent,key={ "recent:$it" }) { text -> Text(text,Modifier.fillMaxWidth().heightIn(min=48.dp).clickable(onClickLabel="Search again") { query=text;saveSearch(text) }.wrapContentHeight(Alignment.CenterVertically),style=MaterialTheme.typography.bodyLarge,maxLines=1,overflow=TextOverflow.Ellipsis) }
+   }
    if(query.isEmpty() && labels.isNotEmpty()) item(key="labels") {
     // Before typing: the labels in most use, as shortcuts (L1).
     Column(Modifier.padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
      Text("LABELS",Modifier.semantics { heading();contentDescription="Labels" },style=SpuntoType.overline,color=SpuntoColors.ink3)
-     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { topLabels(labels).forEach { label -> SuggestionChip(onClick={query="#${label.path} "},label={ Text("#${label.path}") },modifier=Modifier.heightIn(min=48.dp)) } }
+     FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) { labels.forEach { label -> SuggestionChip(onClick={query="#${label.path} "},label={ Text("#${label.path}") },modifier=Modifier.heightIn(min=48.dp)) } }
     }
    }
-   items(results,key={ it.id }) { note -> SearchResult(note,terms,note.id in meaning) { onNote(note.id) } }
+   items(results,key={ it.id }) { note -> SearchResult(note,terms,note.id in meaning) { saveSearch(query);onNote(note.id) } }
    if(query.isNotBlank() && results.isEmpty()) item(key="none") {
     Column(Modifier.padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
      Text("No notes match ‘${query.trim()}’.",style=MaterialTheme.typography.bodyLarge)
@@ -88,7 +102,9 @@ import java.time.*
 }
 private fun marked(text:String,terms:List<String>,style:SpanStyle):AnnotatedString=buildAnnotatedString { append(text);matchRanges(text,terms).forEach { addStyle(style,it.first,it.last+1) } }
 
-internal fun topLabels(labels:List<LabelCount>,count:Int=8)=labels.sortedByDescending { it.count }.take(count)
+/** S2: the last [keep] searches, newest first; running one again moves it to the top. */
+internal fun rememberSearch(recent:List<String>,query:String,keep:Int=5):List<String> = query.trim().takeIf { it.isNotEmpty() }?.let { text -> (listOf(text)+recent.filterNot { it.equals(text,ignoreCase=true) }).take(keep) } ?: recent
+internal fun recentSearches(stored:String?):List<String> = stored?.let { runCatching { Json.parseToJsonElement(it).jsonArray.map { item -> item.jsonPrimitive.content } }.getOrNull() }.orEmpty()
 /** The words a search looks for, folded like the index; `#label` filters are not words. */
 internal fun searchTerms(query:String):List<String> {
  var text=query;labels(query).asReversed().forEach { text=text.replaceRange(it.start,it.end," ") }

@@ -82,6 +82,17 @@ class LabelsHierarchyTest {
   val changed=async {withTimeout(3000) {repository.dao.noteCount().first {it==1}}}
   repository.dao.put(repository.dao.get(live)!!.copy(archived=true));assertEquals(1,changed.await())
  }
+ @Test fun labelsByUseRankTheLastThirtyDaysFirstThenOverallUse()=runBlocking {
+  val now=System.currentTimeMillis();val day=86_400_000L;val old=now-60*day;val since=now-30*day
+  suspend fun dated(body:String,created:Long,updated:Long=created,archived:Boolean=false,trashed:Boolean=false)=repository.putNote(Note(uuidV7(),body,createdAt=created,updatedAt=updated,archived=archived,trashed=trashed))
+  repeat(3) {dated("Synthetic #Often",old)};repeat(2) {dated("Synthetic #Middle",old)}
+  repeat(2) {dated("Synthetic #Lately",now-day)}
+  dated("Synthetic #Edited",old,updated=now-2*day)
+  dated("Synthetic #Kept",old,archived=true)
+  repeat(5) {dated("Synthetic #Binned",now,trashed=true)}
+  assertEquals(listOf("Lately" to 2,"Edited" to 1,"Often" to 3,"Middle" to 2,"Kept" to 1),repository.dao.labelsByUse(since,8).first().map {it.path to it.count})
+  assertEquals(listOf("lately","edited"),repository.dao.labelsByUse(since,2).first().map {it.key})
+ }
  @Test fun readingHierarchyLeavesPendingPayloadDraftAndRevisionIdentityUntouched()=runBlocking {
   val id=repository.create("Synthetic local #Project/Spunto")
   repository.dao.putDraft(DraftEntity("capture","Synthetic retained draft",42))

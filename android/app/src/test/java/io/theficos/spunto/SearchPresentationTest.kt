@@ -1,6 +1,5 @@
 package io.theficos.spunto
 
-import io.theficos.spunto.core.model.LabelCount
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -21,8 +20,11 @@ class SearchPresentationTest {
   val snippet=searchSnippet(long,listOf("needle"),width=60)!!
   assertTrue(snippet.startsWith("…") && snippet.endsWith("…") && "needle" in snippet)
  }
- @Test fun topLabelsAreTheMostUsed() {
-  val labels=listOf(LabelCount("a","a",1),LabelCount("b","b",9),LabelCount("c","c",4))
-  assertEquals(listOf("b","c"),topLabels(labels,2).map { it.path })
+ @Test fun recentSearchesKeepTheLastFiveNewestFirstWithoutRepeats() {
+  var recent=listOf<String>()
+  listOf("garden","  ","#idea ","bread","Garden","one","two","three").forEach { recent=rememberSearch(recent,it) }
+  assertEquals(listOf("three","two","one","Garden","bread"),recent)
+  assertEquals(recent,recentSearches("""["three","two","one","Garden","bread"]"""))
+  assertEquals(emptyList<String>(),recentSearches(null));assertEquals(emptyList<String>(),recentSearches("not json"))
  }
 }

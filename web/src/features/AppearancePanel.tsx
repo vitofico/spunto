@@ -112,7 +112,7 @@ export function AppearancePanel() {
   return (
     <>
       <h1>Appearance</h1>
-      <p className={styles.muted}>A quiet page, in your colours.</p>
+      <p className="muted">A quiet page, in your colours.</p>
       {ready && requested !== selected.theme && (
         <p className={styles.facts}>
           The saved colour pack is unavailable. Using Carta until it returns.
@@ -196,7 +196,7 @@ export function AppearancePanel() {
           </div>
         </>
       )}
-      <label className={`${styles.row} ${styles.field}`}>
+      <label className={`${styles.row} ${styles.formField}`}>
         <span>Use a different theme on this device</span>
         <input
           className={styles.switch}
@@ -270,7 +270,7 @@ export function AppearancePanel() {
         Mode, reading face and text size apply to this browser.
       </p>
       {(save.error ?? query.error) && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {(save.error ?? query.error)?.message}
         </p>
       )}

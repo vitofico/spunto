@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/errors";
+import { useHosted } from "../lib/query";
 import type {
   AICapability,
   AIHealth,
@@ -147,21 +149,21 @@ function AIModelSettings({
           </button>
         )}
       </div>
-      <p className={styles.muted}>
+      <p className="muted">
         Model choices apply to this space. Selecting a model also chooses its
         provider for that capability. Each plugin can choose a different
         provider in its settings.
       </p>
       {!canManage && <p>Only a space owner can change models.</p>}
       {inventory.error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           Could not load available models. Your saved choices are kept.
         </p>
       )}
       {ai.profiles.map((profile) =>
         inventory.data?.profiles.find((item) => item.profile === profile.name)
           ?.error ? (
-          <p key={profile.name} role="alert" className={styles.error}>
+          <p key={profile.name} role="alert" className="error">
             Could not load models from {profile.name}. Saved choices are kept.
           </p>
         ) : null,
@@ -195,10 +197,11 @@ function AIModelSettings({
         return (
           <div
             key={capability}
-            className={`${styles.field} ${styles.modelField}`}
+            className={`${styles.formField} ${styles.modelField}`}
           >
             <label htmlFor={`ai-model-${capability}`}>{title} model</label>
             <select
+              className="field"
               id={`ai-model-${capability}`}
               value={modelValue(override)}
               disabled={!canManage || busy}
@@ -283,7 +286,7 @@ function AIModelSettings({
                 effective,
                 draft.saved.embed ?? selection.defaults.embed,
               ) && (
-                <p className={styles.muted}>
+                <p className="muted">
                   Embedding changes rebuild the index; progress appears below
                   after saving.
                 </p>
@@ -320,12 +323,12 @@ function AIModelSettings({
       {dirty && <p role="status">Changes are not saved.</p>}
       {save.isSuccess && <p role="status">Model choices saved.</p>}
       {save.error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {selectionError(save.error)}
         </p>
       )}
       {reload.error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           Could not reload model settings. Your choices are kept.
         </p>
       )}
@@ -354,11 +357,22 @@ export function AIHealthResults({ rows }: { rows: AIHealth[] }) {
           {capabilities.find(([id]) => id === row.capability)?.[1]}:
           {row.ok ? " OK" : " Unavailable"}
           {row.dimension ? ` · ${row.dimension} dimensions` : ""}
-          {row.fix_hint && <p className={styles.muted}>{row.fix_hint}</p>}
+          {row.fix_hint && <p className="muted">{row.fix_hint}</p>}
         </li>
       ))}
     </ul>
   ) : null;
+}
+/** The one way to turn AI on, said the same on every page that mentions it. */
+export function AIOffHint() {
+  return useHosted() ? (
+    <>Ask whoever runs the server to set up a model.</>
+  ) : (
+    <>
+      To turn it on, set the <code>SPUNTO_AI_*</code> variables and restart the
+      server.
+    </>
+  );
 }
 export function AISettings() {
   const query = useAI();
@@ -382,15 +396,19 @@ export function AISettings() {
     <>
       <h1>AI</h1>
       {query.isPending && <p role="status">Loading AI settings…</p>}
-      {ai && (
+      {ai && !ai.profiles.length && (
+        <div className="empty">
+          <h2>AI is off.</h2>
+          <p>
+            Everything else works. <AIOffHint />
+          </p>
+        </div>
+      )}
+      {ai && !!ai.profiles.length && (
         <>
-          {!ai.profiles.length && (
-            <p>
-              AI is off. Ask your server administrator to configure a provider.
-            </p>
-          )}
-          <p className={styles.muted}>
-            Providers are managed by your server administrator.
+          <p className="muted">
+            Providers are set by whoever runs the server. Private and
+            machine-written notes are never sent to a model.
           </p>
           {ai.profiles.map((profile) => (
             <section key={profile.name} className={styles.connection}>
@@ -432,7 +450,7 @@ export function AISettings() {
               </div>
             ))}
           </dl>
-          <p className={styles.muted}>
+          <p className="muted">
             Each plugin can choose a different configured profile in its
             settings.
           </p>
@@ -488,14 +506,11 @@ export function AISettings() {
         </>
       )}
       {(query.error || check.error || reindex.error) && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {(query.error ?? check.error ?? reindex.error)?.message}
         </p>
       )}
-      <p className={styles.muted}>
-        Private and machine-written notes are never sent to a model.
-      </p>
-      <a href="/status">Server status</a>
+      {ai && !!ai.profiles.length && <Link href="/status">Server status</Link>}
     </>
   );
 }
@@ -521,12 +536,12 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
     plugin.permissions.includes(`ai.${capability}`),
   );
   if (!used.length)
-    return <p className={styles.muted}>This plugin does not use AI.</p>;
+    return <p className="muted">This plugin does not use AI.</p>;
   if (!query.data)
     return query.isPending ? (
       <p>Loading AI routes…</p>
     ) : (
-      <p role="alert" className={styles.error}>
+      <p role="alert" className="error">
         {query.error?.message}
       </p>
     );
@@ -549,11 +564,12 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
         const selected = routes[capability] || ai.bindings[capability];
         const profile = ai.profiles.find((item) => item.name === selected);
         return (
-          <div className={styles.field} key={capability}>
+          <div className={styles.formField} key={capability}>
             <label htmlFor={`ai-route-${plugin.id}-${capability}`}>
               {title} profile
             </label>
             <select
+              className="field"
               id={`ai-route-${plugin.id}-${capability}`}
               value={routes[capability] ?? ""}
               disabled={save.isPending || ai.can_manage === false}
@@ -602,7 +618,7 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
         {calls} recorded calls · {failures} failures or refusals
       </p>
       {save.error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {save.error.message}
         </p>
       )}

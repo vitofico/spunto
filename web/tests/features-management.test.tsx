@@ -147,10 +147,9 @@ describe("plugin lifecycle controls", () => {
       state: "enabled",
     });
     wrap(<SettingsPage section="plugins" />);
-    expect(await screen.findByText(visionFact)).toBeTruthy();
     expect(
-      screen.getByText("Origin unknown · 1.0.0").parentElement?.textContent,
-    ).toContain(`Origin unknown · 1.0.0 ${visionFact}`);
+      await screen.findByText(`Origin unknown · ${visionFact}`),
+    ).toBeTruthy();
     const control = screen.getByRole("switch", {
       name: "Enable Text in images",
     });
@@ -256,33 +255,49 @@ describe("plugin lifecycle controls", () => {
             },
           },
         },
+        {
+          ...plugin,
+          id: "describe",
+          name: "Describe",
+          permissions: ["ai.chat", "ai.vision"],
+          ai_destinations: {
+            chat: {
+              profile: "chat",
+              model: "fixture-chat",
+              host: "chat.synthetic.test",
+              leaves_network: false,
+            },
+          },
+        },
       ],
       plugins_rev: 1,
     });
     wrap(<SettingsPage section="plugins" />);
     expect(
-      await screen.findByText("Vision: no model is configured for this plugin"),
+      await screen.findByText("Origin unknown · Needs a vision model"),
     ).toBeTruthy();
     expect(
-      screen.getByText("Transcription: no model is configured for this plugin"),
+      screen.getByText("Origin unknown · Needs a transcription model"),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Chat: fixture-chat at chat.synthetic.test · On your network",
+        "Origin unknown · Chat: fixture-chat at chat.synthetic.test · On your network",
       ),
     ).toBeTruthy();
-    expect(screen.queryByText(/AI is not configured/)).toBeNull();
+    expect(
+      screen.getByText(
+        "Chat: fixture-chat at chat.synthetic.test · On your network; Vision: no vision model is set up",
+        { exact: false },
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/AI is off/)).toBeNull();
     fireEvent.click(
       screen.getByRole("switch", { name: "Enable Text in images" }),
     );
     const dialog = await screen.findByRole("dialog", {
       name: "Turn on Text in images?",
     });
-    expect(
-      within(dialog).getByText(
-        "Vision: no model is configured for this plugin",
-      ),
-    ).toBeTruthy();
+    expect(within(dialog).getByText("Needs a vision model")).toBeTruthy();
   });
   it("uses neutral model requirements when a legacy catalog omits destinations", async () => {
     vi.mocked(api.catalog).mockResolvedValue({
@@ -292,7 +307,7 @@ describe("plugin lifecycle controls", () => {
     wrap(<SettingsPage section="plugins" />);
     expect(
       await screen.findByText(
-        "Requires a chat model; Requires an embedding model",
+        "Origin unknown · Needs a chat model and an embedding model",
       ),
     ).toBeTruthy();
     expect(
@@ -318,7 +333,7 @@ describe("plugin lifecycle controls", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Connects to the configured server · Never reads private notes",
+        "Origin unknown · Connects to the configured server · Never reads private notes",
       ),
     ).toBeTruthy();
   });

@@ -71,12 +71,12 @@ export function AccountPanel() {
   return (
     <>
       <h1>Account</h1>
-      <p className={styles.muted}>
+      <p className="muted">
         Manage how you sign in. Password and SSO sign-in open the same account
         and notes.
       </p>
       {auth.session && (
-        <details className={styles.muted}>
+        <details className="muted">
           <summary>Account details</summary>
           <p>
             Account ID:{" "}
@@ -94,7 +94,7 @@ export function AccountPanel() {
             </p>
           )}
           {!value.local_password_set && (
-            <p className={styles.muted}>
+            <p className="muted">
               Add a username and password to this existing account. Your library
               stays here.
             </p>
@@ -118,9 +118,10 @@ export function AccountPanel() {
                 change.mutate();
               }}
             >
-              <label className={styles.field}>
+              <label className={styles.formField}>
                 Username
                 <input
+                  className="field"
                   value={username ?? value.local_username ?? ""}
                   onChange={(event) => setUsername(event.target.value)}
                   autoComplete="username"
@@ -133,14 +134,15 @@ export function AccountPanel() {
                   required
                 />
               </label>
-              <p className={styles.muted}>
+              <p className="muted">
                 Use 3–64 letters, numbers, periods, underscores or hyphens. No
                 email address is needed. Start with a letter or number.
               </p>
               {value.local_password_set && (
-                <label className={styles.field}>
+                <label className={styles.formField}>
                   Current password
                   <input
+                    className="field"
                     type="password"
                     value={current}
                     onChange={(event) => setCurrent(event.target.value)}
@@ -151,9 +153,10 @@ export function AccountPanel() {
                   />
                 </label>
               )}
-              <label className={styles.field}>
+              <label className={styles.formField}>
                 New password
                 <input
+                  className="field"
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -164,9 +167,10 @@ export function AccountPanel() {
                   required
                 />
               </label>
-              <label className={styles.field}>
+              <label className={styles.formField}>
                 Confirm new password
                 <input
+                  className="field"
                   type="password"
                   value={confirmation}
                   onChange={(event) => setConfirmation(event.target.value)}
@@ -177,7 +181,7 @@ export function AccountPanel() {
                   required
                 />
               </label>
-              <p className={styles.muted}>
+              <p className="muted">
                 At least 8 characters. Saving signs out other browser sessions;
                 this browser stays signed in.
               </p>
@@ -192,7 +196,7 @@ export function AccountPanel() {
           ) : value.reauth_url ===
             "/api/v1/auth/oidc/start?reauth=local-password" ? (
             <>
-              <p className={styles.muted}>
+              <p className="muted">
                 Verify your SSO identity before adding password sign-in to this
                 account.
               </p>
@@ -205,14 +209,14 @@ export function AccountPanel() {
               </a>
             </>
           ) : (
-            <p className={styles.muted}>
+            <p className="muted">
               Sign-in verification is unavailable. Ask the server operator to
               restore your sign-in provider.
             </p>
           )}
           <h2>Single sign-on</h2>
           {value.oidc_linked ? (
-            <p className={styles.muted}>SSO is connected to this account.</p>
+            <p className="muted">SSO is connected to this account.</p>
           ) : options.data?.oidc_enabled && value.local_password_set ? (
             <form
               onSubmit={(event) => {
@@ -220,14 +224,15 @@ export function AccountPanel() {
                 link.mutate();
               }}
             >
-              <p className={styles.muted}>
+              <p className="muted">
                 Connect {options.data.label ?? "SSO"} to this account. Verify
                 your current password, then sign in with the provider. Accounts
                 are never linked by email.
               </p>
-              <label className={styles.field}>
+              <label className={styles.formField}>
                 Password to connect SSO
                 <input
+                  className="field"
                   type="password"
                   value={linkPassword}
                   onChange={(event) => setLinkPassword(event.target.value)}
@@ -242,7 +247,7 @@ export function AccountPanel() {
               </button>
             </form>
           ) : (
-            <p className={styles.muted}>
+            <p className="muted">
               SSO is optional and is not configured for this account.
             </p>
           )}
@@ -250,7 +255,7 @@ export function AccountPanel() {
       )}
       {saved && <p role="status">Sign-in settings saved.</p>}
       {error && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {error}
         </p>
       )}

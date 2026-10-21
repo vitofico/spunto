@@ -114,7 +114,7 @@ export function ReviewPage() {
       {query.isPending ? (
         <p>Loading suggestions…</p>
       ) : query.isError ? (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {query.error.message}
         </p>
       ) : !suggestions.length ? (
@@ -152,7 +152,7 @@ export function ReviewPage() {
             const shown = expanded.includes(name) ? items : items.slice(0, 3);
             return (
               <section key={name} aria-label={name}>
-                <h2 className={styles.overline}>{name}</h2>
+                <h2 className="overline">{name}</h2>
                 {shown.map((s) => (
                   <article className={styles.proposal} key={s.id}>
                     <div className={styles.between}>
@@ -205,7 +205,7 @@ export function ReviewPage() {
         </>
       )}
       {decide.isError && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {decide.error.message}
         </p>
       )}

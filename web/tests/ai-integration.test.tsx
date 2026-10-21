@@ -332,7 +332,7 @@ it("reports enabled AI on server status rather than the M3 off placeholder", asy
     },
   });
   wrap(<StatusPage />);
-  expect(await screen.findByText("chat · embed")).toBeTruthy();
+  expect(await screen.findByText("Chat · Embeddings")).toBeTruthy();
   expect(screen.getByText("4 embedding chunks · Indexing on")).toBeTruthy();
   expect(screen.queryByText("Off.")).toBeNull();
 });

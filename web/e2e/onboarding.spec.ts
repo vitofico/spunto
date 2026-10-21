@@ -147,7 +147,7 @@ test("Settings replay returns to its trigger on Skip and can finish at All notes
   await fixture(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Skip", exact: true }).click();
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/profile");
   const replay = page.getByRole("button", { name: "Show guide", exact: true });
   await replay.click();
   await expect(guide(page)).toBeVisible();

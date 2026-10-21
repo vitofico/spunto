@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { api } from "../lib/api";
 import { copyText } from "./copy";
 import { agentSnippets } from "./agentSnippets";
@@ -7,6 +8,9 @@ import { AppearancePanel } from "./AppearancePanel";
 import { ProfilePanel } from "./ProfilePanel";
 import { AccountPanel } from "./AccountPanel";
 import { useHosted } from "../lib/query";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useToast } from "../components/core/Toast";
+import { useConfirm } from "../components/core/ConfirmDialog";
 import type {
   Args,
   Credential,
@@ -20,10 +24,22 @@ import { SchemaForm } from "./SchemaForm";
 import { Dialog } from "./Dialog";
 import { CommandResult, PluginCommands, type CommandOrigin } from "./Slots";
 import styles from "./Feature.module.css";
-import { AISettings, AIRouting, AIHealthResults } from "./AISettings";
+import {
+  AISettings,
+  AIRouting,
+  AIHealthResults,
+  AIOffHint,
+} from "./AISettings";
 import { PairDevice } from "./PairDevice";
 import { MarkdownImport } from "./MarkdownImport";
 import { SpacesPanel } from "./Collaboration";
+import {
+  browserName,
+  formatBytes,
+  formatWhen,
+  humanize,
+  plural,
+} from "./format";
 const sections = [
   ["account", "Account"],
   ["spaces", "Spaces"],
@@ -38,10 +54,14 @@ const sections = [
 ];
 function ErrorLine({ error }: { error: Error | null }) {
   return error ? (
-    <p className={styles.error} role="alert">
+    <p className="error" role="alert">
       {error.message}
     </p>
   ) : null;
+}
+function PageTitle({ page }: { page: string }) {
+  useDocumentTitle(page);
+  return null;
 }
 export function SettingsPage({
   section = "appearance",
@@ -53,6 +73,10 @@ export function SettingsPage({
   const hosted = useHosted();
   const parts = section.replace(/^\//, "").split("/");
   const selected = parts[0] || "appearance";
+  const visible = sections.filter(
+    ([id]) => (id !== "account" && id !== "spaces") || hosted,
+  );
+  const title = visible.find(([id]) => id === selected)?.[1];
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const revealSelected = () => {
@@ -72,31 +96,27 @@ export function SettingsPage({
   }, [selected, hosted]);
   return (
     <div className={styles.settings}>
+      {!(selected === "plugins" && parts[1]) && (
+        <PageTitle page={`Settings · ${title ?? "Unavailable"}`} />
+      )}
       <nav ref={navRef} className={styles.nav} aria-label="Settings">
-        {sections
-          .filter(([id]) => id !== "account" || hosted)
-          .map(([id, title]) => (
-            <a
-              href={`/settings/${id}`}
-              aria-current={id === selected ? "page" : undefined}
-              key={id}
-            >
-              {title}
-            </a>
-          ))}
+        {visible.map(([id, title]) => (
+          <Link
+            href={`/settings/${id}`}
+            aria-current={id === selected ? "page" : undefined}
+            key={id}
+          >
+            {title}
+          </Link>
+        ))}
       </nav>
       <section className={styles.section}>
-        {onShowGuide && (
-          <div className={styles.guideAction}>
-            <button onClick={onShowGuide}>Show guide</button>
-          </div>
-        )}
         {selected === "account" && hosted ? (
           <AccountPanel />
-        ) : selected === "spaces" ? (
+        ) : selected === "spaces" && hosted ? (
           <SpacesPanel />
         ) : selected === "profile" ? (
-          <ProfilePanel />
+          <ProfilePanel onShowGuide={onShowGuide} />
         ) : selected === "appearance" ? (
           <AppearancePanel />
         ) : selected === "plugins" ? (
@@ -187,27 +207,50 @@ function pluginCanDelete(plugin: Plugin) {
     (plugin.state !== "removed" && plugin.can_delete_data === undefined)
   );
 }
+const capabilityNames: Record<AICapability, [title: string, model: string]> = {
+  chat: ["Chat", "a chat model"],
+  embed: ["Embeddings", "an embedding model"],
+  transcribe: ["Transcription", "a transcription model"],
+  vision: ["Vision", "a vision model"],
+};
+function aiCapabilities(plugin: Plugin) {
+  return plugin.permissions
+    .filter((p) => p.startsWith("ai."))
+    .map((p) => p.slice(3) as AICapability)
+    .filter((capability) => capability in capabilityNames);
+}
+/** AI is off when every AI plugin's catalog row names no model at all. */
+function aiIsOff(plugins: Plugin[]) {
+  const users = plugins.filter(
+    (p) => p.state !== "removed" && aiCapabilities(p).length,
+  );
+  return (
+    users.length > 0 &&
+    users.every(
+      (p) =>
+        p.ai_destinations !== undefined &&
+        !Object.keys(p.ai_destinations).length,
+    )
+  );
+}
 function pluginFacts(plugin: Plugin) {
   if (plugin.state === "removed") return "Plugin code is no longer installed";
-  const ai = plugin.permissions.filter((p) => p.startsWith("ai."));
-  if (ai.length)
+  const ai = aiCapabilities(plugin);
+  if (ai.length) {
+    const missing = ai.filter((c) => !plugin.ai_destinations?.[c]);
+    // With no model for any capability, one short requirement replaces a line per capability.
+    if (missing.length === ai.length)
+      return `Needs ${missing.map((c) => capabilityNames[c][1]).join(" and ")}`;
     return ai
-      .map((permission) => {
-        const capability = permission.slice(3) as AICapability;
-        const label = {
-          chat: "Chat",
-          embed: "Embeddings",
-          transcribe: "Transcription",
-          vision: "Vision",
-        }[capability];
+      .map((capability) => {
+        const [title, model] = capabilityNames[capability];
         const destination = plugin.ai_destinations?.[capability];
-        if (destination)
-          return `${label}: ${destination.model} at ${destination.host ?? destination.profile} · ${destination.leaves_network ? "Outside your network" : "On your network"}`;
-        if (plugin.ai_destinations !== undefined)
-          return `${label}: no model is configured for this plugin`;
-        return `Requires ${capability === "embed" ? "an embedding" : `a ${label.toLowerCase()}`} model`;
+        return destination
+          ? `${title}: ${destination.model} at ${destination.host ?? destination.profile} · ${destination.leaves_network ? "Outside your network" : "On your network"}`
+          : `${title}: no ${model.split(" ").slice(1).join(" ")} is set up`;
       })
       .join("; ");
+  }
   const destinations = (
     (plugin as unknown as { network_destinations?: (string | null)[] })
       .network_destinations ?? []
@@ -322,24 +365,71 @@ function PermissionDialog({
         ))}
       </ul>
       <h3>Where text goes</h3>
-      <p className={styles.muted}>{pluginFacts(plugin)}</p>
+      <p className="muted">{pluginFacts(plugin)}</p>
       <h3>Where it shows up</h3>
-      <p className={styles.muted}>{slotSentences(plugin)}</p>
+      <p className="muted">{slotSentences(plugin)}</p>
       <ErrorLine error={error} />
     </Dialog>
   );
+}
+/** The chat and embedding models most plugins use, from the catalog's routes. */
+function aiSummary(plugins: Plugin[]) {
+  const seen = new Map<AICapability, { model: string; host: string }>();
+  for (const p of plugins)
+    for (const [capability, destination] of Object.entries(
+      p.ai_destinations ?? {},
+    ) as [AICapability, NonNullable<Plugin["ai_destinations"]>[AICapability]][])
+      if (destination && !p.ai_route?.[capability] && !seen.has(capability))
+        seen.set(capability, {
+          model: destination.model,
+          host: destination.host ?? destination.profile,
+        });
+  const parts = (["chat", "embed"] as const).flatMap((capability) => {
+    const route = seen.get(capability);
+    return route
+      ? [{ ...route, title: capability === "chat" ? "Chat" : "Embed" }]
+      : [];
+  });
+  if (!parts.length) return null;
+  const hosts = new Set(parts.map((part) => part.host));
+  return hosts.size === 1
+    ? `${parts.map((part) => `${part.title} ${part.model}`).join(" · ")} · at ${parts[0].host}`
+    : parts
+        .map((part) => `${part.title} ${part.model} at ${part.host}`)
+        .join(" · ");
+}
+/** Switching off asks nothing; one toast offers Undo for a few seconds (03 §6.4). */
+function useSwitchOff() {
+  const action = usePluginActions();
+  const toast = useToast();
+  const report = (error: Error) => toast.show({ message: error.message });
+  const switchOff = (plugin: Plugin) =>
+    action.mutate(
+      { plugin, on: false },
+      {
+        onError: report,
+        onSuccess: (receipt) => {
+          if (receipt.switch !== "off" || receipt.state === "removed") return;
+          // Undo re-checks the current catalog, so it never grants a changed permission set.
+          toast.show({
+            message: `${plugin.name} is off`,
+            actionLabel: "Undo",
+            onAction: () =>
+              action.mutate(
+                { plugin, on: true, intent: "undo" },
+                { onError: report },
+              ),
+          });
+        },
+      },
+    );
+  return [action, switchOff] as const;
 }
 function PluginManager() {
   const query = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
   const [onlyOn, setOnlyOn] = useState(false);
   const [enable, setEnable] = useState<Plugin | null>(null);
-  const [undo, setUndo] = useState<Plugin | null>(null);
-  const action = usePluginActions();
-  useEffect(() => {
-    if (!undo) return;
-    const timer = setTimeout(() => setUndo(null), 7000);
-    return () => clearTimeout(timer);
-  }, [undo]);
+  const [action, switchOff] = useSwitchOff();
   const plugins =
     query.data?.plugins.filter(
       (p) => p.category !== "look" || p.state === "removed",
@@ -349,24 +439,30 @@ function PluginManager() {
     pendingEnable &&
     !pendingEnable.pinned_by_env &&
     pluginCanEnable(pendingEnable);
-  const pendingUndo = plugins.find((p) => p.id === undo?.id);
-  const canUndo =
-    undo &&
-    pendingUndo &&
-    pendingUndo.switch === "off" &&
-    !pendingUndo.pinned_by_env &&
-    pluginCanEnable(pendingUndo) &&
-    pluginPermissionsMatch(undo, pendingUndo) &&
-    pluginRetainsGrants(undo, pendingUndo);
   const enabled = plugins.filter((p) => p.switch === "on").length;
+  const aiOff = aiIsOff(plugins);
+  const summary = aiOff ? null : aiSummary(plugins);
   return (
     <>
       <h1>Plugins</h1>
-      <p className={styles.muted}>
+      <p className="muted">
         Everything beyond notes, labels and search. Switch one on and it takes
         its place; switch it off and it leaves the screen, while its data and
-        any notes it wrote stay.
+        any notes it wrote stay. New plugins are added by whoever runs the
+        server.
       </p>
+      {aiOff ? (
+        <p className="notice">
+          AI is off, so plugins that need a model wait until one is set up.{" "}
+          <Link href="/settings/ai">AI settings</Link>
+        </p>
+      ) : (
+        summary && (
+          <p className={styles.facts}>
+            {summary} · <Link href="/settings/ai">AI settings</Link>
+          </p>
+        )
+      )}
       <div className={styles.segments}>
         <button aria-pressed={!onlyOn} onClick={() => setOnlyOn(false)}>
           All {plugins.length}
@@ -388,108 +484,93 @@ function PluginManager() {
           if (!items.length) return null;
           return (
             <section key={category}>
-              <h2 className={styles.overline}>
+              <h2 className="overline">
                 {category} · {all.filter((p) => p.switch === "on").length} of{" "}
                 {all.length} on
               </h2>
               <ul className={styles.list}>
-                {items.map((p) => (
-                  <li className={styles.plugin} key={p.id}>
-                    <div className={styles.between}>
-                      <div>
-                        <strong>{p.name}</strong>
-                        {p.kind === "device" && (
-                          <small className={styles.facts}> · Android</small>
-                        )}
-                        <p>{p.description}</p>
-                        <span className={styles.facts}>
-                          {pluginOrigin(p)} · {p.version}
-                        </span>{" "}
-                        <span className={styles.facts}>
-                          {pluginFacts(p)}
-                          {p.state === "failed"
-                            ? " · Paused after failed runs"
-                            : ""}
-                        </span>
+                {items.map((p) => {
+                  const linked = p.switch === "on" || p.state === "removed";
+                  return (
+                    <li
+                      className={`${styles.plugin} ${linked ? styles.rowLink : ""}`}
+                      key={p.id}
+                    >
+                      <div className={styles.between}>
+                        <div>
+                          <strong>
+                            {linked ? (
+                              <Link
+                                href={`/settings/plugins/${encodeURIComponent(p.id)}`}
+                              >
+                                {p.name}
+                              </Link>
+                            ) : (
+                              p.name
+                            )}
+                          </strong>
+                          {p.kind === "device" && (
+                            <small className={styles.facts}> · Android</small>
+                          )}
+                          <p>{p.description}</p>
+                          <div className={styles.facts}>
+                            <span>
+                              {p.origin === "bundled"
+                                ? pluginFacts(p)
+                                : `${pluginOrigin(p)} · ${pluginFacts(p)}`}
+                            </span>
+                            {p.state === "waiting" && !aiOff && (
+                              <>
+                                {" · "}
+                                <Link href="/settings/ai">AI settings</Link>
+                              </>
+                            )}
+                            {p.state === "failed" && (
+                              <>
+                                {" · Paused after failed runs · "}
+                                <Link href="/status">Details</Link>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className={styles.actions}>
+                          {p.pinned_by_env ? (
+                            <span className={styles.facts}>
+                              Set in the environment ·{" "}
+                              {p.switch === "on" ? "On" : "Off"}
+                            </span>
+                          ) : p.state === "removed" ? (
+                            <span className={styles.facts}>Removed · Off</span>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              role="switch"
+                              aria-label={`Enable ${p.name}`}
+                              className={styles.switch}
+                              checked={p.switch === "on"}
+                              disabled={
+                                action.isPending ||
+                                (p.switch !== "on" && !pluginCanEnable(p))
+                              }
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  action.reset();
+                                  setEnable(p);
+                                } else switchOff(p);
+                              }}
+                            />
+                          )}
+                        </div>
                       </div>
-                      <div className={styles.actions}>
-                        <a
-                          href={`/settings/plugins/${encodeURIComponent(p.id)}`}
-                        >
-                          {p.state === "removed" ? "Stored data" : "Settings"}
-                        </a>
-                        {p.pinned_by_env ? (
-                          <span className={styles.facts}>
-                            Set in the environment ·{" "}
-                            {p.switch === "on" ? "On" : "Off"}
-                          </span>
-                        ) : p.state === "removed" ? (
-                          <span className={styles.facts}>Removed · Off</span>
-                        ) : (
-                          <input
-                            type="checkbox"
-                            role="switch"
-                            aria-label={`Enable ${p.name}`}
-                            className={styles.switch}
-                            checked={p.switch === "on"}
-                            disabled={
-                              action.isPending ||
-                              (p.switch !== "on" && !pluginCanEnable(p))
-                            }
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                action.reset();
-                                setEnable(p);
-                              } else
-                                action.mutate(
-                                  { plugin: p, on: false },
-                                  {
-                                    onSuccess: (receipt) =>
-                                      setUndo(
-                                        receipt.switch === "off" &&
-                                          receipt.state !== "removed"
-                                          ? p
-                                          : null,
-                                      ),
-                                  },
-                                );
-                            }}
-                          />
-                        )}
-                        {p.state === "waiting" && (
-                          <a href="/settings/ai" className={styles.facts}>
-                            Requirement missing
-                          </a>
-                        )}
-                        {p.state === "failed" && <a href="/status">Details</a>}
-                      </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           );
         },
       )}
-      {canUndo && pendingUndo && undo && (
-        <p className={styles.notice}>
-          {pendingUndo.name} is off.{" "}
-          <button
-            disabled={action.isPending}
-            onClick={() =>
-              action.mutate(
-                { plugin: undo, on: true, intent: "undo" },
-                { onSuccess: () => setUndo(null) },
-              )
-            }
-          >
-            Undo
-          </button>
-        </p>
-      )}
-      <ErrorLine
-        error={query.error ?? (!canConfirmEnable ? action.error : null)}
-      />
+      <ErrorLine error={query.error} />
       {canConfirmEnable && pendingEnable && (
         <PermissionDialog
           plugin={pendingEnable}
@@ -508,6 +589,20 @@ function PluginManager() {
     </>
   );
 }
+/** Plugins whose order or visibility matters: on, and filling a shared slot. */
+function arrangeable(plugin: Plugin) {
+  const c = plugin.contributes ?? {};
+  return (
+    plugin.state === "enabled" &&
+    !!(
+      c.panel ||
+      c.meta ||
+      c.views?.length ||
+      c.mcp_tools?.length ||
+      plugin.permissions.includes("suggest")
+    )
+  );
+}
 function PluginArrangement() {
   const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
@@ -521,15 +616,18 @@ function PluginArrangement() {
     },
   });
   const order = settings.data?.plugin_order ?? [];
+  const shown = order.flatMap((id) => {
+    const plugin = catalog.data?.plugins.find((p) => p.id === id);
+    return plugin && arrangeable(plugin) ? [plugin] : [];
+  });
+  // Moving swaps with the neighbour on screen; hidden plugins keep their places.
   const move = (id: string, direction: number) => {
+    const index = shown.findIndex((p) => p.id === id);
+    const other = shown[index + direction]?.id;
+    if (index < 0 || !other) return;
     const next = [...order];
-    const index = next.indexOf(id);
-    if (index < 0 || index + direction < 0 || index + direction >= next.length)
-      return;
-    [next[index], next[index + direction]] = [
-      next[index + direction],
-      next[index],
-    ];
+    const [a, b] = [next.indexOf(id), next.indexOf(other)];
+    [next[a], next[b]] = [next[b], next[a]];
     save.mutate({ plugin_order: next });
   };
   const toggle = (key: "hidden_views" | "hidden_mcp_tools", id: string) => {
@@ -540,78 +638,68 @@ function PluginArrangement() {
         : [...values, id],
     });
   };
-  if (!catalog.data?.plugins.length) return null;
+  if (shown.length < 1) return null;
   return (
-    <>
-      <h2>Arrange</h2>
-      <p className={styles.muted}>
+    <details className={styles.arrange}>
+      <summary>Arrange</summary>
+      <p className="muted">
         Your order chooses the note panel, suggestion order and meta fact.
       </p>
-      {order.map((id, index) => {
-        const p = catalog.data?.plugins.find((p) => p.id === id);
-        if (!p) return null;
-        return (
-          <div className={styles.plugin} key={id}>
-            <div className={styles.between}>
-              <span>{p.name}</span>
-              <div className={styles.actions}>
-                <button
-                  aria-label={`Move ${p.name} up`}
-                  disabled={save.isPending || index === 0}
-                  onClick={() => move(id, -1)}
-                >
-                  ↑
-                </button>
-                <button
-                  aria-label={`Move ${p.name} down`}
-                  disabled={save.isPending || index === order.length - 1}
-                  onClick={() => move(id, 1)}
-                >
-                  ↓
-                </button>
-              </div>
+      {shown.map((p, index) => (
+        <div className={styles.plugin} key={p.id}>
+          <div className={styles.between}>
+            <span>{p.name}</span>
+            <div className={styles.actions}>
+              <button
+                aria-label={`Move ${p.name} up`}
+                disabled={save.isPending || index === 0}
+                onClick={() => move(p.id, -1)}
+              >
+                ↑
+              </button>
+              <button
+                aria-label={`Move ${p.name} down`}
+                disabled={save.isPending || index === shown.length - 1}
+                onClick={() => move(p.id, 1)}
+              >
+                ↓
+              </button>
             </div>
-            {p.state !== "removed" &&
-              p.contributes?.views?.map((v) => (
-                <label key={v.id} className={styles.row}>
-                  <input
-                    type="checkbox"
-                    checked={
-                      !settings.data?.hidden_views.includes(`${id}/${v.id}`)
-                    }
-                    disabled={save.isPending}
-                    onChange={() => toggle("hidden_views", `${id}/${v.id}`)}
-                  />
-                  Show {v.title} in the rail
-                </label>
-              ))}
-            {p.state !== "removed" &&
-              p.contributes?.mcp_tools?.map((t) => (
-                <label key={t.name} className={styles.row}>
-                  <input
-                    type="checkbox"
-                    checked={
-                      !settings.data?.hidden_mcp_tools.includes(
-                        `${id}_${t.name}`,
-                      )
-                    }
-                    disabled={save.isPending}
-                    onChange={() =>
-                      toggle("hidden_mcp_tools", `${id}_${t.name}`)
-                    }
-                  />
-                  Expose{" "}
-                  <code>
-                    {id}_{t.name}
-                  </code>{" "}
-                  to agents
-                </label>
-              ))}
           </div>
-        );
-      })}
+          {p.contributes?.views?.map((v) => (
+            <label key={v.id} className={styles.row}>
+              <input
+                type="checkbox"
+                checked={
+                  !settings.data?.hidden_views.includes(`${p.id}/${v.id}`)
+                }
+                disabled={save.isPending}
+                onChange={() => toggle("hidden_views", `${p.id}/${v.id}`)}
+              />
+              Show {v.title} in the rail
+            </label>
+          ))}
+          {p.contributes?.mcp_tools?.map((t) => (
+            <label key={t.name} className={styles.row}>
+              <input
+                type="checkbox"
+                checked={
+                  !settings.data?.hidden_mcp_tools.includes(`${p.id}_${t.name}`)
+                }
+                disabled={save.isPending}
+                onChange={() => toggle("hidden_mcp_tools", `${p.id}_${t.name}`)}
+              />
+              Expose{" "}
+              <code>
+                {p.id}_{t.name}
+              </code>{" "}
+              to agents
+            </label>
+          ))}
+        </div>
+      ))}
       <ErrorLine error={save.error} />
-    </>
+    </details>
   );
 }
 function PluginPage({ id }: { id: string }) {
@@ -637,7 +725,7 @@ function PluginPage({ id }: { id: string }) {
       return {};
     }
   });
-  const action = usePluginActions();
+  const [action, switchOff] = useSwitchOff();
   const save = useMutation({
     mutationFn: (values: Args) => {
       const current = client
@@ -671,11 +759,24 @@ function PluginPage({ id }: { id: string }) {
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
+  const page = <PageTitle page={`Settings · ${plugin?.name ?? "Plugins"}`} />;
+  const back = (
+    <Link href="/settings/plugins" className={styles.back}>
+      ← Plugins
+    </Link>
+  );
   if (catalog.isPending || (!!plugin && !removed && query.isPending))
-    return <p>Loading plugin settings…</p>;
+    return (
+      <>
+        {page}
+        <p>Loading plugin settings…</p>
+      </>
+    );
   if (!plugin)
     return (
       <>
+        {page}
+        {back}
         <h1>Plugin unavailable</h1>
         <ErrorLine error={catalog.error} />
       </>
@@ -685,6 +786,8 @@ function PluginPage({ id }: { id: string }) {
     ? plugin.data_count
     : undefined;
   const canDelete = pluginCanDelete(plugin);
+  const usesAI = aiCapabilities(plugin).length > 0;
+  const aiOff = aiIsOff([plugin]);
   const saveValues = (values: Args) => {
     const device: Args = {},
       server: Args = {};
@@ -703,7 +806,8 @@ function PluginPage({ id }: { id: string }) {
   };
   return (
     <>
-      <a href="/settings/plugins">← Plugins</a>
+      {page}
+      {back}
       <div className={styles.between}>
         <h1>{plugin.name}</h1>
         {plugin.pinned_by_env ? (
@@ -724,16 +828,15 @@ function PluginPage({ id }: { id: string }) {
               (plugin.switch !== "on" && !pluginCanEnable(plugin))
             }
             onChange={(e) =>
-              e.target.checked
-                ? setEnable(true)
-                : action.mutate({ plugin, on: false })
+              e.target.checked ? setEnable(true) : switchOff(plugin)
             }
           />
         )}
       </div>
       <p>{plugin.description}</p>
       <p className={styles.facts}>
-        {plugin.category ?? "data"} · {pluginOrigin(plugin)} · {plugin.version}
+        {humanize(plugin.category ?? "data")} · {pluginOrigin(plugin)} ·{" "}
+        {plugin.version}
       </p>
       {!!plugin.pinned_by_env && (
         <p className={styles.secret}>
@@ -741,15 +844,16 @@ function PluginPage({ id }: { id: string }) {
         </p>
       )}
       {removed && (
-        <p className={styles.notice}>
+        <p className="notice">
           Removed. Plugin code is no longer installed. Its stored data and notes
           remain.
         </p>
       )}
       {plugin.state === "waiting" && (
-        <p className={styles.notice}>
-          A requirement is missing. Your switch stays on and resumes when it is
-          available. <a href="/settings/ai">AI settings</a>
+        <p className="notice">
+          {pluginFacts(plugin)}. Your switch stays on and it resumes when the
+          requirement is available.{" "}
+          {aiOff ? <AIOffHint /> : <Link href="/settings/ai">AI settings</Link>}
         </p>
       )}
       {!removed && query.data && (
@@ -768,16 +872,16 @@ function PluginPage({ id }: { id: string }) {
           Settings saved.
         </p>
       )}
-      {!removed && (
+      {!removed && usesAI && !aiOff && (
         <>
           <h2>AI</h2>
           <AIRouting plugin={plugin} />
         </>
       )}
-      {!removed && !!plugin.contributes?.commands?.length && (
+      {plugin.state === "enabled" && !!plugin.contributes?.commands?.length && (
         <>
           <h2>Run</h2>
-          <p className={styles.muted}>
+          <p className="muted">
             Note commands appear in the palette while a note is open.
           </p>
           <PluginCommands
@@ -798,9 +902,9 @@ function PluginPage({ id }: { id: string }) {
         </>
       )}
       <h2>Activity</h2>
-      <p className={styles.muted}>
+      <p className="muted">
         {data.last_run_at
-          ? `Last run ${new Date(data.last_run_at).toLocaleString()}`
+          ? `Last run ${formatWhen(data.last_run_at)}`
           : "No runs yet."}
         {data.last_error ? ` · ${data.last_error}` : " · No failures"}
       </p>
@@ -811,11 +915,11 @@ function PluginPage({ id }: { id: string }) {
         ))}
       </ul>
       {removed ? (
-        <p className={styles.muted}>
+        <p className="muted">
           Access above describes the retained plugin. No plugin code is running.
         </p>
       ) : (
-        <p className={styles.muted}>
+        <p className="muted">
           {pluginFacts(plugin)}. Up to 3 commands, 10 panel items and 5
           unattended notes per day.
         </p>
@@ -831,18 +935,17 @@ function PluginPage({ id }: { id: string }) {
           </p>
         ))}
       <h2>Stored data</h2>
-      <p className={styles.muted}>
-        {recordCount ?? "…"} records · {plugin.data_size_bytes ?? 0} bytes. Its
-        notes stay: they are notes.
+      <p className="muted">
+        {recordCount === undefined ? "…" : plural(recordCount, "record")} ·{" "}
+        {formatBytes(plugin.data_size_bytes ?? 0)}. Its notes stay: they are
+        notes.
       </p>
       {canDelete && (
-        <button className={styles.danger} onClick={() => setRemove(true)}>
+        <button className="danger" onClick={() => setRemove(true)}>
           Delete this plugin’s data…
         </button>
       )}
-      <ErrorLine
-        error={(!removed ? query.error : null) ?? save.error ?? action.error}
-      />
+      <ErrorLine error={(!removed ? query.error : null) ?? save.error} />
       {enable && !plugin.pinned_by_env && pluginCanEnable(plugin) && (
         <PermissionDialog
           plugin={plugin}
@@ -870,7 +973,7 @@ function PluginPage({ id }: { id: string }) {
                 Cancel
               </button>
               <button
-                className={styles.danger}
+                className="danger"
                 disabled={
                   deletion.isPending || !pluginCountKnown(plugin.data_count)
                 }
@@ -892,18 +995,62 @@ function PluginPage({ id }: { id: string }) {
     </>
   );
 }
+const clientNames: Record<string, string> = {
+  script: "Script or other tool",
+  codex: "Codex",
+  "claude-code": "Claude Code",
+  monitor: "Status monitor",
+};
+const scopeNames: Record<string, string> = {
+  read: "Reads notes",
+  write: "Reads and writes notes",
+  status: "Status only",
+};
+function credentialName(c: Credential) {
+  return c.kind === "session" ? browserName(c.name) : c.name;
+}
+function credentialFacts(c: Credential) {
+  // Private and external-note limits only exist on access tokens.
+  if (c.kind === "pat")
+    return [
+      clientNames[c.client ?? ""] ?? c.client,
+      scopeNames[c.scope] ?? c.scope,
+      c.scope === "status"
+        ? null
+        : c.private_ok
+          ? "Includes private notes"
+          : "Excludes private notes",
+      c.scope === "status"
+        ? null
+        : c.external_ok
+          ? "Includes external notes"
+          : "Excludes external notes",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  return c.kind === "device" ? "Android app" : null;
+}
+function credentialUse(c: Credential) {
+  const used = c.current
+    ? "Active now"
+    : c.last_used_at
+      ? `Last used ${formatWhen(c.last_used_at)}`
+      : c.kind === "pat"
+        ? "Not used yet"
+        : `Signed in ${formatWhen(c.created_at)}`;
+  return c.expires_at ? `${used} · Expires ${formatWhen(c.expires_at)}` : used;
+}
 function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
   const query = useQuery({
     queryKey: ["credentials"],
     queryFn: api.credentials,
   });
   const client = useQueryClient();
-  const [revoke, setRevoke] = useState<Credential | null>(null);
+  const [confirm, dialog] = useConfirm();
   const mutation = useMutation({
-    mutationFn: (id: string) => api.revokeCredential(id),
-    onSuccess: () => {
-      if (revoke?.current) location.assign("/login");
-      setRevoke(null);
+    mutationFn: (credential: Credential) => api.revokeCredential(credential.id),
+    onSuccess: (_, credential) => {
+      if (credential.current) location.assign("/");
       void client.invalidateQueries({ queryKey: ["credentials"] });
     },
   });
@@ -913,162 +1060,76 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
         ? c.kind === "pat"
         : ["session", "device"].includes(c.kind),
     ) ?? [];
+  const revoke = async (c: Credential) => {
+    if (
+      await confirm({
+        title: `Revoke ${credentialName(c)}?`,
+        body: `This ${c.kind === "pat" ? "token" : "device or session"} will lose access immediately.${c.current ? " You will be signed out." : ""}`,
+        confirmLabel: "Revoke access",
+        danger: true,
+      })
+    )
+      mutation.mutate(c);
+  };
   return (
     <>
       {query.isPending ? (
         <p>Loading access…</p>
       ) : items.length ? (
         <ul className={styles.list}>
-          {items.map((c) => (
-            <li className={styles.plugin} key={c.id}>
-              <div className={styles.between}>
-                <div>
-                  <strong>{c.name}</strong>
-                  {c.current && (
-                    <small className={styles.facts}> · This browser</small>
-                  )}
-                  <p>
-                    {c.client ?? c.kind} · {c.scope}
-                    {c.private_ok
-                      ? " · Includes private notes"
-                      : " · Excludes private notes"}
-                    {c.external_ok
-                      ? " · Includes external notes"
-                      : " · Excludes external notes"}
-                  </p>
-                  <small className={styles.facts}>
-                    Last used{" "}
-                    {c.last_used_at
-                      ? new Date(c.last_used_at).toLocaleString()
-                      : "never"}
-                    {c.expires_at
-                      ? ` · Expires ${new Date(c.expires_at).toLocaleString()}`
-                      : ""}
-                  </small>
+          {items.map((c) => {
+            const facts = credentialFacts(c);
+            return (
+              <li className={styles.plugin} key={c.id}>
+                <div className={styles.between}>
+                  <div>
+                    <strong title={c.kind === "session" ? c.name : undefined}>
+                      {credentialName(c)}
+                    </strong>
+                    {c.current && (
+                      <small className={styles.facts}> · This browser</small>
+                    )}
+                    {facts && <p>{facts}</p>}
+                    <small className={styles.facts}>{credentialUse(c)}</small>
+                  </div>
+                  <div className={styles.actions}>
+                    <button
+                      aria-label={`Revoke ${credentialName(c)}`}
+                      disabled={mutation.isPending}
+                      onClick={() => void revoke(c)}
+                    >
+                      Revoke
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => setRevoke(c)}>Revoke</button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       ) : (
-        <p className={styles.muted}>
+        <p className="muted">
           {kind === "tokens" ? "No access tokens yet." : "No other devices."}
         </p>
       )}
       <ErrorLine error={query.error ?? mutation.error} />
-      {revoke && (
-        <Dialog
-          title={`Revoke ${revoke.name}?`}
-          onClose={() => setRevoke(null)}
-          footer={
-            <>
-              <button onClick={() => setRevoke(null)}>Cancel</button>
-              <button
-                className={styles.danger}
-                disabled={mutation.isPending}
-                onClick={() => mutation.mutate(revoke.id)}
-              >
-                Revoke access
-              </button>
-            </>
-          }
-        >
-          <p>
-            This {revoke.kind === "pat" ? "token" : "device or session"} will
-            lose access immediately.
-            {revoke.current ? " You will be signed out." : ""}
-          </p>
-        </Dialog>
-      )}
+      {dialog}
     </>
   );
 }
 function Devices() {
-  const hosted = useHosted();
-  const query = useQuery({
-    queryKey: ["session"],
-    queryFn: () => api.session(),
-  });
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState(false);
-  const change = useMutation({
-    mutationFn: () => api.changePassword(password),
-    onSuccess: () => {
-      setPassword("");
-      location.assign("/login");
-    },
-  });
   return (
     <>
       <h1>Devices</h1>
-      <p className={styles.muted}>
+      <p className="muted">
         Every browser session and connected device, with its last use.
       </p>
       <CredentialRows kind="devices" />
       <PairDevice />
-      <h2>Password</h2>
-      {hosted ? (
-        <p className={styles.muted}>
-          Manage username, password and optional SSO in{" "}
-          <a href="/settings/account">Account settings</a>.
-        </p>
-      ) : query.data?.password_managed ? (
-        <p className={styles.secret}>
-          Set in the environment. Change <code>SPUNTO_OWNER_PASSWORD</code> or{" "}
-          <code>SPUNTO_OWNER_PASSWORD_HASH</code> and restart the server.
-        </p>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setConfirm(true);
-          }}
-        >
-          <label className={styles.field}>
-            New password
-            <input
-              type="password"
-              value={password}
-              autoComplete="new-password"
-              minLength={12}
-              maxLength={1024}
-              required
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          <button disabled={!password}>Change password…</button>
-        </form>
-      )}
-      <ErrorLine error={change.error} />
-      {confirm && (
-        <Dialog
-          title="Change your password?"
-          onClose={() => setConfirm(false)}
-          footer={
-            <>
-              <button onClick={() => setConfirm(false)}>Cancel</button>
-              <button
-                className="primary"
-                disabled={change.isPending}
-                onClick={() => change.mutate()}
-              >
-                Change password
-              </button>
-            </>
-          }
-        >
-          <p>
-            Your web sessions will be signed out. Device and access tokens keep
-            their current access.
-          </p>
-          <ErrorLine error={change.error} />
-        </Dialog>
-      )}
     </>
   );
 }
 function Tokens() {
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -1097,11 +1158,14 @@ function Tokens() {
       void client.invalidateQueries({ queryKey: ["credentials"] });
     },
   });
-
+  const ready =
+    !create.isPending &&
+    !!name.trim() &&
+    (!expires || new Date(expires).getTime() > Date.now());
   return (
     <>
       <h1>Access tokens</h1>
-      <p className={styles.muted}>
+      <p className="muted">
         Create a separate token for each agent or script. A read token can find
         notes without changing them.
       </p>
@@ -1124,85 +1188,94 @@ function Tokens() {
               <button onClick={() => setOpen(false)}>Cancel</button>
               <button
                 className="primary"
-                disabled={
-                  create.isPending ||
-                  !name.trim() ||
-                  (!!expires && new Date(expires).getTime() <= Date.now())
-                }
-                onClick={() => create.mutate()}
+                type="submit"
+                form={formId}
+                disabled={!ready}
               >
                 {create.isPending ? "Creating…" : "Create token"}
               </button>
             </>
           }
         >
-          <label className={styles.field}>
-            Name
-            <input
-              value={name}
-              maxLength={120}
-              required
-              autoFocus
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            Client
-            <select
-              value={clientName}
-              onChange={(e) =>
-                setClientName(e.target.value as TokenInput["client"])
-              }
-            >
-              {["script", "codex", "claude-code", "monitor"].map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.field}>
-            Scope
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value as typeof scope)}
-            >
-              <option value="read">Read notes</option>
-              <option value="write">Read and write notes</option>
-              <option value="status">Status only · no note text</option>
-            </select>
-          </label>
-          {scope !== "status" && (
-            <>
-              <label className={styles.row}>
-                <input
-                  type="checkbox"
-                  checked={privateOk}
-                  onChange={(e) => setPrivate(e.target.checked)}
-                />
-                Include private notes
-              </label>
-              <label className={styles.row}>
-                <input
-                  type="checkbox"
-                  checked={externalOk}
-                  onChange={(e) => setExternal(e.target.checked)}
-                />
-                Include external-origin notes
-              </label>
-            </>
-          )}
-          <label className={styles.field}>
-            Expires at (optional)
-            <input
-              type="datetime-local"
-              value={expires}
-              onChange={(e) => setExpires(e.target.value)}
-            />
-            <small>
-              Leave blank for no expiry. You can revoke access at any time.
-            </small>
-          </label>
+          <form
+            id={formId}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (ready) create.mutate();
+            }}
+          >
+            <label className={styles.formField}>
+              Name
+              <input
+                className="field"
+                value={name}
+                maxLength={120}
+                required
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className={styles.formField}>
+              Client
+              <select
+                className="field"
+                value={clientName}
+                onChange={(e) =>
+                  setClientName(e.target.value as TokenInput["client"])
+                }
+              >
+                {Object.entries(clientNames).map(([value, title]) => (
+                  <option key={value} value={value}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.formField}>
+              Scope
+              <select
+                className="field"
+                value={scope}
+                onChange={(e) => setScope(e.target.value as typeof scope)}
+              >
+                <option value="read">Read notes</option>
+                <option value="write">Read and write notes</option>
+                <option value="status">Status only · no note text</option>
+              </select>
+            </label>
+            {scope !== "status" && (
+              <>
+                <label className={styles.row}>
+                  <input
+                    type="checkbox"
+                    checked={privateOk}
+                    onChange={(e) => setPrivate(e.target.checked)}
+                  />
+                  Include private notes
+                </label>
+                <label className={styles.row}>
+                  <input
+                    type="checkbox"
+                    checked={externalOk}
+                    onChange={(e) => setExternal(e.target.checked)}
+                  />
+                  Include external-origin notes
+                </label>
+              </>
+            )}
+            <label className={styles.formField}>
+              Expires at (optional)
+              <input
+                className="field"
+                type="datetime-local"
+                value={expires}
+                onChange={(e) => setExpires(e.target.value)}
+              />
+              <small>
+                Leave blank for no expiry. You can revoke access at any time.
+              </small>
+            </label>
+          </form>
           <ErrorLine error={create.error} />
         </Dialog>
       )}
@@ -1259,9 +1332,10 @@ function Agents() {
   return (
     <>
       <h1>Agents</h1>
-      <p className={styles.muted}>
-        Give each agent its own <a href="/settings/tokens">access token</a>.
-        Start with read access and keep edit tools asking for confirmation. Set{" "}
+      <p className="muted">
+        Give each agent its own{" "}
+        <Link href="/settings/tokens">access token</Link>. Start with read
+        access and keep edit tools asking for confirmation. Set{" "}
         <code>SPUNTO_TOKEN</code> privately in the environment that starts your
         client.
       </p>
@@ -1312,9 +1386,15 @@ function Data() {
   const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
   const status = useQuery({ queryKey: ["status"], queryFn: api.status });
   const client = useQueryClient();
-  const [empty, setEmpty] = useState(false);
+  const toast = useToast();
+  const [confirm, dialog] = useConfirm();
+  const [enable, setEnable] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const action = usePluginActions();
+  const importer = catalog.data?.plugins.find(
+    (plugin) => plugin.id === "markdown-import",
+  );
   const count = Number(
     (status.data?.database as { trashed_notes?: number } | undefined)
       ?.trashed_notes ?? 0,
@@ -1325,7 +1405,7 @@ function Data() {
         method: "POST",
       }),
     onSuccess: () => {
-      setEmpty(false);
+      toast.show({ message: "Trash emptied" });
       for (const key of ["notes", "status", "labels"])
         void client.invalidateQueries({ queryKey: [key] });
     },
@@ -1350,7 +1430,7 @@ function Data() {
     <>
       <h1>Data</h1>
       <h2>Export</h2>
-      <p className={styles.muted}>
+      <p className="muted">
         All your notes as Markdown, their metadata and attachments in one ZIP.
       </p>
       <button
@@ -1361,64 +1441,108 @@ function Data() {
         {exporting ? "Preparing export…" : "Export notes"}
       </button>
       {exportError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {exportError}
         </p>
       )}
       <h2>Import Markdown</h2>
-      {catalog.data?.plugins.find((plugin) => plugin.id === "markdown-import")
-        ?.state === "enabled" ? (
+      {importer?.state === "enabled" ? (
         <MarkdownImport />
+      ) : importer && importer.state !== "removed" ? (
+        <>
+          <p className="muted">
+            Import a Markdown ZIP, such as a Spunto export or an Obsidian vault.
+            The {importer.name} plugin reads it; turn it on to choose a file.
+          </p>
+          {importer.pinned_by_env ? (
+            <p className={styles.facts}>Set in the environment · Off</p>
+          ) : (
+            <button
+              disabled={!pluginCanEnable(importer)}
+              onClick={() => {
+                action.reset();
+                setEnable(true);
+              }}
+            >
+              Turn on {importer.name}…
+            </button>
+          )}
+        </>
       ) : (
-        <p className={styles.muted}>
-          <a href="/settings/plugins/markdown-import">
-            Turn on Import Markdown
-          </a>{" "}
-          in Plugins to preview a ZIP.
+        <p className="muted">
+          Markdown import is not available on this server.
         </p>
       )}
       <h2>Trash</h2>
-      <p className={styles.muted}>
-        {count} notes in Trash. Notes here are deleted for good after 30 days.
+      <p className="muted">
+        {plural(count, "note")} in Trash. Notes there are deleted for good after
+        30 days.
       </p>
-      <a href="/trash">Open Trash</a>
-      {count > 0 && (
-        <p>
-          <button className={styles.danger} onClick={() => setEmpty(true)}>
+      <div className={styles.row}>
+        <Link href="/trash">Open Trash</Link>
+        {count > 0 && (
+          <button
+            className="danger"
+            disabled={deletion.isPending}
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: `Delete ${plural(count, "note")} for good?`,
+                  body: `This permanently deletes ${plural(count, "trashed note")} and their attachments. This cannot be undone.`,
+                  confirmLabel: `Delete ${plural(count, "note")}`,
+                  danger: true,
+                })
+              )
+                deletion.mutate();
+            }}
+          >
             Empty trash…
           </button>
-        </p>
-      )}
+        )}
+      </div>
       <ErrorLine error={status.error ?? deletion.error} />
-      {empty && (
-        <Dialog
-          title={`Delete ${count} notes for good?`}
-          onClose={() => setEmpty(false)}
-          footer={
-            <>
-              <button onClick={() => setEmpty(false)}>Cancel</button>
-              <button
-                className={styles.danger}
-                disabled={deletion.isPending}
-                onClick={() => deletion.mutate()}
-              >
-                Delete {count} notes
-              </button>
-            </>
+      {dialog}
+      {enable && importer && pluginCanEnable(importer) && (
+        <PermissionDialog
+          plugin={importer}
+          onClose={() => setEnable(false)}
+          busy={action.isPending}
+          error={action.error}
+          onEnable={() =>
+            action.mutate(
+              { plugin: importer, on: true },
+              { onSuccess: () => setEnable(false) },
+            )
           }
-        >
-          <p>
-            This permanently deletes {count} trashed notes and their
-            attachments. This cannot be undone.
-          </p>
-          <ErrorLine error={deletion.error} />
-        </Dialog>
+        />
       )}
     </>
   );
 }
+const pluginStates: Record<string, string> = {
+  enabled: "On",
+  disabled: "Off",
+  available: "Off",
+  waiting: "Waiting for a requirement",
+  failed: "Paused after failed runs",
+  removed: "Removed",
+};
+function duration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  return days
+    ? plural(days, "day")
+    : hours
+      ? plural(hours, "hour")
+      : plural(minutes, "minute");
+}
 export function StatusPage() {
+  useDocumentTitle("Server status");
   const query = useQuery({ queryKey: ["status"], queryFn: api.status });
+  const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
+  const name = (id: string) =>
+    catalog.data?.plugins.find((p) => p.id === id)?.name ?? humanize(id);
   const data = query.data;
   const ai = data?.ai as
     | {
@@ -1459,26 +1583,29 @@ export function StatusPage() {
         <ErrorLine error={query.error} />
       ) : (
         <>
-          <p className={styles.muted}>
-            Spunto {String(data?.version)} · Schema {String(data?.schema)}
+          <p className="muted">
+            Spunto {String(data?.version)} · Database schema{" "}
+            {String(data?.schema)}
           </p>
           <dl className={styles.counts}>
             {[
-              ["Notes", database?.notes],
-              ["Private notes", database?.private_notes],
-              ["Trashed notes", database?.trashed_notes],
+              ["Notes", (database?.notes ?? 0).toLocaleString()],
+              [
+                "Private notes",
+                (database?.private_notes ?? 0).toLocaleString(),
+              ],
+              ["In Trash", (database?.trashed_notes ?? 0).toLocaleString()],
               [
                 database?.size_kind === "note_rows"
-                  ? "Note row bytes (estimate)"
-                  : "Database bytes",
-                database?.size_bytes,
+                  ? "Note text (estimate)"
+                  : "Database size",
+                formatBytes(database?.size_bytes ?? 0),
               ],
-              ["Uptime seconds", data?.uptime_seconds],
-              ["Change sequence", data?.change_seq],
+              ["Running for", duration(Number(data?.uptime_seconds ?? 0))],
             ].map(([title, value]) => (
-              <div key={String(title)}>
-                <dt>{String(title)}</dt>
-                <dd>{String(value ?? 0)}</dd>
+              <div key={title}>
+                <dt>{title}</dt>
+                <dd>{value}</dd>
               </div>
             ))}
           </dl>
@@ -1487,48 +1614,61 @@ export function StatusPage() {
             {backup?.managed
               ? "Backups are managed by the host."
               : backup?.last_at
-                ? `Last backup ${new Date(backup.last_at).toLocaleString()} · ${backup.age_hours} hours ago`
+                ? `Last backup ${formatWhen(backup.last_at)} · ${plural(Math.round(backup.age_hours ?? 0), "hour")} ago`
                 : "No backup yet."}
           </p>
           <h2>AI</h2>
           <p>
             {ai?.enabled
               ? ai.capabilities
-                  .map((capability) => capability.replace("ai.", ""))
+                  .map(
+                    (capability) =>
+                      capabilityNames[
+                        capability.replace("ai.", "") as AICapability
+                      ]?.[0] ?? humanize(capability.replace("ai.", "")),
+                  )
                   .join(" · ")
-              : "Off."}
+              : "AI is off."}
           </p>
           <AIHealthResults rows={ai?.health ?? []} />
           {ai?.indexing && (
-            <p className={styles.muted}>
+            <p className="muted">
               {ai.indexing.available
-                ? `${ai.indexing.chunks} embedding chunks`
+                ? `${plural(ai.indexing.chunks, "embedding chunk")}`
                 : "Vector index unavailable"}
               {ai.indexing.enabled ? " · Indexing on" : " · Indexing paused"}
             </p>
           )}
           {ai?.stats?.map((stat, index) => (
             <p className={styles.facts} key={index}>
-              {stat.plugin_id} · {stat.capability} · {stat.outcome}: {stat.n}
+              {name(stat.plugin_id)} ·{" "}
+              {capabilityNames[
+                stat.capability.replace("ai.", "") as AICapability
+              ]?.[0] ?? humanize(stat.capability)}{" "}
+              · {humanize(stat.outcome)}: {stat.n.toLocaleString()}
             </p>
           ))}
-          <a href="/settings/ai">AI settings</a>
+          <Link href="/settings/ai">AI settings</Link>
           <h2>Plugins and jobs</h2>
           {plugins?.map((p) => (
-            <p className={styles.muted} key={p.id}>
-              {p.id} · {p.state}
+            <p className="muted" key={p.id}>
+              {name(p.id)} · {pluginStates[p.state] ?? humanize(p.state)}
               {p.last_error ? ` · ${p.last_error}` : ""}
             </p>
           ))}
           {jobs?.map((j, i) => (
             <p className={styles.facts} key={i}>
-              {j.plugin_id} · {j.status} · {j.count}
+              {name(j.plugin_id)} · {plural(j.count, "job")}{" "}
+              {humanize(j.status).toLowerCase()}
             </p>
           ))}
           <h2>Access</h2>
-          <p className={styles.muted}>
-            {Array.isArray(data?.credentials) ? data.credentials.length : 0}{" "}
-            active credentials.
+          <p className="muted">
+            {plural(
+              Array.isArray(data?.credentials) ? data.credentials.length : 0,
+              "active credential",
+            )}
+            .
           </p>
           <button onClick={() => void query.refetch()}>Refresh status</button>
         </>

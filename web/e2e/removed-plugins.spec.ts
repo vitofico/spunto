@@ -138,8 +138,8 @@ test("packaged Removed cards retain metadata and notes while owner cleanup stays
       await expect(row.getByText(/Operator-installed/)).toBeVisible();
       await expect(row.getByRole("switch")).toHaveCount(0);
       await expect(
-        row.getByRole("link", { name: "Stored data", exact: true }),
-      ).toBeVisible();
+        row.getByRole("link", { name: removed.name, exact: true }),
+      ).toHaveAttribute("href", `/settings/plugins/${id}`);
       if (id === ids[1])
         await expect(
           row.getByText("Set in the environment · Off", { exact: true }),

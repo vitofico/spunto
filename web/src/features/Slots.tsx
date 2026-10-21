@@ -160,7 +160,7 @@ export function SuggestionLine({
         </button>
       )}
       {decision.isError && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {decision.error.message}
         </p>
       )}
@@ -296,7 +296,7 @@ function PanelSection({
         onCommand={(id, args) => command.mutate({ id, args })}
       />
       {command.isError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {command.error.message}
         </p>
       )}
@@ -382,7 +382,7 @@ export function DailySlip() {
     return null;
   return (
     <section className={styles.slip}>
-      <p className={styles.overline}>
+      <p className="overline">
         From your notes · {new Date(slip.note.created_at).toLocaleDateString()}
       </p>
       <blockquote>{slip.note.body.slice(0, 400)}</blockquote>
@@ -403,7 +403,7 @@ export function DailySlip() {
         </button>
       </div>
       {(dismiss.isError || archive.isError) && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           The change could not be saved. Try again.
         </p>
       )}
@@ -632,12 +632,12 @@ export function CommandResult({
         {onDismiss && <button onClick={onDismiss}>Back</button>}
       </footer>
       {save.isError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {save.error.message}
         </p>
       )}
       {followup.error && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {followup.error.message}
         </p>
       )}
@@ -771,7 +771,7 @@ export function PluginCommands({
         </button>
       ))}
       {command.isError && (
-        <p role="alert" className={styles.error}>
+        <p role="alert" className="error">
           {command.error.message}
         </p>
       )}

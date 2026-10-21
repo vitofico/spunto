@@ -15,7 +15,7 @@ import styles from "./Feature.module.css";
 
 function ErrorLine({ error }: { error: Error | null }) {
   return error ? (
-    <p className={styles.error} role="alert">
+    <p className="error" role="alert">
       {error.message}
     </p>
   ) : null;
@@ -31,7 +31,7 @@ function GrantForm({
   const [role, setRole] = useState<"editor" | "viewer">("viewer");
   return (
     <form
-      className={`${styles.field} ${styles.grantForm}`}
+      className={`${styles.formField} ${styles.grantForm}`}
       onSubmit={(event) => {
         event.preventDefault();
         add(email.trim(), role);
@@ -40,6 +40,7 @@ function GrantForm({
       <label>
         Username or verified email
         <input
+          className="field"
           type="text"
           required
           value={email}
@@ -52,6 +53,7 @@ function GrantForm({
       <label>
         Access
         <select
+          className="field"
           value={role}
           onChange={(event) => setRole(event.target.value as typeof role)}
         >
@@ -172,13 +174,14 @@ function HostedSpaces() {
   return (
     <>
       <h1>Spaces</h1>
-      <p className={styles.muted}>
+      <p className="muted">
         Keep your own notes in your personal space. Create a shared space when a
         group needs the same notes and labels.
       </p>
-      <label className={styles.field}>
+      <label className={styles.formField}>
         Current space
         <select
+          className="field"
           value={workspace?.id ?? session?.workspace_id ?? ""}
           disabled={change.isPending || !spaces.data}
           onChange={(event) => change.mutate(event.target.value)}
@@ -213,9 +216,10 @@ function HostedSpaces() {
           create.mutate();
         }}
       >
-        <label className={styles.field}>
+        <label className={styles.formField}>
           Space name
           <input
+            className="field"
             required
             maxLength={120}
             value={name}

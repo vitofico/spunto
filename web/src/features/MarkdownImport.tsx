@@ -58,7 +58,7 @@ export function MarkdownImport() {
   const error = upload.error ?? importing.error ?? refresh.error;
   return (
     <section aria-label="Import Markdown">
-      <p className={styles.muted}>
+      <p className="muted">
         Upload a Markdown ZIP to preview its notes and attachments. Spunto
         exports preserve their metadata; other vaults use supported front
         matter. Notes you edited here are kept.
@@ -110,7 +110,7 @@ export function MarkdownImport() {
       )}
       {report ? <VocabularyOutput value={report} /> : null}
       {error && (
-        <p className={styles.error} role="alert">
+        <p className="error" role="alert">
           {error.message}
         </p>
       )}

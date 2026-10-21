@@ -5,6 +5,7 @@ import {
   formatBytes,
   humanize,
   plural,
+  willSentence,
 } from "../src/features/format";
 
 it("writes counts and sizes the way people read them", () => {
@@ -50,4 +51,26 @@ it("names a browser from its user agent and keeps unknown agents as they are", (
     ),
   ).toBe("Firefox on Linux");
   expect(browserName("curl/8.7.1")).toBe("curl/8.7.1");
+});
+
+it('rewords permission sentences to follow "It will" the way the phone does', () => {
+  expect(
+    [
+      "Reads attachments",
+      "Fetches the linked page",
+      "Uses the vision model",
+      "Never reads private notes",
+      "Process audio",
+      "Adds labels",
+      "Connects to ollama.home.arpa",
+    ].map(willSentence),
+  ).toEqual([
+    "Read attachments",
+    "Fetch the linked page",
+    "Use the vision model",
+    "Never read private notes",
+    "Process audio",
+    "Add labels",
+    "Connect to ollama.home.arpa",
+  ]);
 });

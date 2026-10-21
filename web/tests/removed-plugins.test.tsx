@@ -478,7 +478,7 @@ it("explicit permission approval still grants a replacement intentionally", asyn
   renderPage("plugins");
   fireEvent.click(await screen.findByRole("switch", { name: "Enable Tasks" }));
   const dialog = await screen.findByRole("dialog", { name: "Turn on Tasks?" });
-  expect(within(dialog).getByText("Reads your notes")).toBeTruthy();
+  expect(within(dialog).getByText("Read your notes")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Turn on" }));
   await waitFor(() =>
     expect(api.enablePlugin).toHaveBeenCalledWith(

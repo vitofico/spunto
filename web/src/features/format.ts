@@ -61,6 +61,20 @@ export function choiceLabel(choice: unknown) {
   return /^[a-z0-9]+([_-][a-z0-9]+)*$/.test(choice) ? humanize(choice) : choice;
 }
 
+/** A permission sentence read after "It will", as on the phone: "Reads attachments" → "Read attachments", "Never reads" → "Never read". */
+export function willSentence(sentence: string): string {
+  if (sentence.startsWith("Never "))
+    return "Never " + willSentence(sentence.slice(6));
+  const verb = sentence.split(" ", 1)[0];
+  const base =
+    verb.length < 4 || !verb.endsWith("s") || verb.endsWith("ss")
+      ? verb
+      : /(ch|sh|x|ss)es$/.test(verb)
+        ? verb.slice(0, -2)
+        : verb.slice(0, -1);
+  return base + sentence.slice(verb.length);
+}
+
 /** "Chrome on macOS" from a browser's user agent; anything unrecognised stays as it is. */
 export function browserName(agent: string) {
   const browser = /Edg(e|A|iOS)?\//.test(agent)

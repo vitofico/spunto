@@ -39,6 +39,7 @@ import {
   formatWhen,
   humanize,
   plural,
+  willSentence,
 } from "./format";
 const sections = [
   ["account", "Account"],
@@ -364,7 +365,7 @@ function PermissionDialog({
       <h3>It will</h3>
       <ul>
         {permissions(plugin).map((p, i) => (
-          <li key={i}>{p}</li>
+          <li key={i}>{willSentence(p)}</li>
         ))}
       </ul>
       <h3>Where text goes</h3>

@@ -351,7 +351,7 @@ describe("plugin lifecycle controls", () => {
     expect(
       await screen.findByRole("dialog", { name: "Turn on Tasks?" }),
     ).toBeTruthy();
-    expect(screen.getByText("Reads your notes")).toBeTruthy();
+    expect(screen.getByText("Read your notes")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     await waitFor(() =>
       expect(enable).toHaveBeenCalledWith("tasks", ["notes.read", "annotate"]),

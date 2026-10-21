@@ -61,6 +61,8 @@ it("requires an uploaded preview before queueing and shows the finished vocabula
   const submit = await screen.findByRole("button", {
     name: "Import these notes",
   });
+  expect(screen.getByText("2 notes and 1 attachment (24 bytes).")).toBeTruthy();
+  expect(screen.getByText(/^1 local link could not be found\./)).toBeTruthy();
   expect(fetch.mock.calls[0][0]).toBe("/api/v1/plugins/markdown-import/upload");
   expect(fetch.mock.calls[0][1].body).toBeInstanceOf(FormData);
   fireEvent.click(submit);

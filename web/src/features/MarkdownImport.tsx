@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, request } from "../lib/api";
 import { VocabularyOutput } from "./Vocabulary";
+import { formatBytes, plural } from "./format";
 import styles from "./Feature.module.css";
 
 type Preview = {
@@ -42,6 +43,7 @@ export function MarkdownImport() {
     onSuccess: (result) => {
       setReport(result);
       void client.invalidateQueries({ queryKey: ["notes"] });
+      void client.invalidateQueries({ queryKey: ["labels"] });
     },
   });
   const importing = useMutation({
@@ -84,13 +86,14 @@ export function MarkdownImport() {
       {preview && (
         <div>
           <p>
-            {preview.report.notes} notes and {preview.report.attachments}{" "}
-            attachments ({preview.report.attachment_bytes} bytes).
+            {plural(preview.report.notes, "note")} and{" "}
+            {plural(preview.report.attachments, "attachment")} (
+            {formatBytes(preview.report.attachment_bytes)}).
           </p>
           {preview.report.missing_links > 0 && (
             <p>
-              {preview.report.missing_links} local links could not be found.
-              Their original links will stay.
+              {plural(preview.report.missing_links, "local link")} could not be
+              found. The original links stay as they are.
             </p>
           )}
           <button disabled={busy || queued} onClick={() => importing.mutate()}>
@@ -100,7 +103,8 @@ export function MarkdownImport() {
       )}
       {queued && (
         <p>
-          Imports run in the background. Refresh the report to check progress.
+          The import runs in the background and its notes appear as they arrive.
+          Refresh the report for the totals.
         </p>
       )}
       {(queued || report !== undefined) && (

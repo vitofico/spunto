@@ -186,15 +186,18 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  val owner=LocalLifecycleOwner.current
  LaunchedEffect(id,draftId) { if(id!="capture") while(true) { delay(60_000); if(ready && !saved && !latestSaving && latestText!=committed) { val body=latestText;val write=model.repository.editorWrite(lease,body);if(commitEditor(write)) committed=body } } }
  var copyNoticed by remember(id,draftId) { mutableStateOf(false) }
+ val copyMessage="This note changed elsewhere too. Your version is kept as a conflicted copy."
+ // The note's own conflict line takes over once the editor closes, so the notice doesn't follow you to other notes.
+ DisposableEffect(id,draftId) { onDispose { if(model.message.value==copyMessage) model.message.value="" } }
  // A sync that changes this note while every word here is saved (an edit made elsewhere, or the server's merge of these
  // words) shows here, so later typing grows from it. Words being typed, dictated, recorded or saved are never replaced.
  LaunchedEffect(id,draftId) { if(id!="capture") model.repository.observe(id).distinctUntilChanged().collect {
   if(!ready || saved) return@collect
   val shown=value.text;val synced=model.repository.syncedForEditor(lease,shown)
-  if(lease.noteId!=id && !copyNoticed) { copyNoticed=true;model.message.value="This note changed elsewhere too. Your version is kept as a conflicted copy." }
+  if(lease.noteId!=id && !copyNoticed) { copyNoticed=true;model.message.value=copyMessage }
   if(synced==null || value.text!=shown || shown!=committed || saving || closing || startingVoice || voice.hasSession || latestPendingRecording!=null || dictation.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)) return@collect
   val write=model.repository.editorWrite(lease,synced.body)
-  value=TextFieldValue(synced.body,TextRange(value.selection.start.coerceAtMost(synced.body.length)));committed=synced.body
+  value=TextFieldValue(synced.body,TextRange(caretAfterSync(shown,synced.body,value.selection.start),caretAfterSync(shown,synced.body,value.selection.end)));committed=synced.body
   model.repository.adoptSynced(write,synced)
  } }
  DisposableEffect(editorLease) {
@@ -393,4 +396,10 @@ private fun languageName(tag:String)=when(tag) {"it-IT" -> "Italian";"en-US" -> 
   Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically,content=tools)
   save()
  }
+}
+/** Where a caret at [at] in [old] belongs in [new], the text a sync put in its place: it stays with the words around it. */
+internal fun caretAfterSync(old:String,new:String,at:Int):Int {
+ val prefix=old.commonPrefixWith(new).length
+ val suffix=old.commonSuffixWith(new).length.coerceAtMost(minOf(old.length,new.length)-prefix)
+ return when { at<=prefix -> at; at>=old.length-suffix -> at+new.length-old.length; else -> new.length-suffix }
 }

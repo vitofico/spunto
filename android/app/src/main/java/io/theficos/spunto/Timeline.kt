@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.theficos.spunto.core.design.*
 import io.theficos.spunto.core.model.*
@@ -37,7 +38,7 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
   item { Composer(model,onPlainCaptureSave={body,ref ->model.repository.create(body,sourceRef=ref)},onSave={model.saveLocal(it)}) }
   if(proposals>=3) item { TextButton(onClick=onReview) { Text("$proposals suggestions · Review") } }
   outputs.filter { it.kind=="annotation" && payload(it.payload).string("kind")=="slip" && model.container.manifest.enabled(payload(it.payload).string("plugin")) && notes.any { note -> note.id==it.noteId && !note.privateNote && !note.trashed } }.take(1).forEach { output -> item { Surface(color=MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(16.dp)) { Text("From your notes",style=MaterialTheme.typography.labelSmall); notes.firstOrNull { it.id==output.noteId }?.let { Markdown(it.body.take(600));Row { TextButton(onClick={onNote(it.id)}) { Text("Open") };TextButton(onClick={model.flags(it.id,archived=true)}) { Text("Archive") } } } ?: RenderOutput(model,payload(output.payload),onNote) } } } }
-  if(page.itemCount==0) item { if(from.isNotBlank() || to.isNotBlank()) Text("No notes in this date range.") else { Text("A quiet place for loose ideas.",style=MaterialTheme.typography.titleLarge); Text("Share anything to spunto from any app, or select text and choose Save to spunto.",color=MaterialTheme.colorScheme.onSurfaceVariant) } }
+  if(page.itemCount==0 && page.loadState.refresh is LoadState.NotLoading) item { if(from.isNotBlank() || to.isNotBlank()) Text("No notes in this date range.") else { Text("A quiet place for loose ideas.",style=MaterialTheme.typography.titleLarge); Text("Share anything to spunto from any app, or select text and choose Save to spunto.",color=MaterialTheme.colorScheme.onSurfaceVariant) } }
   items(page.itemCount,key={index -> page.peek(index)?.id ?: index}) { index -> page[index]?.note()?.let { NoteEntry(model,it,onNote) } }
  }
 }
@@ -82,7 +83,7 @@ fun payload(raw:String):JsonObject=runCatching { Json.parseToJsonElement(raw).js
  val paging=model.paging(spec)
  val page=paging.collectAsLazyPagingItems()
  LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-  if(page.itemCount==0) item { Text(if(from.isNotBlank() || to.isNotBlank()) "No notes in this date range." else "Nothing here yet.") }
+  if(page.itemCount==0 && page.loadState.refresh is LoadState.NotLoading) item { Text(if(from.isNotBlank() || to.isNotBlank()) "No notes in this date range." else "Nothing here yet.") }
   items(page.itemCount,key={index -> page.peek(index)?.id ?: index}) { index -> page[index]?.note()?.let { NoteEntry(model,it,onNote) } }
  }
 }

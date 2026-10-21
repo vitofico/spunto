@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { willSentence } from "../src/features/format";
 
 // This suite uses the packaged app and real API. Fixture-only suites also run
 // against Vite when working on individual components.
@@ -203,7 +204,10 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
     await toggle.click();
     const sheet = page.getByRole("dialog", { name: "Turn on Tasks?" });
     await expect(sheet).toBeVisible();
-    await expect(sheet.locator("ul li")).toHaveText(tasks.permission_sentences);
+    // The server's sentences, reworded to follow "It will".
+    await expect(sheet.locator("ul li")).toHaveText(
+      tasks.permission_sentences.map(willSentence),
+    );
     const [enableRequest] = await Promise.all([
       page.waitForRequest(
         (request) =>

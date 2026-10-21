@@ -27,6 +27,8 @@ internal class CaptureLaunchState:androidx.lifecycle.ViewModel() {
 class CaptureActivity:LockedActivity() {
  private val model:SpuntoViewModel by viewModels()
  private val launchState:CaptureLaunchState by viewModels()
+ // Tile, widget and shortcut launches own their task; removing it returns to the app underneath, not to Spunto. A share runs in the sharing app's task and only finishes.
+ override fun finish() { if(isTaskRoot) finishAndRemoveTask() else super.finish() }
  override fun onCreate(savedInstanceState:Bundle?) {
   super.onCreate(savedInstanceState)
   lifecycleScope.launch {(application as SpuntoApplication).container.replicas.collect {if(it.key!=model.container.key) finish()}}

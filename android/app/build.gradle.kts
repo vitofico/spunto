@@ -19,7 +19,7 @@ android {
  // Compile original profiles with the R8 mapping; synthetic profile rewriting can race.
  experimentalProperties["android.experimental.art-profile-r8-rewriting"] = false
  buildTypes {
-  debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug"; resValue("string", "app_name", "Spunto Debug"); isMinifyEnabled = true; proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-debug.pro"); testProguardFiles("proguard-android-test.pro") }
+  debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug"; resValue("string", "app_name", "Spunto Debug"); resValue("string", "application_id", "io.theficos.spunto.debug"); isMinifyEnabled = true; proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-debug.pro"); testProguardFiles("proguard-android-test.pro") }
   release { isMinifyEnabled = true; vcsInfo.include = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
  }
 }

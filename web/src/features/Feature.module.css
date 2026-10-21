@@ -769,6 +769,7 @@
     border-bottom: 1px solid var(--rule);
   }
   .nav a {
+    flex-shrink: 0;
     white-space: nowrap;
     min-height: 44px;
     min-width: 44px;

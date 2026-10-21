@@ -279,8 +279,22 @@ kbd {
   color: var(--ink);
   font-weight: 500;
 }
+@media (hover: hover) {
+  .rail nav a:hover {
+    background: var(--sunken);
+    text-decoration: none;
+  }
+}
+/* Only the label list scrolls; everything else in the rail keeps its height, so
+   the footer can never paint over (and take clicks meant for) a label. */
+.rail > :not(.label-tree) {
+  flex-shrink: 0;
+}
 .label-tree {
-  min-height: 60px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .label-tree a .count {
   margin-left: auto;
@@ -889,10 +903,12 @@ kbd {
   }
   .app .rail.open .rail-label,
   .app .rail.open .wordmark-text,
-  .app .rail.open .label-tree,
   .app .rail.open .overline,
   .app .rail.open .rail-foot p {
     display: initial;
+  }
+  .app .rail.open .label-tree {
+    display: block;
   }
   .topbar {
     min-height: 64px;

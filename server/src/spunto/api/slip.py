@@ -29,9 +29,12 @@ async def _current(conn, services, principal):
     )
     if hidden and json.loads(hidden[0][0]) == day:
         return None
+    # An archived or trashed note has left the timeline, so its slip leaves with it.
     rows = await conn.execute_fetchall(
         "SELECT a.* FROM annotation a JOIN plugin p ON p.id=a.plugin_id "
+        "JOIN note n ON n.id=a.note_id "
         "WHERE a.kind='slip' AND a.updated_at>=? AND a.updated_at<? "
+        "AND n.archived_at IS NULL AND n.trashed_at IS NULL "
         "AND p.state='enabled' AND p.switch='on' ORDER BY p.position,a.plugin_id LIMIT 1",
         (start, end),
     )

@@ -28,6 +28,7 @@ async def daily(ctx: Ctx) -> None:
         note
         async for note in iter_notes(ctx)
         if not note["machine"]
+        and not note["archived"]
         and time_ms(note["created_at"]) <= now - ctx.settings.get("min_age_days", 30) * DAY
     ]
     anniversary = [

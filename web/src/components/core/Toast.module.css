@@ -1,0 +1,51 @@
+.layer {
+  position: fixed;
+  inset: auto 0 var(--s-24);
+  z-index: 110;
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--s-16);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  max-width: var(--measure);
+  min-height: 48px;
+  padding: var(--s-4) var(--s-4) var(--s-4) var(--s-16);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-14);
+  background: var(--raised);
+  box-shadow: var(--e2);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  opacity: 0;
+  translate: 0 var(--s-8);
+  visibility: hidden;
+  transition:
+    opacity var(--dur-1) var(--ease-in),
+    translate var(--dur-1) var(--ease-in),
+    visibility 0s var(--dur-1);
+}
+.toast[data-open] {
+  opacity: 1;
+  translate: 0;
+  visibility: visible;
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    translate var(--dur-2) var(--ease-out);
+}
+.toast:not(:has(button)) {
+  padding-right: var(--s-16);
+}
+.toast button {
+  color: var(--accent);
+  font-weight: 500;
+}
+@media print {
+  .layer {
+    display: none;
+  }
+}

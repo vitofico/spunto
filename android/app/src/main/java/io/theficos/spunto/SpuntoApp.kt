@@ -90,6 +90,7 @@ import kotlinx.serialization.json.*
  val activeSelection=if(appearanceManifest!=null) {
   if(themeOverride) resolveThemeSelection(theme,accent,appearanceManifest.catalog) else appearanceManifest.instance
  } else snapshot ?: resolveThemeSelection(requestedTheme,requestedAccent)
+ LaunchedEffect(activeSelection) { CaptureSurfaces.palette(model.container.context,activeSelection.light,activeSelection.dark) }
  LaunchedEffect(appearanceManifest,themeOverride,requestedTheme,requestedAccent,activeSelection) {
   if(appearanceManifest!=null) storeSelectedThemeSnapshot(model.container.preferences,SelectedThemeSnapshot(themeOverride,requestedTheme,requestedAccent,manifestFingerprint,activeSelection))
  }

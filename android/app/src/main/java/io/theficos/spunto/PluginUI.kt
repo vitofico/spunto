@@ -75,7 +75,7 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
  catch(error:Exception) {
   if(current()) {
    if(error is ApiException && error.status==401) model.reauthenticate.value=true
-   onError(when(error) {is ApiException -> pluginCommandErrorMessage(error.status,error.code);is IllegalArgumentException -> error.message ?: "Check the tool inputs.";is java.net.SocketTimeoutException -> "The tool took too long. Try again, or choose a faster model in Settings → AI.";else -> "Couldn't reach the server. Check your connection, then retry."})
+   onError(when(error) {is ApiException -> apiErrorMessage(error);is IllegalArgumentException -> error.message ?: "Check the tool inputs.";is java.net.SocketTimeoutException -> "The tool took too long. Try again.";else -> "Couldn't reach the server. Check your connection, then retry."})
   }
  } finally { onComplete() }
 }

@@ -20,26 +20,14 @@ Follow-up server revision `977169b` fixes public hosted HTML rendering before a 
 
 The current local owner-signed Android APK has version code **9**, size **4,459,585 bytes**, and SHA256 `a55fdbaf66d332139be1d917ae3c50151bfb0e5c4f09b32e51337b6bcaf1e588`. The debug APK was regenerated at **13,740,209 bytes** and its DEX verified against the latest source. Focused `NativeNavigationTest` and `AccountReplicaSwitchTest` acceptance passed all **3 emulator tests**; the local receipt is `/tmp/spunto-local-auth-emulator-acceptance.log`. No physical-phone acceptance or APK publication is claimed.
 
-## Production preservation and recovery
+## Remaining checks
 
-The old SQLite service was frozen, and its old image restored successfully against isolated recovery storage. The owner's stable provider subject was pinned before import. On-node import, complete row-digest and file comparisons, and sequence reconciliation passed under the [migration contract](multiuser-migration.md). No production database or secrets were newly copied off the node.
-
-Managed PostgreSQL recovery set `20261018-141619-2cc03e23` passed isolated restore Job `spunto-hosted-restore-check-866cd2150d`. The actual NFS recovery reader used UID999 with primary GID10001. The reviewed daily **03:30 UTC** backup entry is installed in the node user's crontab. Off-site Borg execution and recovery remain **unverified**.
-
-The legacy deployment is at zero replicas; hosted core and Cloud each have one replica, and PostgreSQL is Ready. Ingress routes to the hosted services with the existing TLS configuration retained. Public API health, Cloud health, anonymous-access isolation and the PKCE authorization redirect passed.
-
-## Live public verification and remaining checks
-
-The deployed follow-up image serves the root, sign-in, settings and index routes and their JavaScript/CSS assets successfully over HTTPS. Core and Cloud readiness pass, signed-out note/account access returns HTTP401, HTTP redirects to HTTPS, and sign-in uses PKCE with a secure HttpOnly cookie. Browser verification reached Authentik's “Login to continue to Spunto” form.
-
-The owner confirmed normal Authentik sign-in as `vito` and that the existing library appears. Physical-phone acceptance and off-site Borg execution/recovery remain unverified. APK publication and billing remain separate follow-up work.
+Physical-phone acceptance remains unverified. APK publication and billing remain separate follow-up work.
 
 ## Password login and scoped import delivery
 
-**Delivered to production.** The runtime core image is
-`spunto-hosted:2026.10.18.1-6279eaef9110`; Cloud runs revision `463f201224af`.
 Both repositories are privately published. The CI descendants below contain only
-test fixture/scheduler corrections; deployed runtime images and the APK above
+test fixture/scheduler corrections; the runtime images and the APK above
 remain unchanged.
 
 | Delivered follow-up | Evidence | Result |
@@ -68,26 +56,4 @@ independent review before the green CI runs above.
 The operator import opens only the verified owner's selected workspace and creates
 no browser session. Synthetic PostgreSQL acceptance covers source timestamps,
 provenance, attachment integrity, idempotent replay and preservation of owner edits
-and unrelated workspaces. The owner separately authorized importing the real Blinko
-library. The production import into the verified existing personal space completed:
-the target previously contained **0 notes**, and the receipt records **30 notes
-created, 30 matching notes, 0 failed, 0 attachments and 0 unrecognized tags**.
-Idempotent replay and the personal-space mapping were verified, and no browser
-session was created. The raw source snapshot and token stayed node-private in the
-`blinko-import` directory. Protected execution receipts are in
-`/path/to/spunto-hosted/20261018/local-auth-upgrade-6279-import`.
-
-The maintenance driver paused safely on Kubernetes/API validation before import
-writes. Explicitly reviewed forward continuations completed the work without
-replaying the SQLite migration or rolling back to stale SQLite data.
-
-Post-import managed recovery set `20261018-160708-9c0fc15490ce-schema5` passed
-isolated restore Job `spunto-hosted-restore-check-da87ad15da`. The legacy deployment
-remains at zero replicas; hosted core and Cloud each have one Ready replica, with
-no operator Pods or temporary resources remaining.
-
-All **20 public HTTPS, asset, health, anonymous HTTP401, PKCE and HTTP301 checks**
-passed. An actual anonymous browser showed username/password fields and the
-optional Authentik link. Earlier human Authentik sign-in as `vito` was confirmed;
-the owner's **first local-password setup and login remain pending**. Physical-phone
-acceptance, APK publication and off-site Borg execution/recovery remain unverified.
+and unrelated workspaces.

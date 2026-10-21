@@ -17,7 +17,7 @@ services:
     environment:
       SPUNTO_PUBLIC_URL: https://spunto.example.org
       SPUNTO_OWNER_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
-      TZ: Europe/Rome
+      TZ: UTC                                   # replace with your time zone
       # Optional AI, the default setup (D16): chat and vision on Ollama cloud, embeddings on the host's Ollama.
       # SPUNTO_AI_PROFILES: local,cloud
       # SPUNTO_AI_LOCAL_BASE_URL: http://host.docker.internal:11434/v1

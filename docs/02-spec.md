@@ -4,13 +4,13 @@ Status: revised 2026-10-13 for the redesign the owner approved that day. Inputs:
 
 What changed in this revision, in one sentence: the app is now a small core that is a complete notes app on its own, plus plugins that can appear only in fixed, budgeted places on screen; the AI features, the importers and the views beyond the timeline moved into plugins (§2.4 to §2.19), the AI pipeline became a gateway every plugin goes through (§7), and the milestones lost their cutover deadline (§16).
 
-Nothing is built yet and no repository changes because of this document. Blinko keeps running on theficos until the owner chooses to switch, some time after the Android milestone (M5); there is no deadline.
+Nothing is built yet and no repository changes because of this document. Blinko keeps running on the owner's home server until the owner chooses to switch, some time after the Android milestone (M5); there is no deadline.
 
 How to read decision references:
 
 - Decisions are numbered D1 to D33: D1 to D11 come from the requirements, D12 to D24 from this spec's first draft, D25 to D33 from the redesign (04 §8). The owner settled all of them on 2026-10-13, and §17 records each with the chosen option and a one-line reason. The text cites them where they shape a choice, as "(D16)".
 - Everything else is a default the spec takes on its own, stated once with its reason.
-- Name: **Spunto** (requirements §10). Identifiers follow it: the Python package and command `spunto` (first-party plugins under `spunto.plugins`), the environment prefix `SPUNTO_` (plugin secrets as `SPUNTO_PLUGIN_<ID>_<KEY>`), the token prefix `spunto_`, the image `ghcr.io/vitofico/spunto`, the Android application ID `io.theficos.spunto`, the MCP server name `spunto`, and on theficos the host `spunto.example.org`. Prose still says "the app" where the name adds nothing.
+- Name: **Spunto** (requirements §10). Identifiers follow it: the Python package and command `spunto` (first-party plugins under `spunto.plugins`), the environment prefix `SPUNTO_` (plugin secrets as `SPUNTO_PLUGIN_<ID>_<KEY>`), the token prefix `spunto_`, the image `ghcr.io/vitofico/spunto`, the Android application ID `io.theficos.spunto`, the MCP server name `spunto`, and in examples the host `spunto.example.org`. Prose still says "the app" where the name adds nothing.
 
 ---
 
@@ -22,7 +22,7 @@ That much is the **core**, and with nothing else switched on it is a complete, c
 
 Every model call goes through one **AI gateway**: chat, embeddings, transcription and vision, each bound to a named provider profile (any OpenAI-compatible endpoint, Ollama included, or Anthropic) and routable per plugin, with every answer checked against a schema and its meaning before it can touch anything. With no AI configured, AI plugins wait quietly and everything else works. Three built-in themes (Carta, Ardesia, Salvia) change colours and nothing else.
 
-The stack reuses the owner's existing code where it is already proven: Quire's Kotlin and Compose Android skeleton and its Python LLM client and auth, Galley's web conventions and MCP tool habits, and the theficos deployment template. The server is Python with FastAPI; the web app is React with Vite; storage is SQLite with its built-in full-text index and the `sqlite-vec` extension for vectors.
+The stack reuses the owner's existing code where it is already proven: Quire's Kotlin and Compose Android skeleton and its Python LLM client and auth, Galley's web conventions and MCP tool habits, and the owner's cluster deployment template. The server is Python with FastAPI; the web app is React with Vite; storage is SQLite with its built-in full-text index and the `sqlite-vec` extension for vectors.
 
 ---
 
@@ -452,7 +452,7 @@ The list is a contract for honest plugins and a review aid, not a sandbox; §9.6
 ### 2.14 Install and distribution
 
 - **First-party** plugins live in the server package (`spunto/plugins/<id>/`) and, for device plugins, in the Android and web codebases. They ship with every image; the owner only switches them.
-- **Third-party** server plugins load from M8 (D25) and are installed by whoever runs the server, never through the UI (D27): a pure-Python folder dropped into `SPUNTO_PLUGINS_DIR` (default `/data/plugins`), or a package installed in a derived image (`FROM ghcr.io/vitofico/spunto:<version>` plus `uv pip install …`), found through the `spunto.plugins` entry-point group. Before M8 the host loads first-party plugins only. Runtime installs are impossible anyway on theficos, whose pods run with a read-only root filesystem.
+- **Third-party** server plugins load from M8 (D25) and are installed by whoever runs the server, never through the UI (D27): a pure-Python folder dropped into `SPUNTO_PLUGINS_DIR` (default `/data/plugins`), or a package installed in a derived image (`FROM ghcr.io/vitofico/spunto:<version>` plus `uv pip install …`), found through the `spunto.plugins` entry-point group. Before M8 the host loads first-party plugins only. Runtime installs are impossible anyway on the owner's cluster, whose pods run with a read-only root filesystem.
 - **Theme packs** install the same way, as folders in `SPUNTO_THEMES_DIR` (default `/data/themes`), also from M8 (THM-3); they carry no code.
 - There is no catalog server and no marketplace. A list in the docs is enough for one-owner instances.
 
@@ -602,7 +602,7 @@ A command in the palette and in search, answered as a command result:
 
 ### 3.3 Files
 
-Attachments live in `SPUNTO_ATTACHMENTS_DIR` (default `/data/attachments`) as `ab/cd/<sha256>`, written once to a temporary name and renamed into place, never modified. Because they never change, any file-level backup tool can copy them safely at any time, and the database snapshot is the consistency point. A separate directory setting exists so theficos can put attachments on the borg-covered NFS share while the database stays on a local volume (D21, §10.5).
+Attachments live in `SPUNTO_ATTACHMENTS_DIR` (default `/data/attachments`) as `ab/cd/<sha256>`, written once to a temporary name and renamed into place, never modified. Because they never change, any file-level backup tool can copy them safely at any time, and the database snapshot is the consistency point. A separate directory setting exists so the owner's cluster can put attachments on the NFS share covered by off-site backups while the database stays on a local volume (D21, §10.5).
 
 ### 3.4 Migrations
 
@@ -1203,11 +1203,11 @@ The vector index is a core service, built and kept current only while an enabled
 - **Where.** Each chunk row records a `model_key`, a fingerprint of the endpoint, model, measured dimension and prefixes. Vectors live in a `vec0` table named after that key, created once the dimension is measured.
 - **Queries.** Plugins ask through `vectors.nearest` (§2.6). The core joins the note table after the nearest-neighbour step, so trashed, private and machine-written notes are filtered in one place.
 - **Changing the model** (AI-5) creates a new vector table and backfills it in the background while search keeps using the old one; when the backfill finishes, the active key in `meta` switches and the old table is dropped. The status page shows progress.
-- **Default model** (D17): `embeddinggemma` (small, CPU-friendly, multilingual), because the owner writes in English and Italian and `nomic-embed-text`, already on theficos, is English-centred; `bge-m3` is the stronger and heavier alternative. M4 confirms the choice with a 30-query retrieval check over the imported Blinko notes (15 English, 15 Italian) across the candidates.
+- **Default model** (D17): `embeddinggemma` (small, CPU-friendly, multilingual), because the owner writes in English and Italian and `nomic-embed-text`, already on the owner's home server, is English-centred; `bge-m3` is the stronger and heavier alternative. M4 confirms the choice with a 30-query retrieval check over the imported Blinko notes (15 English, 15 Italian) across the candidates.
 
 ### 7.4 Transcription
 
-Bound to a profile that serves `/v1/audio/transcriptions`, and used by `voice-memos` (§11.8). Ollama did not serve a transcription endpoint when this was written (to verify in M7), so on theficos this means one more small pod running an OpenAI-compatible Whisper server (Speaches, LocalAI and others expose the endpoint), or a cloud endpoint, which is the same privacy call as D16.
+Bound to a profile that serves `/v1/audio/transcriptions`, and used by `voice-memos` (§11.8). Ollama did not serve a transcription endpoint when this was written (to verify in M7), so on the owner's home server this means one more small pod running an OpenAI-compatible Whisper server (Speaches, LocalAI and others expose the endpoint), or a cloud endpoint, which is the same privacy call as D16.
 
 The answer is validated like every model answer (§7.2): JSON with a string `text`, control characters stripped, a length cap per second of audio, and a repeated-phrase check, because Whisper-family models can loop on silence and still answer 200. A failure fails closed. Uploads are capped by `SPUNTO_MAX_UPLOAD_MB`, and the gateway keeps no copy of the audio after the call.
 
@@ -1259,11 +1259,11 @@ AI is off when no capability is bound; each capability can be on independently.
 
 ### 7.11 Where note text goes
 
-Settled as D16 (revised): embeddings stay local (`embeddinggemma` on the theficos Ollama), chat and vision default to Ollama cloud (the owner's choice, 2026-10-13, and the setup in §7.1 and §10.4), transcription stays unbound until `voice-memos` needs it, and per-plugin routing is for speed and quality, not privacy. Every provider in §7.1 stays supported; the default is a configuration, not a limit. An honest reading of routing: label suggestions eventually send every note once, and a digest sends every week's notes, so any cloud chat route means essentially all notes leave over time. Private notes are the per-note opt-out. On theficos the realistic setups are:
+Settled as D16 (revised): embeddings stay local (`embeddinggemma` on the home server's Ollama), chat and vision default to Ollama cloud (the owner's choice, 2026-10-13, and the setup in §7.1 and §10.4), transcription stays unbound until `voice-memos` needs it, and per-plugin routing is for speed and quality, not privacy. Every provider in §7.1 stays supported; the default is a configuration, not a limit. An honest reading of routing: label suggestions eventually send every note once, and a digest sends every week's notes, so any cloud chat route means essentially all notes leave over time. Private notes are the per-note opt-out. On the owner's home server the realistic setups are:
 
 | Setup | Consequence |
 |---|---|
-| Local embeddings and a local chat model on the theficos Ollama | Nothing leaves the house. The node is CPU-only, so a small chat model (for example a 4B-parameter Qwen3) takes several seconds to tens of seconds per suggestion; acceptable for background suggestions, slow for Ask, digests and develop. |
+| Local embeddings and a local chat model on the home server's Ollama | Nothing leaves the house. The node is CPU-only, so a small chat model (for example a 4B-parameter Qwen3) takes several seconds to tens of seconds per suggestion; acceptable for background suggestions, slow for Ask, digests and develop. |
 | **Default.** Local embeddings, chat and vision through Ollama cloud models (what Quire and Hermes use today, e.g. `gpt-oss:120b`) | Fast and good suggestions; every note's text goes to Ollama's cloud over time. Embedding, the bulk of the traffic, stays local. This provider is the one known to ignore `json_schema`, which §7.2 handles. |
 | Local embeddings, chat through Anthropic | As above, with Anthropic as the recipient instead of Ollama's cloud. |
 
@@ -1408,7 +1408,7 @@ bearer_token_env_var = "SPUNTO_TOKEN"
 
 The Codex snippet also spells out its approval settings, so that only read tools run without asking (§8.5): in the M0 spike, `codex exec` with approval `never` ran a write tool without asking. Codex 0.162 has per-server and per-tool approval keys; M1 confirms their exact names when it writes the snippet.
 
-On theficos `/mcp` is reachable on the public hostname with token auth (D18): the web login is already public there, and agents run on laptops outside the home network too.
+On the owner's home server `/mcp` is reachable on the public hostname with token auth (D18): the web login is already public there, and agents run on laptops outside the home network too.
 
 ---
 
@@ -1575,7 +1575,7 @@ services:
     environment:
       SPUNTO_PUBLIC_URL: ${SPUNTO_PUBLIC_URL:?set the address you will open, e.g. https://spunto.example.org}
       SPUNTO_OWNER_PASSWORD_FILE: /run/secrets/owner_password
-      TZ: Europe/Rome
+      TZ: UTC                                   # replace with your time zone
       # Optional AI, the default setup (D16): chat and vision on Ollama cloud, embeddings on the host's Ollama.
       # SPUNTO_AI_PROFILES: local,cloud
       # SPUNTO_AI_LOCAL_BASE_URL: http://host.docker.internal:11434/v1
@@ -1601,13 +1601,13 @@ volumes:
 
 The one-liner from HOST-1 (`docker run -p 8080:8080 -v spunto:/data -e SPUNTO_PUBLIC_URL=… -e SPUNTO_OWNER_PASSWORD=… ghcr.io/vitofico/spunto:<version>`) stays valid. HOST-9 (later) adds a Caddy variant and an Ollama variant.
 
-### 10.5 Kubernetes and theficos
+### 10.5 Kubernetes and the owner's cluster
 
-A Kustomize folder in the repo (`deploy/k8s/`) and `applications/spunto/` in `theficos-cluster`, copied from the Galley template:
+A Kustomize folder in the repo (`deploy/k8s/`) and a matching folder in the owner's private cluster repository, copied from the Galley template:
 
 - **Deployment**, 1 replica, `strategy: Recreate` (the database allows one writer; a rolling update would briefly run two). `startupProbe` on `/readyz` with room for a pre-migration snapshot; `livenessProbe` on `/healthz`; `readinessProbe` on `/readyz`.
 - **Pod security** per cluster rules: `automountServiceAccountToken: false`, `seccompProfile: RuntimeDefault`, drop all capabilities, no privilege escalation, `runAsNonRoot` with UID and `fsGroup` 10001, `readOnlyRootFilesystem: true` with an `emptyDir` at `/tmp`.
-- **Storage.** The database on a `microk8s-hostpath` PVC (`ReadWriteOnce`, 5 Gi) mounted at `/data`; never on NFS, because SQLite locking over a soft-mounted NFS share is the corruption risk Blinko's vector file runs today. `SPUNTO_BACKUP_DIR=/backups` on an NFS PersistentVolume at `/srv/cluster-data/spunto/backups`, which borg already copies off-site; this also closes the known gap that hostpath volumes are outside the borg backups. Attachments go on NFS too (D21): `SPUNTO_ATTACHMENTS_DIR=/mnt/…/attachments`, because write-once files are safe on NFS and get borg coverage for free.
+- **Storage.** The database on a `microk8s-hostpath` PVC (`ReadWriteOnce`, 5 Gi) mounted at `/data`; never on NFS, because SQLite locking over a soft-mounted NFS share is the corruption risk Blinko's vector file runs today. `SPUNTO_BACKUP_DIR=/backups` on an NFS PersistentVolume that the off-site backup already copies; this also closes the known gap that hostpath volumes are outside the off-site backups. Attachments go on NFS too (D21): `SPUNTO_ATTACHMENTS_DIR=/mnt/…/attachments`, because write-once files are safe on NFS and get off-site coverage for free.
 - **Resources.** Requests 20m CPU and 96 Mi, limits 500m and 512 Mi (target in success criterion 2: at most 50m and 128 Mi requested, measured with the default-on plugins enabled).
 - **Network.** `default-deny-ingress`, `allow-from-traefik` on 8080. Egress is restricted too, because it is the hard limit on what plugin code can reach (§9.6): DNS, the `ollama` namespace on 11434 (plus the matching `allow-from-spunto` policy in `ollama`), and HTTPS only to what the AI profiles and enabled plugins need: a cloud chat profile, `api.telegram.org` for `telegram`, the IMAP host for `email-in`, the configured webhook and Blinko URLs, and the open internet on 443 only while `link-enrichment` is on. The status page lists those destinations, so enabling a plugin and widening the policy go together.
 - **Ingress.** Traefik `websecure`, cert-manager `letsencrypt-prod`, host `spunto.example.org`, with `/mcp` exposed on it behind token auth (D18).
@@ -1627,7 +1627,7 @@ A Kustomize folder in the repo (`deploy/k8s/`) and `applications/spunto/` in `th
   docker compose run --rm spunto spunto restore /data/backups/spunto-2026-10-13T0330Z-s7.db
   ```
 
-  It first prepares the incoming copy: it verifies the checksum and `PRAGMA integrity_check`, refuses a file that is not a Spunto snapshot and a snapshot from a newer schema, each with a sentence, copies the snapshot in beside the database and assigns the copy a new `sync_epoch` (so devices repopulate anything newer, §6.8). Only then does it move the current database aside as `spunto.db.before-restore-<time>` and put the copy in its place, so a restore that fails on the way (a damaged file, a full disk) never leaves the server without its database. It prints the note count, the newest note's date and any attachment files the restored notes reference but the volume lacks. On theficos: scale the deployment to zero, run the same command in a one-off pod that mounts both volumes, scale back to one; the runbook goes in `docs/operations.md`.
+  It first prepares the incoming copy: it verifies the checksum and `PRAGMA integrity_check`, refuses a file that is not a Spunto snapshot and a snapshot from a newer schema, each with a sentence, copies the snapshot in beside the database and assigns the copy a new `sync_epoch` (so devices repopulate anything newer, §6.8). Only then does it move the current database aside as `spunto.db.before-restore-<time>` and put the copy in its place, so a restore that fails on the way (a damaged file, a full disk) never leaves the server without its database. It prints the note count, the newest note's date and any attachment files the restored notes reference but the volume lacks. On Kubernetes: scale the deployment to zero, run the same command in a one-off pod that mounts both volumes, scale back to one; the runbook goes in `docs/operations.md`.
 - **CI restores** a snapshot on every release and checks note counts (requirements §6.7).
 - **Last resort:** the Markdown export (DATA-1).
 
@@ -1875,7 +1875,7 @@ Contract drift, the main risk of three languages, is handled in two ways: the we
 - **Health:** `/healthz` (alive) and `/readyz` (database open and migrated), for orchestrators and Uptime Kuma.
 - **Status page** (`/status`, data from `GET /api/v1/status`; HOST-6): version and uptime; note, label and attachment counts; database and attachment sizes; indexing progress (embedded notes out of total, active model and dimension); queue depth and dead jobs; AI health per capability and profile, with the last check, the fix hint and whether it leaves this network; validation outcomes over 24 hours and 7 days (including "this provider ignores json_schema"); each plugin with its state, last run, AI calls and failures, outbound destinations, suggestion acceptance rate and circuit breaker; last backup time, size and age; devices with last sync time; tokens with last use.
 - **Android:** no telemetry. Settings has a sync log (the last 200 sync events with outcome and reason, plus dictation error codes, never words, §11.8) with a copy button for bug reports.
-- **Metrics:** no Prometheus endpoint for now; the status JSON covers monitoring on theficos. A `/metrics` endpoint is a later option if a Prometheus appears on the cluster.
+- **Metrics:** no Prometheus endpoint for now; the status JSON covers monitoring on the owner's cluster. A `/metrics` endpoint is a later option if a Prometheus appears on the cluster.
 
 ---
 
@@ -1886,7 +1886,7 @@ No dates: Blinko keeps running, so each milestone ships when it is good. Each on
 | | Ships | Daily use from here | Done when |
 |---|---|---|---|
 | **M0 Skeleton and spikes** | Monorepo, CI, multi-arch image with `/healthz` and `/readyz`, config validation, migrations runner, data lock, owner setup and login, backup and restore commands | None yet | The image starts, backs up and restores in CI. Spikes confirm: `sqlite-vec` loads in the image on amd64 and arm64; stateless streamable HTTP from the Python SDK's low-level server, mounted in FastAPI, works with bearer auth from both Claude Code and Codex, including a tool list that differs per token and per enabled plugin; a test plugin is enabled and disabled without a restart; Room FTS4 with the fold function meets 200 ms on 10,000 notes; the on-device recognizer on the owner's Android 16 phone dictates Italian and English in airplane mode (availability offline confirmed by the owner on 2026-10-13; a probe APK still checks live partial results, punctuation, continuous sessions and language detection, D22). The name's availability is checked. |
-| **M1 Core server and agents** | Data model, label grammar and fixtures, revisions with coalescing and the history API, merge and conflicted copies, private notes, keyword search, REST API and its reference docs, Markdown export, trash purge, tokens with the `status` scope, the seven MCP tools and the `note://` resource, theficos deployment | Agents capture and search over MCP | Success criterion 5 without semantic search; the conformance suite passes in Python; the merge property tests pass |
+| **M1 Core server and agents** | Data model, label grammar and fixtures, revisions with coalescing and the history API, merge and conflicted copies, private notes, keyword search, REST API and its reference docs, Markdown export, trash purge, tokens with the `status` scope, the seven MCP tools and the `note://` resource, deployment on the owner's cluster | Agents capture and search over MCP | Success criterion 5 without semantic search; the conformance suite passes in Python; the merge property tests pass |
 | **M2 Plugin host** | Loader, manifest validation, lifecycle, storage tables, jobs and schedules, routes, plugin MCP tools, guarded fetch, `SPUNTO_PLUGINS` pins; the first plugins, none needing AI: `blinko-import`, `agent-inbox`, `tasks`, `resurface` | The owner's Blinko library is in and agents read it | The four plugins pass the contract suite; counts match the Blinko spot check (success criterion 1, first half) |
 | **M3 Web** | Core screens, the slot renderers and vocabulary, generated settings pages, Review, Settings → Plugins, three themes | Daily capture and recall on the desktop | Playwright suite green; bundle under budget; every plugin off leaves a finished-looking app |
 | **M4 AI gateway and wave 1** | Profiles and routing, validation loop, Anthropic adapter, vector index, health check; `label-suggestions`, `semantic-search`, `related`, `ask` | The first plan's AI, plugin by plugin | The fake-provider suite proves fail-closed for each plugin; the embedding-model check (D17) |
@@ -1936,12 +1936,12 @@ The owner settled every decision on 2026-10-13, at the recommended option unless
 | D13 | Revisions from M1 | Yes, with the history UI in the core (CAP-10) | They are the merge base and the undo for agent and plugin edits |
 | D14 | Label identity | Case-insensitive, accents significant, an all-digit `#123` is not a label (§4.3) | One tree whatever the capitalization; issue numbers stay issue numbers |
 | D15 | Anthropic support | A native adapter in the AI gateway, M4 (§7.1) | Schema-constrained output without a lossy compatibility shim |
-| D16 (revised) | Where note text goes for AI | Embeddings local (`embeddinggemma` on the theficos Ollama); chat and vision default to Ollama cloud; transcription unbound until `voice-memos` needs a Whisper-compatible server; every provider stays supported and per-plugin routing can override (§7.11) | The owner chose Ollama cloud for chat; embeddings are the bulk of the calls and need one stable model, so they run locally |
+| D16 (revised) | Where note text goes for AI | Embeddings local (`embeddinggemma` on the home server's Ollama); chat and vision default to Ollama cloud; transcription unbound until `voice-memos` needs a Whisper-compatible server; every provider stays supported and per-plugin routing can override (§7.11) | The owner chose Ollama cloud for chat; embeddings are the bulk of the calls and need one stable model, so they run locally |
 | D17 | Default embedding model | `embeddinggemma`, confirmed by the M4 retrieval check (§7.3) | Multilingual and CPU-friendly, where `nomic-embed-text` is weaker on Italian |
-| D18 | `/mcp` exposure on theficos | The public hostname with token auth (§8.6) | Agents run on laptops away from home too, and the web login is already public |
+| D18 | `/mcp` exposure on the owner's cluster | The public hostname with token auth (§8.6) | Agents run on laptops away from home too, and the web login is already public |
 | D19 | Private notes and MCP | Hidden from MCP by default; per-token opt-in | "Private" means private from every reader the owner did not pick |
-| D20 | Image tag on theficos | Pinned CalVer (§10.5) | The server migrates at start, so a pod restart must never become an unattended upgrade |
-| D21 | Attachments on theficos | On NFS, covered by borg (§10.5) | Write-once files are safe on NFS and get off-site backups for free |
+| D20 | Image tag on the owner's cluster | Pinned CalVer (§10.5) | The server migrates at start, so a pod restart must never become an unattended upgrade |
+| D21 | Attachments on the owner's cluster | On NFS, covered by the off-site backup (§10.5) | Write-once files are safe on NFS and get off-site backups for free |
 | D22 | Dictation engine | Android's on-device recognizer; the M0 spike confirms the Italian and English packs on the owner's Android 16 phone (§11.8) | Android 16 has one, so no model goes into the APK and the bundled engine (AND-16) waits |
 | D23 | Online recognition where on-device is missing | Ask once per phone; off until accepted | Audio never leaves a phone unannounced |
 | D24 | Keeping audio, server transcription | Not in the core; the opt-in `voice-memos` plugin does both (§11.8) | The owner's voice stays out of backups unless chosen |

@@ -44,4 +44,4 @@ The prior local APK `2026.10.18.1` failed independent clean reproduction. It was
 
 ## Remaining acceptance
 
-This APK is a private preview. Physical-phone performance, offline English/Italian speech and accessibility acceptance remain incomplete; emulator launch is no phone-performance result. The stable Obtainium import excludes prereleases, and the F-Droid recipe stays disabled. Public store distribution and offsite Borg recovery remain unverified.
+This APK is a private preview. Physical-phone performance, offline English/Italian speech and accessibility acceptance remain incomplete; emulator launch is no phone-performance result. The stable Obtainium import excludes prereleases, and the F-Droid recipe stays disabled. Public store distribution and offsite backup recovery remain unverified.

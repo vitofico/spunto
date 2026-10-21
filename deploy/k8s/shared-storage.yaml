@@ -1,5 +1,5 @@
-# Provision the exports and Borg coverage before applying this base.
-# NFS exports are backed by the node's separate btrfs /srv/cluster-data filesystem.
+# Create the NFS exports and include them in your backups before applying this base.
+# Replace the example server 192.0.2.10 and the /srv/nfs paths with your NFS server and exports.
 # Capacity here is metadata, not an enforced filesystem quota.
 apiVersion: v1
 kind: PersistentVolume
@@ -16,8 +16,8 @@ spec:
     name: spunto-backups
   mountOptions: [hard, nfsvers=4.2, timeo=600, retrans=2]
   nfs:
-    server: 192.0.2.10
-    path: /srv/cluster-data/spunto/backups
+    server: 192.0.2.10  # replace with your NFS server
+    path: /srv/nfs/spunto/backups
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -46,8 +46,8 @@ spec:
     name: spunto-attachments
   mountOptions: [hard, nfsvers=4.2, timeo=600, retrans=2]
   nfs:
-    server: 192.0.2.10
-    path: /srv/cluster-data/spunto/attachments
+    server: 192.0.2.10  # replace with your NFS server
+    path: /srv/nfs/spunto/attachments
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

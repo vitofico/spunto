@@ -8,7 +8,7 @@ Conventions: decisions continue the register in 02 §17, so new ones are D25 to 
 
 ## 1. What changes and why
 
-The first round of documents drew a tight MVP around one deadline: get off Blinko in about seven weeks. The owner has lifted that. Blinko keeps running on theficos for as long as it takes, and the scope should grow: more AI features, a couple of built-in themes, and room for plugins, with first-party features built as plugins too, so they are easy to add and to switch on and off. The rule that comes with it: basic, minimal, never clutter the space.
+The first round of documents drew a tight MVP around one deadline: get off Blinko in about seven weeks. The owner has lifted that. Blinko keeps running on the owner's home server for as long as it takes, and the scope should grow: more AI features, a couple of built-in themes, and room for plugins, with first-party features built as plugins too, so they are easy to add and to switch on and off. The rule that comes with it: basic, minimal, never clutter the space.
 
 The danger is concrete and already documented. Research on Blinko (`research/blinko.md` §9) found a sidebar of Notes, Todo, Analytics, Resources, Archived, Trash, Plugin and Settings, plus a hub, comments, a music player and a shader background; the capture loop got lost among features, and "plugin system and marketplace" went on our drop list for that reason. So the redesign has to add breadth without adding things on screen.
 
@@ -299,7 +299,7 @@ Trust is stated plainly. First-party plugins ship in the image and are reviewed 
 ### 3.9 Distribution and install
 
 - **First-party** plugins live in the server package (`spunto/plugins/<id>/`) and in the Android and web codebases for device plugins. They ship with every image; the owner only switches them.
-- **Third-party** server plugins are installed by whoever runs the server, never through the UI (D27): a pure-Python folder dropped into `SPUNTO_PLUGINS_DIR` (default `/data/plugins`), or a package installed in a derived image (`FROM ghcr.io/vitofico/spunto:<version>` plus `uv pip install …`), found through the `spunto.plugins` entry-point group. Runtime installs are impossible anyway on theficos, whose pods run with a read-only root filesystem.
+- **Third-party** server plugins are installed by whoever runs the server, never through the UI (D27): a pure-Python folder dropped into `SPUNTO_PLUGINS_DIR` (default `/data/plugins`), or a package installed in a derived image (`FROM ghcr.io/vitofico/spunto:<version>` plus `uv pip install …`), found through the `spunto.plugins` entry-point group. Runtime installs are impossible anyway on the owner's cluster, whose pods run with a read-only root filesystem.
 - **Themes** install the same way, as folders, and also need no code.
 - There is no catalog server and no marketplace. A list in the docs is enough for one-owner instances.
 
@@ -421,7 +421,7 @@ No dates: Blinko keeps running, so each milestone ships when it is good. Each on
 | | Ships | Daily use from here | Done when |
 |---|---|---|---|
 | **M0 Skeleton and spikes** | Monorepo, CI, image, config validation, migrations, backup and restore | none yet | The 02 §16 spikes pass, plus: a per-token, per-plugin MCP tool list through the SDK's low-level handlers, seen correctly by Claude Code and Codex; enabling and disabling a test plugin without restart; dictation on the owner's Android 16 phone (D22). The name's availability is checked. |
-| **M1 Core server and agents** | Notes, labels, revisions, merge, keyword search, REST API, export, tokens with the `status` scope, the seven MCP tools, theficos deployment | Agents capture and search over MCP | 01 success criterion 5 without semantic search |
+| **M1 Core server and agents** | Notes, labels, revisions, merge, keyword search, REST API, export, tokens with the `status` scope, the seven MCP tools, deployment on the owner's cluster | Agents capture and search over MCP | 01 success criterion 5 without semantic search |
 | **M2 Plugin host** | Loader, manifest validation, lifecycle, storage tables, jobs and schedules, routes, plugin MCP tools, guarded fetch, Settings → Plugins data; first plugins without AI: `blinko-import`, `agent-inbox`, `tasks`, `resurface` | The owner's Blinko library is in and agents read it | The four plugins pass the contract suite; counts match the Blinko spot check (criterion 1, first half) |
 | **M3 Web** | Core screens, the slot renderers and vocabulary, generated settings pages, Review, three themes | Daily capture and recall on the desktop | Playwright suite green; bundle under budget; every plugin off leaves a finished-looking app |
 | **M4 AI gateway and wave 1** | Profiles and routing, validation loop, Anthropic adapter, vector index, health check; `label-suggestions`, `semantic-search`, `related`, `ask` | The old MVP's AI, plugin by plugin | Fake-provider suite proves fail-closed for each plugin; the embedding-model check (D17) |
@@ -462,7 +462,7 @@ Applied only after approval. Each line is a concrete edit.
 - §7: rewritten as "AI gateway" (profiles, routing, structured-only, vision, rate shares, private enforcement); §7.3 to §7.7 move into per-plugin sections; §7.9 says plugins wait when their capability is missing; D16 becomes per-plugin routing.
 - §8: seven core tools, dynamic tool listing through the low-level handlers, plugin tool naming and budgets, `request_id`, origin marking (D32).
 - §9: a trust and permissions subsection, guarded fetch, plugin secrets from the environment, the `status` scope, and three threats: a malicious installed plugin, a plugin sending text off the instance, planted text through `email-in`.
-- §10: environment variables for profiles (`SPUNTO_AI_PROFILES`, `SPUNTO_AI_<PROFILE>_BASE_URL`, `_API_KEY`, and `SPUNTO_AI_CHAT_PROFILE`, `_EMBED_PROFILE`, `_TRANSCRIBE_PROFILE`, `_VISION_PROFILE`), `SPUNTO_PLUGINS_DIR`, `SPUNTO_PLUGINS`, `SPUNTO_PLUGIN_<ID>_<KEY>`; network policy egress per enabled plugin on theficos; Uptime Kuma uses a `status` token; §10.9 becomes the `blinko-import` plugin with its CLI (`spunto plugins run blinko-import …`).
+- §10: environment variables for profiles (`SPUNTO_AI_PROFILES`, `SPUNTO_AI_<PROFILE>_BASE_URL`, `_API_KEY`, and `SPUNTO_AI_CHAT_PROFILE`, `_EMBED_PROFILE`, `_TRANSCRIBE_PROFILE`, `_VISION_PROFILE`), `SPUNTO_PLUGINS_DIR`, `SPUNTO_PLUGINS`, `SPUNTO_PLUGIN_<ID>_<KEY>`; network policy egress per enabled plugin on the owner's cluster; Uptime Kuma uses a `status` token; §10.9 becomes the `blinko-import` plugin with its CLI (`spunto plugins run blinko-import …`).
 - §11: modules add `:core:plugins` (manifest cache, vocabulary renderer, form from schema, local view filters) and `:plugins:*` for device plugins; the note screen's Related list moves into "About this note".
 - §12: slot renderers, palette commands from the manifest, theme loading.
 - §13: `server/src/spunto/host/`, `server/src/spunto/plugins/<id>/`, `themes/<id>/`, `spec/fixtures/vocabulary/`.
@@ -576,7 +576,7 @@ Stakes: per-plugin routing lets the owner send each plugin to a different model,
 
 | Option | Consequence |
 |---|---|
-| Everything local on the theficos Ollama | Nothing leaves the house; CPU-only chat is slow for Ask, digests and develop |
+| Everything local on the home server's Ollama | Nothing leaves the house; CPU-only chat is slow for Ask, digests and develop |
 | **Embeddings local always; one chat profile chosen by the owner; per-plugin routing used to send heavy, slow jobs to whichever model is good enough (recommended)** | Clear mental model, with "private" as the per-note opt-out; the status page names each destination |
 | Mixed per plugin for privacy reasons | Feels finer-grained; in practice most notes still reach the cloud through some plugin |
 
@@ -630,7 +630,7 @@ Settled: Spunto. Identifiers follow it (`spunto.plugins`, `SPUNTO_PLUGIN_*`, the
 ## 9. Clear-cut fixes to fold in during propagation
 
 1. **Autosave writes a revision on every pause.** 03 A5 and W3 autosave one second after typing stops, and each save adds a version, a revision row, a sync change and an embed job. Fix: clients keep writing the local draft on every pause (CAP-4 is unchanged) but send to the server after 5 seconds idle, on leaving the note, or every 60 seconds while typing. The server coalesces: a change by the same credential within 10 minutes of its previous revision of the same note, with no other credential in between, replaces that revision instead of adding one. The three-way merge falls back to the nearest older revision as its base, which still merges cleanly because identical changes on both sides count once (02 §6.4). Lands in 02 §4.2, §6.4, §6.10, §10.6 and 03 A5, W3.
-2. **The monitoring token can read every note.** 02 §10.5 points Uptime Kuma at `/api/v1/status` with a read token, which also reads all notes. Fix: a `status` scope that reaches only `/api/v1/status`; the docs and the theficos monitor use it. Lands in 02 §5.3, §9.1, §10.5 and 01 MCP-2.
+2. **The monitoring token can read every note.** 02 §10.5 points Uptime Kuma at `/api/v1/status` with a read token, which also reads all notes. Fix: a `status` scope that reaches only `/api/v1/status`; the docs and the owner's cluster monitor use it. Lands in 02 §5.3, §9.1, §10.5 and 01 MCP-2.
 3. **The embedding URL defaults to the chat URL.** With chat pointed at a cloud model, every note would be embedded in the cloud without anyone choosing it. Fix: capabilities bind to named profiles and nothing inherits; a profile whose host is not a private address is flagged "leaves this network" at startup, on the status page and on every plugin page that uses it. Lands in 02 §7.1, §10.3 and 01 AI-1.
 4. **MCP `create_note` is not idempotent.** A retried call makes a second note. Fix: an optional `request_id` stored in `applied_op` per token, so a retry returns the first answer; and an identical body from the same token within 10 minutes returns the existing note with `duplicate: true`. Lands in 02 §8.3 and 01 MCP-5.
 5. **MCP tools overlap.** `recent_notes` duplicates `search_notes` with an empty query; `related_notes` with free text duplicates semantic search; single-id `get_note` forces one call per note. Fix: core tools become `search_notes` (empty query allowed, `sort: relevance | recent`), `get_notes` (1 to 20 IDs, same shape, same ceiling), `list_labels`, `create_note`, `append_to_note`, `set_labels`, `archive_note`; read tokens see three. `related_notes(id)` moves into the `related` plugin, by ID only. Lands in 02 §8.3, §8.5 and 01 MCP-4, MCP-5.

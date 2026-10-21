@@ -12,7 +12,7 @@ The current bundled catalog contains **26 plugins**. Every manifest and declared
 server command binding was inspected. The original catalog grew through Context
 packs and Decision journal, while the Blinko importer was removed.
 
-Production's content-free aggregate inspection found Label suggestions and Label
+A hosted instance's content-free aggregate inspection found Label suggestions and Label
 gardener in `failed` with `plugin_circuit_open`, and no AI accounting rows for either
 plugin. Both read the label vocabulary before calling a model. That query selected
 `l.path` and ordered by `l.key` while grouping only by `l.id`. SQLite accepted it;
@@ -195,23 +195,14 @@ published Obtainium release.
 ## Hosted recovery
 
 The final image is `spunto-hosted:2026.10.20-ux-2cf70832b3d3`. Hardened synthetic
-startup, backup and restore smoke checks pass. The existing hosted deployment was
-updated after an on-node PostgreSQL backup; public HTTPS readiness is HTTP 200.
-The final image incorporates the concurrent main release's certifi update; the
-locked server suite (1,132 tests), 98 release-tooling tests, repository hooks and
-hardened backup/restore smoke checks were repeated after integration. The updated
-CA bundle also parses with TLS certificate verification enabled. The amd64 image
-passes the compressed image budget at 70,097,530 bytes. An initial ARM dependency
-rebuild was rolled back; the final amd64 image passed a disposable on-node
-preflight before rollout, without credentials, data mounts or external calls.
-The previous image and backup remain available for rollback. No production note
-bodies or provider answers were inspected or copied into this record.
+startup, backup and restore smoke checks pass. The final image incorporates the
+concurrent main release's certifi update; the locked server suite (1,132 tests),
+98 release-tooling tests, repository hooks and hardened backup/restore smoke checks
+were repeated after integration. The updated CA bundle also parses with TLS
+certificate verification enabled. The amd64 image passes the compressed image
+budget at 70,097,530 bytes. An initial ARM dependency rebuild was rolled back.
 
-Both configured providers pass fixed-content connection checks. Only the two
-already-enabled failed label plugins were recovered through their supported API
-with their existing grants. Temporary verification sessions were revoked. Label
-suggestions subsequently recorded a successful chat call; the retained gardener
-job completed with a successful validation retry. A separate temporary database
-with six synthetic notes also produced one valid gardener proposal through the
-configured live model, with `retried_ok`. This verifies the live request path and
-retry behavior, without claiming that all model suggestions will be useful.
+A separate temporary database with six synthetic notes produced one valid gardener
+proposal through the configured live model, with `retried_ok`. This verifies the
+live request path and retry behavior, without claiming that all model suggestions
+will be useful.

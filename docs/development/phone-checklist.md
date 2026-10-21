@@ -9,7 +9,7 @@ After intermittent USB loss, including after a cable change, the owner manually 
 ## Access and offline work
 
 - Install the supplied APK as an update. Existing notes, drafts, device preferences and sign-in must survive.
-- Sign in or pair with `https://spunto.example.org`. On mobile data, create a synthetic note, edit it and find it from the web app. The browser must show a valid HTTPS connection.
+- Sign in or pair with the server's public HTTPS URL. On mobile data, create a synthetic note, edit it and find it from the web app. The browser must show a valid HTTPS connection.
 - In airplane mode, open saved notes, search a keyword, edit an existing note and save a new note. Force-stop and reopen Spunto. Saved text and an unfinished draft must still be present.
 - Reconnect. Verify the queued changes appear once on the web, with no lost newer typing. Repeat with a private note and check that it produces no AI proposal.
 

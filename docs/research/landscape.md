@@ -25,7 +25,7 @@ Confidence: facts about MCP tool lists, Claude Code and Codex configuration, Mem
 
 | App | What it does best | Take for us |
 |---|---|---|
-| **Blinko** (baseline, runs on theficos today) | Self-hosted AI card notes with RAG search (retrieval-augmented generation: the AI answers from your own notes), Ollama support, a Telegram bot for capture, and Tauri desktop and Android builds. | Keep the card model and local-LLM support. Fix what feels heavy: the UI density and the AI surface area. Its CVE-2026-23882 (an MCP config field could run arbitrary commands) is a warning: never let user config spawn processes. |
+| **Blinko** (baseline, runs on the owner's home server today) | Self-hosted AI card notes with RAG search (retrieval-augmented generation: the AI answers from your own notes), Ollama support, a Telegram bot for capture, and Tauri desktop and Android builds. | Keep the card model and local-LLM support. Fix what feels heavy: the UI density and the AI surface area. Its CVE-2026-23882 (an MCP config field could run arbitrary commands) is a warning: never let user config spawn processes. |
 | **Memos** (usememos) | The leanest self-hosted capture timeline: one Go binary or container, SQLite by default, inline tags, a built-in MCP server. | The hosting bar to meet: a single container, SQLite default, one env var to start. Its MCP design is covered in section 4. Android is served by community clients *(memory)*, which leaves a gap. |
 | **Obsidian** | Local Markdown files you own forever ("file over app"), plus a huge plugin ecosystem. 1.12 added an official CLI that talks to the running app. | Markdown as the portable body format. Easy export as a folder of `.md` files. |
 | **Bear** | The most beautiful Markdown editor on Apple platforms: hidden syntax, inline nested `#tags/like/this`, a custom typeface and polished themes. | The typographic bar, and inline nested tags as the only organizing primitive. Apple-only, no first-party AI or MCP. |
@@ -224,7 +224,7 @@ For a self-hosted server that has to work from a laptop, a CI box or a phone, ar
 
 Questions this survey raises for the requirements and spec work:
 
-1. **Storage truth.** Is the database the source of truth with Markdown export (Memos, Blinko), or are Markdown files the truth (basic-memory, Obsidian)? This drives sync, MCP edits and the "easy to host" story. SQLite plus a vector extension keeps hosting to one container. Postgres plus pgvector suits theficos but raises the hosting bar for everyone else.
+1. **Storage truth.** Is the database the source of truth with Markdown export (Memos, Blinko), or are Markdown files the truth (basic-memory, Obsidian)? This drives sync, MCP edits and the "easy to host" story. SQLite plus a vector extension keeps hosting to one container. Postgres plus pgvector suits the owner's cluster but raises the hosting bar for everyone else.
 2. **Android stack.** Native Compose (best capture integrations, M3 Expressive, the notes role, Glance widgets, a fast cold start) versus a shared web shell. quire already proves out the native path.
 3. **Offline-first sync model** for Android: local store, an outbox of pending writes, and conflict handling with per-note versions (the same versions MCP edits rely on).
 4. **AI provider abstraction**: OpenAI-compatible plus Ollama, an embeddings model choice, schema validation with retry and fail-closed behavior, and the per-note privacy flag.

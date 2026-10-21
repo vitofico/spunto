@@ -91,11 +91,7 @@ A snapshot restores credential and plugin state from its backup time. Review res
 
 Keep protected backups of environment/configuration, secret files, operator plugin/theme folders and the Android release signing key separately. SQLite snapshots include plugin settings and retained records, but not those external files or attachment bytes. Restore the corresponding trusted code/configuration and attachment tree, verify a separate recovery volume, and retain the previous database until confirmed.
 
-## Historical SQLite deployment evidence
-
-Earlier single-owner deployment checks are retained in the [M5 record](development/M5.md).
-Those versions, counts and results describe that historical installation; they are
-not a current inventory or evidence of PostgreSQL/SSO cutover.
+## Kubernetes example
 
 The [Kubernetes reference](../deploy/k8s/README.md) explains image, TLS and storage
 conventions. Adapt its hostnames, image digest, storage and secret references to

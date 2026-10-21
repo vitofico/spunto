@@ -93,6 +93,10 @@ interface SpuntoDao {
  @Insert suspend fun putRevision(revision: RevisionEntity)
  @Query("SELECT * FROM revisions WHERE noteId=:id ORDER BY at DESC") fun history(id: String): Flow<List<RevisionEntity>>
  @Query("SELECT * FROM revisions WHERE noteId=:id ORDER BY lastEditAt DESC, at DESC, id DESC LIMIT 1") suspend fun latestRevision(id:String):RevisionEntity?
+ /** The first text a sync replaced after [since], with its server version (both times are this phone's clock). */
+ @Query("SELECT * FROM revisions WHERE noteId=:id AND historySource='replica' AND at>:since ORDER BY at, id LIMIT 1") suspend fun replacedSince(id:String,since:Long):RevisionEntity?
+ /** The conflicted copy of [id] that holds [body], if a save of those words crossed an edit made elsewhere. */
+ @Query("SELECT * FROM notes WHERE conflictOf=:id AND body=:body AND trashed=0 ORDER BY rowid DESC LIMIT 1") suspend fun conflictCopy(id:String,body:String):NoteEntity?
  @Query("UPDATE revisions SET lastEditAt=:at WHERE id=:id") suspend fun touchRevision(id:String,at:Long)
  @Query("SELECT * FROM outbox ORDER BY createdAt,rowid") fun observeOutbox():Flow<List<OutboxEntity>>
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun putServerRevisions(revisions:List<ServerRevisionEntity>)

@@ -480,7 +480,7 @@ describe("quiet slots", () => {
     expect(decide).toHaveBeenCalledWith("s0", "dismiss");
     expect(decide).toHaveBeenCalledWith("s1", "dismiss");
   });
-  it("archives the daily slip with feedback and refreshes the slip", async () => {
+  it("draws the daily slip's note rendered, archives it with feedback and refreshes the slip", async () => {
     const manifest = {
       ui: 1,
       plugins_rev: 1,
@@ -497,7 +497,12 @@ describe("quiet slots", () => {
           plugin_id: "tasks",
           note_id: "old",
           payload: null,
-          note: { id: "old", body: "An old thought", created_at: created },
+          note: {
+            id: "old",
+            body: "An *old* thought",
+            html: "<p>An <em>old</em> thought</p>",
+            created_at: created,
+          },
           updated_at: created,
         },
       })
@@ -508,7 +513,8 @@ describe("quiet slots", () => {
         <DailySlip />
       </ToastProvider>,
     );
-    expect(await screen.findByText("An old thought")).toBeTruthy();
+    expect((await screen.findByText("old")).tagName).toBe("EM");
+    expect(screen.queryByText(/\*old\*/)).toBeNull();
     expect(
       screen.getByText(
         `From your notes · ${new Date(created).toLocaleDateString(undefined, {
@@ -524,9 +530,7 @@ describe("quiet slots", () => {
       expect(flags).toHaveBeenCalledWith("old", { archived: true }),
     );
     expect(await screen.findByText("Archived")).toBeTruthy();
-    await waitFor(() =>
-      expect(screen.queryByText("An old thought")).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByText("old")).toBeNull());
   });
 });
 

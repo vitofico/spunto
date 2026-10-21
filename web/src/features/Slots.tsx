@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
+import { NoteBody } from "../components/core/NoteCard";
 import { useToast } from "../components/core/Toast";
 import { createIdempotencyKey } from "../lib/drafts";
 import { copyText } from "./copy";
@@ -431,7 +432,9 @@ export function DailySlip() {
           dateStyle: "long",
         })}
       </p>
-      <blockquote>{slip.note.body.slice(0, 400)}</blockquote>
+      <blockquote>
+        <NoteBody note={slip.note} clamp />
+      </blockquote>
       <div className={styles.row}>
         <Link href={`/n/${encodeURIComponent(slip.note_id)}`}>Open</Link>
         <button

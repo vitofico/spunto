@@ -16,9 +16,10 @@ class StatusPresentationTest {
   assertFalse(syncSummary(SyncStatus.Waiting("sensitive_unknown_code"),2,true,null).contains("sensitive_unknown_code"))
  }
  @Test fun signingOutSaysWhereThePhoneStaysListed() {
-  assertTrue(signOutText(0).endsWith("This phone stays listed under Devices in the web app until you remove it there."))
-  assertTrue(signOutText(1).startsWith("1 change hasn't synced yet. It stays on this phone"))
-  assertTrue(signOutText(3).startsWith("3 changes haven't synced yet. They stay"))
+  assertTrue(signOutText(0,online=false).endsWith("This phone stays listed under Devices in the web app until you remove it there."))
+  assertEquals("Your notes stay on this phone. This phone also leaves Devices in the web app.",signOutText(0,online=true))
+  assertTrue(signOutText(1,online=true).startsWith("1 change hasn't synced yet. It stays on this phone"))
+  assertTrue(signOutText(3,online=false).startsWith("3 changes haven't synced yet. They stay"))
  }
  @Test fun healthForPreviousModelNeverClaimsCurrentModelPassed() {
   val ai=Json.parseToJsonElement("""{"profiles":[{"name":"local","chat_model":"new-model","base_url":"http://model.test/v1","leaves_network":{"chat":false}}],"bindings":{"chat":"local"},"health":[{"capability":"chat","profile":"local","model":"old-model","ok":true}]}""").jsonObject

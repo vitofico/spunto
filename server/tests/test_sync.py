@@ -73,6 +73,24 @@ async def test_password_devices_names_scope_hashes_and_backoff(server):
     ).status_code == 429
 
 
+async def test_signing_out_a_device_revokes_only_its_own_credential(server):
+    phone, other = await signed(server), await signed(server, "Other phone")
+    origin = {"Origin": server.services.settings.public_url}
+    assert (await server.client.post("/api/v1/auth/logout", headers=phone)).status_code == 204
+    gone = await server.client.post("/api/v1/auth/logout", headers=phone)
+    assert gone.status_code == 401 and gone.json()["code"] == "unauthenticated"
+    assert (await server.client.get("/api/v1/sync/pull", headers=phone)).status_code == 401
+    assert (await server.client.get("/api/v1/sync/pull", headers=other)).status_code == 200
+    names = [row["name"] for row in (await server.client.get("/api/v1/credentials")).json()]
+    assert "Other phone" in names and "Synthetic phone" not in names
+    bad = await server.client.post("/api/v1/auth/logout", headers={"Authorization": "Bearer nope"})
+    assert bad.status_code == 401 and bad.headers["content-type"] == "application/problem+json"
+    # The owner's browser session still signs out only itself, and needs its Origin to do so.
+    assert (await server.client.post("/api/v1/auth/logout")).status_code == 403
+    assert (await server.client.post("/api/v1/auth/logout", headers=origin)).status_code == 204
+    assert (await server.client.get("/api/v1/sync/pull", headers=other)).status_code == 200
+
+
 async def test_qr_session_origin_one_use_expiry_and_revocation(server):
     await signed(server)
     assert (await server.client.post("/api/v1/auth/pairing")).status_code == 403

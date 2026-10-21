@@ -3,6 +3,7 @@ package io.theficos.spunto.data.sync
 import io.theficos.spunto.core.model.*
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -54,6 +55,8 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  }
  suspend fun signIn(password:String,name:String):DeviceToken = json.decodeFromJsonElement(request("/api/v1/auth/devices","POST",buildJsonObject { put("password",password);put("name",name) }))
  suspend fun pairingExchange(code:String,name:String):DeviceToken = json.decodeFromJsonElement(request("/api/v1/auth/pairing/exchange","POST",buildJsonObject { put("code",code);put("name",name) }))
+ /** Revokes this phone's own device credential; false when the server can't be told, so it stays listed under Devices. */
+ suspend fun signOut():Boolean = try { request("/api/v1/auth/logout","POST");true } catch(e:CancellationException) { throw e } catch(e:ApiException) { e.status==401 } catch(e:Exception) { false }
  suspend fun get(path:String):JsonObject = request(path).jsonObject
  suspend fun post(path:String,body:JsonObject):JsonObject = request(path,"POST",body).jsonObject
  suspend fun ai():JsonObject = get("/api/v1/ai")

@@ -85,11 +85,11 @@ import kotlinx.serialization.json.*
    SettingsRow("Spunto $version".trim(),"Free software under the AGPL-3.0 licence")
   }
  }
- if(signOut) AlertDialog(onDismissRequest={signOut=false},title={Text("Sign out?")},text={Text(signOutText(pending))},confirmButton={TextButton(onClick={model.signOut();signOut=false}) {Text("Sign out")}},dismissButton={TextButton(onClick={signOut=false}) {Text("Cancel")}})
+ if(signOut) AlertDialog(onDismissRequest={signOut=false},title={Text("Sign out?")},text={Text(signOutText(pending,online))},confirmButton={TextButton(onClick={model.signOut();signOut=false}) {Text("Sign out")}},dismissButton={TextButton(onClick={signOut=false}) {Text("Cancel")}})
 }
-/** A device can't revoke its own credential (owner session only), so sign-out says where the phone stays listed. */
-internal fun signOutText(pending:Int)=(if(pending>0) "${if(pending==1) "1 change hasn't" else "$pending changes haven't"} synced yet. ${if(pending==1) "It stays" else "They stay"} on this phone and ${if(pending==1) "syncs" else "sync"} after you sign in again." else "Your notes stay on this phone.")+
- " This phone stays listed under Devices in the web app until you remove it there."
+/** Online, signing out revokes this phone's credential; offline, it says where the phone stays listed. */
+internal fun signOutText(pending:Int,online:Boolean)=(if(pending>0) "${if(pending==1) "1 change hasn't" else "$pending changes haven't"} synced yet. ${if(pending==1) "It stays" else "They stay"} on this phone and ${if(pending==1) "syncs" else "sync"} after you sign in again." else "Your notes stay on this phone.")+
+ if(online) " This phone also leaves Devices in the web app." else " This phone stays listed under Devices in the web app until you remove it there."
 
 @Composable internal fun SettingsSection(title:String) {
  Text(title.uppercase(),Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,top=24.dp,bottom=4.dp).semantics {heading()},style=SpuntoType.overline,color=MaterialTheme.colorScheme.onSurfaceVariant)

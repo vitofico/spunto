@@ -12,7 +12,14 @@ from typing import Annotated
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from spunto.api.deps import Services, ServicesDep, SessionDep, check_origin
+from spunto.api.deps import (
+    Services,
+    ServicesDep,
+    SessionDep,
+    check_origin,
+    current_principal,
+    current_session,
+)
 from spunto.api.errors import Problem
 from spunto.api.network import client_ip
 from spunto.auth import owner, passwords, sessions
@@ -79,7 +86,13 @@ async def login(body: LoginBody, request: Request, services: ServicesDep) -> Res
 
 
 @router.post("/auth/logout", status_code=204)
-async def logout(session_id: SessionDep, services: ServicesDep) -> Response:
+async def logout(request: Request, services: ServicesDep) -> Response:
+    # A phone signing out ends its own device credential, as on a hosted server; it names no other.
+    if request.headers.get("authorization"):
+        principal = await current_principal(request, services)
+        await sessions.revoke(services.store, principal.id, now_ms())
+        return Response(status_code=204)
+    session_id = await current_session(request, services)
     await sessions.revoke(services.store, session_id, now_ms())
     response = Response(status_code=204)
     _clear_cookie(response, services)

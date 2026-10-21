@@ -154,7 +154,12 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   if(accepted.replicaId==container.replicaId) synchronize()
  }
  internal fun retire() {viewModelScope.cancel()}
- fun signOut()=task {if(container.auth.config.first()?.replicaId==container.replicaId) container.auth.clear();reauthenticate.value=false}
+ /** Signs out at once; online, the server then revokes this phone's credential too, and offline it stays listed under Devices. */
+ fun signOut()=task {
+  val config=container.auth.config.first()?.takeIf {it.replicaId==container.replicaId};val reachable=online.value
+  config?.let {container.auth.clear()};reauthenticate.value=false
+  if(config!=null && reachable && !ApiClient(config).signOut()) message.value="Signed out. This phone stays listed under Devices in the web app until you remove it there."
+ }
  fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(ApiClient(config).request(path,method,body)) }
  fun ask(question:String,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
   completeAskRequest(request={ auth.value?.let { config -> ApiClient(config).request("/api/v1/plugins/ask/commands/ask","POST",buildJsonObject { put("question",question) }) } },onComplete=onComplete,onResult=onResult)

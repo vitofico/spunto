@@ -101,7 +101,7 @@ interface SpuntoDao {
     CASE WHEN instr(l.key,'/')=0 THEN '' ELSE substr(l.key,instr(l.key,'/')+1) END,
     CASE WHEN instr(l.path,'/')=0 THEN '' ELSE substr(l.path,instr(l.path,'/')+1) END, 1
    FROM labels l JOIN notes n ON n.id=l.noteId
-   WHERE n.trashed=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
+   WHERE n.trashed=0 AND n.archived=0 AND NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)
    UNION ALL
    SELECT noteId,
     key||'/'||CASE WHEN instr(tailKey,'/')=0 THEN tailKey ELSE substr(tailKey,1,instr(tailKey,'/')-1) END,

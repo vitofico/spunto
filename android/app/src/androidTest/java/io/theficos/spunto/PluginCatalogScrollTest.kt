@@ -57,7 +57,8 @@ class PluginCatalogScrollTest {
     if(step==6 || step==16) {
      compose.mainClock.autoAdvance=true
      if(step==6) {
-      list().performScrollToNode(hasText(bottomRow))
+      // Varied rows append tags to the name ("Synthetic data 7 · Default with AI").
+      list().performScrollToNode(hasText(bottomRow,substring=true))
       list().performSemanticsAction(SemanticsActions.ScrollBy) {it(0f,10_000f)}
      } else list().performScrollToIndex(0)
      compose.waitForIdle()

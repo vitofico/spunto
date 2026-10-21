@@ -23,10 +23,13 @@ time = "{time}"
 [settings]
 type = "object"
 [settings.properties.time]
+title = "Time"
 type = "string"
 format = "time"
 default = "08:00"
 [settings.properties.min_age_days]
+title = "Minimum age in days"
+description = "Only notes at least this old come back."
 type = "integer"
 minimum = 1
 default = 30

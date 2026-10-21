@@ -5,7 +5,7 @@ api = "0.9"
 kind = "server"
 runtime = "in-process"
 category = "recall"
-description = "Weekly digest through guarded owner actions."
+description = "Each week, a short note on what you captured: themes, open questions and threads worth continuing, each linked to its notes."
 entry = "spunto.plugins.digest:plugin"
 requires = ["ai.chat"]
 default = "off"
@@ -38,19 +38,25 @@ annotations = { readOnlyHint = true, destructiveHint = false, idempotentHint = t
 [settings]
 type = "object"
 [settings.properties.weekday]
+title = "Day"
 type = "string"
 enum = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 default = "sunday"
 [settings.properties.time]
+title = "Time"
 type = "string"
 format = "time"
 default = "18:00"
 [settings.properties.min_notes]
+title = "Minimum notes in a week"
+description = "Quieter weeks get no digest."
 type = "integer"
 minimum = 1
 maximum = 50
 default = 3
 [settings.properties.leave_out]
+title = "Leave out labels"
+description = "Notes with these labels are never read for the digest."
 type = "array"
 items = { type = "string", format = "label" }
 default = []

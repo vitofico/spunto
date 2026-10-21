@@ -16,6 +16,8 @@ permissions = ["notes.read", "net.out:<configured>"]
 type = "object"
 additionalProperties = false
 [settings.properties.urls]
+title = "Destination URLs"
+description = "Up to 10 http or https addresses. Each note event is sent to every one as JSON."
 type = "array"
 default = []
 [settings.properties.urls.items]
@@ -23,5 +25,7 @@ type = "string"
 maxLength = 2048
 
 [settings.properties.token]
+title = "Bearer token"
+description = "Sent in the Authorization header, if set."
 type = "string"
 x-secret = true

@@ -26,9 +26,12 @@ mode = "live"
 type = "object"
 additionalProperties = false
 [settings.properties.language]
+title = "Spoken language"
 type = "string"
 enum = ["auto", "it", "en"]
 default = "auto"
 [settings.properties.keep_link]
+title = "Keep the recording in the note"
+description = "When off, the transcript replaces the recording link. The recording itself is kept."
 type = "boolean"
 default = true

@@ -68,7 +68,7 @@ export function SettingsPage({
   onShowGuide,
 }: {
   section?: string;
-  onShowGuide?: () => void;
+  onShowGuide?: (trigger: HTMLElement) => void;
 }) {
   const hosted = useHosted();
   const parts = section.replace(/^\//, "").split("/");

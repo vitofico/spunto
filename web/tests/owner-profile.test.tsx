@@ -190,7 +190,10 @@ it("offers the password, not an unused display name, on a single-owner server", 
   await userEvent
     .setup()
     .click(screen.getByRole("button", { name: "Show guide" }));
-  expect(showGuide).toHaveBeenCalledTimes(1);
+  // The click names its button, so focus returns there (WebKit leaves a clicked button unfocused).
+  expect(showGuide).toHaveBeenCalledExactlyOnceWith(
+    screen.getByRole("button", { name: "Show guide" }),
+  );
 });
 
 it("signs out at once without drafts and warns before erasing unsent notes", async () => {

@@ -123,7 +123,7 @@ function Rail({
   collapsed: boolean;
   open: boolean;
   close: () => void;
-  onPalette: () => void;
+  onPalette: (trigger: HTMLElement) => void;
   blocked: boolean;
   returnFocus: RefObject<HTMLElement | null>;
 }) {
@@ -165,9 +165,9 @@ function Rail({
         <button
           className="row rail-search"
           aria-label="Search and commands"
-          onClick={() => {
+          onClick={(event) => {
             close();
-            onPalette();
+            onPalette(event.currentTarget);
           }}
         >
           <span>
@@ -475,9 +475,9 @@ export default function App() {
     else if (guideReplay)
       requestAnimationFrame(() => guideTrigger.current?.focus());
   }
-  function showGuide() {
+  function showGuide(trigger: HTMLElement) {
     if (document.querySelector("dialog[open]")) return;
-    guideTrigger.current = document.activeElement as HTMLElement;
+    guideTrigger.current = trigger;
     setPalette(false);
     setHelp(false);
     setRailOpen(false);
@@ -494,12 +494,12 @@ export default function App() {
   const helpDialog = useRef<HTMLElement>(null);
   const modalOpen = palette || help || railOpen;
   useModalFocus(helpDialog, help, () => setHelp(false), overlayTrigger);
-  function rememberFocus() {
-    if (!modalOpen)
-      overlayTrigger.current = document.activeElement as HTMLElement;
+  /** A click names its button: WebKit doesn't focus a clicked button. */
+  function rememberFocus(trigger = document.activeElement) {
+    if (!modalOpen) overlayTrigger.current = trigger as HTMLElement;
   }
-  function openSearch() {
-    rememberFocus();
+  function openSearch(trigger?: HTMLElement) {
+    rememberFocus(trigger);
     setInstant(false);
     setRailOpen(false);
     setHelp(false);
@@ -743,8 +743,8 @@ export default function App() {
           className="button"
           aria-label="Open navigation"
           aria-expanded={railOpen}
-          onClick={() => {
-            rememberFocus();
+          onClick={(event) => {
+            rememberFocus(event.currentTarget);
             setRailOpen(true);
           }}
         >
@@ -753,7 +753,11 @@ export default function App() {
         <Link href="/" className="wordmark">
           spunto<span>.</span>
         </Link>
-        <button className="button" aria-label="Search" onClick={openSearch}>
+        <button
+          className="button"
+          aria-label="Search"
+          onClick={(event) => openSearch(event.currentTarget)}
+        >
           <Icon name="search" />
         </button>
       </header>

@@ -10,7 +10,11 @@ import { useConfirm } from "../components/core/ConfirmDialog";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
 
-export function ProfilePanel({ onShowGuide }: { onShowGuide?: () => void }) {
+export function ProfilePanel({
+  onShowGuide,
+}: {
+  onShowGuide?: (trigger: HTMLElement) => void;
+}) {
   const hosted = useHosted();
   return (
     <>
@@ -22,7 +26,9 @@ export function ProfilePanel({ onShowGuide }: { onShowGuide?: () => void }) {
           <p className="muted">
             The four first-run steps: writing, labels, search and settings.
           </p>
-          <button onClick={onShowGuide}>Show guide</button>
+          <button onClick={(event) => onShowGuide(event.currentTarget)}>
+            Show guide
+          </button>
         </>
       )}
       <SignOut />

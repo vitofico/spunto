@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
+import { ApiError } from "../src/lib/errors";
 import { AISettings, AIRouting } from "../src/features/AISettings";
 import { StatusPage } from "../src/features/Settings";
 import { NotePanel } from "../src/features/Slots";
@@ -393,4 +394,61 @@ it("does not query AI live panels for private or machine-written notes", async (
   await waitFor(() => expect(client.getQueryData(["manifest"])).toBeTruthy());
   expect(panel).not.toHaveBeenCalled();
   expect(document.querySelector("summary")).toBeNull();
+});
+
+it("shows the monthly allowance and which AI actions wait for its renewal", async () => {
+  vi.mocked(api.ai).mockResolvedValue({
+    ...ai,
+    quota: {
+      period: "2026-10",
+      resets_at: "2026-11-01T00:00:00Z",
+      actions: [
+        { action: "labels", used: 100, limit: 100 },
+        { action: "ask", used: 3, limit: 20 },
+        { action: "embed", used: 40, limit: null },
+      ],
+    },
+  });
+  wrap(<AISettings />);
+  expect(await screen.findByText("Monthly allowance")).toBeTruthy();
+  expect(
+    screen.getByText(
+      /^Auto-labelling paused until .*1.*\. Notes and search keep working\.$/,
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText("3 of 20")).toBeTruthy();
+  expect(screen.getByText("40 used")).toBeTruthy();
+});
+
+it("shows the server's pause reason when Ask has used its allowance", async () => {
+  vi.mocked(api.manifest).mockResolvedValue({
+    ui: 1,
+    plugins_rev: 1,
+    plugins: [ask],
+  });
+  const detail =
+    "Ask has used this month's allowance (20) and resumes on 1 November. Notes and search keep working.";
+  vi.spyOn(api, "command").mockImplementation(async (_plugin, _id, args) => {
+    if (!args?.question)
+      return {
+        type: "form",
+        schema: {
+          type: "object",
+          required: ["question"],
+          properties: { question: { type: "string", title: "Question" } },
+        },
+      };
+    throw new ApiError(429, "ai_quota_exhausted", undefined, detail, 3600);
+  });
+  wrap(<Palette onClose={() => {}} />);
+  fireEvent.click(
+    await screen.findByRole("option", {
+      name: /Ask your notes/,
+    }),
+  );
+  fireEvent.change(await screen.findByLabelText("Question"), {
+    target: { value: "Where is coffee?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
+  expect(await screen.findByText(detail)).toBeTruthy();
 });

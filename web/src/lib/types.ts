@@ -241,6 +241,14 @@ export interface VectorStatus {
     total: number;
   }[];
 }
+export type AIAllowanceAction =
+  "labels" | "ask" | "chat" | "vision" | "transcribe" | "embed";
+/** A hosted account's monthly AI allowance; a null limit is unlimited. */
+export interface AIQuota {
+  period: string;
+  resets_at: string;
+  actions: { action: AIAllowanceAction; used: number; limit: number | null }[];
+}
 export interface AIStatus {
   capabilities: string[];
   profiles: AIProfile[];
@@ -249,6 +257,7 @@ export interface AIStatus {
   can_manage?: boolean;
   model_selection?: AIModelSelection;
   indexing?: VectorStatus;
+  quota?: AIQuota | null;
   stats?: {
     plugin_id: string;
     capability: string;

@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useHosted } from "../lib/query";
 import type {
+  AIAllowanceAction,
   AICapability,
   AIHealth,
   AIModelChoice,
   AIModelSelection,
   AIModelSelections,
+  AIQuota,
   AIStatus,
   Plugin,
 } from "../lib/types";
@@ -351,6 +353,52 @@ export function AIHealthResults({ rows }: { rows: AIHealth[] }) {
     </ul>
   ) : null;
 }
+const allowances: Record<AIAllowanceAction, string> = {
+  labels: "Auto-labelling",
+  ask: "Ask",
+  chat: "Other AI actions",
+  vision: "Image reading",
+  transcribe: "Transcription",
+  embed: "Search indexing",
+};
+/** A hosted account's month of AI: what is used, and what waits for the renewal. */
+function AIAllowance({ quota }: { quota: AIQuota }) {
+  const renews = new Date(quota.resets_at).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+  const paused = quota.actions.filter(
+    (row) => row.limit !== null && row.used >= row.limit,
+  );
+  return (
+    <>
+      <h2>Monthly allowance</h2>
+      {paused.length > 0 && (
+        <p role="status" className="notice">
+          {paused.map((row) => allowances[row.action]).join(", ")} paused until{" "}
+          {renews}. Notes and search keep working.
+        </p>
+      )}
+      <dl className={styles.keyValues}>
+        {quota.actions.map((row) => (
+          <div key={row.action}>
+            <dt>{allowances[row.action]}</dt>
+            <dd>
+              {row.limit === null
+                ? `${row.used.toLocaleString()} used`
+                : `${row.used.toLocaleString()} of ${row.limit.toLocaleString()}`}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="muted">
+        AI in this space counts against its owner’s account, shared by all of
+        their spaces. The allowance renews on {renews}.
+      </p>
+    </>
+  );
+}
 /** The one way to turn AI on, said the same on every page that mentions it. */
 export function AIOffHint() {
   return useHosted() ? (
@@ -395,6 +443,7 @@ export function AISettings() {
             Providers are set by whoever runs the server. Private and
             machine-written notes are never sent to a model.
           </p>
+          {ai.quota && <AIAllowance quota={ai.quota} />}
           {ai.profiles.map((profile) => (
             <section key={profile.name} className={styles.connection}>
               <h2>{profile.name}</h2>

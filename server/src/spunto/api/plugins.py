@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import math
 import os
 import unicodedata
 from typing import Annotated
@@ -11,6 +12,7 @@ from fastapi import APIRouter, Body, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from spunto.ai.errors import AIError
+from spunto.ai.quota import QuotaExceeded
 from spunto.ai.vectors import VectorUnavailable
 from spunto.api.deps import PrincipalDep, ServicesDep, SessionDep
 from spunto.api.errors import Problem, problem_response
@@ -74,6 +76,9 @@ async def _call(awaitable):
         return await awaitable
     except Problem:
         raise
+    except QuotaExceeded as error:
+        wait = {"Retry-After": str(math.ceil(error.retry_after))}
+        raise Problem(429, error.code, error.detail, wait) from None
     except AIError as error:
         status = {"validation": 422, "refused": 403}.get(error.category, 503)
         raise Problem(status, error.code, error.detail) from None

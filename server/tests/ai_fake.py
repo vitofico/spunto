@@ -66,7 +66,10 @@ class FakeProvider:
                         "refusal": "No" if mode == "refusal" else None,
                     },
                 }
-            ]
+            ],
+            "usage": {"prompt_tokens": "many", "completion_tokens": -1}
+            if mode == "bad_usage"
+            else {"prompt_tokens": 120, "completion_tokens": 8},
         }
 
     async def embed(self, request: Request):
@@ -85,13 +88,16 @@ class FakeProvider:
             return JSONResponse({"data": data})  # Not JSON encodable: useful transport failure.
         if self.on_embed:
             await self.on_embed()
-        return {"data": data}
+        return {"data": data, "usage": {"prompt_tokens": 4 * len(data), "total_tokens": 4}}
 
     async def transcribe(self, request: Request):
         _, mode = await self.capture(request, False)
         if mode in {"500", "401", "404"}:
             return JSONResponse({"error": "fixture provider body must never escape"}, int(mode))
-        return {"text": "test\u0000" if mode == "valid" else "loop " * 30}
+        return {
+            "text": "test\u0000" if mode == "valid" else "loop " * 30,
+            "usage": {"type": "tokens", "input_tokens": 30, "output_tokens": 5},
+        }
 
     async def anthropic(self, request: Request):
         _, mode = await self.capture(request)

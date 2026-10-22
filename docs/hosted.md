@@ -169,6 +169,38 @@ opens a browser session. Never put passwords in command arguments or logs. Keep
 it to `true` explicitly opens local signup. Optional SSO enrollment remains the
 provider's separate policy.
 
+### Monthly AI allowances
+
+Every AI call in a space counts against the space owner's account before it joins
+a provider queue, so creating more spaces never adds allowance, and members of a
+shared space use its owner's allowance. Each action has its own counter, renewed
+on the first of each month in UTC:
+
+| Action | What counts | `free` | `paid` |
+|---|---|---|---|
+| `labels` | One auto-labelling run | 100 | 2,000 |
+| `ask` | One Ask question | 20 | 300 |
+| `chat` | One action of any other AI plugin | 50 | 1,000 |
+| `vision` | One image read | 10 | 200 |
+| `transcribe` | One transcription | 10 | 100 |
+| `embed` | One embedding request for search | unlimited | unlimited |
+
+`SPUNTO_AI_QUOTA_PLAN` picks the tier every account gets: `free` when unset,
+`paid`, or `unlimited`, which still counts. `SPUNTO_AI_QUOTA_LIMITS` overrides
+single actions with a JSON object, where `null` means unlimited:
+
+```text
+SPUNTO_AI_QUOTA_PLAN=paid
+SPUNTO_AI_QUOTA_LIMITS={"ask": 500, "vision": 0}
+```
+
+A used allowance pauses that action until the renewal. An interactive action
+answers `429 ai_quota_exhausted` with the renewal date; background runs stay
+queued and look again hourly, so a raised limit resumes them without waiting for
+the month. Settings → AI shows the month's usage. Notes, sync and search keep
+working. A call refused before it reached a provider is not counted. Both
+variables apply only to hosted servers; a SQLite server keeps no allowance.
+
 Route `/cloud/*` to cloud and other paths to core on the same HTTPS origin.
 Application cookies are host-only. Cloud calls a fixed private core URL, forwards
 only application session cookies and never follows upstream redirects or forwards
@@ -242,8 +274,8 @@ server authorization. Cloud CI checks HTTP contracts, lint, locked dependencies,
 secrets, the hardened image and known image vulnerabilities. A CI definition is
 not a receipt of a successful hosted run, deployment or physical-device check.
 
-Billing, quotas, paid plans, anonymous publishing, CRDTs, SCIM and back-channel
-logout are absent. An IdP logout/deletion alone does not revoke an existing
+Billing, per-account plans (one allowance tier applies to the whole server),
+anonymous publishing, CRDTs, SCIM and back-channel logout are absent. An IdP logout/deletion alone does not revoke an existing
 application session. Operators must revoke application credentials separately;
 full application-account suspension/deletion and retention policies need an
 explicit contract. Public APK/container distribution, offsite recovery and real

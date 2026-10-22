@@ -4,6 +4,7 @@ Secrets also accept a _FILE variant that names a file holding the value. A bad
 value stops startup with a sentence naming the variable (HOST-2).
 """
 
+import json
 import re
 from datetime import time
 from ipaddress import IPv4Network, IPv6Network, ip_network
@@ -19,6 +20,7 @@ from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from spunto.ai.profiles import CAPABILITIES, Profile, load_profiles
+from spunto.ai.quota import ACTIONS, PLANS
 from spunto.auth.passwords import problem as password_problem
 from spunto.errors import OperatorError
 
@@ -50,6 +52,10 @@ class Settings(BaseSettings):
     ai_embed_profile: str | None = None
     ai_transcribe_profile: str | None = None
     ai_vision_profile: str | None = None
+    ai_quota_plan: Literal["free", "paid", "unlimited"] | None = None
+    ai_quota_limits: Annotated[dict[str, Annotated[int, Field(ge=0)] | None], NoDecode] = Field(
+        default_factory=dict
+    )
     max_upload_mb: int = Field(20, ge=1, le=1000)
 
     @field_validator("max_upload_mb", mode="before")
@@ -71,6 +77,33 @@ class Settings(BaseSettings):
     @classmethod
     def _ai_profiles(cls, value):
         return load_profiles(value)
+
+    @field_validator("ai_quota_limits", mode="before")
+    @classmethod
+    def _quota_limits_json(cls, value):
+        if not isinstance(value, str):
+            return value
+        try:
+            return json.loads(value) if value.strip() else {}
+        except ValueError:
+            raise ValueError('must be a JSON object such as {"ask": 300}') from None
+
+    @field_validator("ai_quota_limits")
+    @classmethod
+    def _known_quota_actions(cls, value):
+        if unknown := set(value) - set(ACTIONS):
+            raise ValueError(
+                "names unknown AI actions ("
+                + ", ".join(sorted(unknown))
+                + "); use "
+                + ", ".join(ACTIONS)
+            )
+        return value
+
+    @property
+    def ai_quota(self):
+        """Monthly per-account limits for hosted servers; None is unlimited."""
+        return {**PLANS[self.ai_quota_plan or "free"], **self.ai_quota_limits}
 
     @property
     def ai_bindings(self):
@@ -118,7 +151,7 @@ class Settings(BaseSettings):
         # Compose and shells hand over "" for a variable that is declared but empty.
         field = cls.model_fields[info.field_name]
         if isinstance(value, str) and not value.strip() and not field.is_required():
-            return field.get_default()
+            return field.get_default(call_default_factory=True)
         return value
 
     @field_validator("public_url")
@@ -221,6 +254,10 @@ class Settings(BaseSettings):
                 )
         elif any((self.identity_database_url, self.oidc_issuer, self.oidc_client_id)):
             raise ValueError("Hosted identity settings require SPUNTO_DATABASE_URL.")
+        elif self.ai_quota_plan or self.ai_quota_limits:
+            raise ValueError(
+                "SPUNTO_AI_QUOTA_PLAN and SPUNTO_AI_QUOTA_LIMITS apply only to hosted servers."
+            )
         for cap, name in self.ai_bindings.items():
             profile = self.ai_profiles.get(name)
             if profile is None or not getattr(profile, cap + "_model"):

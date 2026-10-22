@@ -467,8 +467,11 @@ async def test_host_counter_json_archive_and_ai_stat_upserts(pg):
                 "value=CAST(CAST(value AS INTEGER)+CAST(excluded.value AS INTEGER) AS TEXT)"
             )
             await connection.execute(
-                "INSERT INTO ai_stat VALUES('2026-10-18','synthetic','chat','ok',1) "
-                "ON CONFLICT(day,plugin_id,capability,outcome) DO UPDATE SET n=n+1"
+                "INSERT INTO ai_stat(day,plugin_id,capability,outcome,n,input_tokens,"
+                "output_tokens) VALUES('2026-10-18','synthetic','chat','ok',1,7,2) "
+                "ON CONFLICT(day,plugin_id,capability,outcome) DO UPDATE SET "
+                "n=ai_stat.n+1,input_tokens=ai_stat.input_tokens+excluded.input_tokens,"
+                "output_tokens=ai_stat.output_tokens+excluded.output_tokens"
             )
         await connection.execute(
             "INSERT INTO job(plugin_id,kind,args,priority,status,run_after,created_at,updated_at) "
@@ -477,7 +480,8 @@ async def test_host_counter_json_archive_and_ai_stat_upserts(pg):
         )
     async with bounds[0].read() as connection:
         assert (await connection.execute_fetchall("SELECT value FROM plugin_kv"))[0][0] == "2"
-        assert (await connection.execute_fetchall("SELECT n FROM ai_stat"))[0][0] == 2
+        stat = await connection.execute_fetchall("SELECT n,input_tokens,output_tokens FROM ai_stat")
+        assert tuple(stat[0]) == (2, 14, 4)
         assert (
             await connection.execute_fetchall(
                 "SELECT kind FROM job WHERE json_extract(args,'$.archive_id')=?", ("synthetic",)

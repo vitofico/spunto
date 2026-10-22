@@ -776,3 +776,190 @@ async def test_hosted_mcp_keeps_token_and_workspace_authority(hosted):
     assert response.status_code == 200, response.text
     assert "Alice MCP private sentinel" not in response.text
     assert (await client.post("/mcp", headers=headers(alice), json={})).status_code == 401
+
+
+async def test_ai_allowance_is_per_account_across_spaces_and_pauses_with_a_reason(
+    hosted, monkeypatch
+):
+    from datetime import UTC, datetime
+
+    from ai_fake import FakeProvider
+
+    from spunto.ai.errors import AIError
+    from spunto.ai.gateway import Gateway, Probe
+    from spunto.ai.profiles import Profile
+    from spunto.ai.quota import PLANS, AccountQuota, QuotaExceeded
+
+    client, manager, users, settings = hosted
+    alice, bob, carol = users
+    fake = FakeProvider()
+
+    async def models(*args, **kwargs):
+        return []
+
+    async def health(self):
+        return []
+
+    monkeypatch.setattr("spunto.ai.selection.inventory", models)
+    monkeypatch.setattr(Gateway, "health_check", health)
+    settings.ai_profiles = {
+        "fixture": Profile(
+            name="fixture",
+            base_url="http://provider.synthetic/v1",
+            chat_model="chat-fixture",
+            rate_per_min=1000,
+        )
+    }
+    settings.ai_chat_profile = "fixture"
+    settings.ai_quota_limits = {"ask": 2, "labels": 5}
+    second = (
+        await client.post(
+            "/api/v1/workspaces", headers=headers(alice), json={"name": "Second synthetic space"}
+        )
+    ).json()
+    spaces = [alice["workspace"]["id"], second["id"]]
+    gateways = []
+    for user, space in ((alice, spaces[0]), (alice, spaces[1]), (bob, bob["workspace"]["id"])):
+        assert (await client.get("/api/v1/ai", headers=headers(user, space))).status_code == 200
+        gateways.append(manager._runtimes[space].ai)
+        gateways[-1].transport = httpx.ASGITransport(fake.app)
+    first, other, bobs = gateways
+
+    # A second space draws from the same monthly allowance as the first.
+    await first.chat(Probe, "check", plugin_id="ask")
+    await other.chat(Probe, "check", plugin_id="ask")
+    for gateway in (first, other):
+        with pytest.raises(QuotaExceeded) as refused:
+            await gateway.chat(Probe, "check", plugin_id="ask")
+    assert len(fake.requests) == 2, "a refused call must never reach the provider"
+    assert 0 < refused.value.retry_after <= 3600
+    assert refused.value.detail.startswith("Ask has used this month's allowance (2)")
+    assert refused.value.detail.endswith("Notes and search keep working.")
+    # Another account and another action keep their own allowances.
+    await bobs.chat(Probe, "check", plugin_id="ask")
+    await first.chat(Probe, "check", plugin_id="tidy")
+
+    # Concurrent calls from both spaces cannot overshoot the shared allowance.
+    results = await asyncio.gather(
+        *(
+            gateway.chat(Probe, "check", plugin_id="label-suggestions")
+            for gateway in [first, other] * 6
+        ),
+        return_exceptions=True,
+    )
+    assert sum(not isinstance(result, BaseException) for result in results) == 5
+    assert all(isinstance(r, QuotaExceeded) for r in results if isinstance(r, BaseException))
+
+    # A call that never reached a provider gives its allowance back.
+    with pytest.raises(AIError, match="ai_note_refused"):
+        await first.chat(Probe, "check", notes=["missing-note"], plugin_id="tidy")
+
+    # Owners see where the month stands; tokens and refusals are recorded per space.
+    status = (await client.get("/api/v1/ai", headers=headers(alice, spaces[1]))).json()
+    usage = {row["action"]: (row["used"], row["limit"]) for row in status["quota"]["actions"]}
+    assert usage == {
+        "labels": (5, 5),
+        "ask": (2, 2),
+        "chat": (1, 50),
+        "vision": (0, 10),
+        "transcribe": (0, 10),
+        "embed": (0, None),
+    }
+    assert status["quota"]["resets_at"].endswith("-01T00:00:00Z")
+    stats = {(row["plugin_id"], row["outcome"]): row for row in status["stats"]}
+    assert (stats[("ask", "ok")]["n"], stats[("ask", "ok")]["input_tokens"]) == (1, 120)
+    assert stats[("ask", "ok")]["output_tokens"] == 8
+    assert stats[("ask", "quota")]["n"] == 1
+
+    # Notes and search keep working; an interactive AI action pauses with the reason.
+    created = await client.post(
+        "/api/v1/notes",
+        headers=headers(alice),
+        json={"body": "Synthetic allowance note about tomato seedlings"},
+    )
+    assert created.status_code == 201, created.text
+    note_id = created.json()["id"]
+    found = await client.get("/api/v1/search?q=seedlings&mode=keyword", headers=headers(alice))
+    assert [hit["id"] for hit in found.json()["hits"]] == [note_id]
+    suggested = await client.post(
+        "/api/v1/plugins/label-suggestions/commands/suggest-now",
+        headers=headers(alice),
+        json={"note_id": note_id},
+    )
+    assert suggested.status_code == 429, suggested.text
+    assert suggested.json()["code"] == "ai_quota_exhausted"
+    assert suggested.json()["detail"].startswith("Auto-labelling has used this month's allowance")
+    assert 0 < int(suggested.headers["retry-after"]) <= 3600
+
+    # The background run after the save waits for the allowance instead of failing.
+    runtime = manager._runtimes[spaces[0]]
+    async with runtime.store.write() as connection:
+        await connection.execute(
+            "UPDATE job SET run_after=0 WHERE plugin_id='label-suggestions' AND note_id=?",
+            (note_id,),
+        )
+    runtime.host._wake.set()
+    for _ in range(100):
+        async with runtime.store.read() as connection:
+            jobs = await connection.execute_fetchall(
+                "SELECT status,last_error,run_after FROM job "
+                "WHERE plugin_id='label-suggestions' AND note_id=?",
+                (note_id,),
+            )
+        if jobs and jobs[0]["last_error"]:
+            break
+        await asyncio.sleep(0.05)
+    assert (jobs[0]["status"], jobs[0]["last_error"]) == ("queued", "ai_quota_exhausted")
+    assert jobs[0]["run_after"] > time.time() * 1000
+
+    # Allowances renew with the UTC month; a zero limit refuses without counting.
+    clock = [datetime(2026, 10, 31, 23, 59, tzinfo=UTC)]
+    month = AccountQuota(
+        manager.accounts,
+        carol["account"]["id"],
+        {**PLANS["free"], "ask": 1, "vision": 0},
+        clock=lambda: clock[0],
+    )
+    await month.reserve("ask")
+    for name in ("ask", "vision"):
+        with pytest.raises(QuotaExceeded) as refused:
+            await month.reserve(name)
+    assert refused.value.retry_after == 60
+    assert "resumes on 1 November" in refused.value.detail
+    clock[0] = datetime(2026, 11, 1, tzinfo=UTC)
+    assert await month.reserve("ask") == ("ask", "2026-11")
+
+
+async def test_ai_account_allowance_is_visible_only_to_its_owner(hosted):
+    client, manager, users, _ = hosted
+    alice, bob, carol = users
+    personal = await client.get("/api/v1/ai", headers=headers(alice))
+    assert personal.status_code == 200
+    await manager._runtimes[alice["workspace"]["id"]].ai.quota.reserve("ask")
+    shared = await client.post(
+        "/api/v1/workspaces", headers=headers(alice), json={"name": "Synthetic shared AI space"}
+    )
+    assert shared.status_code == 201
+    workspace = shared.json()["id"]
+    for user, role in ((bob, "editor"), (carol, "viewer")):
+        member = await client.post(
+            f"/api/v1/workspaces/{workspace}/members",
+            headers=headers(alice),
+            json={"user_id": user["account"]["id"], "role": role},
+        )
+        assert member.status_code == 200
+        response = await client.get("/api/v1/ai", headers=headers(user, workspace))
+        assert response.status_code == 200
+        assert response.json()["can_manage"] is False
+        assert response.json()["quota"] is None
+    for space in (alice["workspace"]["id"], workspace):
+        response = await client.get("/api/v1/ai", headers=headers(alice, space))
+        assert response.status_code == 200
+        status = response.json()
+        assert status["can_manage"] is True
+        assert (
+            next(row["used"] for row in status["quota"]["actions"] if row["action"] == "ask") == 1
+        )
+    own_account = await client.get("/api/v1/ai", headers=headers(bob))
+    assert own_account.status_code == 200
+    assert all(row["used"] == 0 for row in own_account.json()["quota"]["actions"])

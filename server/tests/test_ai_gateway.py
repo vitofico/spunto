@@ -217,6 +217,8 @@ async def test_native_anthropic_sdk_recorded_responses_and_effort(store):
     gateway = Gateway(store, settings_for(profile), anthropic_client_factory=factory)
     try:
         assert (await gateway.chat(Probe, "check", purpose="label-suggestions")).ok
+        stat = (await gateway.status())["stats"][0]
+        assert (stat["input_tokens"], stat["output_tokens"]) == (10, 10)
         outbound = fake.requests[0]["body"]
         assert outbound["output_config"]["format"]["type"] == "json_schema"
         assert outbound["output_config"]["effort"] == "low"
@@ -733,3 +735,52 @@ async def test_external_page_has_independent_gateway_fence(fixture_gateway, stor
     with pytest.raises(AIError, match="ai_external_refused"):
         await gateway.chat(Probe, "Read.", external_text="page", external_ok=False)
     assert len(fake.requests) == 1
+
+
+async def test_provider_token_reports_are_recorded_per_call(fixture_gateway):
+    gateway, fake = fixture_gateway
+    for _ in range(2):
+        await gateway.chat(Probe, "check", plugin_id="ask")
+    await gateway.embed(["query"])
+    audio = files("spunto.ai").joinpath("health.wav").read_bytes()
+    await gateway.transcribe(audio, "audio/wav", duration_s=1, plugin_id="voice-memos")
+    fake.modes.append("bad_usage")
+    await gateway.chat(Probe, "check", plugin_id="tidy")
+    status = await gateway.status()
+    stats = {
+        (row["plugin_id"], row["capability"]): (row["n"], row["input_tokens"], row["output_tokens"])
+        for row in status["stats"]
+    }
+    assert stats[("ask", "chat")] == (2, 240, 16)
+    assert stats[("core", "embed")] == (1, 4, 0)
+    assert stats[("voice-memos", "transcribe")] == (1, 30, 5)
+    # Provider counts are untrusted; malformed ones record nothing rather than failing.
+    assert stats[("tidy", "chat")] == (1, 0, 0)
+    # A self-hosted SQLite server keeps no monthly allowance.
+    assert status["quota"] is None
+
+
+def test_allowances_follow_utc_months_and_core_checks_draw_from_none():
+    from datetime import UTC, datetime, timedelta, timezone
+
+    from spunto.ai import quota
+
+    assert quota._month(datetime(2026, 12, 31, 23, 59, tzinfo=UTC)) == (
+        "2026-12",
+        datetime(2027, 1, 1, tzinfo=UTC),
+    )
+    rome = timezone(timedelta(hours=1))
+    assert quota._month(datetime(2027, 1, 1, 0, 30, tzinfo=rome))[0] == "2026-12"
+    assert [
+        quota.action(capability, plugin)
+        for capability, plugin in [
+            ("chat", "ask"),
+            ("chat", "label-suggestions"),
+            ("chat", "tidy"),
+            ("vision", "image-text"),
+            ("transcribe", "voice-memos"),
+            ("embed", "core"),
+            ("chat", "core"),
+            ("transcribe", "core"),
+        ]
+    ] == ["ask", "labels", "chat", "vision", "transcribe", "embed", None, None]

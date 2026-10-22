@@ -23,6 +23,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from spunto import __version__
+from spunto.ai.errors import AIError
 from spunto.api.deps import Services
 from spunto.api.errors import Problem, problem_response
 from spunto.api.network import from_trusted_proxy
@@ -248,7 +249,7 @@ class MCP:
             )
         except ValidationError:
             result = self._error("The tool arguments are invalid; check its input schema.")
-        except Problem as exc:
+        except (Problem, AIError) as exc:
             result = self._error(exc.detail)
         except ValueError:
             result = self._error(

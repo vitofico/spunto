@@ -101,11 +101,12 @@ def test_every_problem_is_reported_at_once(env):
 
 
 def test_blank_values_mean_unset(env):
-    env(SPUNTO_PORT="", SPUNTO_OWNER_PASSWORD=" ", SPUNTO_TRUSTED_PROXIES="")
+    env(SPUNTO_PORT="", SPUNTO_OWNER_PASSWORD=" ", SPUNTO_TRUSTED_PROXIES="", SPUNTO_AI_PROFILES="")
     settings = load_settings()
     assert settings.port == 8080
     assert settings.owner_password is None
     assert settings.trusted_proxies == ()
+    assert settings.ai_profiles == {}
 
 
 def test_settings_any_case(env):

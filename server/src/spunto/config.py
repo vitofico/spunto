@@ -118,7 +118,7 @@ class Settings(BaseSettings):
         # Compose and shells hand over "" for a variable that is declared but empty.
         field = cls.model_fields[info.field_name]
         if isinstance(value, str) and not value.strip() and not field.is_required():
-            return field.get_default()
+            return field.get_default(call_default_factory=True)
         return value
 
     @field_validator("public_url")

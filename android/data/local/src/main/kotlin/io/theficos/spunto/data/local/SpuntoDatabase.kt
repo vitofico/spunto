@@ -13,7 +13,10 @@ import kotlinx.serialization.json.Json
 @Entity(tableName = "notes", indices = [Index(value = ["id"], unique = true),Index(value=["trashed","archived","pinned","createdAt","id"]),Index(value=["trashed","createdAt","id"]),Index(value=["trashed","pinned","createdAt","id"]),Index(value=["trashed","trashedAt","createdAt","id"])])
 data class NoteEntity(@PrimaryKey(autoGenerate = true) val rowid: Long = 0, val id: String, val body: String, val title: String, val foldedTitle: String, val foldedBody: String, val createdAt: Long, val updatedAt: Long, val serverRev: Int = 0, val pinned: Boolean = false, val archived: Boolean = false, val trashed: Boolean = false, val privateNote: Boolean = false, val machine: Boolean = false, val conflictOf: String? = null, val sourceUrl: String? = null, val sourceKind: String = "android", val sourceRef: String? = null, val pending: Boolean = false, val syncError: String? = null, val pinnedAt: Long = 0, val archivedAt: Long = 0, val trashedAt: Long = 0, val privateAt: Long = 0, val origin: String = "owner", val updatedViaAgent: Boolean = false, @ColumnInfo(defaultValue="0") val openTasks:Int=0) {
  fun note() = Note(id,body,title,createdAt,updatedAt,serverRev,pinned,archived,trashed,privateNote,machine,conflictOf,sourceUrl,sourceKind,sourceRef,pending,syncError,pinnedAt,archivedAt,trashedAt,privateAt,origin,updatedViaAgent)
- companion object { fun from(note: Note, rowid: Long = 0) = NoteEntity(rowid,note.id,note.body,note.title,fold(note.title),fold(note.body),note.createdAt,note.updatedAt,note.serverRev,note.pinned,note.archived,note.trashed,note.privateNote,note.machine,note.conflictOf,note.sourceUrl,note.sourceKind,note.sourceRef,note.pending,note.syncError,note.pinnedAt,note.archivedAt,note.trashedAt,note.privateAt,note.origin,note.updatedViaAgent,openTaskCount(note.body)) }
+ companion object { fun from(note: Note, rowid: Long = 0, previous:NoteEntity?=null):NoteEntity {
+  val unchangedBody=previous?.takeIf {it.body==note.body}
+  return NoteEntity(rowid,note.id,note.body,note.title,previous?.takeIf {it.title==note.title}?.foldedTitle ?: fold(note.title),unchangedBody?.foldedBody ?: fold(note.body),note.createdAt,note.updatedAt,note.serverRev,note.pinned,note.archived,note.trashed,note.privateNote,note.machine,note.conflictOf,note.sourceUrl,note.sourceKind,note.sourceRef,note.pending,note.syncError,note.pinnedAt,note.archivedAt,note.trashedAt,note.privateAt,note.origin,note.updatedViaAgent,unchangedBody?.openTasks ?: openTaskCount(note.body))
+ } }
 }
 @Fts4(contentEntity = NoteEntity::class, tokenizer = FtsOptions.TOKENIZER_UNICODE61)
 @Entity(tableName = "notes_fts")
@@ -62,6 +65,7 @@ interface SpuntoDao {
  @Query("SELECT * FROM notes WHERE conflictOf IS NOT NULL AND trashed=0 ORDER BY updatedAt DESC") fun conflicts(): Flow<List<NoteEntity>>
  @Query("SELECT * FROM notes WHERE id=:id") suspend fun get(id: String): NoteEntity?
  @Query("SELECT * FROM notes") suspend fun all(): List<NoteEntity>
+ @Query("SELECT n.* FROM notes n WHERE NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)") suspend fun reconcilableNotes():List<NoteEntity>
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(note: NoteEntity): Long
  @Query("DELETE FROM notes WHERE id=:id") suspend fun removeNoteRow(id:String)
  @Query("DELETE FROM revisions WHERE noteId=:id") suspend fun clearLocalHistory(id:String)

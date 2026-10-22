@@ -533,3 +533,11 @@ async def test_runtime_rejects_admin_role_and_direct_cross_workspace_writes(pg):
                 "INSERT INTO spunto.setting(workspace_id,key,value) VALUES(%s,%s,%s)",
                 (spaces[1], "cross", "forbidden"),
             )
+
+
+async def test_postgres_batch_serialization_keeps_scoped_plugin_metadata(pg):
+    from note_serialization import assert_batch_serialization
+
+    _, bounds, users, _, _ = pg
+    await notes(bounds[1], users[1]).create("Synthetic batch other workspace #Hidden")
+    await assert_batch_serialization(notes(bounds[0], users[0]))

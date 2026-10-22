@@ -13,7 +13,7 @@ Run on 2026-10-13. 02 §16 ends the M0 "Done when" with "The name's availability
 | Domains | `spunto.com`, `spunto.it`, `spunto.io` | Registered (2006, an old `.it` record, and 2026-03-03). No product page turned up in a web search |
 | Domains | `getspunto.com`, `spuntoapp.com` | Free |
 | Domains | `spunto.app`, `spunto.dev` | Inconclusive: the registry's whois did not answer |
-| Web search | "Spunto" notes app or AI app | No notes or AI product by that name |
+| Web search | "Spunto" notes app or AI app | None found on 2026-10-13. **Corrected 2026-10-22:** several AI products launched under the name in 2025 and 2026, among them an AI workspace by Spunto Labs LLC (`spunto.ai`), a sandbox service for AI agents (`spunto.net`) and an AI app builder (`spunto.dev`) |
 | Trademarks | EUIPO, UIBM (Italy), USPTO | **Not checked**: needs the owner, see below |
 
 **Commands.**

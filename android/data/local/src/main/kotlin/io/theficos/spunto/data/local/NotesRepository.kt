@@ -240,7 +240,10 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    if(coalesce) dao.touchRevision(previous!!.id,now)
    else dao.putRevision(RevisionEntity(noteId=note.id,body=old.body,at=now,version=old.serverRev,historySource=if(localEdit) "local" else "replica",lastEditAt=now,changeKind=historyKind))
   }
-  dao.put(NoteEntity.from(note,old?.rowid?:0));dao.clearLabels(note.id);dao.putLabels(labels(note.body).distinctBy { it.key }.map { LabelEntity(note.id,it.key,it.path) })
+  dao.put(NoteEntity.from(note,old?.rowid?:0,old))
+  if(old==null || old.body!=note.body) {
+   dao.clearLabels(note.id);dao.putLabels(labels(note.body).distinctBy { it.key }.map { LabelEntity(note.id,it.key,it.path) })
+  }
  }
  suspend fun enqueue(op: OutboxOperation) {
   val queued=dao.outbox().filter { !it.sent && it.error==null }

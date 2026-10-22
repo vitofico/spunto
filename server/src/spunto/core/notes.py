@@ -134,107 +134,136 @@ class Notes:
     async def _serialize(
         self, conn, row, *, render: bool = False, include_plugins: bool = True
     ) -> dict:
-        paths = await conn.execute_fetchall(
-            (
-                "SELECT l.path FROM label l JOIN note_label nl ON nl.label_id=l.id "
-                "WHERE nl.note_id=? ORDER BY l.id"
-            ),
-            (row["id"],),
-        )
-        actor = await conn.execute_fetchall(
-            "SELECT kind FROM credential WHERE id=?", (row["updated_by"],)
-        )
-        source = {"kind": row["source_kind"], "ref": row["source_ref"]}
-        if row["source_url"]:
-            source["url"] = row["source_url"]
-        result = {
-            "id": row["id"],
-            "body": row["body"],
-            "body_hash": row["body_hash"],
-            "title": row["title"],
-            "labels": [p[0] for p in paths],
-            "version": row["version"],
-            "change_seq": row["change_seq"],
-            "created_at": iso(row["created_at"]),
-            "updated_at": iso(row["updated_at"]),
-            "pinned": bool(row["pinned"]),
-            "archived": row["archived_at"] is not None,
-            "trashed": row["trashed_at"] is not None,
-            "private": bool(row["private"]),
-            "flag_times": {
-                name: row[f"{name}_clock"] for name in ("pinned", "archived", "trashed", "private")
-            },
-            "open_tasks": row["open_tasks"],
-            "source": source,
-            "origin": row["origin"],
-            "updated_via_agent": bool(actor and actor[0][0] == "pat"),
-            "machine": bool(row["machine"]),
-            "conflict_of": row["conflict_of"],
-            "suggestions": [],
-            "annotations": [],
+        return (
+            await self._serialize_many(conn, [row], render=render, include_plugins=include_plugins)
+        )[0]
+
+    async def _serialize_many(
+        self, conn, rows, *, render: bool = False, include_plugins: bool = True
+    ) -> list[dict]:
+        if not rows:
+            return []
+        ids = [row["id"] for row in rows]
+        placeholders = ",".join("?" for _ in ids)
+        paths = {note_id: [] for note_id in ids}
+        for path in await conn.execute_fetchall(
+            "SELECT nl.note_id,l.path FROM label l JOIN note_label nl ON nl.label_id=l.id "  # noqa: S608
+            f"WHERE nl.note_id IN ({placeholders}) ORDER BY l.id",
+            ids,
+        ):
+            paths[path["note_id"]].append(path["path"])
+        actor_ids = list({row["updated_by"] for row in rows})
+        actors = {
+            actor["id"]: actor["kind"]
+            for actor in await conn.execute_fetchall(
+                "SELECT id,kind FROM credential WHERE id IN ("  # noqa: S608
+                + ",".join("?" for _ in actor_ids)
+                + ")",
+                actor_ids,
+            )
         }
-        if not include_plugins:
-            return result
-        proposals = await conn.execute_fetchall(
-            "SELECT s.* FROM suggestion s JOIN plugin p ON p.id=s.plugin_id "
-            "WHERE s.note_id=? AND s.status='pending' AND p.state='enabled' AND p.switch='on' "
-            "AND s.created_at>? "
-            "ORDER BY coalesce(s.confidence,0) DESC,p.position,s.created_at DESC",
-            (row["id"], now_ms() - 14 * 86400000),
-        )
-        counts = {}
-        for proposal in proposals:
-            from spunto.core.suggestions import references_visible
-
-            count = counts.get(proposal["plugin_id"], 0)
-            if count >= 3 or not await references_visible(conn, self, proposal):
+        proposals = {note_id: [] for note_id in ids}
+        annotations = {note_id: [] for note_id in ids}
+        if include_plugins:
+            for proposal in await conn.execute_fetchall(
+                "SELECT s.* FROM suggestion s JOIN plugin p ON p.id=s.plugin_id "  # noqa: S608
+                f"WHERE s.note_id IN ({placeholders}) AND s.status='pending' "
+                "AND p.state='enabled' AND p.switch='on' AND s.created_at>? "
+                "ORDER BY coalesce(s.confidence,0) DESC,p.position,s.created_at DESC",
+                [*ids, now_ms() - 14 * 86400000],
+            ):
+                proposals[proposal["note_id"]].append(proposal)
+            for annotation in await conn.execute_fetchall(
+                "SELECT a.* FROM annotation a JOIN plugin p ON p.id=a.plugin_id "  # noqa: S608
+                f"WHERE a.note_id IN ({placeholders}) AND p.state='enabled' "
+                "AND p.switch='on' ORDER BY p.position,a.plugin_id,a.kind",
+                ids,
+            ):
+                annotations[annotation["note_id"]].append(annotation)
+        results = []
+        for row in rows:
+            source = {"kind": row["source_kind"], "ref": row["source_ref"]}
+            if row["source_url"]:
+                source["url"] = row["source_url"]
+            result = {
+                "id": row["id"],
+                "body": row["body"],
+                "body_hash": row["body_hash"],
+                "title": row["title"],
+                "labels": paths[row["id"]],
+                "version": row["version"],
+                "change_seq": row["change_seq"],
+                "created_at": iso(row["created_at"]),
+                "updated_at": iso(row["updated_at"]),
+                "pinned": bool(row["pinned"]),
+                "archived": row["archived_at"] is not None,
+                "trashed": row["trashed_at"] is not None,
+                "private": bool(row["private"]),
+                "flag_times": {
+                    name: row[f"{name}_clock"]
+                    for name in ("pinned", "archived", "trashed", "private")
+                },
+                "open_tasks": row["open_tasks"],
+                "source": source,
+                "origin": row["origin"],
+                "updated_via_agent": actors.get(row["updated_by"]) == "pat",
+                "machine": bool(row["machine"]),
+                "conflict_of": row["conflict_of"],
+                "suggestions": [],
+                "annotations": [],
+            }
+            if not include_plugins:
+                results.append(result)
                 continue
-            counts[proposal["plugin_id"]] = count + 1
-            item = dict(proposal)
-            item["payload"] = json.loads(item["payload"])
-            item["created_at"] = iso(item["created_at"])
-            result["suggestions"].append(item)
-        annotations = await conn.execute_fetchall(
-            "SELECT a.* FROM annotation a JOIN plugin p ON p.id=a.plugin_id "
-            "WHERE a.note_id=? AND p.state='enabled' AND p.switch='on' "
-            "ORDER BY p.position,a.plugin_id,a.kind",
-            (row["id"],),
-        )
-        meta = False
-        for annotation in annotations:
-            item = dict(annotation)
-            if item["kind"] == "meta":
-                if meta:
+            counts = {}
+            for proposal in proposals[row["id"]]:
+                from spunto.core.suggestions import references_visible
+
+                count = counts.get(proposal["plugin_id"], 0)
+                if count >= 3 or not await references_visible(conn, self, proposal):
                     continue
-                meta = True
-            item["payload"] = await self._visible_components(conn, json.loads(item["payload"]))
-            if item["payload"] is None:
-                continue
+                counts[proposal["plugin_id"]] = count + 1
+                item = dict(proposal)
+                item["payload"] = json.loads(item["payload"])
+                item["created_at"] = iso(item["created_at"])
+                result["suggestions"].append(item)
+            meta = False
+            for annotation in annotations[row["id"]]:
+                item = dict(annotation)
+                if item["kind"] == "meta":
+                    if meta:
+                        continue
+                    meta = True
+                item["payload"] = await self._visible_components(conn, json.loads(item["payload"]))
+                if item["payload"] is None:
+                    continue
+                if render:
+                    from spunto.host.vocabulary import render_output
+
+                    item["payload"] = render_output(item["payload"])
+                item["updated_at"] = iso(item["updated_at"])
+                result["annotations"].append(item)
             if render:
-                from spunto.host.vocabulary import render_output
+                from spunto.core.render import render_markdown
 
-                item["payload"] = render_output(item["payload"])
-            item["updated_at"] = iso(item["updated_at"])
-            result["annotations"].append(item)
-        if render:
-            from spunto.core.render import render_markdown
+                result["html"] = render_markdown(row["body"])
+                if self.principal.workspace_id:
+                    from urllib.parse import quote
 
-            result["html"] = render_markdown(row["body"])
-            if self.principal.workspace_id:
-                from urllib.parse import quote
+                    result["html"] = re.sub(
+                        r'(["\'])/a/([a-fA-F0-9-]{36})(?=["\'])',
+                        lambda m: (
+                            m[1]
+                            + "/a/"
+                            + m[2]
+                            + "?workspace="
+                            + quote(self.principal.workspace_id, safe="")
+                        ),
+                        result["html"],
+                    )
+            results.append(result)
 
-                result["html"] = re.sub(
-                    r'(["\'])/a/([a-fA-F0-9-]{36})(?=["\'])',
-                    lambda m: (
-                        m[1]
-                        + "/a/"
-                        + m[2]
-                        + "?workspace="
-                        + quote(self.principal.workspace_id, safe="")
-                    ),
-                    result["html"],
-                )
-        return result
+        return results
 
     async def _visible_components(self, conn, payload):
         if isinstance(payload, list):
@@ -268,16 +297,16 @@ class Notes:
         parsed = labels(row["body"])
         if {item[0] for item in prior} != {item.key for item in parsed}:
             self.store.emit("labels.changed", row["id"], row["version"])
-        await conn.execute("DELETE FROM note_label WHERE note_id=?", (row["id"],))
-        for label in parsed:
-            await conn.execute(
-                "INSERT OR IGNORE INTO label(key,path,created_at) VALUES (?,?,?)",
-                (label.key, label.path, now_ms()),
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO note_label SELECT ?,id FROM label WHERE key=?",
-                (row["id"], label.key),
-            )
+            await conn.execute("DELETE FROM note_label WHERE note_id=?", (row["id"],))
+            for label in parsed:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO label(key,path,created_at) VALUES (?,?,?)",
+                    (label.key, label.path, now_ms()),
+                )
+                await conn.execute(
+                    "INSERT OR IGNORE INTO note_label SELECT ?,id FROM label WHERE key=?",
+                    (row["id"], label.key),
+                )
         await conn.execute("DELETE FROM note_fts WHERE rowid=?", (row["fts_id"],))
         extra = await conn.execute_fetchall(
             "SELECT t.text FROM note_text t JOIN plugin p ON p.id=t.plugin_id "
@@ -953,7 +982,7 @@ class Notes:
                 + f" ORDER BY {order} LIMIT ?",
                 [*args, limit + 1],
             )
-            result = [await self._serialize(conn, row, render=render) for row in rows[:limit]]
+            result = await self._serialize_many(conn, rows[:limit], render=render)
         last = rows[limit - 1] if len(rows) > limit else None
         return {
             "notes": result,
@@ -1107,9 +1136,12 @@ class Notes:
                         and not found[note_id]["machine"]
                     )
                 ]
+                serialized = await self._serialize_many(
+                    conn, [found[note_id] for note_id, _ in eligible[:limit]], render=render
+                )
                 hits = [
-                    {**await self._serialize(conn, found[note_id], render=render), "match": kind}
-                    for note_id, kind in eligible[:limit]
+                    {**note, "match": kind}
+                    for note, (_, kind) in zip(serialized, eligible[:limit], strict=True)
                 ]
             remaining = [list(item) for item in eligible[limit:]]
             return {
@@ -1153,8 +1185,8 @@ class Notes:
                 )
                 rows = await full_rows(conn, candidates[:limit])
                 hits = [
-                    {**await self._serialize(conn, row, render=render), "match": "keyword"}
-                    for row in rows
+                    {**note, "match": "keyword"}
+                    for note in await self._serialize_many(conn, rows, render=render)
                 ]
             last = candidates[limit - 1] if len(candidates) > limit else None
             return {
@@ -1214,8 +1246,8 @@ class Notes:
                 candidates = await conn.execute_fetchall(query, args)
             rows = await full_rows(conn, candidates[:limit])
             hits = [
-                {**await self._serialize(conn, row, render=render), "match": "keyword"}
-                for row in rows
+                {**note, "match": "keyword"}
+                for note in await self._serialize_many(conn, rows, render=render)
             ]
         # BM25 depends on live corpus statistics. Carry the bounded remaining candidates,
         # rather than live scores, so unrelated new notes cannot invalidate the next page.

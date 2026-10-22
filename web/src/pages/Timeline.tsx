@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -324,7 +331,12 @@ export default function Timeline({
   const [emptyBusy, setEmptyBusy] = useState(false);
   const [emptyError, setEmptyError] = useState<string | null>(null);
   const sentinel = useRef<HTMLDivElement>(null);
-  const all = notes.data?.pages.flatMap((p) => p.notes) ?? [];
+  const all = useMemo(
+    () => notes.data?.pages.flatMap((p) => p.notes) ?? [],
+    [notes.data],
+  );
+  const today = new Date().toDateString();
+  const groups = useMemo(() => groupedNotes(all), [all, today]);
   const count =
     labels.data?.labels.find((l) => fold(l.path) === fold(label ?? ""))
       ?.count ?? all.length;
@@ -543,7 +555,7 @@ export default function Timeline({
           <Empty heading={EmptyHeading} title="No notes here yet." />
         ))}
       <section aria-label="Notes" aria-busy={notes.isPending}>
-        {groupedNotes(all).map((group) => (
+        {groups.map((group) => (
           <section key={group.title} aria-label={group.title}>
             <h2 className="overline day">{group.title}</h2>
             {group.notes.map((note) => (

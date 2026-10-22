@@ -38,12 +38,11 @@ class AndroidPcmSource(private val context:Context):PcmSource {
  override fun close() {stop();audio?.release();audio=null}
 }
 
-/** Native Opus encoder and Ogg muxer; no bundled model or encoder library. */
+/** Native Opus encoding with checked Ogg packaging; no bundled model or encoder library. */
 @RequiresApi(29)
 class AndroidOggEncoder(private val beforeFinalize:((File)->Unit)?=null):RecordingEncoder {
  private var codec:MediaCodec?=null
- private var muxer:MediaMuxer?=null
- private var track=-1
+ private var muxer:OpusOggWriter?=null
  private var started=false
  private var finished=false
  private var codecEof=false
@@ -52,11 +51,11 @@ class AndroidOggEncoder(private val beforeFinalize:((File)->Unit)?=null):Recordi
  private var output:GeneratedOggOutput?=null
  private var outputFile:File?=null
  private var lastEndUs=0L
+ private var endFrames:Long?=null
  override fun start(file:File) {
   check(output==null)
   output=GeneratedOggOutput.reserve(file);outputFile=file
   try {
-   muxer=MediaMuxer(file.absolutePath,MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG)
    val format=MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS,RECORDING_RATE,1)
    format.setInteger(MediaFormat.KEY_BIT_RATE,RECORDING_BITRATE)
    format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE,6400)
@@ -66,15 +65,18 @@ class AndroidOggEncoder(private val beforeFinalize:((File)->Unit)?=null):Recordi
  override suspend fun write(samples:ShortArray,count:Int,timeUs:Long)=withContext(Dispatchers.IO) {
   require(count in 1..samples.size)
   val local=codec?:throw RecordingFailure("encoder_unavailable")
+  queuePcm(local,samples,count,timeUs)
+  inputFrames+=count
+  drain(local,false)
+ }
+ private fun queuePcm(local:MediaCodec,samples:ShortArray,count:Int,timeUs:Long) {
   val index=inputIndex(local)
   val input=local.getInputBuffer(index)?:throw RecordingFailure("encoder_failed")
   if(input.capacity()<count*2) throw RecordingFailure("encoder_buffer_small")
   input.clear();input.order(ByteOrder.LITTLE_ENDIAN)
   repeat(count) {input.putShort(samples[it])}
   local.queueInputBuffer(index,0,count*2,timeUs,0)
-  inputFrames+=count
   lastEndUs=timeUs+count*1_000_000L/RECORDING_RATE
-  drain(local,false)
  }
  private fun inputIndex(local:MediaCodec):Int {
   repeat(100) {val index=local.dequeueInputBuffer(10_000);if(index>=0) return index;drain(local,false)}
@@ -84,12 +86,12 @@ class AndroidOggEncoder(private val beforeFinalize:((File)->Unit)?=null):Recordi
   val info=MediaCodec.BufferInfo();val deadline=System.nanoTime()+2_000_000_000L
   do {
    when(val index=local.dequeueOutputBuffer(info,if(end) 10_000 else 0)) {
-    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {if(started) throw RecordingFailure("encoder_format_changed");track=muxer!!.addTrack(local.outputFormat);muxer!!.start();started=true}
+    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {if(started) throw RecordingFailure("encoder_format_changed");val format=local.outputFormat;val header=format.getByteBuffer("csd-0")?:throw RecordingFailure("encoder_no_header");muxer=OpusOggWriter(requireNotNull(outputFile),header,format.getByteBuffer("csd-1"));endFrames?.let {muxer!!.endInput(it)};started=true}
     MediaCodec.INFO_TRY_AGAIN_LATER -> if(!end) return
     else -> if(index>=0) {
      val output=local.getOutputBuffer(index)?:throw RecordingFailure("encoder_failed")
      if((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG)!=0) info.size=0
-     if(info.size>0) {if(!started) throw RecordingFailure("encoder_no_format");output.position(info.offset);output.limit(info.offset+info.size);muxer!!.writeSampleData(track,output,info)}
+     if(info.size>0) {if(!started) throw RecordingFailure("encoder_no_format");output.position(info.offset);output.limit(info.offset+info.size);val packet=ByteArray(info.size);output.get(packet);muxer!!.write(packet)}
      val done=(info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0
      local.releaseOutputBuffer(index,false)
      if(done) {codecEof=true;return}
@@ -101,18 +103,27 @@ class AndroidOggEncoder(private val beforeFinalize:((File)->Unit)?=null):Recordi
  override suspend fun finish()=withContext(Dispatchers.IO) {
   if(finished) return@withContext
   val local=codec?:throw RecordingFailure("encoder_unavailable")
+  if(inputFrames==0L) throw RecordingFailure("empty_recording")
+  endFrames=inputFrames;muxer?.endInput(inputFrames)
+  // Some Opus codecs flush only one partial frame at EOF, omitting lookahead for a short tail.
+  // Feed bounded silence until every captured sample is encoded; the Ogg end trims all padding.
+  val padding=ShortArray(RECORDING_RATE/50)
+  val maximumPadding=65_535L*RECORDING_RATE/48_000+2*padding.size
+  var padded=0
+  while(muxer?.hasEndAudio!=true && padded<maximumPadding) {
+   queuePcm(local,padding,padding.size,lastEndUs);padded+=padding.size;drain(local,false)
+  }
   local.queueInputBuffer(inputIndex(local),0,0,lastEndUs,MediaCodec.BUFFER_FLAG_END_OF_STREAM)
   drain(local,true)
   if(!started) throw RecordingFailure("empty_recording")
-  muxer!!.stop();muxerStopped=true
-  // OggWriter has joined. Only this new output may receive its missing final EOS/CRC.
+  muxer!!.finish(inputFrames);muxerStopped=true
+  // Only this new, completed output is validated and synced before the journal retains it.
   beforeFinalize?.invoke(requireNotNull(outputFile))
   requireNotNull(output).finish(codecEof,muxerStopped,inputFrames)
   finished=true
  }
  override fun close() {
   runCatching {codec?.stop()};runCatching {codec?.release()};codec=null
-  if(started && !muxerStopped) runCatching {muxer?.stop()}
-  runCatching {muxer?.release()};muxer=null
+  runCatching {muxer?.close()};muxer=null
  }
 }

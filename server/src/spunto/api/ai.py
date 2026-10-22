@@ -43,8 +43,12 @@ async def refresh(services, *, changed=False):
 
 
 async def status(services, principal):
+    ai = await services.ai.status()
+    if not can_manage(principal):
+        # The allowance includes the owner's activity in their other, private spaces.
+        ai["quota"] = None
     return {
-        **await services.ai.status(),
+        **ai,
         "indexing": await services.vectors.status(),
         "can_manage": can_manage(principal),
     }

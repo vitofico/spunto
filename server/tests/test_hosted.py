@@ -928,3 +928,38 @@ async def test_ai_allowance_is_per_account_across_spaces_and_pauses_with_a_reaso
     assert "resumes on 1 November" in refused.value.detail
     clock[0] = datetime(2026, 11, 1, tzinfo=UTC)
     assert await month.reserve("ask") == ("ask", "2026-11")
+
+
+async def test_ai_account_allowance_is_visible_only_to_its_owner(hosted):
+    client, manager, users, _ = hosted
+    alice, bob, carol = users
+    personal = await client.get("/api/v1/ai", headers=headers(alice))
+    assert personal.status_code == 200
+    await manager._runtimes[alice["workspace"]["id"]].ai.quota.reserve("ask")
+    shared = await client.post(
+        "/api/v1/workspaces", headers=headers(alice), json={"name": "Synthetic shared AI space"}
+    )
+    assert shared.status_code == 201
+    workspace = shared.json()["id"]
+    for user, role in ((bob, "editor"), (carol, "viewer")):
+        member = await client.post(
+            f"/api/v1/workspaces/{workspace}/members",
+            headers=headers(alice),
+            json={"user_id": user["account"]["id"], "role": role},
+        )
+        assert member.status_code == 200
+        response = await client.get("/api/v1/ai", headers=headers(user, workspace))
+        assert response.status_code == 200
+        assert response.json()["can_manage"] is False
+        assert response.json()["quota"] is None
+    for space in (alice["workspace"]["id"], workspace):
+        response = await client.get("/api/v1/ai", headers=headers(alice, space))
+        assert response.status_code == 200
+        status = response.json()
+        assert status["can_manage"] is True
+        assert (
+            next(row["used"] for row in status["quota"]["actions"] if row["action"] == "ask") == 1
+        )
+    own_account = await client.get("/api/v1/ai", headers=headers(bob))
+    assert own_account.status_code == 200
+    assert all(row["used"] == 0 for row in own_account.json()["quota"]["actions"])

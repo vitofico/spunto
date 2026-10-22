@@ -900,3 +900,44 @@ async def test_configured_network_origins_include_ports_and_legacy_url(
             await Ctx(host, plugin.id).fetch("https://example.test", pre_send="invalid")
         with pytest.raises(ContextError, match="fetch_option_denied"):
             await Ctx(host, plugin.id).fetch("https://example.test", check=pre_send)
+
+
+@pytest.mark.anyio
+async def test_plugin_note_pages_batch_metadata_and_keep_borrowed_sources(
+    tmp_path, settings, monkeypatch
+):
+    import aiosqlite
+
+    from spunto.auth.tokens import Principal
+    from spunto.core.notes import Notes
+    from spunto.core.plugin_notes import PluginNotes
+
+    value = manifest(permissions=["notes.read", "net.fetch"])
+    async with harness(tmp_path, settings, catalog=[value], notes_factory=PluginNotes) as host:
+        await host.enable("example", ["notes.read", "net.fetch"])
+        owner = Notes(host.store, Principal("owner", "session", "Owner", "full", private_ok=True))
+        created = [
+            await owner.create(f"Synthetic plugin page {index} #label") for index in range(12)
+        ]
+        await owner.create("Synthetic private plugin page", private=True)
+        async with host.store.write() as conn:
+            await conn.execute(
+                "UPDATE note SET import_key='synthetic-import' WHERE id=?", (created[-1]["id"],)
+            )
+        await host.store.drain_events()
+        queries = []
+        original = aiosqlite.Connection.execute_fetchall
+
+        async def counted(conn, sql, *args, **kwargs):
+            queries.append(sql)
+            return await original(conn, sql, *args, **kwargs)
+
+        monkeypatch.setattr(aiosqlite.Connection, "execute_fetchall", counted)
+        ctx = Ctx(host, "example")
+        page = await ctx.notes.query(limit=10)
+        assert len(page["notes"]) == 10 and page["next_cursor"]
+        assert len(queries) == 5
+        assert page["notes"][0]["id"] == created[-1]["id"]
+        assert page["notes"][0]["import_key"] == "synthetic-import"
+        assert all(note["labels"] == ["label"] and not note["private"] for note in page["notes"])
+        assert ctx._borrowed_notes == {note["id"]: note["body"] for note in page["notes"]}

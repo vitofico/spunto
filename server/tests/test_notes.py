@@ -577,3 +577,60 @@ async def test_rest_invalid_descendant_rename_rolls_back_the_entire_vocabulary_c
         assert unchanged["body"] == original["body"] and unchanged["version"] == original["version"]
     vocabulary = (await server.client.get("/api/v1/labels")).json()["labels"]
     assert "x" not in {entry["path"] for entry in vocabulary}
+
+
+async def test_batch_serialization_keeps_metadata_plugin_caps_and_private_references(domain):
+    from note_serialization import assert_batch_serialization
+
+    await assert_batch_serialization(domain)
+
+
+async def test_note_pages_have_bounded_related_reads(domain, monkeypatch):
+    import aiosqlite
+
+    for index in range(12):
+        await domain.create(f"Synthetic page {index} #first #second")
+    await domain.store.drain_events()
+    original = aiosqlite.Connection.execute_fetchall
+    queries = []
+
+    async def counted(conn, sql, *args, **kwargs):
+        queries.append(sql)
+        return await original(conn, sql, *args, **kwargs)
+
+    monkeypatch.setattr(aiosqlite.Connection, "execute_fetchall", counted)
+    page = await domain.list(limit=10)
+    assert len(page["notes"]) == 10 and page["next_cursor"]
+    assert len(queries) == 5
+    queries.clear()
+    for query in ("Synthetic", ""):
+        result = await domain.search(query, limit=10, mode="keyword")
+        assert len(result["hits"]) == 10 and result["next_cursor"]
+        assert len(queries) == 6
+        queries.clear()
+    assert (await domain.list(labels=["missing"]))["notes"] == []
+    assert len(queries) == 1
+
+
+async def test_body_edits_preserve_existing_label_links_and_refresh_search(domain, monkeypatch):
+    note = await domain.create("Before #First #Second")
+    statements = []
+    original = domain.store._writer.execute
+
+    async def counted(sql, *args, **kwargs):
+        statements.append(sql)
+        return await original(sql, *args, **kwargs)
+
+    monkeypatch.setattr(domain.store._writer, "execute", counted)
+    edited = await domain.edit(note["id"], "After #second #FIRST", 1)
+    assert edited["labels"] == ["First", "Second"]
+    assert not any(
+        "INTO label" in sql or "INTO note_label" in sql or "DELETE FROM note_label" in sql
+        for sql in statements
+    )
+    assert [hit["id"] for hit in (await domain.search("After"))["hits"]] == [note["id"]]
+    assert (await domain.search("Before"))["hits"] == []
+    statements.clear()
+    relabelled = await domain.edit(note["id"], "After #Third", edited["version"])
+    assert relabelled["labels"] == ["Third"]
+    assert any("DELETE FROM note_label" in sql for sql in statements)

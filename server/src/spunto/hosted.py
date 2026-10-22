@@ -76,6 +76,7 @@ class Hosted:
         async with self._lock:
             if workspace_id not in self._runtimes:
                 from spunto.ai.gateway import Gateway
+                from spunto.ai.quota import AccountQuota
                 from spunto.ai.vectors import VectorIndex
                 from spunto.core.attachments import Attachments
                 from spunto.core.plugin_notes import PluginNotes
@@ -101,7 +102,9 @@ class Hosted:
                         "backup_dir": self.settings.backup_dir / workspace_id,
                     }
                 )
-                gateway = Gateway(store, settings)
+                # Every space an account owns draws from that account's one allowance.
+                quota = AccountQuota(self.accounts, owner["user_id"], settings.ai_quota)
+                gateway = Gateway(store, settings, quota=quota)
                 await gateway.selection.load()
                 vectors = VectorIndex(store, gateway)
                 host = Host(

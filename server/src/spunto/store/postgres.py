@@ -136,7 +136,15 @@ _COLUMNS = {
     "embedding_route": ["profile", "active_key", "target_key"],
     "chunk": ["id", "note_id", "ordinal", "text_hash", "model_key"],
     "embedding_note": ["note_id", "model_key", "text_hash", "body_hash"],
-    "ai_stat": ["day", "plugin_id", "capability", "outcome", "n"],
+    "ai_stat": [
+        "day",
+        "plugin_id",
+        "capability",
+        "outcome",
+        "n",
+        "input_tokens",
+        "output_tokens",
+    ],
     "pairing": ["code_hash", "credential_id", "created_at", "expires_at"],
 }
 _PRIMARY_KEYS = {
@@ -244,7 +252,7 @@ def _translate(statement: str, parameters: Sequence = ()) -> tuple[str, list, bo
     returning_id = False
     statement, args = _vector_statement(statement, args)
     if statement == "PRAGMA user_version":
-        return "SELECT 7 AS user_version", [], False
+        return "SELECT 8 AS user_version", [], False
     if re.match(r"(?is)^(?:CREATE|ALTER|DROP|PRAGMA|ATTACH|DETACH)\b", statement):
         raise ValueError("Schema changes require operator migrations")
     statement = re.sub(r"\bifnull\(", "coalesce(", statement, flags=re.I)
@@ -314,7 +322,6 @@ def _translate(statement: str, parameters: Sequence = ()) -> tuple[str, list, bo
         )
         if "DO UPDATE SET" in statement:
             before, tail = statement.split("DO UPDATE SET", 1)
-            tail = tail.replace("n=n+1", "n=ai_stat.n+1")
             tail = tail.replace("CAST(value AS BIGINT)", "CAST(" + table + ".value AS BIGINT)")
             statement = before + "DO UPDATE SET" + tail
         if table in {"job", "chunk", "label"} and "RETURNING" not in statement.upper():

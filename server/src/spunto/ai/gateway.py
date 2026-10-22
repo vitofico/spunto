@@ -16,6 +16,7 @@ from spunto.ai.errors import AIError
 from spunto.ai.output import Output, Transcript, closed_schema, parse_output
 from spunto.ai.profiles import CAPABILITIES, Profile
 from spunto.ai.queue import ProfileQueue
+from spunto.ai.quota import QuotaExceeded, Usage, action
 
 
 class Probe(Output):
@@ -23,8 +24,10 @@ class Probe(Output):
 
 
 class Gateway:
-    def __init__(self, store, settings, *, transport=None, anthropic_client_factory=None):
-        self.store, self.settings = store, settings
+    def __init__(
+        self, store, settings, *, transport=None, anthropic_client_factory=None, quota=None
+    ):
+        self.store, self.settings, self.quota = store, settings, quota
         self.transport, self.anthropic_client_factory = transport, anthropic_client_factory
         self.queues = {name: ProfileQueue(p) for name, p in settings.ai_profiles.items()}
         self.adapters = {}
@@ -124,18 +127,22 @@ class Gateway:
             for n in notes
         )
 
-    async def _count(self, plugin, capability, outcome):
+    async def _count(self, plugin, capability, outcome, usage):
         day = datetime.now(UTC).date().isoformat()
         async with self.store.write() as conn:
             await conn.execute(
-                "INSERT INTO ai_stat(day,plugin_id,capability,outcome,n) VALUES(?,?,?,?,1) "
-                "ON CONFLICT(day,plugin_id,capability,outcome) DO UPDATE SET n=n+1",
-                (day, plugin, capability, outcome),
+                "INSERT INTO ai_stat(day,plugin_id,capability,outcome,n,input_tokens,"
+                "output_tokens) VALUES(?,?,?,?,1,?,?) "
+                "ON CONFLICT(day,plugin_id,capability,outcome) DO UPDATE SET "
+                "n=ai_stat.n+1,input_tokens=ai_stat.input_tokens+excluded.input_tokens,"
+                "output_tokens=ai_stat.output_tokens+excluded.output_tokens",
+                (day, plugin, capability, outcome, usage.input_tokens, usage.output_tokens),
             )
 
     async def _call(self, capability, fn, *, plugin_id, priority, profile=None, check=None):
         generation = self.generation
         accounted = False
+        usage, reserved = Usage(), None
 
         def current():
             configured = self.settings.ai_profiles.get(p.name)
@@ -154,25 +161,29 @@ class Gateway:
             queue = self.queues[p.name]
             if check:
                 check()
+            # Charge the space owner's monthly allowance before the call queues.
+            if self.quota and (name := action(capability, plugin_id)):
+                reserved = await self.quota.reserve(name)
             async with queue.slot(plugin_id, priority):
                 import asyncio
 
                 unchanged()
                 async with asyncio.timeout(p.timeout_s):
-                    result, retried = await fn(p, self._adapter(p))
+                    with usage:
+                        result, retried = await fn(p, self._adapter(p))
                 unchanged()
                 if check:
                     check()
                 if current():
                     queue.success()
-            await self._count(plugin_id, capability, "retried_ok" if retried else "ok")
+            await self._count(plugin_id, capability, "retried_ok" if retried else "ok", usage)
             accounted = True
             unchanged()
             return result
         except TimeoutError:
             if current():
                 queue.pause()
-            await self._count(plugin_id, capability, "provider_error")
+            await self._count(plugin_id, capability, "provider_error", usage)
             raise AIError("provider", "ai_provider_timeout", retry_after=30) from None
         except AIError as exc:
             if exc.category == "provider":
@@ -185,14 +196,20 @@ class Gateway:
                 await self._count(
                     plugin_id,
                     capability,
-                    {
+                    "quota"
+                    if isinstance(exc, QuotaExceeded)
+                    else {
                         "validation": "invalid",
                         "provider": "provider_error",
                         "refused": "refused",
                         "unavailable": "refused",
                     }[exc.category],
+                    usage,
                 )
             raise
+        finally:
+            if reserved and not usage.sent:
+                await self.quota.release(*reserved)
 
     async def _quirk(self, profile, model, value=None):
         key = "ai:quirk:" + hashlib.sha256((profile.base_url + "\0" + model).encode()).hexdigest()
@@ -477,6 +494,7 @@ class Gateway:
             "bindings": self.settings.ai_bindings,
             "health": self.health,
             "stats": [dict(r) for r in rows],
+            "quota": await self.quota.status() if self.quota else None,
             "quirks": [json.loads(r["value"]) for r in quirks],
             "model_selection": self.selection.status(),
         }

@@ -39,6 +39,34 @@ def test_postgres_accounts_do_not_require_an_oidc_provider(env):
     assert load_settings().local_registration_enabled is True
 
 
+def test_hosted_ai_allowance_defaults_to_free_and_overrides_by_action(env):
+    hosted = {
+        "SPUNTO_DATABASE_URL": "postgresql://localhost/spunto",
+        "SPUNTO_IDENTITY_DATABASE_URL": "postgresql://localhost/spunto_identity",
+    }
+    env(**hosted)
+    assert load_settings().ai_quota == {
+        "labels": 100,
+        "ask": 20,
+        "chat": 50,
+        "vision": 10,
+        "transcribe": 10,
+        "embed": None,
+    }
+    env(SPUNTO_AI_QUOTA_PLAN="paid", SPUNTO_AI_QUOTA_LIMITS='{"ask": 500, "embed": 9000}')
+    limits = load_settings().ai_quota
+    assert (limits["labels"], limits["ask"], limits["embed"]) == (2000, 500, 9000)
+    assert error_for(env, SPUNTO_AI_QUOTA_LIMITS='{"asks": 3}') == (
+        "SPUNTO_AI_QUOTA_LIMITS names unknown AI actions (asks); "
+        "use labels, ask, chat, vision, transcribe, embed."
+    )
+    assert "greater than or equal to 0" in error_for(env, SPUNTO_AI_QUOTA_LIMITS='{"ask": -1}')
+    env(SPUNTO_DATABASE_URL="", SPUNTO_IDENTITY_DATABASE_URL="", SPUNTO_AI_QUOTA_LIMITS="")
+    assert error_for(env, SPUNTO_AI_QUOTA_PLAN="unlimited") == (
+        "SPUNTO_AI_QUOTA_PLAN and SPUNTO_AI_QUOTA_LIMITS apply only to hosted servers."
+    )
+
+
 def test_optional_oidc_requires_complete_configuration(env):
     assert "Set both SPUNTO_OIDC_ISSUER" in error_for(
         env,

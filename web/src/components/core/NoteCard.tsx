@@ -1,8 +1,10 @@
 import DOMPurify from "dompurify";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -60,6 +62,15 @@ export function NoteBody({
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ticks = body ?? note.body;
+  const html = useMemo(
+    () =>
+      note.html
+        ? DOMPurify.sanitize(note.html, {
+            ADD_ATTR: ["data-checkbox-index", "data-checkbox-offset"],
+          })
+        : "",
+    [note.html],
+  );
   useLayoutEffect(() => {
     for (const box of content.current?.querySelectorAll<HTMLInputElement>(
       "input[data-checkbox-offset]",
@@ -115,11 +126,7 @@ export function NoteBody({
         )
           onCheckbox(offset);
       }}
-      dangerouslySetInnerHTML={{
-        __html: DOMPurify.sanitize(note.html ?? "", {
-          ADD_ATTR: ["data-checkbox-index", "data-checkbox-offset"],
-        }),
-      }}
+      dangerouslySetInnerHTML={{ __html: html }}
     />
   );
   if (!clamp) return text;
@@ -260,7 +267,7 @@ export function queueTick(
     void invalidateContent();
   });
 }
-export function NoteCard({ note }: { note: Note }) {
+export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
   const canEdit = useWorkspaceRole() !== "viewer";
   const [, navigate] = useLocation();
   const toast = useToast();
@@ -395,7 +402,7 @@ export function NoteCard({ note }: { note: Note }) {
       )}
     </article>
   );
-}
+});
 export function dayLabel(value: string) {
   const date = new Date(value),
     today = new Date();
@@ -415,12 +422,18 @@ export function dayLabel(value: string) {
         });
 }
 export function groupedNotes(notes: Note[]) {
-  const groups: { title: string; notes: Note[] }[] = [];
+  const groups = new Map<string, { title: string; notes: Note[] }>();
   for (const note of notes) {
-    const title = note.pinned ? "Pinned" : dayLabel(note.created_at);
-    const existing = groups.find((group) => group.title === title);
+    const day = note.pinned
+      ? "Pinned"
+      : new Date(note.created_at).toDateString();
+    const existing = groups.get(day);
     if (existing) existing.notes.push(note);
-    else groups.push({ title, notes: [note] });
+    else
+      groups.set(day, {
+        title: note.pinned ? "Pinned" : dayLabel(note.created_at),
+        notes: [note],
+      });
   }
-  return groups;
+  return [...groups.values()];
 }

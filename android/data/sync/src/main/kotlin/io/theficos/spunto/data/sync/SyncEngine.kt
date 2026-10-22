@@ -109,17 +109,27 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
  }
  private suspend fun reconcile(api:ApiClient,epoch:String) {
   val dao=repository.dao
-  val notes=dao.all().map { it.note() }.filter { dao.tombstone(it.id)==null }
+  val notes=dao.reconcilableNotes().map { it.note() }
   for(chunk in notes.chunked(1000)) {
    val response=api.reconcile(epoch,chunk)
    ownedTransaction {
+    if(response.restoreIds.isEmpty()) return@ownedTransaction
+    val restoring=mutableSetOf<String>()
+    val superseded=mutableMapOf<String?,MutableList<String>>()
+    for(row in dao.outbox()) {
+     val op=Json.decodeFromString<OutboxOperation>(row.payload)
+     when(op.type) {
+      "note.restore" -> op.noteId?.let {restoring+=it}
+      "note.create","note.update","note.flags" -> superseded.getOrPut(row.noteId) {mutableListOf()}.add(row.opId)
+     }
+    }
     for(id in response.restoreIds) {
      // Pending notes are represented by a restore of their latest local body;
      // retain existing operations unchanged, then replay against restored version.
      val note=dao.get(id)?.note()?:continue
      if(dao.tombstone(id)!=null) continue
-     if(dao.outbox().any { Json.decodeFromString<OutboxOperation>(it.payload).let { op -> op.type=="note.restore" && op.noteId==id } }) continue
-     val restore=OutboxOperation(type="note.restore",noteId=id,body=note.body,baseVersion=note.serverRev.takeIf { it>0 },createdAt=note.createdAt,at=note.updatedAt,pinned=note.pinned,archived=note.archived,trashed=note.trashed,privateNote=note.privateNote,sourceKind=note.sourceKind,sourceRef=note.sourceRef,sourceUrl=note.sourceUrl,machine=note.machine,origin=note.origin,pinnedAt=note.pinnedAt,archivedAt=note.archivedAt,trashedAt=note.trashedAt,privateAt=note.privateAt,supersededOpIds=dao.outbox().filter { queued -> queued.noteId==id && Json.decodeFromString<OutboxOperation>(queued.payload).type in listOf("note.create","note.update","note.flags") }.map { it.opId })
+     if(!restoring.add(id)) continue
+     val restore=OutboxOperation(type="note.restore",noteId=id,body=note.body,baseVersion=note.serverRev.takeIf { it>0 },createdAt=note.createdAt,at=note.updatedAt,pinned=note.pinned,archived=note.archived,trashed=note.trashed,privateNote=note.privateNote,sourceKind=note.sourceKind,sourceRef=note.sourceRef,sourceUrl=note.sourceUrl,machine=note.machine,origin=note.origin,pinnedAt=note.pinnedAt,archivedAt=note.archivedAt,trashedAt=note.trashedAt,privateAt=note.privateAt,supersededOpIds=superseded[id].orEmpty())
      dao.markSent(restore.supersededOpIds)
      dao.putOutbox(OutboxEntity(restore.opId,id,Json.encodeToString(restore),Long.MIN_VALUE+System.currentTimeMillis()))
      repository.putNote(note.copy(pending=true))

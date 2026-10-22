@@ -37,10 +37,14 @@ class PluginNotes:
             raise ContextError("read_only_token")
 
     async def _value(self, conn, row):
-        result = await self.core._serialize(conn, row)
-        result["import_key"] = row["import_key"]
-        self.ctx._borrowed_notes[row["id"]] = row["body"]
-        return result
+        return (await self._values(conn, [row]))[0]
+
+    async def _values(self, conn, rows):
+        results = await self.core._serialize_many(conn, rows)
+        for result, row in zip(results, rows, strict=True):
+            result["import_key"] = row["import_key"]
+            self.ctx._borrowed_notes[row["id"]] = row["body"]
+        return results
 
     async def get(self, note_id):
         self.ctx.check("notes.read")
@@ -231,7 +235,7 @@ class PluginNotes:
                 + " ORDER BY n.created_at DESC,n.id DESC LIMIT ?",
                 [*args, limit + 1],
             )
-            results = [await self._value(conn, dict(row)) for row in rows[:limit]]
+            results = await self._values(conn, rows[:limit])
         self.ctx.check("notes.read")
         return {
             "notes": results,

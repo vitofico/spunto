@@ -14,7 +14,7 @@ internal class GeneratedOggOutput private constructor(private val file:File) {
   }
  }
 
- /** MediaMuxer OGG may omit EOS. Successful codec EOF and stopped writer are prerequisites. */
+ /** Successful codec EOF and a stopped writer are prerequisites for validating this new output. */
  fun finish(codecEof:Boolean,muxerStopped:Boolean,inputFrames:Long) {
   require(codecEof && muxerStopped && inputFrames in 1..RECORDING_RATE*RECORDING_MAX_SECONDS) {"Encoder did not finish."}
   RandomAccessFile(file,"rw").use {stream ->

@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.lifecycle.Lifecycle
 import io.theficos.spunto.plugins.quickcapture.CaptureSurfaces
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -51,11 +52,6 @@ class AppLockTest {
   while(target!=null && !target.isClickable) target=target.parent
   check(target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)==true)
  }
- private fun click(text:String) {
-  waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()==text}}
-  val node=nodes(instrumentation.uiAutomation.rootInActiveWindow).first {it.text?.toString()==text}
-  performClick(node)
- }
  private fun clickAuthentication(matches:(AccessibilityNodeInfo)->Boolean) {
   waitFor("the system authentication control") {authenticationNodes().any(matches)}
   performClick(authenticationNodes().first(matches))
@@ -63,16 +59,36 @@ class AppLockTest {
  private fun customKeypad(nodes:List<AccessibilityNodeInfo>):Boolean =
   nodes.any {it.viewIdResourceName=="com.android.systemui:id/key_enter"} &&
    ('0'..'9').all {digit ->nodes.any {it.text?.toString()==digit.toString() && it.isClickable}}
+ private fun credentialVisible():Boolean {
+  val current=authenticationNodes()
+  return customKeypad(current) || current.any {it.isPassword || it.className?.toString()?.contains("EditText")==true}
+ }
+ private fun waitForAuthentication() {
+  waitFor("automatic system authentication") {
+   credentialVisible() || authenticationNodes().any {it.viewIdResourceName=="com.android.systemui:id/biometric_icon" && it.isVisibleToUser}
+  }
+  assertFalse(app.container.appLock.state.value.unlocked)
+ }
  private fun waitForCredential() {
   waitFor("the system PIN keypad or credential input") {
-   val current=authenticationNodes()
-   customKeypad(current) || current.any {it.isPassword || it.className?.toString()?.contains("EditText")==true}
+   credentialVisible()
   }
  }
  private fun waitForFingerprint() {
   waitFor("the real SystemUI fingerprint prompt") {
    val current=authenticationNodes()
    current.any {it.viewIdResourceName=="com.android.systemui:id/biometric_icon"} && current.any {it.text?.toString()=="Unlock Spunto"}
+  }
+ }
+ private fun recreateDuringAuthentication(scenario:ActivityScenario<MainActivity>) {
+  var previous:MainActivity?=null
+  // ActivityScenario.recreate() first demands RESUMED, but system credentials
+  // legitimately keep the host paused until authentication finishes.
+  scenario.onActivity {previous=it;it.recreate()}
+  waitFor("the replacement authentication host") {
+   var replaced=false
+   try {scenario.onActivity {replaced=it!==previous}} catch(_:IllegalStateException) {return@waitFor false}
+   replaced
   }
  }
  private fun configure(enabled:Boolean) {instrumentation.runOnMainSync {app.container.appLock.configure(enabled);if(enabled) app.container.appLock.lock()}}
@@ -82,9 +98,13 @@ class AppLockTest {
   check(pin!!.matches(Regex("[0-9]{4,12}"))) {"Use the synthetic disposable PIN."}
   return pin
  }
- private fun enterPin(pin:String) {
-  click("Use screen lock")
+ private fun useCredential() {
+  waitForAuthentication()
+  if(!credentialVisible()) clickAuthentication {it.text?.toString()=="Use screen lock"}
   waitForCredential()
+ }
+ private fun enterPin(pin:String) {
+  useCredential()
   if(customKeypad(authenticationNodes())) {
    pin.forEach {digit ->clickAuthentication {it.text?.toString()==digit.toString() && it.isClickable}}
    clickAuthentication {it.viewIdResourceName=="com.android.systemui:id/key_enter"}
@@ -100,15 +120,15 @@ class AppLockTest {
   configure(true)
   try {
    ActivityScenario.launch(MainActivity::class.java).use {scenario ->
-    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()=="Spunto is locked"}}
-    scenario.recreate()
-    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()=="Spunto is locked"}}
+    waitForAuthentication()
+    recreateDuringAuthentication(scenario)
+    waitForAuthentication()
    }
    val selection=Intent(instrumentation.targetContext,CaptureActivity::class.java).setAction(Intent.ACTION_PROCESS_TEXT).putExtra(Intent.EXTRA_PROCESS_TEXT,"Synthetic locked selection").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
    ActivityScenario.launch<CaptureActivity>(selection).use {
-    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()=="Spunto is locked"}}
+    waitForAuthentication()
     assertEquals(before,runBlocking {app.container.repository.notes.first().size})
-    assertFalse(nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()?.contains("Synthetic locked selection")==true})
+    assertFalse(instrumentation.uiAutomation.windows.flatMap {nodes(it.root)}.any {it.text?.toString()?.contains("Synthetic locked selection")==true})
    }
    CaptureSurfaces.cacheSlip(app,"synthetic-note","Synthetic hidden widget text")
    val prefs=app.getSharedPreferences("device-surfaces",0)
@@ -121,12 +141,13 @@ class AppLockTest {
   check(app.getSystemService(KeyguardManager::class.java).isDeviceSecure) {"Enroll the disposable screen lock first."}
   configure(true)
   try {
-   ActivityScenario.launch(MainActivity::class.java).use {
-    click("Use screen lock")
-    waitForCredential()
+   ActivityScenario.launch(MainActivity::class.java).use {scenario ->
+    useCredential()
     shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
-    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {node ->node.text?.toString()=="Spunto is locked"}}
+    waitFor("Back to close the locked activity") {scenario.state==Lifecycle.State.DESTROYED}
     assertFalse(app.container.appLock.state.value.unlocked)
+   }
+   ActivityScenario.launch(MainActivity::class.java).use {
     enterPin(pin)
     assertTrue(app.container.appLock.state.value.enabled)
    }
@@ -139,14 +160,21 @@ class AppLockTest {
   configure(true)
   try {
    ActivityScenario.launch(MainActivity::class.java).use {scenario ->
-    click("Unlock Spunto")
+    waitForFingerprint()
+    recreateDuringAuthentication(scenario)
     waitForFingerprint()
     instrumentation.sendStatus(2,Bundle().apply {putString("stream","SPUNTO_FINGERPRINT_READY\n")})
     waitFor {var failed=false;scenario.onActivity {failed=it.lockMessage=="Not recognized. Try again or use your screen lock."};failed && !app.container.appLock.state.value.unlocked}
     instrumentation.sendStatus(2,Bundle().apply {putString("stream","SPUNTO_FINGERPRINT_RETRY_READY\n")})
     waitFor {app.container.appLock.state.value.unlocked}
     shell("input keyevent ${KeyEvent.KEYCODE_HOME}")
-    waitFor {!app.container.appLock.state.value.unlocked}
+    waitFor {!app.container.appLock.state.value.unlocked && scenario.state==Lifecycle.State.CREATED}
+    val launcher=checkNotNull(app.packageManager.getLaunchIntentForPackage(app.packageName))
+    app.startActivity(launcher.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    waitForFingerprint()
+    shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+    waitFor("Back to close the locked activity") {scenario.state==Lifecycle.State.DESTROYED}
+    assertFalse(app.container.appLock.state.value.unlocked)
    }
   } finally {runBlocking {authority.requireCurrent()};configure(false)}
  }
@@ -162,12 +190,47 @@ class AppLockTest {
     assertTrue(editor.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,Bundle().apply {putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,draft)}))
     waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()==draft}}
     instrumentation.runOnMainSync {app.container.appLock.lock()}
-    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()=="Spunto is locked"}}
+    waitForAuthentication()
     val exposed=instrumentation.uiAutomation.windows.flatMap {nodes(it.root)}.mapNotNull {it.text?.toString()}
     assertFalse(exposed.any {it.contains(draft) || it.contains("Synthetic shared context")})
     scenario.onActivity {assertTrue(it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE!=0)}
     enterPin(pin)
     waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()==draft}}
+   }
+  } finally {runBlocking {authority.requireCurrent()};configure(false)}
+ }
+ @Test fun backExitsLockScreenWhenPhoneAuthenticationIsUnavailable() {
+  assumeTrue(!app.getSystemService(KeyguardManager::class.java).isDeviceSecure)
+  configure(true)
+  try {
+   ActivityScenario.launch(MainActivity::class.java).use {scenario ->
+    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()=="Spunto is locked"}}
+    shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+    waitFor("Back to dismiss the secure lock dialog and close the activity") {scenario.state==Lifecycle.State.DESTROYED}
+    assertFalse(app.container.appLock.state.value.unlocked)
+   }
+  } finally {runBlocking {authority.requireCurrent()};configure(false)}
+ }
+ @Test fun cancellingSettingsAuthenticationDoesNotExitOrChangeSetting() {
+  fixturePin();configure(false)
+  try {
+   ActivityScenario.launch(MainActivity::class.java).use {scenario ->
+    for(enabled in listOf(false,true)) {
+     if(enabled) {configure(true);enterPin(fixturePin())}
+     scenario.onActivity {it.setPhoneLock(!enabled)}
+     if(androidx.biometric.BiometricManager.from(app).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)==androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) waitForFingerprint()
+     else waitForCredential()
+     shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+     waitFor("settings authentication cancellation") {
+      var cancelled=false
+      scenario.onActivity {cancelled=it.lockMessage=="Authentication cancelled. App lock setting unchanged."}
+      cancelled && scenario.state==Lifecycle.State.RESUMED
+     }
+     assertEquals(enabled,app.container.appLock.state.value.enabled)
+     waitFor("system authentication to dismiss without another prompt") {
+      !credentialVisible() && authenticationNodes().none {it.viewIdResourceName=="com.android.systemui:id/biometric_icon" && it.isVisibleToUser}
+     }
+    }
    }
   } finally {runBlocking {authority.requireCurrent()};configure(false)}
  }

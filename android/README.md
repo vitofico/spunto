@@ -10,6 +10,8 @@ Download [**2026.10.19.3**, version code **14**](https://github.com/vitofico/spu
 
 Capture, editing and local search work without an account or server. The first-run guide explains the basics; **Settings → Show guide** replays it. When you want sync, use your server’s HTTPS address. Multi-account installations offer browser username/password sign-in or optional SSO, followed by QR/code pairing from web **Settings → Devices**. Local SQLite installations also support owner-password sign-in. Pairing can use the camera or a pasted one-use code.
 
+With **App lock** enabled, opening or returning to the locked app starts system biometric authentication immediately. **Use screen lock** offers the phone's PIN, pattern or password; it opens directly when a strong biometric is unavailable. Back closes the locked activity, including from either system authentication prompt. Authentication errors leave a retry button. Canceling authentication for an App lock setting change keeps the current setting.
+
 [Obtainium setup](../docs/android-distribution.md#obtainium) tracks stable Android releases directly from GitHub. F-Droid submission and external review are pending; Spunto is not listed there. Read the [privacy policy](../PRIVACY.md) for local storage, optional permissions and server/AI boundaries.
 
 ## Build locally

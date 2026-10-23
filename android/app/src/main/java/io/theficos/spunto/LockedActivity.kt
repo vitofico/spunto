@@ -41,6 +41,7 @@ internal class LockPromptState: ViewModel() {
  var biometricActive=false
  var cancelling=false
  var transitioning=false
+ var unlockRequested=false
 }
 
 /** One entry gate for launcher, shortcuts, shares and selection capture. */
@@ -60,7 +61,7 @@ abstract class LockedActivity: FragmentActivity() {
   promptState.credentialToken=null
   if(current(expected)) {
    promptState.awaitingCredential = false
-   if(result.resultCode == RESULT_OK) succeed(expected!!) else fail(expected!!,"Unlock cancelled. Your notes stay locked.")
+   if(result.resultCode == RESULT_OK) succeed(expected!!) else cancelled(expected!!)
   }
  }
  override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,7 +71,10 @@ abstract class LockedActivity: FragmentActivity() {
   prompt = buildPrompt(promptState.token)
   lifecycleScope.launch { appLock.state.collect { state ->
    if(state.enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-   if(state.unlocked && resumed && lastUnlockedRevision != state.revision) { lastUnlockedRevision = state.revision; onUnlocked() }
+   if(state.unlocked) {
+    promptState.unlockRequested=false
+    if(resumed && lastUnlockedRevision != state.revision) { lastUnlockedRevision = state.revision; onUnlocked() }
+   } else requestUnlock()
   }}
   setContent {
    val replica by (application as SpuntoApplication).container.replicas.collectAsState()
@@ -87,7 +91,7 @@ abstract class LockedActivity: FragmentActivity() {
     if(mounted) Box(if(state.unlocked) Modifier.fillMaxSize() else Modifier.fillMaxSize().graphicsLayer { alpha = 0f }.clearAndSetSemantics {}) { screen() }
     if(!state.unlocked) SpuntoTheme(namespace=replica.replicaId.takeUnless {it=="legacy"}.orEmpty()) {
      Surface(Modifier.fillMaxSize()) {}
-     Dialog(onDismissRequest = {}, properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+     Dialog(onDismissRequest = { closeLockedActivity() }, properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
       val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
       val darkIcons=io.theficos.spunto.core.design.useDarkSystemBarIcons(MaterialTheme.colorScheme.background)
       SideEffect { dialogWindow?.let {dialog ->
@@ -100,10 +104,10 @@ abstract class LockedActivity: FragmentActivity() {
        if(error.isNotEmpty()) Text(error)
        Spacer(Modifier.height(SpuntoSpacing.s20)); Button(onClick = { authenticate(null) }) { Text("Unlock Spunto") }
        TextButton(onClick = { authenticate(null, credentialOnly = true) }) { Text("Use screen lock") }
-       TextButton(onClick = { finish() }) { Text("Close") }
+       TextButton(onClick = { closeLockedActivity() }) { Text("Close") }
       }}
      }
-     BackHandler { finish() }
+     BackHandler { closeLockedActivity() }
     }
    }
   }
@@ -116,12 +120,14 @@ abstract class LockedActivity: FragmentActivity() {
   val keyguard = getSystemService(KeyguardManager::class.java)
   if(appLock.state.value.enabled && keyguard.isDeviceLocked) appLock.lock()
  }
- override fun onResume() { super.onResume(); resumed = true; if(unlocked) onUnlocked() }
+ override fun onResume() { super.onResume(); resumed = true; if(unlocked) onUnlocked() else requestUnlock() }
  override fun onPause() { resumed = false; super.onPause() }
  override fun onStop() {
   val expectedCredential=promptState.awaitingCredential && promptState.token!=null
+  // The external credential result can arrive before the next onResume.
+  if(expectedCredential) promptState.unlockRequested=true
   appLock.stopped(activityOwner, isChangingConfigurations, promptState.token.takeIf {expectedCredential})
-  if(!isChangingConfigurations && !expectedCredential) cancelPrompt()
+  if(!isChangingConfigurations && !expectedCredential) { promptState.unlockRequested=false;cancelPrompt() }
   super.onStop()
  }
  override fun onDestroy() {
@@ -146,18 +152,32 @@ abstract class LockedActivity: FragmentActivity() {
     cancelPrompt()
     promptState.transitioning=true
     window.decorView.post {promptState.transitioning=false;authenticate(setting,credentialOnly=true)}
-   } else fail(expected!!,"Unlock was not completed. Try again or use your screen lock.")
+   } else if(code==BiometricPrompt.ERROR_USER_CANCELED) cancelled(expected!!)
+   else fail(expected!!,"Unlock was not completed. Try again or use your screen lock.")
   }
  })
  private fun finishCancellation(expected:Long) {
   // AndroidX keeps one callback per live prompt. Do not attach a new callback
   // until the old prompt's terminal event has fully returned to the framework.
-  window.decorView.post {if(current(expected) && promptState.cancelling) {promptState.token=null;promptState.setting=null;promptState.cancelling=false;promptState.awaitingCredential=false}}
+  window.decorView.post {if(current(expected) && promptState.cancelling) {promptState.token=null;promptState.setting=null;promptState.cancelling=false;promptState.awaitingCredential=false;requestUnlock()}}
  }
  private fun cancelPrompt() {
   promptState.token?.let(appLock::cancel)
   if(promptState.biometricActive) {promptState.cancelling=true;prompt.cancelAuthentication()}
   else {promptState.token=null;promptState.setting=null;promptState.awaitingCredential=false;promptState.cancelling=false}
+ }
+ private fun requestUnlock() {
+  if(!resumed || unlocked || isFinishing || promptState.unlockRequested || promptState.transitioning || promptState.cancelling) return
+  // One automatic attempt per foreground visit; errors leave an explicit retry.
+  promptState.unlockRequested=true
+  if(promptState.token==null) authenticate(null)
+ }
+ private fun closeLockedActivity() { cancelPrompt();finish() }
+ private fun cancelled(expected:Long) {
+  val changingSetting=promptState.setting!=null
+  val exit=!changingSetting && !unlocked
+  fail(expected,if(changingSetting) "Authentication cancelled. App lock setting unchanged." else "Unlock cancelled. Your notes stay locked.")
+  if(exit) finish()
  }
  private fun authenticate(setting: Boolean?, credentialOnly: Boolean = false) {
   if(!resumed || isFinishing || promptState.token!=null || promptState.transitioning || promptState.cancelling) return

@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
@@ -29,7 +28,6 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoTheme
 import kotlinx.coroutines.launch
 
@@ -98,14 +96,7 @@ abstract class LockedActivity: FragmentActivity() {
        dialog.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
        androidx.core.view.WindowCompat.getInsetsController(dialog,dialog.decorView).apply {isAppearanceLightStatusBars=darkIcons;isAppearanceLightNavigationBars=darkIcons}
       } }
-      Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
-       Text(getString(R.string.sys_lock_title), style = MaterialTheme.typography.headlineLarge)
-       Spacer(Modifier.height(SpuntoSpacing.s16)); Text(getString(R.string.sys_lock_description))
-       if(error.isNotEmpty()) Text(error)
-       Spacer(Modifier.height(SpuntoSpacing.s20)); Button(onClick = { authenticate(null) }) { Text(getString(R.string.sys_unlock)) }
-       TextButton(onClick = { authenticate(null, credentialOnly = true) }) { Text(getString(R.string.sys_screen_lock)) }
-       TextButton(onClick = { closeLockedActivity() }) { Text(getString(R.string.sys_close)) }
-      }}
+      UnlockScreen(error=error,onUnlock={authenticate(null)},onScreenLock={authenticate(null,credentialOnly=true)})
      }
      BackHandler { closeLockedActivity() }
     }

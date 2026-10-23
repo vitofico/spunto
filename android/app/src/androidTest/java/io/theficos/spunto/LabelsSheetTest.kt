@@ -1,6 +1,9 @@
 package io.theficos.spunto
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.theficos.spunto.core.design.SpuntoTheme
@@ -39,12 +42,30 @@ class LabelsSheetTest {
   compose.onNode(hasText("Review") and hasText("6")).assertIsDisplayed()
  }
  @Test fun exactLabelSelectionNavigatesOnceWithCanonicalKey() {
+  exactLabelSelection(labels,1f)
+ }
+ @Test fun exactLabelSelectionWithOffscreenAncestorsAtLargeText() {
+  val manyLabels=listOf(labels.first())+(1..24).map {index ->
+   val path="project/branch${index.toString().padStart(2,'0')}"
+   LabelCount(path,path,1)
+  }+labels.last()
+  exactLabelSelection(manyLabels,2f)
+ }
+ private fun exactLabelSelection(fixture:List<LabelCount>,fontScale:Float) {
   val open=mutableStateOf(true);val routes=mutableListOf<String>()
-  compose.setContent {SpuntoTheme("carta","dark") {if(open.value) LabelsSheet(LabelsNavigationSnapshot("label:project/spunto",labels,manifest()),{routes+=it;open.value=false},{},{},{},{open.value=false})}}
-  compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("label:project/spunto"))
-  compose.onNodeWithTag("label:project/spunto").assertIsSelected();compose.onNodeWithTag("label:project").assertIsNotSelected()
-  compose.onNodeWithTag("label:project/spunto").performClick()
-  compose.runOnIdle {assertEquals(listOf("label:project/spunto"),routes);assertFalse(open.value)}
+  val selected=fixture.last().key
+  compose.setContent {
+   CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density,fontScale)) {
+    SpuntoTheme("carta","dark") {if(open.value) LabelsSheet(LabelsNavigationSnapshot("label:$selected",fixture,manifest()),{routes+=it;open.value=false},{},{},{},{open.value=false})}
+   }
+  }
+  // Lazy rows outside the viewport need not exist in the semantics tree.
+  compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("label:project"))
+  compose.onNodeWithTag("label:project").assertIsDisplayed().assertIsNotSelected()
+  compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("label:$selected"))
+  compose.onNodeWithTag("label:$selected").assertIsDisplayed().assertIsSelected()
+  compose.onNodeWithTag("label:$selected").performClick()
+  compose.runOnIdle {assertEquals(listOf("label:$selected"),routes);assertFalse(open.value)}
  }
  @Test fun hiddenViewsAreTemporarilyBrowsableOfflineWithoutManagementWrites() {
   val cached=manifest();val before=cached.toString();val routes=mutableListOf<String>();var management=0

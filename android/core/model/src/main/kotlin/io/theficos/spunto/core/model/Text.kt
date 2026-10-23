@@ -6,7 +6,7 @@ private fun compatibilityExpansion(text: String): String = text.codePoints().toA
 fun fold(text: String): String = caseFold(Normalizer.normalize(compatibilityExpansion(text), Normalizer.Form.NFKD).codePoints().toArray().filterNot(::combining).joinToString("") { String(Character.toChars(it)) })
 fun labelKey(path: String): String {
  val normalized = Normalizer.normalize(path, Normalizer.Form.NFC); val parts = normalized.split('/')
- require(normalized.isNotEmpty() && normalized.codePointCount(0, normalized.length) <= 128 && parts.size <= 5 && !parts[0].codePoints().allMatch(::unicodeDigit) && parts.all { it.isNotEmpty() && it.codePoints().allMatch { c -> (unicodeLetter(c) || unicodeDigit(c)) || c == '_'.code || c == '-'.code } }) { "Labels need 1 to 5 letter, digit, underscore or hyphen segments." }
+ requireLocal(normalized.isNotEmpty() && normalized.codePointCount(0, normalized.length) <= 128 && parts.size <= 5 && !parts[0].codePoints().allMatch(::unicodeDigit) && parts.all { it.isNotEmpty() && it.codePoints().allMatch { c -> (unicodeLetter(c) || unicodeDigit(c)) || c == '_'.code || c == '-'.code } },LocalOperationProblem.LabelInvalid) { "Labels need 1 to 5 letter, digit, underscore or hyphen segments." }
  return caseFold(normalized)
 }
 private fun escaped(body: String, at: Int): Boolean { var start = at; while (start > 0 && body[start - 1] == '\\') start--; return (at - start) % 2 == 1 }
@@ -158,5 +158,5 @@ fun setLabels(body:String,add:List<String>,remove:List<String> = emptyList()):St
   val trailingLabel=tokens.any { it.end==end && it.start>=line }
   result=when {result.isEmpty()->"#$path";trailingLabel->result.substring(0,end)+" #$path"+result.substring(end);else->result+(if(result.endsWith('\n')) "" else "\n")+"#$path"}
  }
- require(add.all { label -> labels(result).any { it.key==labelKey(label) } }) { "Close the unfinished code block before adding labels." };return result
+ requireLocal(add.all { label -> labels(result).any { it.key==labelKey(label) } },LocalOperationProblem.UnfinishedCodeBlock) { "Close the unfinished code block before adding labels." };return result
 }

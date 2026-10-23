@@ -1,3 +1,5 @@
+import { localizeCatalog } from "../lib/localizePlugins";
+import { t, useLanguage } from "../lib/i18n";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -23,28 +25,30 @@ function permissions(plugin: Plugin) {
     plugin.permissions.map(
       (p) =>
         ({
-          "notes.read": "Reads your notes",
-          "notes.create": "Creates notes",
-          "notes.update_own": "Updates its own unedited notes",
-          suggest: "Proposes edits for your review",
-          annotate: "Adds information about notes",
-          "search.text": "Adds searchable text",
-          schedule: "Runs scheduled jobs",
-          routes: "Provides commands",
-          mcp: "Adds tools for agents",
-          "net.fetch": "Fetches public web pages",
-          "attachments.read": "Reads attachments",
-          "attachments.write": "Adds attachments",
+          "notes.read": t("settingsplugins.reads_your_notes"),
+          "notes.create": t("settingsplugins.creates_notes"),
+          "notes.update_own": t(
+            "settingsplugins.updates_its_own_unedited_notes",
+          ),
+          suggest: t("settingsplugins.proposes_edits_for_your_review"),
+          annotate: t("settingsplugins.adds_information_about_notes"),
+          "search.text": t("settingsplugins.adds_searchable_text"),
+          schedule: t("settingsplugins.runs_scheduled_jobs"),
+          routes: t("settingsplugins.provides_commands"),
+          mcp: t("settingsplugins.adds_tools_for_agents"),
+          "net.fetch": t("settingsplugins.fetches_public_web_pages"),
+          "attachments.read": t("settingsplugins.reads_attachments"),
+          "attachments.write": t("settingsplugins.adds_attachments"),
         })[p] ?? p,
     )
   );
 }
 function pluginOrigin(plugin: Plugin) {
   return plugin.origin === "bundled"
-    ? "Built-in"
+    ? t("settingsplugins.built_in")
     : plugin.origin === "operator"
-      ? "Operator-installed"
-      : "Origin unknown";
+      ? t("settingsplugins.operator_installed")
+      : t("settingsplugins.origin_unknown");
 }
 export function pluginCanEnable(plugin: Plugin) {
   return (
@@ -79,20 +83,23 @@ function pluginCanDelete(plugin: Plugin) {
     (plugin.state !== "removed" && plugin.can_delete_data === undefined)
   );
 }
-export const capabilityNames: Record<
+export const capabilityNames: () => Record<
   AICapability,
   [title: string, model: string]
-> = {
-  chat: ["Chat", "a chat model"],
-  embed: ["Embeddings", "an embedding model"],
-  transcribe: ["Transcription", "a transcription model"],
-  vision: ["Vision", "a vision model"],
-};
+> = () => ({
+  chat: [t("aisettings.chat"), t("settingsplugins.a_chat_model")],
+  embed: [t("aisettings.embeddings"), t("settingsplugins.an_embedding_model")],
+  transcribe: [
+    t("aisettings.transcription"),
+    t("settingsplugins.a_transcription_model"),
+  ],
+  vision: [t("aisettings.vision"), t("settingsplugins.a_vision_model")],
+});
 function aiCapabilities(plugin: Plugin) {
   return plugin.permissions
     .filter((p) => p.startsWith("ai."))
     .map((p) => p.slice(3) as AICapability)
-    .filter((capability) => capability in capabilityNames);
+    .filter((capability) => capability in capabilityNames());
 }
 /** AI is off when every AI plugin's catalog row names no model at all. */
 function aiIsOff(plugins: Plugin[]) {
@@ -109,20 +116,34 @@ function aiIsOff(plugins: Plugin[]) {
   );
 }
 function pluginFacts(plugin: Plugin) {
-  if (plugin.state === "removed") return "Plugin code is no longer installed";
+  if (plugin.state === "removed")
+    return t("settingsplugins.plugin_code_is_no_longer_installed");
   const ai = aiCapabilities(plugin);
   if (ai.length) {
     const missing = ai.filter((c) => !plugin.ai_destinations?.[c]);
     // With no model for any capability, one short requirement replaces a line per capability.
     if (missing.length === ai.length)
-      return `Needs ${missing.map((c) => capabilityNames[c][1]).join(" and ")}`;
+      return t("settingsplugins.needs_value1", {
+        value1: missing
+          .map((c) => capabilityNames()[c][1])
+          .join(t("format.and")),
+      });
     return ai
       .map((capability) => {
-        const [title, model] = capabilityNames[capability];
+        const [title, model] = capabilityNames()[capability];
         const destination = plugin.ai_destinations?.[capability];
         return destination
-          ? `${title}: ${destination.model} at ${destination.host ?? destination.profile} · ${destination.leaves_network ? "Outside your network" : "On your network"}`
-          : `${title}: no ${model.split(" ").slice(1).join(" ")} is set up`;
+          ? t("settingsplugins.destination", {
+              capability: title,
+              model: destination.model,
+              host: destination.host ?? destination.profile,
+              network: destination.leaves_network
+                ? t("settingsplugins.outside_your_network")
+                : t("settingsplugins.on_your_network"),
+            })
+          : t(`settingsplugins.missing_model.${capability}`, {
+              capability: title,
+            });
       })
       .join("; ");
   }
@@ -133,30 +154,38 @@ function pluginFacts(plugin: Plugin) {
     (value): value is string => typeof value === "string" && !!value.trim(),
   );
   return destinations.length
-    ? `Connects to ${destinations.join(", ")} · Never reads private notes`
+    ? t("settingsplugins.connects_to_value1_never_reads_private_notes", {
+        value1: destinations.join(", "),
+      })
     : plugin.permissions.some((p) => p.startsWith("net.out:"))
-      ? "Connects to the configured server · Never reads private notes"
+      ? t(
+          "settingsplugins.connects_to_the_configured_server_never_reads_private",
+        )
       : plugin.permissions.includes("net.fetch")
-        ? "Fetches public web pages · Never reads private notes"
+        ? t(
+            "settingsplugins.fetches_public_web_pages_never_reads_private_notes",
+          )
         : plugin.kind === "device"
-          ? "Stays on the phone"
-          : "Stays on your server";
+          ? t("settingsplugins.stays_on_the_phone")
+          : t("settingsplugins.stays_on_your_server");
 }
 function slotSentences(plugin: Plugin) {
   const c = plugin.contributes ?? {};
   return (
     [
-      c.views ? "A view in the rail" : null,
-      c.commands ? "Commands in the palette or note actions" : null,
-      c.panel ? "A section in About this note" : null,
-      c.meta ? "One fact in the note’s meta line" : null,
-      c.slip ? "One daily slip" : null,
+      c.views ? t("settingsplugins.a_view_in_the_rail") : null,
+      c.commands
+        ? t("settingsplugins.commands_in_the_palette_or_note_actions")
+        : null,
+      c.panel ? t("settingsplugins.a_section_in_about_this_note") : null,
+      c.meta ? t("settingsplugins.one_fact_in_the_note_s_meta_line") : null,
+      c.slip ? t("settingsplugins.one_daily_slip") : null,
       plugin.permissions.includes("suggest")
-        ? "Pills under notes and the shared Review queue"
+        ? t("settingsplugins.pills_under_notes_and_the_shared_review_queue")
         : null,
     ]
       .filter(Boolean)
-      .join(". ") || "Settings only."
+      .join(". ") || t("settingsplugins.settings_only")
   );
 }
 export function usePluginActions() {
@@ -184,7 +213,9 @@ export function usePluginActions() {
             (intent === "undo" && !pluginRetainsGrants(plugin, current))))
       )
         throw new Error(
-          "That plugin switch is unavailable. Review its current permissions.",
+          t(
+            "settingsplugins.that_plugin_switch_is_unavailable_review_its_current",
+          ),
         );
       return on
         ? api.enablePlugin(current.id, plugin.permissions)
@@ -219,32 +250,35 @@ export function PermissionDialog({
   error: Error | null;
   opener: HTMLElement | null;
 }) {
+  useLanguage();
   return (
     <Dialog
-      title={`Turn on ${plugin.name}?`}
+      title={t("settingsplugins.turn_on_value1", { value1: plugin.name })}
       opener={opener}
       onClose={onClose}
       footer={
         <>
           <button disabled={busy} onClick={onClose}>
-            Cancel
+            {t("profilepanel.cancel")}
           </button>
           <button className="primary" disabled={busy} onClick={onEnable}>
-            {busy ? "Turning on…" : "Turn on"}
+            {busy
+              ? t("settingsplugins.turning_on")
+              : t("settingsplugins.turn_on")}
           </button>
         </>
       }
     >
       <p>{plugin.description}</p>
-      <h3>It will</h3>
+      <h3>{t("settingsplugins.it_will")}</h3>
       <ul>
         {permissions(plugin).map((p, i) => (
           <li key={i}>{willSentence(p)}</li>
         ))}
       </ul>
-      <h3>Where text goes</h3>
+      <h3>{t("settingsplugins.where_text_goes")}</h3>
       <p className="muted">{pluginFacts(plugin)}</p>
-      <h3>Where it shows up</h3>
+      <h3>{t("settingsplugins.where_it_shows_up")}</h3>
       <p className="muted">{slotSentences(plugin)}</p>
       <ErrorLine error={error} />
     </Dialog>
@@ -265,7 +299,15 @@ function aiSummary(plugins: Plugin[]) {
   const parts = (["chat", "embed"] as const).flatMap((capability) => {
     const route = seen.get(capability);
     return route
-      ? [{ ...route, title: capability === "chat" ? "Chat" : "Embed" }]
+      ? [
+          {
+            ...route,
+            title:
+              capability === "chat"
+                ? t("aisettings.chat")
+                : t("settingsplugins.embed"),
+          },
+        ]
       : [];
   });
   if (!parts.length) return null;
@@ -290,8 +332,10 @@ function useSwitchOff() {
           if (receipt.switch !== "off" || receipt.state === "removed") return;
           // Undo re-checks the current catalog, so it never grants a changed permission set.
           toast.show({
-            message: `${plugin.name} is off`,
-            actionLabel: "Undo",
+            message: t("settingsplugins.value1_is_off", {
+              value1: plugin.name,
+            }),
+            actionLabel: t("settingsplugins.undo"),
             onAction: () =>
               action.mutate(
                 { plugin, on: true, intent: "undo" },
@@ -304,7 +348,12 @@ function useSwitchOff() {
   return [action, switchOff] as const;
 }
 export function PluginManager() {
-  const query = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
+  useLanguage();
+  const query = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    select: (data) => localizeCatalog(data),
+  });
   const [onlyOn, setOnlyOn] = useState(false);
   const [enable, setEnable] = useState<Plugin | null>(null);
   const opener = useRef<HTMLElement>(null);
@@ -323,34 +372,36 @@ export function PluginManager() {
   const summary = aiOff ? null : aiSummary(plugins);
   return (
     <>
-      <h1>Plugins</h1>
+      <h1>{t("settings.plugins")}</h1>
       <p className="muted">
-        Everything beyond notes, labels and search. Switch one on and it takes
-        its place; switch it off and it leaves the screen, while its data and
-        any notes it wrote stay. New plugins are added by whoever runs the
-        server.
+        {t(
+          "settingsplugins.everything_beyond_notes_labels_and_search_switch_one",
+        )}
       </p>
       {aiOff ? (
         <p className="notice">
-          AI is off, so plugins that need a model wait until one is set up.{" "}
-          <Link href="/settings/ai">AI settings</Link>
+          {t("settingsplugins.ai_is_off_so_plugins_that_need_a")}{" "}
+          <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
         </p>
       ) : (
         summary && (
           <p className={styles.facts}>
-            {summary} · <Link href="/settings/ai">AI settings</Link>
+            {summary} ·{" "}
+            <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
           </p>
         )
       )}
       <div className={styles.segments}>
         <button aria-pressed={!onlyOn} onClick={() => setOnlyOn(false)}>
-          All {plugins.length}
+          {t("settingsplugins.all")}
+          {plugins.length}
         </button>
         <button aria-pressed={onlyOn} onClick={() => setOnlyOn(true)}>
-          On {enabled}
+          {t("settingsplugins.on")}
+          {enabled}
         </button>
       </div>
-      {query.isPending && <p>Loading plugins…</p>}
+      {query.isPending && <p>{t("settingsplugins.loading_plugins")}</p>}
       {["capture", "organize", "recall", "develop", "agents", "data"].map(
         (category) => {
           const all = plugins.filter(
@@ -364,8 +415,11 @@ export function PluginManager() {
           return (
             <section key={category}>
               <h2 className="overline">
-                {category} · {all.filter((p) => p.switch === "on").length} of{" "}
-                {all.length} on
+                {t("settingsplugins.category_count", {
+                  category: t(`category.${category}`),
+                  enabled: all.filter((p) => p.switch === "on").length,
+                  total: all.length,
+                })}
               </h2>
               <ul className={styles.list}>
                 {items.map((p) => {
@@ -389,7 +443,10 @@ export function PluginManager() {
                             )}
                           </strong>
                           {p.kind === "device" && (
-                            <small className={styles.facts}> · Android</small>
+                            <small className={styles.facts}>
+                              {" "}
+                              {t("settingsplugins.android")}
+                            </small>
                           )}
                           <p>{p.description}</p>
                           <div className={styles.facts}>
@@ -401,13 +458,17 @@ export function PluginManager() {
                             {p.state === "waiting" && !aiOff && (
                               <>
                                 {" · "}
-                                <Link href="/settings/ai">AI settings</Link>
+                                <Link href="/settings/ai">
+                                  {t("settingsplugins.ai_settings")}
+                                </Link>
                               </>
                             )}
                             {p.state === "failed" && (
                               <>
-                                {" · Paused after failed runs · "}
-                                <Link href="/status">Details</Link>
+                                {t("settingsplugins.paused_after_failed_runs")}
+                                <Link href="/status">
+                                  {t("settingsplugins.details")}
+                                </Link>
                               </>
                             )}
                           </div>
@@ -415,16 +476,22 @@ export function PluginManager() {
                         <div className={styles.actions}>
                           {p.pinned_by_env ? (
                             <span className={styles.facts}>
-                              Set in the environment ·{" "}
-                              {p.switch === "on" ? "On" : "Off"}
+                              {t("settingsplugins.set_in_the_environment")}{" "}
+                              {p.switch === "on"
+                                ? t("settingsplugins.on_3")
+                                : t("aisettings.off")}
                             </span>
                           ) : p.state === "removed" ? (
-                            <span className={styles.facts}>Removed · Off</span>
+                            <span className={styles.facts}>
+                              {t("settingsplugins.removed_off")}
+                            </span>
                           ) : (
                             <input
                               type="checkbox"
                               role="switch"
-                              aria-label={`Enable ${p.name}`}
+                              aria-label={t("settingsplugins.enable_value1", {
+                                value1: p.name,
+                              })}
                               className={styles.switch}
                               checked={p.switch === "on"}
                               disabled={
@@ -485,7 +552,12 @@ function arrangeable(plugin: Plugin) {
   );
 }
 function PluginArrangement() {
-  const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
+  useLanguage();
+  const catalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    select: (data) => localizeCatalog(data),
+  });
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const client = useQueryClient();
   const save = useMutation({
@@ -522,9 +594,11 @@ function PluginArrangement() {
   if (shown.length < 1) return null;
   return (
     <details className={styles.arrange}>
-      <summary>Arrange</summary>
+      <summary>{t("settingsplugins.arrange")}</summary>
       <p className="muted">
-        Your order chooses the note panel, suggestion order and meta fact.
+        {t(
+          "settingsplugins.your_order_chooses_the_note_panel_suggestion_order",
+        )}
       </p>
       {shown.map((p, index) => (
         <div className={styles.plugin} key={p.id}>
@@ -532,14 +606,18 @@ function PluginArrangement() {
             <span>{p.name}</span>
             <div className={styles.actions}>
               <button
-                aria-label={`Move ${p.name} up`}
+                aria-label={t("settingsplugins.move_value1_up", {
+                  value1: p.name,
+                })}
                 disabled={save.isPending || index === 0}
                 onClick={() => move(p.id, -1)}
               >
                 ↑
               </button>
               <button
-                aria-label={`Move ${p.name} down`}
+                aria-label={t("settingsplugins.move_value1_down", {
+                  value1: p.name,
+                })}
                 disabled={save.isPending || index === shown.length - 1}
                 onClick={() => move(p.id, 1)}
               >
@@ -557,24 +635,28 @@ function PluginArrangement() {
                 disabled={save.isPending}
                 onChange={() => toggle("hidden_views", `${p.id}/${v.id}`)}
               />
-              Show {v.title} in the rail
+              {t("settingsplugins.show_view", { view: v.title })}
             </label>
           ))}
-          {p.contributes?.mcp_tools?.map((t) => (
-            <label key={t.name} className={styles.row}>
+          {p.contributes?.mcp_tools?.map((tool) => (
+            <label key={tool.name} className={styles.row}>
               <input
                 type="checkbox"
                 checked={
-                  !settings.data?.hidden_mcp_tools.includes(`${p.id}_${t.name}`)
+                  !settings.data?.hidden_mcp_tools.includes(
+                    `${p.id}_${tool.name}`,
+                  )
                 }
                 disabled={save.isPending}
-                onChange={() => toggle("hidden_mcp_tools", `${p.id}_${t.name}`)}
+                onChange={() =>
+                  toggle("hidden_mcp_tools", `${p.id}_${tool.name}`)
+                }
               />
-              Expose{" "}
+              {t("settingsplugins.expose")}{" "}
               <code>
-                {p.id}_{t.name}
+                {p.id}_{tool.name}
               </code>{" "}
-              to agents
+              {t("settingsplugins.to_agents")}
             </label>
           ))}
         </div>
@@ -584,7 +666,12 @@ function PluginArrangement() {
   );
 }
 export function PluginPage({ id }: { id: string }) {
-  const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
+  useLanguage();
+  const catalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    select: (data) => localizeCatalog(data),
+  });
   const plugin = catalog.data?.plugins.find((p) => p.id === id);
   const removed = plugin?.state === "removed";
   const query = useQuery({
@@ -615,7 +702,7 @@ export function PluginPage({ id }: { id: string }) {
         .getQueryData<{ plugins: Plugin[] }>(["catalog"])
         ?.plugins.find((item) => item.id === id);
       if (!current || current.state === "removed")
-        throw new Error("Plugin settings are unavailable.");
+        throw new Error(t("settingsplugins.plugin_settings_are_unavailable"));
       return api.savePluginSettings(id, values);
     },
     onSuccess: () => {
@@ -633,7 +720,9 @@ export function PluginPage({ id }: { id: string }) {
         !pluginCanDelete(current) ||
         !pluginCountKnown(current.data_count)
       )
-        throw new Error("Plugin data cleanup is unavailable.");
+        throw new Error(
+          t("settingsplugins.plugin_data_cleanup_is_unavailable"),
+        );
       return api.deletePluginData(id);
     },
     onSuccess: () => {
@@ -642,17 +731,23 @@ export function PluginPage({ id }: { id: string }) {
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
-  const page = <PageTitle page={`Settings · ${plugin?.name ?? "Plugins"}`} />;
+  const page = (
+    <PageTitle
+      page={t("settings.settings_value1", {
+        value1: plugin?.name ?? t("settings.plugins"),
+      })}
+    />
+  );
   const back = (
     <Link href="/settings/plugins" className={styles.back}>
-      ← Plugins
+      {t("settingsplugins.plugins")}
     </Link>
   );
   if (catalog.isPending || (!!plugin && !removed && query.isPending))
     return (
       <>
         {page}
-        <p>Loading plugin settings…</p>
+        <p>{t("settingsplugins.loading_plugin_settings")}</p>
       </>
     );
   if (!plugin)
@@ -660,7 +755,7 @@ export function PluginPage({ id }: { id: string }) {
       <>
         {page}
         {back}
-        <h1>Plugin unavailable</h1>
+        <h1>{t("settingsplugins.plugin_unavailable")}</h1>
         <ErrorLine error={catalog.error} />
       </>
     );
@@ -695,17 +790,24 @@ export function PluginPage({ id }: { id: string }) {
         <h1>{plugin.name}</h1>
         {plugin.pinned_by_env ? (
           <span className={styles.facts}>
-            Set in the environment · {plugin.switch === "on" ? "On" : "Off"}
+            {t("schemaform.set_in_the_environment")}
+            {plugin.switch === "on"
+              ? t("settingsplugins.on_3")
+              : t("aisettings.off")}
           </span>
         ) : removed ? (
-          <span className={styles.facts}>Removed · Off</span>
+          <span className={styles.facts}>
+            {t("settingsplugins.removed_off")}
+          </span>
         ) : (
           <input
             ref={enabler}
             className={styles.switch}
             type="checkbox"
             role="switch"
-            aria-label={`Enable ${plugin.name}`}
+            aria-label={t("settingsplugins.enable_value1", {
+              value1: plugin.name,
+            })}
             checked={plugin.switch === "on"}
             disabled={
               action.isPending ||
@@ -719,31 +821,36 @@ export function PluginPage({ id }: { id: string }) {
       </div>
       <p>{plugin.description}</p>
       <p className={styles.facts}>
-        {humanize(plugin.category ?? "data")} · {pluginOrigin(plugin)} ·{" "}
-        {plugin.version}
+        {t(
+          `category.${["capture", "organize", "recall", "develop", "agents", "data", "look"].includes(plugin.category) ? plugin.category : "data"}`,
+        )}{" "}
+        · {pluginOrigin(plugin)} · {plugin.version}
       </p>
       {!!plugin.pinned_by_env && (
         <p className={styles.secret}>
-          Set in the environment: <code>SPUNTO_PLUGINS</code>
+          {t("settingsplugins.set_in_the_environment_2")}
+          <code>SPUNTO_PLUGINS</code>
         </p>
       )}
       {removed && (
         <p className="notice">
-          Removed. Plugin code is no longer installed. Its stored data and notes
-          remain.
+          {t("settingsplugins.removed_plugin_code_is_no_longer_installed_its")}
         </p>
       )}
       {plugin.state === "waiting" &&
         (aiCapabilities(plugin).length ? (
           <p className="notice">
-            {pluginFacts(plugin)}. It stays on and starts working once that is
-            set up.{" "}
+            {pluginFacts(plugin)}
+            {t("settingsplugins.it_stays_on_and_starts_working_once_that")}{" "}
             {aiOff ? (
               <>
-                AI is off. <AIOffHint />
+                {t("settingsplugins.ai_is_off")}
+                <AIOffHint />
               </>
             ) : (
-              <Link href="/settings/ai">AI settings</Link>
+              <Link href="/settings/ai">
+                {t("settingsplugins.ai_settings")}
+              </Link>
             )}
           </p>
         ) : (
@@ -762,7 +869,7 @@ export function PluginPage({ id }: { id: string }) {
       )}
       {!removed && save.isSuccess && (
         <p role="status" className={styles.facts}>
-          Settings saved.
+          {t("settingsplugins.settings_saved")}
         </p>
       )}
       {!removed && usesAI && !aiOff && (
@@ -773,9 +880,9 @@ export function PluginPage({ id }: { id: string }) {
       )}
       {plugin.state === "enabled" && !!plugin.contributes?.commands?.length && (
         <>
-          <h2>Run</h2>
+          <h2>{t("settingsplugins.run")}</h2>
           <p className="muted">
-            Note commands appear in the palette while a note is open.
+            {t("settingsplugins.note_commands_appear_in_the_palette_while_a")}
           </p>
           <PluginCommands
             pluginId={id}
@@ -794,18 +901,20 @@ export function PluginPage({ id }: { id: string }) {
           )}
         </>
       )}
-      <h2>Activity</h2>
+      <h2>{t("settingsplugins.activity")}</h2>
       <p className="muted">
         {data.last_run_at
-          ? `Last run ${formatWhen(data.last_run_at)}`
-          : "No runs yet."}
+          ? t("settingsplugins.last_run_value1", {
+              value1: formatWhen(data.last_run_at),
+            })
+          : t("settingsplugins.no_runs_yet")}
         {data.state === "waiting"
           ? ""
           : data.last_error
             ? ` · ${data.last_error}`
-            : " · No failures"}
+            : t("settingsplugins.no_failures")}
       </p>
-      <h2>Access</h2>
+      <h2>{t("collaboration.access")}</h2>
       <ul>
         {permissions(plugin).map((text, i) => (
           <li key={i}>{text}</li>
@@ -813,29 +922,31 @@ export function PluginPage({ id }: { id: string }) {
       </ul>
       {removed ? (
         <p className="muted">
-          Access above describes the retained plugin. No plugin code is running.
+          {t(
+            "settingsplugins.access_above_describes_the_retained_plugin_no_plugin",
+          )}
         </p>
       ) : (
         <p className="muted">
-          {pluginFacts(plugin)}. Up to 3 commands, 10 panel items and 5
-          unattended notes per day.
+          {pluginFacts(plugin)}
+          {t("settingsplugins.up_to_3_commands_10_panel_items_and")}
         </p>
       )}
       {!removed &&
-        plugin.contributes?.mcp_tools?.map((t) => (
-          <p key={t.name} className={styles.facts}>
-            Adds agent tool{" "}
+        plugin.contributes?.mcp_tools?.map((tool) => (
+          <p key={tool.name} className={styles.facts}>
+            {t("settingsplugins.adds_agent_tool")}{" "}
             <code>
-              {id}_{t.name}
+              {id}_{tool.name}
             </code>
-            : {t.description}
+            : {tool.description}
           </p>
         ))}
-      <h2>Stored data</h2>
+      <h2>{t("settingsplugins.stored_data")}</h2>
       <p className="muted">
         {recordCount === undefined ? "…" : plural(recordCount, "record")} ·{" "}
-        {formatBytes(plugin.data_size_bytes ?? 0)}. Its notes stay: they are
-        notes.
+        {formatBytes(plugin.data_size_bytes ?? 0)}
+        {t("settingsplugins.its_notes_stay_they_are_notes")}
       </p>
       {canDelete && (
         <button
@@ -843,7 +954,7 @@ export function PluginPage({ id }: { id: string }) {
           className="danger"
           onClick={() => setRemove(true)}
         >
-          Delete this plugin’s data…
+          {t("settingsplugins.delete_this_plugin_s_data")}
         </button>
       )}
       <ErrorLine error={(!removed ? query.error : null) ?? save.error} />
@@ -864,7 +975,9 @@ export function PluginPage({ id }: { id: string }) {
       )}
       {remove && canDelete && (
         <Dialog
-          title={`Delete ${plugin.name}’s data?`}
+          title={t("settingsplugins.delete_value1_s_data", {
+            value1: plugin.name,
+          })}
           opener={remover.current}
           onClose={() => setRemove(false)}
           footer={
@@ -873,7 +986,7 @@ export function PluginPage({ id }: { id: string }) {
                 disabled={deletion.isPending}
                 onClick={() => setRemove(false)}
               >
-                Cancel
+                {t("profilepanel.cancel")}
               </button>
               <button
                 className="danger"
@@ -882,16 +995,19 @@ export function PluginPage({ id }: { id: string }) {
                 }
                 onClick={() => deletion.mutate()}
               >
-                Delete {recordCount ?? "…"} records
+                {t("settingsplugins.delete_records", {
+                  count: recordCount ?? "…",
+                })}
               </button>
             </>
           }
         >
           <p>
-            This deletes {recordCount ?? "…"} plugin records, including
-            suggestions and annotations. Its notes stay: they are notes.
+            {t("settingsplugins.delete_records_description", {
+              count: recordCount ?? "…",
+            })}
           </p>
-          <p>This cannot be undone.</p>
+          <p>{t("settingsplugins.this_cannot_be_undone")}</p>
           <ErrorLine error={deletion.error} />
         </Dialog>
       )}

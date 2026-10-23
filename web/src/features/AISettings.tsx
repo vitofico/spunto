@@ -1,3 +1,4 @@
+import { getLanguage, t, useLanguage } from "../lib/i18n";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,17 +17,17 @@ import type {
 } from "../lib/types";
 import styles from "./Feature.module.css";
 
-const capabilities: [AICapability, string][] = [
-  ["chat", "Chat"],
-  ["embed", "Embeddings"],
-  ["transcribe", "Transcription"],
-  ["vision", "Vision"],
+const capabilities: () => [AICapability, string][] = () => [
+  ["chat", t("aisettings.chat")],
+  ["embed", t("aisettings.embeddings")],
+  ["transcribe", t("aisettings.transcription")],
+  ["vision", t("aisettings.vision")],
 ];
 function sameModel(a?: AIModelChoice, b?: AIModelChoice) {
   return a?.profile === b?.profile && a?.model === b?.model;
 }
 function sameSelections(a: AIModelSelections, b: AIModelSelections) {
-  return capabilities.every(([capability]) =>
+  return capabilities().every(([capability]) =>
     sameModel(a[capability], b[capability]),
   );
 }
@@ -42,6 +43,7 @@ function AIModelSettings({
   selection: AIModelSelection;
   onSaved: () => void;
 }) {
+  useLanguage();
   const client = useQueryClient();
   const canManage = ai.can_manage === true;
   const inventory = useQuery({
@@ -102,7 +104,7 @@ function AIModelSettings({
     },
   });
   const busy = save.isPending || reload.isPending;
-  const valid = capabilities.every(([capability]) => {
+  const valid = capabilities().every(([capability]) => {
     const choice = draft.selections[capability];
     if (!choice || sameModel(choice, draft.saved[capability])) return true;
     return inventory.data?.profiles
@@ -128,37 +130,39 @@ function AIModelSettings({
       }}
     >
       <div className={styles.sectionHeading}>
-        <h2>Models</h2>
+        <h2>{t("aisettings.models")}</h2>
         {canManage && (
           <button
             type="button"
             disabled={busy || inventory.isFetching}
             onClick={() => void inventory.refetch()}
           >
-            {inventory.isFetching ? "Loading models…" : "Refresh models"}
+            {inventory.isFetching
+              ? t("aisettings.loading_models")
+              : t("aisettings.refresh_models")}
           </button>
         )}
       </div>
       <p className="muted">
-        Model choices apply to this space. Selecting a model also chooses its
-        provider for that capability. Each plugin can choose a different
-        provider in its settings.
+        {t("aisettings.model_choices_apply_to_this_space_selecting_a")}
       </p>
-      {!canManage && <p>Only a space owner can change models.</p>}
+      {!canManage && (
+        <p>{t("aisettings.only_a_space_owner_can_change_models")}</p>
+      )}
       {inventory.error && (
         <p role="alert" className="error">
-          Could not load available models. Your saved choices are kept.
+          {t("aisettings.could_not_load_available_models_your_saved_choices")}
         </p>
       )}
       {ai.profiles.map((profile) =>
         inventory.data?.profiles.find((item) => item.profile === profile.name)
           ?.error ? (
           <p key={profile.name} role="alert" className="error">
-            Could not load models from {profile.name}. Saved choices are kept.
+            {t("aisettings.provider_failed", { provider: profile.name })}
           </p>
         ) : null,
       )}
-      {capabilities.map(([capability, title]) => {
+      {capabilities().map(([capability, title]) => {
         const override = draft.selections[capability];
         const effective = override ?? selection.defaults[capability];
         const provider = ai.profiles.find(
@@ -189,7 +193,9 @@ function AIModelSettings({
             key={capability}
             className={`${styles.formField} ${styles.modelField}`}
           >
-            <label htmlFor={`ai-model-${capability}`}>{title} model</label>
+            <label htmlFor={`ai-model-${capability}`}>
+              {t("aisettings.model_label", { capability: title })}
+            </label>
             <select
               className="field"
               id={`ai-model-${capability}`}
@@ -212,16 +218,19 @@ function AIModelSettings({
               }}
             >
               <option value="">
-                Server default (
-                {inherited
-                  ? `${inherited.model} at ${inherited.profile}`
-                  : "Off"}
-                )
+                {t("aisettings.server_default_choice", {
+                  model: inherited
+                    ? `${inherited.model} · ${inherited.profile}`
+                    : t("aisettings.off"),
+                })}
               </option>
               {override && !model && (
                 <option value={modelValue(override)} disabled>
                   {override.model} · {override.profile} (
-                  {unlisted ? "not listed by provider" : "current selection"})
+                  {unlisted
+                    ? t("aisettings.not_listed_by_provider")
+                    : t("aisettings.current_selection")}
+                  )
                 </option>
               )}
               {ai.profiles.map((profile) => (
@@ -246,7 +255,7 @@ function AIModelSettings({
                       >
                         {model.id}
                         {model.capabilities === null
-                          ? " (capability unverified)"
+                          ? t("aisettings.capability_unverified")
                           : ""}
                       </option>
                     ))}
@@ -255,20 +264,22 @@ function AIModelSettings({
             </select>
             {effective && (
               <small>
-                {effective.model} at {provider?.base_url ?? effective.profile}
+                {effective.model} {t("aisettings.at")}
+                {provider?.base_url ?? effective.profile}
                 {locality === undefined
-                  ? " · Network locality unavailable"
+                  ? t("aisettings.network_locality_unavailable")
                   : locality
-                    ? " · Outside your network"
-                    : " · On your network"}
+                    ? t("aisettings.outside_your_network")
+                    : t("aisettings.on_your_network")}
                 {model?.capabilities === null &&
-                  " · Capability not reported by provider. Check providers after saving."}
+                  t(
+                    "aisettings.capability_not_reported_by_provider_check_providers_after",
+                  )}
               </small>
             )}
             {unlisted && (
               <small>
-                The selected model is not listed by the provider for this
-                capability.
+                {t("aisettings.the_selected_model_is_not_listed_by_the")}
               </small>
             )}
             {capability === "embed" &&
@@ -277,8 +288,9 @@ function AIModelSettings({
                 draft.saved.embed ?? selection.defaults.embed,
               ) && (
                 <p className="muted">
-                  Embedding changes rebuild the index; progress appears below
-                  after saving.
+                  {t(
+                    "aisettings.embedding_changes_rebuild_the_index_progress_appears_below",
+                  )}
                 </p>
               )}
           </div>
@@ -287,7 +299,9 @@ function AIModelSettings({
       {canManage && (
         <div className={styles.formActions}>
           <button className="primary" disabled={busy || !dirty || !valid}>
-            {save.isPending ? "Saving models…" : "Save models"}
+            {save.isPending
+              ? t("aisettings.saving_models")
+              : t("aisettings.save_models")}
           </button>
           <button
             type="button"
@@ -297,7 +311,7 @@ function AIModelSettings({
               save.reset();
             }}
           >
-            Use server defaults
+            {t("aisettings.use_server_defaults")}
           </button>
           {dirty && (
             <button
@@ -305,13 +319,17 @@ function AIModelSettings({
               disabled={busy}
               onClick={() => reload.mutate()}
             >
-              {reload.isPending ? "Reloading…" : "Discard changes and reload"}
+              {reload.isPending
+                ? t("aisettings.reloading")
+                : t("aisettings.discard_changes_and_reload")}
             </button>
           )}
         </div>
       )}
-      {dirty && <p role="status">Changes are not saved.</p>}
-      {save.isSuccess && <p role="status">Model choices saved.</p>}
+      {dirty && <p role="status">{t("aisettings.changes_are_not_saved")}</p>}
+      {save.isSuccess && (
+        <p role="status">{t("aisettings.model_choices_saved")}</p>
+      )}
       {save.error && (
         <p role="alert" className="error">
           {save.error.message}
@@ -319,7 +337,7 @@ function AIModelSettings({
       )}
       {reload.error && (
         <p role="alert" className="error">
-          Could not reload model settings. Your choices are kept.
+          {t("aisettings.could_not_reload_model_settings_your_choices_are")}
         </p>
       )}
     </form>
@@ -339,31 +357,35 @@ function useAI(enabled = true) {
   });
 }
 export function AIHealthResults({ rows }: { rows: AIHealth[] }) {
+  useLanguage();
   return rows.length ? (
     <ul className={styles.healthList}>
       {rows.map((row) => (
         <li key={`${row.profile}/${row.capability}`}>
           {row.profile} ·{" "}
-          {capabilities.find(([id]) => id === row.capability)?.[1]}:
-          {row.ok ? " OK" : " Unavailable"}
-          {row.dimension ? ` · ${row.dimension} dimensions` : ""}
+          {capabilities().find(([id]) => id === row.capability)?.[1]}:{" "}
+          {t(row.ok ? "aisettings.health_ok" : "aisettings.health_unavailable")}
+          {row.dimension
+            ? ` · ${t("aisettings.dimensions", { count: row.dimension })}`
+            : ""}
           {row.fix_hint && <p className="muted">{row.fix_hint}</p>}
         </li>
       ))}
     </ul>
   ) : null;
 }
-const allowances: Record<AIAllowanceAction, string> = {
-  labels: "Auto-labelling",
-  ask: "Ask",
-  chat: "Other AI actions",
-  vision: "Image reading",
-  transcribe: "Transcription",
-  embed: "Search indexing",
-};
+const allowances: () => Record<AIAllowanceAction, string> = () => ({
+  labels: t("aisettings.auto_labelling"),
+  ask: t("aisettings.ask"),
+  chat: t("aisettings.other_ai_actions"),
+  vision: t("aisettings.image_reading"),
+  transcribe: t("aisettings.transcription"),
+  embed: t("aisettings.search_indexing"),
+});
 /** A hosted account's month of AI: what is used, and what waits for the renewal. */
 function AIAllowance({ quota }: { quota: AIQuota }) {
-  const renews = new Date(quota.resets_at).toLocaleDateString(undefined, {
+  useLanguage();
+  const renews = new Date(quota.resets_at).toLocaleDateString(getLanguage(), {
     day: "numeric",
     month: "long",
     timeZone: "UTC",
@@ -373,44 +395,47 @@ function AIAllowance({ quota }: { quota: AIQuota }) {
   );
   return (
     <>
-      <h2>Monthly allowance</h2>
+      <h2>{t("aisettings.monthly_allowance")}</h2>
       {paused.length > 0 && (
         <p role="status" className="notice">
-          {paused.map((row) => allowances[row.action]).join(", ")} paused until{" "}
-          {renews}. Notes and search keep working.
+          {t("aisettings.allowance_paused", {
+            actions: paused.map((row) => allowances()[row.action]).join(", "),
+            date: renews,
+          })}
         </p>
       )}
       <dl className={styles.keyValues}>
         {quota.actions.map((row) => (
           <div key={row.action}>
-            <dt>{allowances[row.action]}</dt>
+            <dt>{allowances()[row.action]}</dt>
             <dd>
               {row.limit === null
-                ? `${row.used.toLocaleString()} used`
-                : `${row.used.toLocaleString()} of ${row.limit.toLocaleString()}`}
+                ? t("aisettings.used", { count: row.used })
+                : t("aisettings.used_limit", {
+                    count: row.used,
+                    limit: row.limit,
+                  })}
             </dd>
           </div>
         ))}
       </dl>
       <p className="muted">
-        AI in this space counts against its owner’s account, shared by all of
-        their spaces. The allowance renews on {renews}.
+        {t("aisettings.allowance_renews", { date: renews })}
       </p>
     </>
   );
 }
 /** The one way to turn AI on, said the same on every page that mentions it. */
 export function AIOffHint() {
+  useLanguage();
   return useHosted() ? (
-    <>Ask whoever runs the server to set up a model.</>
+    <>{t("aisettings.ask_whoever_runs_the_server_to_set_up")}</>
   ) : (
-    <>
-      To turn it on, set the <code>SPUNTO_AI_*</code> variables and restart the
-      server.
-    </>
+    <>{t("aisettings.environment_setup")}</>
   );
 }
 export function AISettings() {
+  useLanguage();
   const query = useAI();
   const client = useQueryClient();
   const check = useMutation({
@@ -430,18 +455,20 @@ export function AISettings() {
   const ai = query.data;
   return (
     <>
-      <h1>{ai && !ai.profiles.length ? "AI is off." : "AI"}</h1>
-      {query.isPending && <p role="status">Loading AI settings…</p>}
+      <h1>{ai && !ai.profiles.length ? t("aisettings.ai_is_off") : "AI"}</h1>
+      {query.isPending && (
+        <p role="status">{t("aisettings.loading_ai_settings")}</p>
+      )}
       {ai && !ai.profiles.length && (
         <p className="muted">
-          Everything else works. <AIOffHint />
+          {t("aisettings.everything_else_works")}
+          <AIOffHint />
         </p>
       )}
       {ai && !!ai.profiles.length && (
         <>
           <p className="muted">
-            Providers are set by whoever runs the server. Private and
-            machine-written notes are never sent to a model.
+            {t("aisettings.providers_are_set_by_whoever_runs_the_server")}
           </p>
           {ai.quota && <AIAllowance quota={ai.quota} />}
           {ai.profiles.map((profile) => (
@@ -451,14 +478,14 @@ export function AISettings() {
                 {profile.provider} · <code>{profile.base_url}</code>
               </p>
               <ul>
-                {capabilities.map(
+                {capabilities().map(
                   ([capability, title]) =>
                     profile[`${capability}_model`] && (
                       <li key={capability}>
                         {title}: {profile[`${capability}_model`]}
                         {profile.leaves_network?.[capability]
-                          ? " · Leaves this network"
-                          : " · Local network"}
+                          ? t("aisettings.leaves_this_network")
+                          : t("aisettings.local_network")}
                       </li>
                     ),
                 )}
@@ -475,18 +502,19 @@ export function AISettings() {
               }}
             />
           )}
-          <h2>Default routes</h2>
+          <h2>{t("aisettings.default_routes")}</h2>
           <dl className={styles.keyValues}>
-            {capabilities.map(([capability, title]) => (
+            {capabilities().map(([capability, title]) => (
               <div key={capability}>
                 <dt>{title}</dt>
-                <dd>{ai.bindings[capability] ?? "Off"}</dd>
+                <dd>{ai.bindings[capability] ?? t("aisettings.off")}</dd>
               </div>
             ))}
           </dl>
           <p className="muted">
-            Each plugin can choose a different configured profile in its
-            settings.
+            {t(
+              "aisettings.each_plugin_can_choose_a_different_configured_profile",
+            )}
           </p>
           <button
             disabled={
@@ -496,19 +524,21 @@ export function AISettings() {
             }
             onClick={() => check.mutate()}
           >
-            {check.isPending ? "Checking providers…" : "Check providers"}
+            {check.isPending
+              ? t("aisettings.checking_providers")
+              : t("aisettings.check_providers")}
           </button>
           <AIHealthResults rows={check.data?.health ?? ai.health ?? []} />
           {ai.indexing && (
             <>
-              <h2>Embedding index</h2>
+              <h2>{t("aisettings.embedding_index")}</h2>
               <p>
                 {!ai.indexing.available
-                  ? "Vector index unavailable."
+                  ? t("aisettings.vector_index_unavailable")
                   : ai.indexing.enabled
-                    ? "Indexing is on."
-                    : "Indexing is paused."}{" "}
-                {ai.indexing.chunks} chunks.
+                    ? t("aisettings.indexing_is_on")
+                    : t("aisettings.indexing_is_paused")}{" "}
+                {t("aisettings.chunks_count", { count: ai.indexing.chunks })}
               </p>
               {ai.indexing.routes.map((route) => (
                 <p
@@ -516,11 +546,16 @@ export function AISettings() {
                   role="status"
                   className={styles.indexStatus}
                 >
-                  {route.profile}: {route.indexed} of {route.total} notes
-                  indexed.
+                  {t("aisettings.index_progress", {
+                    provider: route.profile,
+                    indexed: route.indexed,
+                    total: route.total,
+                  })}
                   {route.active_key &&
                     route.active_key !== route.target_key &&
-                    " The previous index is retained until the new model is ready."}
+                    t(
+                      "aisettings.the_previous_index_is_retained_until_the_new",
+                    )}
                 </p>
               ))}
               <button
@@ -532,9 +567,13 @@ export function AISettings() {
                 }
                 onClick={() => reindex.mutate()}
               >
-                {reindex.isPending ? "Queuing index…" : "Reindex notes"}
+                {reindex.isPending
+                  ? t("aisettings.queuing_index")
+                  : t("aisettings.reindex_notes")}
               </button>
-              {reindex.isSuccess && <p role="status">Index work queued.</p>}
+              {reindex.isSuccess && (
+                <p role="status">{t("aisettings.index_work_queued")}</p>
+              )}
             </>
           )}
         </>
@@ -544,11 +583,14 @@ export function AISettings() {
           {(query.error ?? check.error ?? reindex.error)?.message}
         </p>
       )}
-      {ai && !!ai.profiles.length && <Link href="/status">Server status</Link>}
+      {ai && !!ai.profiles.length && (
+        <Link href="/status">{t("aisettings.server_status")}</Link>
+      )}
     </>
   );
 }
 export function AIRouting({ plugin }: { plugin: Plugin }) {
+  useLanguage();
   const query = useAI(
     plugin.permissions.some((permission) => permission.startsWith("ai.")),
   );
@@ -566,14 +608,16 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
         void client.invalidateQueries({ queryKey: [key] });
     },
   });
-  const used = capabilities.filter(([capability]) =>
+  const used = capabilities().filter(([capability]) =>
     plugin.permissions.includes(`ai.${capability}`),
   );
   if (!used.length)
-    return <p className="muted">This plugin does not use AI.</p>;
+    return (
+      <p className="muted">{t("aisettings.this_plugin_does_not_use_ai")}</p>
+    );
   if (!query.data)
     return query.isPending ? (
-      <p>Loading AI routes…</p>
+      <p>{t("aisettings.loading_ai_routes")}</p>
     ) : (
       <p role="alert" className="error">
         {query.error?.message}
@@ -600,7 +644,7 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
         return (
           <div className={styles.formField} key={capability}>
             <label htmlFor={`ai-route-${plugin.id}-${capability}`}>
-              {title} profile
+              {t("aisettings.profile_label", { capability: title })}
             </label>
             <select
               className="field"
@@ -617,7 +661,9 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
               }
             >
               <option value="">
-                Default ({ai.bindings[capability] ?? "Off"})
+                {t("aisettings.default_profile_choice", {
+                  profile: ai.bindings[capability] ?? t("aisettings.off"),
+                })}
               </option>
               {ai.profiles
                 .filter((item) => item[`${capability}_model`])
@@ -631,8 +677,8 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
               <small>
                 {profile.base_url}
                 {profile.leaves_network?.[capability]
-                  ? " · Leaves this network"
-                  : " · Local network"}
+                  ? t("aisettings.leaves_this_network")
+                  : t("aisettings.local_network")}
               </small>
             )}
           </div>
@@ -642,14 +688,14 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
         className="primary"
         disabled={save.isPending || ai.can_manage === false}
       >
-        {save.isPending ? "Saving…" : "Save AI routes"}
+        {save.isPending ? t("app.saving") : t("aisettings.save_ai_routes")}
       </button>
-      {save.isSuccess && <p role="status">AI routes saved.</p>}
+      {save.isSuccess && <p role="status">{t("aisettings.ai_routes_saved")}</p>}
       {ai.can_manage === false && (
-        <p>Only a space owner can change AI routes.</p>
+        <p>{t("aisettings.only_a_space_owner_can_change_ai_routes")}</p>
       )}
       <p className={styles.facts}>
-        {calls} recorded calls · {failures} failures or refusals
+        {t("aisettings.calls", { calls, failures })}
       </p>
       {save.error && (
         <p role="alert" className="error">

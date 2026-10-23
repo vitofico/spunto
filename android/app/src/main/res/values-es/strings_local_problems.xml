@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_problem_note_unavailable">Esta nota ya no está disponible.</string>
+    <string name="local_problem_editor_changed">El editor cambió. Guarda el texto actual con esta grabación.</string>
+    <string name="local_problem_editor_changed_while_saving">El editor cambió al guardar esta grabación. Inténtalo de nuevo.</string>
+    <string name="local_problem_original_unavailable">La nota original ya no está en este teléfono.</string>
+    <string name="local_problem_note_too_large">La nota es demasiado grande.</string>
+    <string name="local_problem_image_too_large">Elige una imagen de 5 MB como máximo.</string>
+    <string name="local_problem_recording_journal_required">Guarda la grabación desde su borrador original antes de volver a usar el audio.</string>
+    <string name="local_problem_recording_path_invalid">La ruta de grabación no pertenece al almacenamiento de grabaciones de este teléfono.</string>
+    <string name="local_problem_voice_memos_disabled">Activa las notas de voz antes de grabar.</string>
+    <string name="local_problem_recording_unavailable">La grabación no está disponible.</string>
+    <string name="local_problem_recording_already_handled">La grabación ya se ha descartado o guardado.</string>
+    <string name="local_problem_recording_state_changed">El estado de la grabación ha cambiado.</string>
+    <string name="local_problem_recording_not_ready">Termina o recupera la grabación antes de guardar.</string>
+    <string name="local_problem_recording_original_note_required">Mantén esta grabación con su nota original.</string>
+    <string name="local_problem_recording_current_editor_required">Usa el editor actual de esta grabación.</string>
+    <string name="local_problem_recording_changed">Los datos de la grabación han cambiado.</string>
+    <string name="local_problem_recording_original_server_required">Vuelve a conectar con el servidor original de la grabación.</string>
+    <string name="local_problem_note_changed_while_saving">La nota cambió al guardar la grabación.</string>
+    <string name="local_problem_note_changed_during_recording">La nota cambió durante la grabación. Conserva el texto actual antes de adjuntar el clip.</string>
+    <string name="local_problem_recording_attachment_must_be_removed">Elimina el adjunto de la nota para quitar una grabación ya guardada.</string>
+    <string name="local_problem_recording_invalid">Esta grabación está incompleta, dañada o tiene un formato incompatible. Tu clip se conserva.</string>
+    <string name="local_problem_recording_limit_or_unavailable">La grabación supera el límite de subida o no está disponible.</string>
+    <string name="local_problem_attachment_limit_or_unavailable">El adjunto supera el límite de subida o no está disponible.</string>
+    <string name="local_problem_recording_nothing_to_recover">La grabación no tiene audio completo que se pueda recuperar.</string>
+    <string name="local_problem_unencrypted_connection_consent_required">Confirma la conexión sin cifrar antes de conectar.</string>
+    <string name="local_problem_server_root_required">Usa la URL raíz del servidor.</string>
+    <string name="local_problem_account_identity_incomplete">El servidor devolvió una identidad de cuenta incompleta.</string>
+    <string name="local_problem_attachment_id_invalid">El ID del adjunto no es válido.</string>
+    <string name="local_problem_label_invalid">Las etiquetas necesitan de 1 a 5 segmentos con letras, números, guiones bajos o guiones.</string>
+    <string name="local_problem_unfinished_code_block">Cierra el bloque de código sin terminar antes de añadir etiquetas.</string>
+    <string name="local_problem_suggestion_no_longer_pending">Esta sugerencia ya no está pendiente. Revisa una propuesta actual.</string>
+    <string name="local_problem_label_review_on_web_required">Revisa los cambios de etiquetas en la página Revisar de la web tras iniciar sesión para comprobar su efecto.</string>
+    <string name="local_problem_replacement_superseded">Esta sustitución ha quedado obsoleta. Compara la nota actual antes de aplicar una propuesta nueva.</string>
+    <string name="local_problem_merge_superseded">Esta combinación ha quedado obsoleta. Vuelve a comparar ambas notas actuales antes de combinarlas.</string>
+</resources>

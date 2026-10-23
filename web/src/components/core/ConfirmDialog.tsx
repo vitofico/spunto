@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../../lib/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog } from "../../features/Dialog";
 
@@ -19,6 +20,7 @@ export function ConfirmDialog({
   opener,
   onClose,
 }: ConfirmOptions & { onClose: (confirmed: boolean) => void }) {
+  useLanguage();
   return (
     <Dialog
       title={title}
@@ -26,7 +28,9 @@ export function ConfirmDialog({
       onClose={() => onClose(false)}
       footer={
         <>
-          <button onClick={() => onClose(false)}>Cancel</button>
+          <button onClick={() => onClose(false)}>
+            {t("profilepanel.cancel")}
+          </button>
           <button
             className={danger ? "danger" : "primary"}
             onClick={() => onClose(true)}

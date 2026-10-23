@@ -96,7 +96,7 @@ class NoteExportTest {
    compose.onNodeWithText("Continue").performClick()
    compose.waitUntil(10000) {compose.onAllNodesWithText("Save selected Markdown?").fetchSemanticsNodes().isNotEmpty()}
    assertEquals("text/markdown",picker.get()!!.type);assertTrue(picker.get()!!.hasCategory(Intent.CATEGORY_OPENABLE))
-   assertEquals(markdownFileName(note.title),picker.get()!!.getStringExtra(Intent.EXTRA_TITLE))
+   assertEquals(markdownFileName(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext,note.title),picker.get()!!.getStringExtra(Intent.EXTRA_TITLE))
    assertNull(picker.get()!!.data)
    runBlocking {authority.requireCurrent();model.repository.saveDraft(note.id,"A separate unsaved synthetic edit")}
    compose.waitUntil(10000) {compose.onAllNodesWithText("Save selected Markdown?").fetchSemanticsNodes().isEmpty()}

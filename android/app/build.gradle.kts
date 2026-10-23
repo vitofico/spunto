@@ -17,6 +17,8 @@ android {
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
  buildFeatures { compose = true }
+ androidResources { generateLocaleConfig = true }
+ testOptions { unitTests.isIncludeAndroidResources = true }
  // Compile original profiles with the R8 mapping; synthetic profile rewriting can race.
  experimentalProperties["android.experimental.art-profile-r8-rewriting"] = false
  buildTypes {
@@ -45,6 +47,7 @@ dependencies {
  androidTestImplementation("androidx.test.ext:junit:1.3.0"); androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0"); androidTestImplementation("androidx.test:core:1.7.0"); androidTestImplementation(platform(libs.compose.bom)); androidTestImplementation("androidx.compose.ui:ui-test-junit4"); androidTestImplementation("androidx.test:runner:1.7.0")
  debugImplementation("androidx.compose.ui:ui-test-manifest"); debugImplementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
  testImplementation("junit:junit:4.13.2")
+ testImplementation(libs.robolectric); testImplementation(libs.androidx.test.core)
 }
 
 val verifyApkBudget by tasks.registering {

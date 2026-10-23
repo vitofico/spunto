@@ -1,3 +1,4 @@
+import { useLanguage } from "../../lib/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "./Icon";
 
@@ -15,6 +16,7 @@ export function MoreMenu({
   label: string;
   items: MenuItem[];
 }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);

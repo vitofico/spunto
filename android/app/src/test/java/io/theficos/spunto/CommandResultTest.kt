@@ -6,6 +6,8 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application=android.app.Application::class,sdk=[28])
 class CommandResultTest {
  @Test fun entryMetaFollowsOwnerOrderInsteadOfReplicaArrival() {
   fun annotation(plugin:String,text:String)=PluginOutputEntity("annotation",plugin,"note-a",buildJsonObject { put("plugin",plugin);put("kind","meta");put("payload",buildJsonObject { put("type","text");put("text",text) }) }.toString())
@@ -19,12 +21,12 @@ class CommandResultTest {
   val result=Json.parseToJsonElement("""[{"type":"markdown","text":"Traduzione sintetica."},{"type":"command","id":"save-translation","title":"Save as note","args":{"result_id":"receipt-a"}}]""")
   val envelope=commandEnvelope("translate","translate",buildJsonObject { put("note_id","note-a");put("language","it") },result)
   assertEquals(2,outputComponents(envelope).size)
-  assertEquals("Traduzione sintetica.",resultCopyText(envelope))
+  assertEquals("Traduzione sintetica.",resultCopyText(settingsTestResources(),envelope))
   assertEquals("note-a",envelope["command_args"]!!.jsonObject["note_id"]!!.jsonPrimitive.content)
   assertEquals("translate",envelope["command_id"]!!.jsonPrimitive.content)
  }
  @Test fun copiedFocusedDiffClearlyNamesBothSides() {
   val diff=Json.parseToJsonElement("""{"type":"diff","base_version":3,"hunks":[{"old_start":4,"new_start":4,"lines":[" context","-Original words","+Proposed words"]}]}""")
-  assertEquals("Before:\ncontext\nOriginal words\n\nAfter:\ncontext\nProposed words",resultCopyText(diff))
+  assertEquals("Before:\ncontext\nOriginal words\n\nAfter:\ncontext\nProposed words",resultCopyText(settingsTestResources(),diff))
  }
 }

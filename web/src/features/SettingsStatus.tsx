@@ -1,3 +1,5 @@
+import { localizeCatalog } from "../lib/localizePlugins";
+import { getLanguage, t, useLanguage } from "../lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
@@ -8,14 +10,14 @@ import { AIHealthResults } from "./AISettings";
 import { formatBytes, formatWhen, humanize, plural } from "./format";
 import { ErrorLine } from "./SettingsParts";
 import { capabilityNames } from "./SettingsPlugins";
-const pluginStates: Record<string, string> = {
-  enabled: "On",
-  disabled: "Off",
-  available: "Off",
-  waiting: "Waiting for a requirement",
-  failed: "Paused after failed runs",
-  removed: "Removed",
-};
+const pluginStates: () => Record<string, string> = () => ({
+  enabled: t("settingsplugins.on_3"),
+  disabled: t("aisettings.off"),
+  available: t("aisettings.off"),
+  waiting: t("settingsstatus.waiting_for_a_requirement"),
+  failed: t("settingsstatus.paused_after_failed_runs"),
+  removed: t("settingsstatus.removed"),
+});
 function duration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -27,9 +29,14 @@ function duration(seconds: number) {
       : plural(minutes, "minute");
 }
 export function StatusPage() {
-  useDocumentTitle("Server status");
+  useLanguage();
+  useDocumentTitle(t("aisettings.server_status"));
   const query = useQuery({ queryKey: ["status"], queryFn: api.status });
-  const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
+  const catalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    select: (data) => localizeCatalog(data),
+  });
   const name = (id: string) =>
     catalog.data?.plugins.find((p) => p.id === id)?.name ?? humanize(id);
   const data = query.data;
@@ -65,32 +72,41 @@ export function StatusPage() {
     { id: string; state: string; last_error?: string | null }[] | undefined;
   return (
     <div className={styles.status}>
-      <h1>Server status</h1>
+      <h1>{t("aisettings.server_status")}</h1>
       {query.isPending ? (
-        <p>Loading status…</p>
+        <p>{t("settingsstatus.loading_status")}</p>
       ) : query.isError ? (
         <ErrorLine error={query.error} />
       ) : (
         <>
           <p className="muted">
-            Spunto {String(data?.version)} · Database schema{" "}
+            Spunto {String(data?.version)} {t("settingsstatus.database_schema")}{" "}
             {String(data?.schema)}
           </p>
           <dl className={styles.counts}>
             {[
-              ["Notes", (database?.notes ?? 0).toLocaleString()],
               [
-                "Private notes",
-                (database?.private_notes ?? 0).toLocaleString(),
+                t("review.notes"),
+                (database?.notes ?? 0).toLocaleString(getLanguage()),
               ],
-              ["In Trash", (database?.trashed_notes ?? 0).toLocaleString()],
+              [
+                t("settingsstatus.private_notes"),
+                (database?.private_notes ?? 0).toLocaleString(getLanguage()),
+              ],
+              [
+                t("settingsstatus.in_trash"),
+                (database?.trashed_notes ?? 0).toLocaleString(getLanguage()),
+              ],
               [
                 database?.size_kind === "note_rows"
-                  ? "Note text (estimate)"
-                  : "Database size",
+                  ? t("settingsstatus.note_text_estimate")
+                  : t("settingsstatus.database_size"),
                 formatBytes(database?.size_bytes ?? 0),
               ],
-              ["Running for", duration(Number(data?.uptime_seconds ?? 0))],
+              [
+                t("settingsstatus.running_for"),
+                duration(Number(data?.uptime_seconds ?? 0)),
+              ],
             ].map(([title, value]) => (
               <div key={title}>
                 <dt>{title}</dt>
@@ -98,13 +114,16 @@ export function StatusPage() {
               </div>
             ))}
           </dl>
-          <h2>Backup</h2>
+          <h2>{t("settingsstatus.backup")}</h2>
           <p>
             {backup?.managed
-              ? "Backups are managed by the host."
+              ? t("settingsstatus.backups_are_managed_by_the_host")
               : backup?.last_at
-                ? `Last backup ${formatWhen(backup.last_at)} · ${plural(Math.round(backup.age_hours ?? 0), "hour")} ago`
-                : "No backup yet."}
+                ? t("settingsstatus.last_backup_value1_value2_ago", {
+                    value1: formatWhen(backup.last_at),
+                    value2: plural(Math.round(backup.age_hours ?? 0), "hour"),
+                  })
+                : t("settingsstatus.no_backup_yet")}
           </p>
           <h2>AI</h2>
           <p>
@@ -112,36 +131,38 @@ export function StatusPage() {
               ? ai.capabilities
                   .map(
                     (capability) =>
-                      capabilityNames[
+                      capabilityNames()[
                         capability.replace("ai.", "") as AICapability
                       ]?.[0] ?? humanize(capability.replace("ai.", "")),
                   )
                   .join(" · ")
-              : "AI is off."}
+              : t("aisettings.ai_is_off")}
           </p>
           <AIHealthResults rows={ai?.health ?? []} />
           {ai?.indexing && (
             <p className="muted">
               {ai.indexing.available
-                ? `${plural(ai.indexing.chunks, "embedding chunk")}`
-                : "Vector index unavailable"}
-              {ai.indexing.enabled ? " · Indexing on" : " · Indexing paused"}
+                ? `${plural(ai.indexing.chunks, "embedding_chunk")}`
+                : t("settingsstatus.vector_index_unavailable")}
+              {ai.indexing.enabled
+                ? t("settingsstatus.indexing_on")
+                : t("settingsstatus.indexing_paused")}
             </p>
           )}
           {ai?.stats?.map((stat, index) => (
             <p className={styles.facts} key={index}>
               {name(stat.plugin_id)} ·{" "}
-              {capabilityNames[
+              {capabilityNames()[
                 stat.capability.replace("ai.", "") as AICapability
               ]?.[0] ?? humanize(stat.capability)}{" "}
-              · {humanize(stat.outcome)}: {stat.n.toLocaleString()}
+              · {humanize(stat.outcome)}: {stat.n.toLocaleString(getLanguage())}
             </p>
           ))}
-          <Link href="/settings/ai">AI settings</Link>
-          <h2>Plugins and jobs</h2>
+          <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
+          <h2>{t("settingsstatus.plugins_and_jobs")}</h2>
           {plugins?.map((p) => (
             <p className="muted" key={p.id}>
-              {name(p.id)} · {pluginStates[p.state] ?? humanize(p.state)}
+              {name(p.id)} · {pluginStates()[p.state] ?? humanize(p.state)}
               {p.last_error ? ` · ${p.last_error}` : ""}
             </p>
           ))}
@@ -151,15 +172,17 @@ export function StatusPage() {
               {humanize(j.status).toLowerCase()}
             </p>
           ))}
-          <h2>Access</h2>
+          <h2>{t("collaboration.access")}</h2>
           <p className="muted">
             {plural(
               Array.isArray(data?.credentials) ? data.credentials.length : 0,
-              "active credential",
+              "active_credential",
             )}
             .
           </p>
-          <button onClick={() => void query.refetch()}>Refresh status</button>
+          <button onClick={() => void query.refetch()}>
+            {t("settingsstatus.refresh_status")}
+          </button>
         </>
       )}
     </div>

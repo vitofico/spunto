@@ -39,7 +39,7 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  private val extendedCommandClient by lazy { this.client.newBuilder().readTimeout(240,TimeUnit.SECONDS).callTimeout(240,TimeUnit.SECONDS).build() }
  private fun requestClient(path:String,method:String):OkHttpClient = if(method=="POST" && pluginCommandPath.matches(path) || method=="POST" && path=="/api/v1/ai/check") extendedCommandClient else client
  private val json=Json { ignoreUnknownKeys=true }
- init { val url=config.serverUrl.toHttpUrl(); require(url.scheme=="https" || config.httpConsent) { "Confirm the unencrypted connection before connecting." }; require(url.encodedPath=="/" && url.username.isEmpty() && url.password.isEmpty()) { "Use the server's root URL." } }
+ init { val url=config.serverUrl.toHttpUrl(); requireLocal(url.scheme=="https" || config.httpConsent,LocalOperationProblem.UnencryptedConnectionConsentRequired) { "Confirm the unencrypted connection before connecting." }; requireLocal(url.encodedPath=="/" && url.username.isEmpty() && url.password.isEmpty(),LocalOperationProblem.ServerRootRequired) { "Use the server's root URL." } }
  suspend fun request(path:String, method:String="GET", body:JsonElement?=null, query:Map<String,String> = emptyMap()):JsonElement = withContext(Dispatchers.IO) {
   checkAuthority()
   val url=(config.serverUrl.trimEnd('/')+path).toHttpUrl().newBuilder().apply { query.forEach { (k,v)->addQueryParameter(k,v) } }.build()
@@ -68,7 +68,7 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  suspend fun waitForChanges(cursor:String,pluginsRev:Int=0):JsonObject = request("/api/v1/changes/wait",query=mapOf("cursor" to cursor,"plugins_rev" to pluginsRev.toString())).jsonObject
  suspend fun downloadAttachment(id:String,target:File,maximumBytes:Long):File=withContext(Dispatchers.IO) {
   checkAuthority()
-  require(java.util.UUID.fromString(id).toString()==id) {"Invalid attachment ID."}
+  requireLocal(java.util.UUID.fromString(id).toString()==id,LocalOperationProblem.AttachmentIdInvalid) {"Invalid attachment ID."}
   require(maximumBytes in 1..1_000_000_000L)
   require(!target.exists()) {"Use a new private cache file."}
   target.parentFile?.mkdirs()

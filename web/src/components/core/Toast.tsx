@@ -1,3 +1,4 @@
+import { useLanguage } from "../../lib/i18n";
 import {
   createContext,
   useCallback,
@@ -26,6 +27,7 @@ const ToastContext = createContext<{ show: (toast: ToastOptions) => void }>({
 export const useToast = () => useContext(ToastContext);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  useLanguage();
   const [toast, setToast] = useState<Shown>();
   const [open, setOpen] = useState(false);
   const [held, setHeld] = useState(false);

@@ -1,0 +1,9 @@
+<resources>
+ <string name="capture_widget_write">Notiz schreiben</string>
+ <string name="capture_widget_description">Eine Notiz vom Startbildschirm aus schreiben oder diktieren.</string>
+ <string name="capture_disabled">Schnellerfassung ist aus. Unter Einstellungen → Plugins aktivieren.</string>
+ <string name="capture_dictate_note">Notiz diktieren</string>
+ <string name="capture_from_notes">Aus deinen Notizen</string>
+ <string name="capture_new_note">Neue Notiz</string>
+ <string name="capture_dictate">Diktieren</string>
+</resources>

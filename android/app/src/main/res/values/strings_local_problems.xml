@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_problem_note_unavailable">This note is no longer available.</string>
+    <string name="local_problem_editor_changed">The editor changed. Save the current text with this recording.</string>
+    <string name="local_problem_editor_changed_while_saving">The editor changed while this recording was saved. Try again.</string>
+    <string name="local_problem_original_unavailable">The original note is no longer on this phone.</string>
+    <string name="local_problem_note_too_large">Note is too large.</string>
+    <string name="local_problem_image_too_large">Choose an image of at most 5 MB.</string>
+    <string name="local_problem_recording_journal_required">Retain the recording from its original journal before reusing its bytes.</string>
+    <string name="local_problem_recording_path_invalid">Recording path is outside this phone\'s recording store.</string>
+    <string name="local_problem_voice_memos_disabled">Enable Voice memos before recording.</string>
+    <string name="local_problem_recording_unavailable">Recording is unavailable.</string>
+    <string name="local_problem_recording_already_handled">Recording was discarded or retained.</string>
+    <string name="local_problem_recording_state_changed">Recording state changed.</string>
+    <string name="local_problem_recording_not_ready">Finish or recover the recording before saving.</string>
+    <string name="local_problem_recording_original_note_required">Keep this recording with its original note.</string>
+    <string name="local_problem_recording_current_editor_required">Use this recording’s current editor.</string>
+    <string name="local_problem_recording_changed">Recording bytes changed.</string>
+    <string name="local_problem_recording_original_server_required">Reconnect to the recording\'s original server.</string>
+    <string name="local_problem_note_changed_while_saving">The note changed while the recording was being saved.</string>
+    <string name="local_problem_note_changed_during_recording">The note changed during recording. Keep the current text before attaching the clip.</string>
+    <string name="local_problem_recording_attachment_must_be_removed">Remove the note attachment instead of discarding a retained recording.</string>
+    <string name="local_problem_recording_invalid">This recording is incomplete, damaged or unsupported. Your clip is kept.</string>
+    <string name="local_problem_recording_limit_or_unavailable">Recording exceeds the upload limit or is unavailable.</string>
+    <string name="local_problem_attachment_limit_or_unavailable">Attachment exceeds the upload limit or is unavailable.</string>
+    <string name="local_problem_recording_nothing_to_recover">Recording has no completed audio to recover.</string>
+    <string name="local_problem_unencrypted_connection_consent_required">Confirm the unencrypted connection before connecting.</string>
+    <string name="local_problem_server_root_required">Use the server\'s root URL.</string>
+    <string name="local_problem_account_identity_incomplete">The server returned an incomplete account identity.</string>
+    <string name="local_problem_attachment_id_invalid">Invalid attachment ID.</string>
+    <string name="local_problem_label_invalid">Labels need 1 to 5 letter, digit, underscore or hyphen segments.</string>
+    <string name="local_problem_unfinished_code_block">Close the unfinished code block before adding labels.</string>
+    <string name="local_problem_suggestion_no_longer_pending">This suggestion is no longer pending. Review a current proposal instead.</string>
+    <string name="local_problem_label_review_on_web_required">Review label changes in the authenticated web Review page to check their impact.</string>
+    <string name="local_problem_replacement_superseded">This replacement is superseded. Compare the current note before applying a new proposal.</string>
+    <string name="local_problem_merge_superseded">This merge is superseded. Compare both live notes again before merging.</string>
+</resources>

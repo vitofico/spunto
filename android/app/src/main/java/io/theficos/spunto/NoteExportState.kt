@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.Context
+
 import io.theficos.spunto.core.model.Note
 import java.security.MessageDigest
 
@@ -9,8 +11,8 @@ internal fun exportDigest(value:String)=MessageDigest.getInstance("SHA-256").dig
 internal fun noteExportStamp(note:Note,draft:String?,credentials:Any?,server:String?,epoch:String?)=NoteExportStamp(
  note.id,exportDigest(listOf(note.body,note.title,note.updatedAt,note.serverRev,note.privateNote,note.trashed).joinToString("\u0000")),draft?.let(::exportDigest),credentials,server,epoch,
 )
-internal fun markdownFileName(title:String):String {
- val stem=title.filter {it.isLetterOrDigit() || it in " -_"}.trim().take(80).trim().ifBlank {"note"}
+internal fun markdownFileName(context:Context,title:String):String {
+ val stem=title.filter {it.isLetterOrDigit() || it in " -_"}.trim().take(80).trim().ifBlank {context.getString(R.string.core_note_file_stem)}
  return "$stem.md"
 }
 internal class NoteExportSession {

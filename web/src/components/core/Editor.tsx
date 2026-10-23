@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../../lib/i18n";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { api, useLabels } from "../../lib";
 import { formatShortcut } from "../../lib/platform";
@@ -93,7 +94,7 @@ export function Editor({
   setBody,
   onSave,
   upload,
-  placeholder = "What’s on your mind?",
+  placeholder = t("editor.what_s_on_your_mind"),
   autoFocus = false,
   caret: initialCaret,
   note = false,
@@ -102,6 +103,7 @@ export function Editor({
   error,
   id = "composer",
 }: Props) {
+  useLanguage();
   const input = useRef<HTMLTextAreaElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const listId = useId();
@@ -191,7 +193,7 @@ export function Editor({
         <textarea
           ref={input}
           id={id}
-          aria-label={note ? "Edit note" : "New note"}
+          aria-label={note ? t("editor.edit_note") : t("app.new_note")}
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}
           aria-activedescendant={open ? `${listId}-${active}` : undefined}
@@ -259,7 +261,7 @@ export function Editor({
         <div className="row" onMouseDown={(e) => e.preventDefault()}>
           <button
             className="button"
-            aria-label="Add label"
+            aria-label={t("editor.add_label")}
             onClick={() => {
               setDismissed(false);
               setSelected(0);
@@ -270,7 +272,7 @@ export function Editor({
           </button>
           <button
             className="button"
-            aria-label="Add checklist"
+            aria-label={t("editor.add_checklist")}
             onClick={() =>
               insert((before) =>
                 before.slice(before.lastIndexOf("\n") + 1).trim()
@@ -285,7 +287,7 @@ export function Editor({
             <>
               <button
                 className="button"
-                aria-label="Attach image"
+                aria-label={t("editor.attach_image")}
                 onClick={() => file.current?.click()}
               >
                 <Icon name="image" />
@@ -315,7 +317,7 @@ export function Editor({
                         setUploadError(
                           error instanceof Error
                             ? error.message
-                            : "Could not attach the image. Try again.",
+                            : t("editor.could_not_attach_the_image_try_again"),
                         ),
                       );
                   }
@@ -332,7 +334,11 @@ export function Editor({
             disabled={saving || saveDisabled || !body.trim()}
             onClick={onSave}
           >
-            {saving ? "Saving…" : note ? "Done" : "Save"}
+            {saving
+              ? t("app.saving")
+              : note
+                ? t("collaboration.done")
+                : t("sharednotes.save")}
           </button>
         </div>
       </div>
@@ -346,7 +352,7 @@ export function Editor({
           className="autocomplete"
           role="listbox"
           id={listId}
-          aria-label="Labels"
+          aria-label={t("app.labels")}
         >
           {options.map((option, index) => (
             <div
@@ -360,7 +366,8 @@ export function Editor({
             >
               {option.fresh ? (
                 <>
-                  <span className="muted">New label</span> #{option.path}
+                  <span className="muted">{t("editor.new_label")}</span> #
+                  {option.path}
                 </>
               ) : (
                 <>#{option.path}</>

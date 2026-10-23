@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.res.Resources
+
 import io.theficos.spunto.core.plugins.validSchema
 import kotlinx.serialization.json.*
 import java.net.URI
@@ -37,12 +39,12 @@ internal data class NativePluginFacts(val raw:JsonObject,private val manifestAct
  val canDisable=valid && !removed && wantedOn && pin==EnvironmentPin.Unmanaged
  val canDeleteData=valid && raw.pluginFlag("can_delete_data")==true
  val permissionReviewRequired=wantedOn && permissions!=null && granted!=null && !granted.toSet().containsAll(permissions)
- val origin=when(raw.pluginText("origin")) { "bundled" -> "Built in"; "operator" -> "Third party"; else -> "Origin unavailable" }
+ fun origin(resources:Resources)=when(raw.pluginText("origin")) { "bundled" -> resources.getString(R.string.settings_built_in); "operator" -> resources.getString(R.string.settings_third_party); else -> resources.getString(R.string.settings_origin_unavailable) }
  val contribution=if(removed) JsonObject(emptyMap()) else raw["contributes"] as? JsonObject ?: JsonObject(emptyMap())
- val facts:List<String> get()=pluginDestinationFacts(this,pluginMissingModel(this).takeIf {state=="waiting"})+pluginScheduleFacts(this)
- val permissionLines:List<String> get()=raw.pluginStrings("permission_sentences")?.takeIf {it.isNotEmpty()} ?: permissions.orEmpty().map(::pluginPermissionSentence)
- val slots:List<String> get()=contribution.keys.mapNotNull { when(it) {
-  "suggestions" -> "Suggestions under notes and in Review"; "review" -> "Review"; "panel" -> "About this note"; "meta" -> "Note details"; "slip" -> "Daily slip"; "commands" -> "Commands"; "views" -> "Views"; "ranking" -> "Search ranking"; "mcp_tools" -> "Agent tools"; "schedules" -> "Scheduled runs"; else -> null
+ fun facts(resources:Resources):List<String> =pluginDestinationFacts(resources,this,pluginMissingModel(this).takeIf {state=="waiting"})+pluginScheduleFacts(resources,this)
+ fun permissionLines(resources:Resources):List<String> = if(raw.pluginText("origin")=="bundled") permissions.orEmpty().map {pluginPermissionSentence(resources,it)} + (if(permissions.orEmpty().any {it.startsWith("ai.") || it.startsWith("net.")}) listOf(resources.getString(R.string.settings_never_reads_private_notes)) else emptyList()) else raw.pluginStrings("permission_sentences")?.takeIf {it.isNotEmpty()} ?: permissions.orEmpty().map {pluginPermissionSentence(resources,it)}
+ fun slots(resources:Resources):List<String> =contribution.keys.mapNotNull { when(it) {
+  "suggestions" -> resources.getString(R.string.settings_suggestions_under_notes_and_in_review); "review" -> resources.getString(R.string.settings_review); "panel" -> resources.getString(R.string.settings_about_this_note); "meta" -> resources.getString(R.string.settings_note_details); "slip" -> resources.getString(R.string.settings_daily_slip); "commands" -> resources.getString(R.string.settings_commands); "views" -> resources.getString(R.string.settings_views); "ranking" -> resources.getString(R.string.settings_search_ranking); "mcp_tools" -> resources.getString(R.string.settings_agent_tools); "schedules" -> resources.getString(R.string.settings_scheduled_runs); else -> null
  } }.distinct()
 }
 internal data class NativePluginCatalog(val valid:Boolean,val revision:Long,val rows:List<NativePluginFacts>) {
@@ -56,55 +58,48 @@ internal fun nativePluginCatalog(catalog:JsonObject,manifest:JsonObject):NativeP
  if(rows.map {it.id}.distinct().size!=rows.size) return NativePluginCatalog(false,revision,emptyList())
  return NativePluginCatalog(true,revision,rows)
 }
-internal fun pluginPermissionSentence(permission:String):String=when(permission) {
- "notes.read" -> "Reads non-private notes"; "notes.create" -> "Creates notes"; "notes.private" -> "Reads private notes"; "attachments.read" -> "Reads attachments"; "attachments.write" -> "Writes attachments"; "suggest" -> "Proposes edits for your review"; "annotate" -> "Adds note details"; "net.fetch" -> "Fetches the pages you link to"; "schedule" -> "Runs on its declared schedule when enabled"; "mcp" -> "Exposes its declared agent tools"; else -> when {
- permission.startsWith("ai.") -> "Uses ${permission.removePrefix("ai.")} AI"; permission.startsWith("net.out:") -> "Talks to ${permission.removePrefix("net.out:")}"; else -> permission
+internal fun pluginPermissionSentence(resources:Resources,permission:String):String=when(permission) {
+ "notes.update_own" -> resources.getString(R.string.settings_updates_own_unedited_notes)
+ "search.text" -> resources.getString(R.string.settings_attaches_searchable_text)
+ "routes" -> resources.getString(R.string.settings_adds_plugin_routes)
+ "mic" -> resources.getString(R.string.settings_uses_device_microphone)
+ "notes.read" -> resources.getString(R.string.settings_reads_non_private_notes); "notes.create" -> resources.getString(R.string.settings_creates_notes); "notes.private" -> resources.getString(R.string.settings_reads_private_notes); "attachments.read" -> resources.getString(R.string.settings_reads_attachments); "attachments.write" -> resources.getString(R.string.settings_writes_attachments); "suggest" -> resources.getString(R.string.settings_proposes_edits_for_your_review); "annotate" -> resources.getString(R.string.settings_adds_note_details); "net.fetch" -> resources.getString(R.string.settings_fetches_the_pages_you_link_to); "schedule" -> resources.getString(R.string.settings_runs_on_its_declared_schedule_when_enabled); "mcp" -> resources.getString(R.string.settings_exposes_its_declared_agent_tools); else -> when {
+ permission.startsWith("ai.") -> resources.getString(R.string.settings_uses_ai ,aiCapabilityName(resources,permission.removePrefix("ai."))); permission.startsWith("net.out:") -> resources.getString(R.string.settings_talks_to ,permission.removePrefix("net.out:")); else -> permission
  }
-}
-/** Permission sentences read as what the plugin "will" do: "Reads your notes" becomes "Read your notes", "Never reads" becomes "Never read". */
-internal fun pluginWillSentence(sentence:String):String {
- if(sentence.startsWith("Never ")) return "Never "+pluginWillSentence(sentence.removePrefix("Never "))
- val verb=sentence.substringBefore(' ');val rest=sentence.substring(verb.length)
- val base=when {
-  verb.length<4 || !verb.endsWith("s") || verb.endsWith("ss") -> verb
-  Regex("(ch|sh|x|ss)es$").containsMatchIn(verb) -> verb.dropLast(2)
-  else -> verb.dropLast(1)
- }
- return base+rest
 }
 /** The AI capability a waiting plugin is missing a model for, from the host's destinations; null when nothing is missing. */
 internal fun pluginMissingModel(plugin:NativePluginFacts):String? {
  val destinations=plugin.raw["ai_destinations"] as? JsonObject
  return plugin.permissions.orEmpty().filter {it.startsWith("ai.")}.map {it.removePrefix("ai.")}.firstOrNull {(destinations?.get(it) as? JsonObject)?.pluginText("model").isNullOrBlank()}
 }
-internal fun aiModelName(capability:String)=when(capability) { "chat" -> "a chat model"; "embed" -> "an embedding model"; "vision" -> "a vision model"; "transcribe" -> "a transcription model"; else -> "an AI model" }
+internal fun aiModelName(resources:Resources,capability:String)=when(capability) { "chat" -> resources.getString(R.string.settings_a_chat_model); "embed" -> resources.getString(R.string.settings_an_embedding_model); "vision" -> resources.getString(R.string.settings_a_vision_model); "transcribe" -> resources.getString(R.string.settings_a_transcription_model); else -> resources.getString(R.string.settings_an_ai_model) }
 /** The waiting line in the switch's place (03 §6.4): "Needs a chat model". */
-internal fun pluginWaitingLine(plugin:NativePluginFacts):String = pluginMissingModel(plugin)?.let {"Needs ${aiModelName(it)}"} ?: "Waiting for a requirement"
+internal fun pluginWaitingLine(resources:Resources,plugin:NativePluginFacts):String = pluginMissingModel(plugin)?.let {resources.getString(R.string.settings_needs ,aiModelName(resources,it))} ?: resources.getString(R.string.settings_waiting_for_a_requirement)
 /** Where each AI capability sends note text; [said] is a missing model the waiting line already names, so it is left out. */
-internal fun pluginDestinationFacts(plugin:NativePluginFacts,said:String?=null):List<String> {
- if(plugin.removed) return listOf("Removed · retained access history only")
+internal fun pluginDestinationFacts(resources:Resources,plugin:NativePluginFacts,said:String?=null):List<String> {
+ if(plugin.removed) return listOf(resources.getString(R.string.settings_removed_retained_access_history_only))
  val result=mutableListOf<String>()
  val destinations=plugin.raw["ai_destinations"] as? JsonObject ?: JsonObject(emptyMap())
- val capabilities=mapOf("chat" to "Chat","embed" to "Embeddings","vision" to "Vision","transcribe" to "Transcription")
+ val capabilities=mapOf("chat" to resources.getString(R.string.settings_chat),"embed" to resources.getString(R.string.settings_embeddings),"vision" to resources.getString(R.string.settings_vision),"transcribe" to resources.getString(R.string.settings_transcription))
  plugin.permissions.orEmpty().filter {it.startsWith("ai.")}.forEach {permission ->
   val capability=permission.removePrefix("ai.");val label=capabilities[capability]?.takeIf {capability!=said} ?: return@forEach
   val destination=destinations[capability] as? JsonObject
   val model=destination?.pluginText("model");val host=destination?.pluginText("host");val outside=destination?.pluginFlag("leaves_network")
-  result+=if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) "$label: note text to $model at $host, ${if(outside) "outside your network" else "on your network"}" else "$label: no model is set up"
+  result+=if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) resources.getString(R.string.settings_note_text_to_at ,label,model,host,if(outside) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)) else resources.getString(R.string.settings_no_model_is_set_up ,label)
  }
- if("net.fetch" in plugin.permissions.orEmpty()) result+="Fetches the linked page from your server"
+ if("net.fetch" in plugin.permissions.orEmpty()) result+=resources.getString(R.string.settings_fetches_the_linked_page_from_your_server)
  val network=plugin.raw.pluginStrings("network_destinations").orEmpty().filter {it.isNotBlank()}.distinct()
- network.forEach {result+="Talks to $it"}
- if(plugin.permissions.orEmpty().any {it.startsWith("net.out:")} && network.isEmpty()) result+="Outbound network destinations are unavailable"
- if(result.isEmpty() && said==null) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") "Recognition uses this phone or its speech provider, according to this phone’s setting" else if(plugin.raw.pluginText("kind")=="device") "Stays on the phone" else "Stays on your server"
+ network.forEach {result+=resources.getString(R.string.settings_talks_to ,it)}
+ if(plugin.permissions.orEmpty().any {it.startsWith("net.out:")} && network.isEmpty()) result+=resources.getString(R.string.settings_outbound_network_destinations_are_unavailable)
+ if(result.isEmpty() && said==null) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") resources.getString(R.string.settings_recognition_uses_this_phone_or_its_speech) else if(plugin.raw.pluginText("kind")=="device") resources.getString(R.string.settings_stays_on_the_phone) else resources.getString(R.string.settings_stays_on_your_server)
  return result
 }
-internal fun pluginScheduleFacts(plugin:NativePluginFacts):List<String> {
+internal fun pluginScheduleFacts(resources:Resources,plugin:NativePluginFacts):List<String> {
  val settings=plugin.raw["settings"] as? JsonObject ?: JsonObject(emptyMap())
  fun resolve(value:String?):String?=value?.let { if(Regex("\\{[a-z][a-z0-9_]*\\}").matches(it)) settings.pluginText(it.substring(1,it.length-1)) else it }
  return (plugin.contribution["schedules"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.map {schedule ->
   val day=resolve(schedule.pluginText("weekday"));val time=resolve(schedule.pluginText("time"))
-  if(day in setOf("monday","tuesday","wednesday","thursday","friday","saturday","sunday") && time!=null && Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(time)) "${day!!.replaceFirstChar {it.uppercase()}} $time (server time) · pauses while off or waiting" else "Schedule details unavailable"
+  if(day in setOf("monday","tuesday","wednesday","thursday","friday","saturday","sunday") && time!=null && Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(time)) resources.getString(R.string.settings_server_time_pauses_while_off_or_waiting ,java.time.DayOfWeek.valueOf(day!!.uppercase(java.util.Locale.ROOT)).getDisplayName(java.time.format.TextStyle.FULL,resources.configuration.locales[0]),time) else resources.getString(R.string.settings_schedule_details_unavailable)
  }
 }
 internal data class NativePluginPage(val schema:JsonObject=JsonObject(emptyMap()),val values:JsonObject=JsonObject(emptyMap()),val secrets:JsonObject=JsonObject(emptyMap())) {
@@ -155,13 +150,22 @@ internal fun undoPermissions(undo:PluginUndo,current:NativePluginFacts,server:St
  val permissions=current.permissions ?: return null
  return permissions.takeIf {it.toSet()==undo.permissions.toSet() && undo.grants.containsAll(it) && current.granted?.toSet()?.containsAll(it)==true}
 }
-internal fun pluginAiSummary(ai:JsonObject):List<String> {
+internal fun pluginAiSummary(resources:Resources,ai:JsonObject):List<String> {
  val profiles=(ai["profiles"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}
  val bindings=ai["bindings"] as? JsonObject ?: JsonObject(emptyMap())
- return listOf("chat" to "Chat","embed" to "Embeddings").map { (cap,label) ->
+ return listOf("chat" to resources.getString(R.string.settings_chat),"embed" to resources.getString(R.string.settings_embeddings)).map { (cap,label) ->
   val profile=profiles.firstOrNull {it.pluginText("name")==bindings.pluginText(cap)}
   val model=profile?.pluginText("${cap}_model");val host=profile?.pluginText("base_url")?.let {runCatching {URI(it).host}.getOrNull()}
   val outside=(profile?.get("leaves_network") as? JsonObject)?.pluginFlag(cap)
-  if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) "$label: $model at $host, ${if(outside) "outside your network" else "on your network"}" else "$label: no model is set up"
+  if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) resources.getString(R.string.settings_at_dac7c ,label,model,host,if(outside) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)) else resources.getString(R.string.settings_no_model_is_set_up ,label)
  }
+}
+
+internal fun pluginCategoryName(resources:Resources,category:String):String = resources.getString(when(category) {
+ "capture" -> R.string.settings_group_capture;"organize" -> R.string.settings_group_organize;"recall" -> R.string.settings_group_recall
+ "develop" -> R.string.settings_group_develop;"agents" -> R.string.settings_group_agents;else -> R.string.settings_group_data
+})
+internal fun aiCapabilityName(resources:Resources,capability:String):String = when(capability) {
+ "chat" -> resources.getString(R.string.settings_chat);"embed" -> resources.getString(R.string.settings_embeddings)
+ "vision" -> resources.getString(R.string.settings_vision);"transcribe" -> resources.getString(R.string.settings_transcription);else -> capability
 }

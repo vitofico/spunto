@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import androidx.compose.ui.platform.LocalContext
+
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
@@ -41,15 +43,17 @@ internal fun firstRunGuideEligible(action:String?,hasData:Boolean,initialNoteId:
 }
 
 private data class GuideStep(val title:String,val body:String,val example:String,val caption:String)
-private val guideSteps=listOf(
- GuideStep("Catch a thought.","Write a quick note, then tap Save. It is kept on this phone, even without a connection.","Ask about the little bookshop.","A note can be a sentence, a list or a longer thought."),
- GuideStep("Labels live in your words.","Type # in a note to add a label. Use / for a nested label. Open All notes to browse them.","A thought for the weekend #ideas\n\nA place to try #life/food","Labels stay in the note text. One note can have several."),
- GuideStep("Find it when you need it.","Search finds your words on this phone. If your server has AI search on, it can also find notes with a similar meaning while you're connected.","little bookshop","Word search works offline. AI search is optional."),
- GuideStep("Sync when you're ready.","Keep writing offline, or sync with your own server at its HTTPS address. On a hosted account, sign in on the web, then scan the pairing code from Settings → Devices.","https://spunto.example.org","Your notes stay on this phone until you connect. A plain HTTP address asks you to confirm first."),
+private fun guideSteps(context:android.content.Context)=listOf(
+ GuideStep(context.getString(R.string.core_guide_catch),context.getString(R.string.core_guide_catch_body),context.getString(R.string.core_guide_bookshop),context.getString(R.string.core_guide_note_caption)),
+ GuideStep(context.getString(R.string.core_guide_labels),context.getString(R.string.core_guide_labels_body),context.getString(R.string.core_guide_labels_example),context.getString(R.string.core_guide_labels_caption)),
+ GuideStep(context.getString(R.string.core_guide_find),context.getString(R.string.core_guide_find_body),context.getString(R.string.core_guide_search_example),context.getString(R.string.core_guide_find_caption)),
+ GuideStep(context.getString(R.string.core_guide_sync),context.getString(R.string.core_guide_sync_body),"https://spunto.example.org",context.getString(R.string.core_guide_sync_caption)),
 )
 
 @Composable internal fun FirstRunGuide(onSkip:()->Unit,onStart:()->Unit,onConnect:(()->Unit)?=null) {
+ val context=LocalContext.current
  var step by rememberSaveable {mutableIntStateOf(0)}
+ val guideSteps=guideSteps(context)
  val current=guideSteps[step]
  val scroll=rememberScrollState()
  val keyboard=LocalSoftwareKeyboardController.current
@@ -64,15 +68,15 @@ private val guideSteps=listOf(
    Column(Modifier.widthIn(max=560.dp).fillMaxWidth().fillMaxHeight().padding(horizontal=SpuntoSpacing.s24,vertical=SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
     // The one progress indicator; the last step offers no Skip, only its own actions.
     Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-     Text("Getting started · ${step+1} of ${guideSteps.size}",Modifier.weight(1f).semantics {contentDescription="Getting started, step ${step+1} of ${guideSteps.size}";liveRegion=LiveRegionMode.Polite},style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
-     if(step<guideSteps.lastIndex) TextButton(onClick={leave(onSkip)},modifier=Modifier.heightIn(min=48.dp)) {Text("Skip")}
+     Text(context.getString(R.string.core_guide_progress,step+1,guideSteps.size),Modifier.weight(1f).semantics {contentDescription=context.getString(R.string.core_guide_step,step+1,guideSteps.size);liveRegion=LiveRegionMode.Polite},style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
+     if(step<guideSteps.lastIndex) TextButton(onClick={leave(onSkip)},modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_skip))}
     }
     val actions:@Composable ()->Unit={
      GuideActions(step,compact,onBack={step--},onNext={if(step==guideSteps.lastIndex) leave(onStart) else step++},onConnect=if(onConnect!=null) ({leave(onConnect)}) else null)
     }
     // Short screens and enlarged text give the explanation and actions one scroll area.
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s24)) {
-     GuideContent(step,if(step==guideSteps.lastIndex && onConnect==null) current.copy(caption="This phone is already connected, so your notes sync.") else current)
+     GuideContent(step,if(step==guideSteps.lastIndex && onConnect==null) current.copy(caption=context.getString(R.string.core_already_connected)) else current)
      if(compact) actions()
     }
     if(!compact) actions()
@@ -98,14 +102,16 @@ private val guideSteps=listOf(
 }
 
 @Composable private fun GuideActions(step:Int,compact:Boolean,onBack:()->Unit,onNext:()->Unit,onConnect:(()->Unit)?) {
+ val context=LocalContext.current
+ val guideSteps=guideSteps(context)
  Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-  if(step==guideSteps.lastIndex && onConnect!=null) OutlinedButton(onClick=onConnect,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Connect to a server")}
+  if(step==guideSteps.lastIndex && onConnect!=null) OutlinedButton(onClick=onConnect,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(context.getString(R.string.core_connect_server))}
   if(compact) {
-   Button(onClick=onNext,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(if(step==guideSteps.lastIndex) "Start writing" else "Next")}
-   TextButton(enabled=step>0,onClick=onBack,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Back")}
+   Button(onClick=onNext,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(if(step==guideSteps.lastIndex) context.getString(R.string.core_start_writing) else context.getString(R.string.core_next))}
+   TextButton(enabled=step>0,onClick=onBack,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text(context.getString(R.string.core_back))}
   } else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
-   TextButton(enabled=step>0,onClick=onBack,modifier=Modifier.heightIn(min=48.dp)) {Text("Back")}
-   Button(onClick=onNext,modifier=Modifier.weight(1f).heightIn(min=48.dp)) {Text(if(step==guideSteps.lastIndex) "Start writing" else "Next")}
+   TextButton(enabled=step>0,onClick=onBack,modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_back))}
+   Button(onClick=onNext,modifier=Modifier.weight(1f).heightIn(min=48.dp)) {Text(if(step==guideSteps.lastIndex) context.getString(R.string.core_start_writing) else context.getString(R.string.core_next))}
   }
  }
 }

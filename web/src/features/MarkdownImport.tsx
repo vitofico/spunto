@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, request } from "../lib/api";
@@ -16,6 +17,7 @@ type Preview = {
 };
 
 export function MarkdownImport() {
+  useLanguage();
   const client = useQueryClient();
   const [preview, setPreview] = useState<Preview>();
   const [report, setReport] = useState<unknown>();
@@ -23,7 +25,7 @@ export function MarkdownImport() {
   const upload = useMutation({
     mutationFn: async (file: File) => {
       if (!file.size || file.size > 20_000_000)
-        throw new Error("Choose a ZIP of at most 20 MB.");
+        throw new Error(t("markdownimport.choose_a_zip_of_at_most_20_mb"));
       const form = new FormData();
       form.append("file", file);
       return request<Preview>("/api/v1/plugins/markdown-import/upload", {
@@ -59,14 +61,12 @@ export function MarkdownImport() {
   const busy = upload.isPending || importing.isPending;
   const error = upload.error ?? importing.error ?? refresh.error;
   return (
-    <section aria-label="Import Markdown">
+    <section aria-label={t("markdownimport.import_markdown")}>
       <p className="muted">
-        Upload a Markdown ZIP to preview its notes and attachments. Spunto
-        exports preserve their metadata; other vaults use supported front
-        matter. Notes you edited here are kept.
+        {t("markdownimport.upload_a_markdown_zip_to_preview_its_notes")}
       </p>
       <label className={styles.filePicker}>
-        Choose a Markdown ZIP
+        {t("markdownimport.choose_a_markdown_zip")}
         <input
           className="sr-only"
           type="file"
@@ -83,24 +83,32 @@ export function MarkdownImport() {
           }}
         />
       </label>
-      {upload.isPending && <p role="status">Preparing preview…</p>}
+      {upload.isPending && (
+        <p role="status">{t("markdownimport.preparing_preview")}</p>
+      )}
       {preview && (
         <div>
           <p>
-            {plural(preview.report.notes, "note")} and{" "}
-            {plural(preview.report.attachments, "attachment")}
-            {preview.report.attachment_bytes > 0 &&
-              ` (${formatBytes(preview.report.attachment_bytes)})`}
-            .
+            {t("markdownimport.preview_counts", {
+              notes: plural(preview.report.notes, "note"),
+              attachments: plural(preview.report.attachments, "attachment"),
+              size:
+                preview.report.attachment_bytes > 0
+                  ? ` (${formatBytes(preview.report.attachment_bytes)})`
+                  : "",
+            })}
           </p>
           {preview.report.missing_links > 0 && (
             <p>
-              {plural(preview.report.missing_links, "local link")} could not be
-              found. The original links stay as they are.
+              {t("markdownimport.missing_links", {
+                count: preview.report.missing_links,
+              })}
             </p>
           )}
           <button disabled={busy || queued} onClick={() => importing.mutate()}>
-            {importing.isPending ? "Queueing import…" : "Import these notes"}
+            {importing.isPending
+              ? t("markdownimport.queueing_import")
+              : t("markdownimport.import_these_notes")}
           </button>
         </div>
       )}
@@ -108,7 +116,7 @@ export function MarkdownImport() {
       {report ? <VocabularyOutput value={report} /> : null}
       {(queued || report !== undefined) && (
         <button disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-          Refresh import report
+          {t("markdownimport.refresh_import_report")}
         </button>
       )}
       {error && (

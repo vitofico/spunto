@@ -5,7 +5,10 @@ import io.theficos.spunto.data.sync.AuthConfig
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application=android.app.Application::class,sdk=[28])
 class NoteExportStateTest {
+ private val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
  private val note=Note("synthetic-export","# Example\n\nUnicode città · text",createdAt=10,updatedAt=20,serverRev=3,privateNote=true)
  private fun stamp(value:Note=note,draft:String?=null,account:Any?="account",server:String?="https://synthetic.invalid",epoch:String?="a")=noteExportStamp(value,draft,account,server,epoch)
  @Test fun pickerOwnsOnlyUnchangedUnlockedNoteAndReplicaWithoutRetainingBody() {
@@ -20,9 +23,9 @@ class NoteExportStateTest {
   val next=session.begin(source);assertFalse(session.owns(first,source,true));assertTrue(session.owns(next,source,true))
  }
  @Test fun safeBoundedMarkdownFilenamePreservesUsefulUnicodeWithoutPathsOrControls() {
-  assertEquals("Città notes.md",markdownFileName("../Città /notes\n\u0000"))
-  assertEquals("note.md",markdownFileName("../\\\n\u0000"))
-  assertEquals(83,markdownFileName("x".repeat(200)).length)
+  assertEquals("Città notes.md",markdownFileName(context,"../Città /notes\n\u0000"))
+  assertEquals("note.md",markdownFileName(context,"../\\\n\u0000"))
+  assertEquals(83,markdownFileName(context,"x".repeat(200)).length)
  }
  @Test fun markdownWriteIsExactUtf8AndStopsBeforeAnyWriteWithoutAuthority() {
   val bytes=java.io.ByteArrayOutputStream()
@@ -38,15 +41,15 @@ class NoteExportStateTest {
  @Test fun fullLibraryAndProfileUseOnlyValidatedOwnerWebRoutesAndNoCredentials() {
   val config=AuthConfig("https://synthetic.invalid","synthetic-export-token","synthetic-device","Phone")
   for(section in listOf("data","profile")) {
-   val target=ownerWebSettingsTarget(config,"https://synthetic.invalid",true,section)
+   val target=ownerWebSettingsTarget(context,config,"https://synthetic.invalid",true,section)
    assertEquals("https://synthetic.invalid/settings/$section",target.url);assertFalse(target.url!!.contains(config.token))
-   assertNull(ownerWebSettingsTarget(config,"https://other.invalid",true,section).url)
-   assertNull(ownerWebSettingsTarget(config,"https://synthetic.invalid",false,section).url)
-   assertNull(ownerWebSettingsTarget(config,"https://synthetic.invalid",true,section,true).url)
+   assertNull(ownerWebSettingsTarget(context,config,"https://other.invalid",true,section).url)
+   assertNull(ownerWebSettingsTarget(context,config,"https://synthetic.invalid",false,section).url)
+   assertNull(ownerWebSettingsTarget(context,config,"https://synthetic.invalid",true,section,true).url)
   }
-  assertNull(ownerWebSettingsTarget(config,"https://synthetic.invalid",true,"../export").url)
-  assertNull(ownerWebSettingsTarget(null,null,true,"data").url)
-  assertNull(ownerWebSettingsTarget(config.copy(serverUrl="https://user:secret@synthetic.invalid"),"https://synthetic.invalid",true,"data").url)
-  assertNull(ownerWebSettingsTarget(config.copy(serverUrl="http://synthetic.invalid"),"http://synthetic.invalid",true,"data").url)
+  assertNull(ownerWebSettingsTarget(context,config,"https://synthetic.invalid",true,"../export").url)
+  assertNull(ownerWebSettingsTarget(context,null,null,true,"data").url)
+  assertNull(ownerWebSettingsTarget(context,config.copy(serverUrl="https://user:secret@synthetic.invalid"),"https://synthetic.invalid",true,"data").url)
+  assertNull(ownerWebSettingsTarget(context,config.copy(serverUrl="http://synthetic.invalid"),"http://synthetic.invalid",true,"data").url)
  }
 }

@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../../lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { api, useLabels, useSearch, useWorkspaceRole } from "../../lib";
@@ -25,6 +26,7 @@ export function Palette({
   /** Opened from the keyboard: no entrance motion (03 §9.1). */
   instant?: boolean;
 }) {
+  useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
   const [exportError, setExportError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -131,19 +133,25 @@ export function Palette({
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       onClose();
     } catch {
-      setExportError("Could not export this space. Try again.");
+      setExportError(t("palette.could_not_export_this_space_try_again"));
     }
   }
   const actions: { label: string; keys?: string; run: () => void }[] = [
-    ...(canEdit ? [{ label: "New note", keys: "n", run: () => go("/") }] : []),
-    { label: "Go to Archive", run: () => go("/archive") },
-    { label: "Go to Trash", keys: "g t", run: () => go("/trash") },
-    { label: "Settings", keys: "g s", run: () => go("/settings/appearance") },
-    { label: "Export notes", run: () => void exportNotes() },
+    ...(canEdit
+      ? [{ label: t("app.new_note"), keys: "n", run: () => go("/") }]
+      : []),
+    { label: t("palette.go_to_archive"), run: () => go("/archive") },
+    { label: t("app.go_to_trash"), keys: "g t", run: () => go("/trash") },
+    {
+      label: t("app.settings"),
+      keys: "g s",
+      run: () => go("/settings/appearance"),
+    },
+    { label: t("settingsdata.export_notes"), run: () => void exportNotes() },
     ...(onHelp
       ? [
           {
-            label: "Keyboard shortcuts",
+            label: t("app.keyboard_shortcuts"),
             keys: "?",
             run: () => {
               onClose();
@@ -164,16 +172,16 @@ export function Palette({
         className={"palette" + (instant ? "" : " enter")}
         role="dialog"
         aria-modal="true"
-        aria-label="Search and commands"
+        aria-label={t("app.search_and_commands")}
       >
         <div className="palette-head">
           <input
             ref={input}
-            aria-label="Search and commands"
+            aria-label={t("app.search_and_commands")}
             aria-controls="palette-options"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search notes, labels and actions…"
+            placeholder={t("palette.search_notes_labels_and_actions")}
             onKeyDown={(e) => {
               if (result) return;
               const all = rows();
@@ -198,7 +206,7 @@ export function Palette({
           />
           <button
             className="button"
-            aria-label="Close search and commands"
+            aria-label={t("palette.close_search_and_commands")}
             onClick={onClose}
           >
             <Icon name="close" />
@@ -217,7 +225,7 @@ export function Palette({
             ref={list}
             id="palette-options"
             role="listbox"
-            aria-label="Results"
+            aria-label={t("palette.results")}
             onMouseMove={(e) => {
               const row = (e.target as HTMLElement).closest("button");
               if (row && row !== active && rows().includes(row)) setActive(row);
@@ -230,7 +238,8 @@ export function Palette({
                   onClick={() => go("/search?q=" + encodeURIComponent(query))}
                 >
                   <span>
-                    Search for <q>{query.trim()}</q>
+                    {t("palette.search_for")}
+                    <q>{query.trim()}</q>
                   </span>
                 </button>
               </div>
@@ -245,14 +254,14 @@ export function Palette({
                 }}
               />
             )}
-            {canEdit && noteId && matches("Edit note") && (
+            {canEdit && noteId && matches(t("editor.edit_note")) && (
               <div
                 className="palette-group"
                 role="group"
-                aria-label="This note"
+                aria-label={t("palette.this_note")}
               >
                 <div className="overline" aria-hidden="true">
-                  This note
+                  {t("palette.this_note")}
                 </div>
                 <button
                   className="palette-row"
@@ -265,18 +274,23 @@ export function Palette({
                       ?.click();
                   }}
                 >
-                  Edit note<kbd>e</kbd>
+                  {t("editor.edit_note")}
+                  <kbd>{t("palette.e")}</kbd>
                 </button>
               </div>
             )}
             {query.trim() && (
-              <div className="palette-group" role="group" aria-label="Notes">
+              <div
+                className="palette-group"
+                role="group"
+                aria-label={t("review.notes")}
+              >
                 <div className="overline" aria-hidden="true">
-                  Notes
+                  {t("review.notes")}
                 </div>
                 {results.isPending && (
                   <p className="palette-status" role="status">
-                    Searching your notes…
+                    {t("search.searching_your_notes")}
                   </p>
                 )}
                 {results.error && (
@@ -285,7 +299,9 @@ export function Palette({
                   </p>
                 )}
                 {!results.isPending && !results.error && !notes.length && (
-                  <p className="palette-status">No notes match this search.</p>
+                  <p className="palette-status">
+                    {t("palette.no_notes_match_this_search")}
+                  </p>
                 )}
                 {notes.map((note) => (
                   <button
@@ -299,9 +315,13 @@ export function Palette({
               </div>
             )}
             {matchingLabels.length > 0 && (
-              <div className="palette-group" role="group" aria-label="Labels">
+              <div
+                className="palette-group"
+                role="group"
+                aria-label={t("app.labels")}
+              >
                 <div className="overline" aria-hidden="true">
-                  Labels
+                  {t("app.labels")}
                 </div>
                 {matchingLabels.map((label) => (
                   <button
@@ -321,9 +341,13 @@ export function Palette({
               </p>
             )}
             {actions.length > 0 && (
-              <div className="palette-group" role="group" aria-label="Actions">
+              <div
+                className="palette-group"
+                role="group"
+                aria-label={t("palette.actions")}
+              >
                 <div className="overline" aria-hidden="true">
-                  Actions
+                  {t("palette.actions")}
                 </div>
                 {actions.map((action) => (
                   <button
@@ -341,8 +365,8 @@ export function Palette({
         )}
         <footer className="palette-footer">
           {result
-            ? "Esc to go back"
-            : "↑ ↓ to choose · ↵ to open · Esc to close"}
+            ? t("palette.esc_to_go_back")
+            : t("palette.to_choose_to_open_esc_to_close")}
         </footer>
       </section>
     </div>

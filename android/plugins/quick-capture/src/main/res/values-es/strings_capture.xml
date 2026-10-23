@@ -1,0 +1,9 @@
+<resources>
+ <string name="capture_widget_write">Escribir una nota</string>
+ <string name="capture_widget_description">Escribe o dicta una nota desde la pantalla de inicio.</string>
+ <string name="capture_disabled">La captura rápida está desactivada. Actívala en Ajustes → Complementos.</string>
+ <string name="capture_dictate_note">Dictar una nota</string>
+ <string name="capture_from_notes">De tus notas</string>
+ <string name="capture_new_note">Nueva nota</string>
+ <string name="capture_dictate">Dictar</string>
+</resources>

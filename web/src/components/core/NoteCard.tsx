@@ -1,3 +1,4 @@
+import { getLanguage, t, useLanguage } from "../../lib/i18n";
 import DOMPurify from "dompurify";
 import {
   memo,
@@ -40,7 +41,7 @@ export function toggleRenderedCheckbox(body: string, offset: number) {
 export function failure(error: unknown) {
   const safe = safeError(error);
   return safe.status === 0
-    ? "Can’t reach the server. Nothing changed; try again when you’re back online."
+    ? t("notecard.can_t_reach_the_server_nothing_changed_try")
     : safe.message;
 }
 /**
@@ -58,6 +59,7 @@ export function NoteBody({
   onCheckbox?: (offset: number) => void;
   clamp?: boolean;
 }) {
+  useLanguage();
   const content = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -145,7 +147,7 @@ export function NoteBody({
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? "Show less" : "Show more"}
+          {expanded ? t("notecard.show_less") : t("notecard.show_more")}
         </button>
       )}
     </>
@@ -153,14 +155,15 @@ export function NoteBody({
 }
 /** Whose words these are: "via Claude Code" for agents, "✧ via Weekly digest" for plugin-written notes. */
 export function Provenance({ note }: { note: Note }) {
+  useLanguage();
   const manifest = useManifest();
   if (note.machine) {
     const ref = note.source.ref;
     const plugin = manifest.data?.plugins.find((p) => p.id === ref);
     return (
       <span className="chip">
-        <span aria-hidden="true">✧ </span>via{" "}
-        {plugin?.name ?? ref ?? "a plugin"}
+        <span aria-hidden="true">✧ </span>
+        {t("notecard.via")} {plugin?.name ?? ref ?? t("notecard.a_plugin")}
       </span>
     );
   }
@@ -170,16 +173,17 @@ export function Provenance({ note }: { note: Note }) {
       <span className="agent-glyph" aria-hidden="true">
         &gt;_
       </span>{" "}
-      via {note.source.ref ?? "an agent"}
+      {t("notecard.via_2")}
+      {note.source.ref ?? t("notecard.an_agent")}
     </span>
   );
 }
 type FlagName = "pinned" | "archived" | "trashed";
-const flagDone: Record<FlagName, [on: string, off: string]> = {
-  pinned: ["Pinned", "Unpinned"],
-  archived: ["Archived", "Unarchived"],
-  trashed: ["Moved to trash", "Restored"],
-};
+const flagDone: () => Record<FlagName, [on: string, off: string]> = () => ({
+  pinned: [t("notecard.pinned"), t("notecard.unpinned")],
+  archived: [t("slots.archived"), t("notecard.unarchived")],
+  trashed: [t("notecard.moved_to_trash"), t("notecard.restored")],
+});
 /** Pin, archive and trash with an Undo toast; resolves true once the change is saved and shown. */
 export function useNoteFlag() {
   const toast = useToast();
@@ -197,8 +201,8 @@ export function useNoteFlag() {
         return false;
       }
       toast.show({
-        message: flagDone[flag][value ? 0 : 1],
-        actionLabel: "Undo",
+        message: flagDone()[flag][value ? 0 : 1],
+        actionLabel: t("settingsplugins.undo"),
         onAction: () =>
           void api
             .flags(note.id, { [flag]: !value })
@@ -268,6 +272,7 @@ export function queueTick(
   });
 }
 export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
+  useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
   const [, navigate] = useLocation();
   const toast = useToast();
@@ -276,7 +281,7 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
   const [ticked, setTicked] = useState<string>();
   // A capture the server has not acknowledged yet (see useDraftEditor).
   const queued = note.id.startsWith("queued:");
-  const name = note.title || "Untitled note";
+  const name = note.title || t("vocabulary.untitled_note");
   useEffect(() => {
     if (!tickQueues.has(note.id)) setTicked(undefined);
   }, [note.id, note.version]);
@@ -316,7 +321,7 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
       toast.show({ message: failure(error) });
     });
   };
-  const time = new Date(note.created_at).toLocaleTimeString(undefined, {
+  const time = new Date(note.created_at).toLocaleTimeString(getLanguage(), {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -335,7 +340,7 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
         <Link
           href={"/n/" + note.id}
           className="time"
-          aria-label={`${note.pinned ? "Pinned" : time}, ${name}`}
+          aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${name}`}
         >
           {note.pinned ? (
             <Icon name="pin" />
@@ -366,36 +371,41 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
       <div className="entry-meta">
         {note.private && (
           <span className="chip">
-            <Icon name="lock" /> private
+            <Icon name="lock" /> {t("note.private")}
           </span>
         )}
         <Provenance note={note} />
         {note.conflict_of && (
           <span className="conflict">
-            Conflicted copy · <Link href={"/n/" + note.id}>Compare</Link>
+            {t("notecard.conflicted_copy")}
+            <Link href={"/n/" + note.id}>{t("review.compare")}</Link>
           </span>
         )}
         <EntryMeta note={note} />
-        {queued && <span className="waiting">Waiting to sync</span>}
+        {queued && (
+          <span className="waiting">{t("notecard.waiting_to_sync")}</span>
+        )}
       </div>
       {canEdit && !queued && <SuggestionLine note={note} />}
       {canEdit && !queued && (
         <MoreMenu
-          label={`Actions for “${name}”`}
+          label={t("notecard.actions_for_value1", { value1: name })}
           items={
             note.trashed
-              ? [{ label: "Restore", onSelect: actions.trash! }]
+              ? [{ label: t("note.restore"), onSelect: actions.trash! }]
               : [
-                  { label: "Edit", onSelect: edit },
+                  { label: t("notecard.edit"), onSelect: edit },
                   {
-                    label: note.pinned ? "Unpin" : "Pin",
+                    label: note.pinned ? t("note.unpin") : t("slots.pin"),
                     onSelect: actions.pin!,
                   },
                   {
-                    label: note.archived ? "Unarchive" : "Archive",
+                    label: note.archived
+                      ? t("note.unarchive")
+                      : t("app.archive"),
                     onSelect: actions.archive!,
                   },
-                  { label: "Move to trash", onSelect: actions.trash! },
+                  { label: t("app.move_to_trash"), onSelect: actions.trash! },
                 ]
           }
         />
@@ -410,10 +420,10 @@ export function dayLabel(value: string) {
     new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((start(today) - start(date)) / 86400000);
   return days === 0
-    ? "Today"
+    ? t("notecard.today")
     : days === 1
-      ? "Yesterday"
-      : date.toLocaleDateString(undefined, {
+      ? t("notecard.yesterday")
+      : date.toLocaleDateString(getLanguage(), {
           weekday: "long",
           month: "long",
           day: "numeric",
@@ -425,13 +435,13 @@ export function groupedNotes(notes: Note[]) {
   const groups = new Map<string, { title: string; notes: Note[] }>();
   for (const note of notes) {
     const day = note.pinned
-      ? "Pinned"
+      ? t("notecard.pinned")
       : new Date(note.created_at).toDateString();
     const existing = groups.get(day);
     if (existing) existing.notes.push(note);
     else
       groups.set(day, {
-        title: note.pinned ? "Pinned" : dayLabel(note.created_at),
+        title: note.pinned ? t("notecard.pinned") : dayLabel(note.created_at),
         notes: [note],
       });
   }

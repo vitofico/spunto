@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.theficos.spunto
 
+import io.theficos.spunto.core.model.LocalOperationException
+
+import android.content.Context
+
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -44,7 +48,7 @@ import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String="What's on your mind?",trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -117,7 +121,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
    val capability=async { PlatformSpeechEngine.supportsAuto(context) }
    if(selected=="auto") autoAvailable=capability.await()
    if(!latestEnabled) return@launch
-   if(manager.isTouchExplorationEnabled) { view.announceForAccessibility("Listening in ${if(selected=="it-IT") "Italian" else if(selected=="auto") "Italian and English" else "English"}");delay(800) }
+   if(manager.isTouchExplorationEnabled) { view.announceForAccessibility(context.getString(R.string.core_listening_language,if(selected=="it-IT") context.getString(R.string.core_italian) else if(selected=="auto") context.getString(R.string.core_italian_english) else context.getString(R.string.core_english)));delay(800) }
    if(!latestEnabled) return@launch
    session.start(value.text,value.selection.start,value.selection.end,if(selected=="auto") "it-IT" else selected,ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED,SpeechOptions(online=online && !PlatformSpeechEngine.onDeviceAvailable(context),auto=selected=="auto" && autoAvailable))
    if(selected!="auto") autoAvailable=capability.await()
@@ -132,7 +136,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     if(session.state.value.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)) session.stopForSave()
     voice.start(value.text,value.selection.start,value.selection.end,language)
    } catch(cancelled:CancellationException) {throw cancelled}
-   catch(error:Exception) {model.message.value=if(error is IllegalArgumentException || error is IllegalStateException) error.message.orEmpty() else "Couldn't start recording. Your text is kept."}
+   catch(error:Exception) {model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else if(error is IllegalArgumentException || error is IllegalStateException) error.message.orEmpty() else context.getString(R.string.core_recording_start_failed)}
    finally {startingVoice=false}
   }
  }
@@ -156,7 +160,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   androidx.compose.runtime.withFrameNanos { }
   if(autoDictate && mic) micTap() else if(autoFocus && !focusSpent) { focusSpent=true; focus.requestFocus(); keyboard?.show() }
  }
- LaunchedEffect(dictation.phase) { if(previousPhase in setOf(DictationPhase.Listening,DictationPhase.Stopping) && dictation.phase !in setOf(DictationPhase.Listening,DictationPhase.Stopping)) { val words=(dictation.text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }-wordsBefore).coerceAtLeast(0);view.announceForAccessibility("Stopped. $words words added.") };previousPhase=dictation.phase }
+ LaunchedEffect(dictation.phase) { if(previousPhase in setOf(DictationPhase.Listening,DictationPhase.Stopping) && dictation.phase !in setOf(DictationPhase.Listening,DictationPhase.Stopping)) { val words=(dictation.text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }-wordsBefore).coerceAtLeast(0);view.announceForAccessibility(context.resources.getQuantityString(R.plurals.core_words_added,words,words)) };previousPhase=dictation.phase }
  LaunchedEffect(dictation.text) { if(!saved && !voice.hasSession && dictation.phase!=DictationPhase.NeedsPermission && dictation.text.isNotEmpty()) {if(dictation.text!=value.text) dictatedText=true;value=TextFieldValue(dictation.text,TextRange(dictation.text.length))} }
  LaunchedEffect(recording.text,recording.textRevision) {
   val snapshot=RecordingTextSnapshot(recording.text,recording.textRevision)
@@ -166,7 +170,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   model.repository.persistEditor(write,commit=true)
  } catch(error:CancellationException) {throw error}
  catch(error:Exception) {
-  model.message.value=if(error is IllegalArgumentException) error.message.orEmpty() else "Couldn't save on this phone. Your draft is still here."
+  model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else if(error is IllegalArgumentException) error.message.orEmpty() else context.getString(R.string.core_save_failed)
   false
  }
  LaunchedEffect(value.text,ready,saving) {
@@ -186,7 +190,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  val owner=LocalLifecycleOwner.current
  LaunchedEffect(id,draftId) { if(id!="capture") while(true) { delay(60_000); if(ready && !saved && !latestSaving && latestText!=committed) { val body=latestText;val write=model.repository.editorWrite(lease,body);if(commitEditor(write)) committed=body } } }
  var copyNoticed by remember(id,draftId) { mutableStateOf(false) }
- val copyMessage="This note changed elsewhere too. Your version is kept as a conflicted copy."
+ val copyMessage=context.getString(R.string.core_copy_notice)
  // The status line's conflict entry takes over once the editor closes, so this notice doesn't follow you to other notes.
  DisposableEffect(id,draftId) { onDispose { if(model.message.value==copyMessage) model.message.value="" } }
  // A sync that changes this note while every word here is saved (an edit made elsewhere, or the server's merge of these
@@ -202,9 +206,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  } }
  DisposableEffect(editorLease) {
   onFinishReady {
-   check(latestReady) {"Wait for this note to finish loading."}
-   check(!startingVoice && !saving) {"Wait for the current recording or save to finish."}
-   check(latestRecoveries.isEmpty() || latestPendingRecording!=null || voice.state.value.recording!=null) {"Recover or discard the unfinished recording before finishing."}
+   check(latestReady) {context.getString(R.string.core_wait_note)}
+   check(!startingVoice && !saving) {context.getString(R.string.core_wait_recording_save)}
+   check(latestRecoveries.isEmpty() || latestPendingRecording!=null || voice.state.value.recording!=null) {context.getString(R.string.core_recover_before_finish)}
    val tappedRevision=ownerRevision
    closing=true
    saving=true
@@ -214,13 +218,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     voice.onForegroundChanged(false);if(voice.hasSession) voice.stop()
     val body=if(voice.hasSession) voice.textSnapshot().text else if(active) session.stopForSave() else latestText
     if(keepRecording) {
-     check(ownerRevision==tappedRevision) {"The editor changed. Save the current text with this recording."}
-     val clipId=recoveredId?:voice.state.value.recording?.id?:latestPendingRecording?.id?:error("Recording could not be finalized. Recover or discard it before finishing.")
+     check(ownerRevision==tappedRevision) {context.getString(R.string.core_editor_changed)}
+     val clipId=recoveredId?:voice.state.value.recording?.id?:latestPendingRecording?.id?:error(context.getString(R.string.core_recording_finish_failed))
      val noteId=voice.retain(clipId,model.repository.editorWrite(editorLease,body))
      retainedId=clipId;recoveredId=null;saved=true
      latestRecordingSaved(noteId)
     } else {
-     if(latestReady && !saved) check(model.repository.finishEditor(model.repository.editorWrite(editorLease,body))) {"Editor is no longer active."}
+     if(latestReady && !saved) check(model.repository.finishEditor(model.repository.editorWrite(editorLease,body))) {context.getString(R.string.core_editor_inactive)}
      else model.repository.abandonEditor(editorLease)
      saved=true
     }
@@ -240,7 +244,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
      catch(error:CancellationException) {throw error}
      catch(error:Exception) {
       model.repository.abandonEditor(editorLease)
-      model.message.value=if(error is IllegalArgumentException) error.message.orEmpty() else "Couldn't save on this phone. Your draft is still here."
+      model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else if(error is IllegalArgumentException) error.message.orEmpty() else context.getString(R.string.core_save_failed)
      }
     }
    } else model.repository.abandonEditor(editorLease)
@@ -266,16 +270,16 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   val mime=context.contentResolver.getType(uri)?.takeIf {it.startsWith("image/")} ?: "image/jpeg"
   val file=withContext(Dispatchers.IO) {
    val target=java.io.File(model.container.privateDirectory("pending-attachments"),java.util.UUID.randomUUID().toString())
-   try {requireNotNull(context.contentResolver.openInputStream(uri)) {"This image is no longer available."}.use {input ->target.outputStream().use {input.copyTo(it)}};target} catch(error:Exception) {target.delete();throw error}
+   try {requireNotNull(context.contentResolver.openInputStream(uri)) {context.getString(R.string.core_image_missing)}.use {input ->target.outputStream().use {input.copyTo(it)}};target} catch(error:Exception) {target.delete();throw error}
   }
   try {
-   if(file.length() !in 1..IMAGE_IMPORT_LIMIT) {file.delete();throw IllegalArgumentException("Choose an image of at most 5 MB.")}
+   if(file.length() !in 1..IMAGE_IMPORT_LIMIT) {file.delete();throw IllegalArgumentException(context.getString(R.string.core_image_limit))}
    if(id=="capture") images=images+(file to mime)
    else {val attachment=model.repository.queueImage(id,file.absolutePath,mime);val text=value.text.trimEnd()+"\n\n[image:$attachment]";ownerValue(TextFieldValue(text,TextRange(text.length)))}
   } catch(error:Exception) {if(id=="capture") file.delete();throw error}
  }
  val pickImage=rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {uri ->
-  if(uri!=null) scope.launch {try {attachImage(uri)} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=(error as? IllegalArgumentException)?.message ?: "Couldn't add this image. Your text is kept."}}
+  if(uri!=null) scope.launch {try {attachImage(uri)} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else (error as? IllegalArgumentException)?.message ?: context.getString(R.string.core_image_add_failed)}}
  }
  fun saveNow() {
     if(startingVoice || saving) return
@@ -288,8 +292,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     try {
      if(retaining) {
       if(voice.hasSession) voice.stop()
-      check(ownerRevision==tappedRevision) {"The editor changed. Save the current text with this recording."}
-      val clipId=recoveredId?:voice.state.value.recording?.id?:pendingRecording?.id?:error("Recording could not be finalized. Recover or discard it before saving.")
+      check(ownerRevision==tappedRevision) {context.getString(R.string.core_editor_changed)}
+      val clipId=recoveredId?:voice.state.value.recording?.id?:pendingRecording?.id?:error(context.getString(R.string.core_recording_save_failed))
       val body=if(voice.hasSession) voice.textSnapshot().text else tappedWrite.body
       val write=if(body==tappedWrite.body && !voice.hasSession) tappedWrite else model.repository.editorWrite(lease,body)
       val noteId=voice.retain(clipId,write)
@@ -305,7 +309,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
      } else {
       val body=if(listening) session.stopForSave() else value.text
       if(body.isNotBlank() || canSaveEmpty || images.isNotEmpty()) {
-       if(id!="capture") check(model.repository.finishEditor(model.repository.editorWrite(lease,body))) { "Editor is no longer active." }
+       if(id!="capture") check(model.repository.finishEditor(model.repository.editorWrite(lease,body))) { context.getString(R.string.core_editor_inactive) }
        val dictated=dictatedText || listening && body.isNotBlank() && body!=dictationInitial
        if(id=="capture" && onPlainCaptureSave!=null) {
         val noteId=onPlainCaptureSave(body,if(dictated) "dictation" else null)
@@ -318,7 +322,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
       }
      }
     } catch(cancelled:CancellationException) {throw cancelled}
-    catch(error:Exception) { model.message.value=if(error is IllegalArgumentException || error is IllegalStateException) error.message.orEmpty() else "Couldn't save on this phone. Your draft is still here." }
+    catch(error:Exception) { model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else if(error is IllegalArgumentException || error is IllegalStateException) error.message.orEmpty() else context.getString(R.string.core_save_failed) }
     finally { saving=false;retaining=false }
    }
  }
@@ -332,26 +336,26 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   Surface(shape=MaterialTheme.shapes.medium,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent) {
    Column(Modifier.fillMaxWidth().padding(if(boxed) SpuntoSpacing.s16 else 0.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Box(Modifier.fillMaxWidth().heightIn(min=if(boxed) 96.dp else 48.dp)) {
-     if(value.text.isEmpty()) Text(placeholder,color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
-     BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription="Note text" },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+     if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
+     BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription=context.getString(R.string.core_note_text) },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
     }
     fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}
     // One message and one way forward per state, inside the card (03 A13).
-    if(recordingNeedsPermission) DictationNotice(if(permanent) "Microphone access is off for spunto." else "Recording needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {permissionAction="recording";if(permanent) openSettings() else permission.launch(Manifest.permission.RECORD_AUDIO)}
+    if(recordingNeedsPermission) DictationNotice(if(permanent) context.getString(R.string.core_mic_off) else context.getString(R.string.core_recording_mic),if(permanent) context.getString(R.string.core_open_settings) else context.getString(R.string.core_allow)) {permissionAction="recording";if(permanent) openSettings() else permission.launch(Manifest.permission.RECORD_AUDIO)}
     if(dictationEnabled && !voice.hasSession) when {
-     dictation.phase==DictationPhase.NeedsPermission -> DictationNotice(if(permanent) "Microphone access is off for spunto." else "Dictation needs the microphone. Audio stays on this phone.",if(permanent) "Open settings" else "Allow") {if(permanent) openSettings() else {permissionAction="dictation";permission.launch(Manifest.permission.RECORD_AUDIO)}}
-     dictation.phase==DictationPhase.NeedsLanguage -> DictationNotice(dictation.message,"Download") {scope.launch {PlatformSpeechEngine.download(context,language)}}
-     listening || dictation.message.isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.message.startsWith("Didn't catch")) -> DictationNotice(dictation.message)
+     dictation.phase==DictationPhase.NeedsPermission -> DictationNotice(if(permanent) context.getString(R.string.core_mic_off) else context.getString(R.string.core_dictation_mic),if(permanent) context.getString(R.string.core_open_settings) else context.getString(R.string.core_allow)) {if(permanent) openSettings() else {permissionAction="dictation";permission.launch(Manifest.permission.RECORD_AUDIO)}}
+     dictation.phase==DictationPhase.NeedsLanguage -> DictationNotice(dictationMessage(context,dictation),context.getString(R.string.core_download)) {scope.launch {PlatformSpeechEngine.download(context,language)}}
+     listening || dictationMessage(context,dictation).isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.notice==DictationNoticeKind.NoSpeech) -> DictationNotice(dictationMessage(context,dictation))
     }
    }
   }
   if(images.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
-   Text(if(images.size==1) "1 image to attach" else "${images.size} images to attach",Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
-   TextButton(onClick={images.forEach {it.first.delete()};images=emptyList()},modifier=Modifier.heightIn(min=48.dp)) {Text("Remove")}
+   Text(context.resources.getQuantityString(R.plurals.core_images_to_attach,images.size,images.size),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
+   TextButton(onClick={images.forEach {it.first.delete()};images=emptyList()},modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_remove))}
   }
-  if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT<33) Text("Voice recording needs Android 13 or newer. You can still type, or use dictation when available.",style=MaterialTheme.typography.bodySmall)
-  VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't discard this clip. It is kept on this phone."}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value="Couldn't recover this clip. Your recording and text are kept."}}},saveAction=if(showSaveAction) "Save" else "Done")
-  pendingRecording?.let {row ->AttachmentPlayer(model,row.id,"Recording ${recordingTime(row.durationMs)}",AttachmentEntity(row.id,row.noteId.orEmpty(),row.finalPath,"audio/ogg",kind="recording",durationMs=row.durationMs,byteSize=row.byteSize,sha256=row.sha256,serverUrl=row.serverUrl,status="local-only"))}
+  if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT<33) Text(context.getString(R.string.core_voice_android),style=MaterialTheme.typography.bodySmall)
+  VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=context.getString(R.string.core_clip_discard_failed)}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=context.getString(R.string.core_clip_recover_failed)}}},saveAction=if(showSaveAction) context.getString(R.string.core_save) else context.getString(R.string.core_done))
+  pendingRecording?.let {row ->AttachmentPlayer(model,row.id,context.getString(R.string.core_recording_time,recordingTime(row.durationMs)),AttachmentEntity(row.id,row.noteId.orEmpty(),row.finalPath,"audio/ogg",kind="recording",durationMs=row.durationMs,byteSize=row.byteSize,sha256=row.sha256,serverUrl=row.serverUrl,status="local-only"))}
  }
  // Hiding the keyboard ends typing in the capture composer: focus goes, so its bar undocks and the list
  // stops holding the composer in place (a focused item stays composed, which kept day headers from sticking).
@@ -365,24 +369,24 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   ComposerToolbar(tools={
    if(prefix!=null && (suggestions.isNotEmpty() || newLabel!=null)) {
     suggestions.forEach {label -> SuggestionChip(onClick={val caret=value.selection.start;insertAtCaret(label.path+" ",caret-prefix.length,caret)},label={Text("#${label.path}")})}
-    if(newLabel!=null) Text("New label #$newLabel",Modifier.padding(horizontal=SpuntoSpacing.s8),style=MaterialTheme.typography.labelMedium,color=SpuntoColors.ink3)
+    if(newLabel!=null) Text(context.getString(R.string.core_new_label,newLabel),Modifier.padding(horizontal=SpuntoSpacing.s8),style=MaterialTheme.typography.labelMedium,color=SpuntoColors.ink3)
    } else if(listening || dictation.phase==DictationPhase.NeedsLanguage) {
-    IconButton(onClick={session.stopAndKeep();focus.requestFocus();keyboard?.show()}) {Icon(painterResource(R.drawable.ic_keyboard),contentDescription="Back to typing",modifier=Modifier.size(24.dp))}
-    TextButton(onClick=switchLanguage,modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription="Dictation language, ${languageName(language)}. Switch"}) {Text(languageName(language))}
+    IconButton(onClick={session.stopAndKeep();focus.requestFocus();keyboard?.show()}) {Icon(painterResource(R.drawable.ic_keyboard),contentDescription=context.getString(R.string.core_back_typing),modifier=Modifier.size(24.dp))}
+    TextButton(onClick=switchLanguage,modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription=context.getString(R.string.core_dictation_language,languageName(context,language))}) {Text(languageName(context,language))}
     if(listening) ComposerDictationAction(true,true,startingVoice) {session.stopAndKeep()}
    } else if(tools) {
-    IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription="Add a label"})}
-    IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription="Add a checklist item",modifier=Modifier.size(24.dp))}
-    if(id!="capture" || onPlainCaptureSave!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=ready && !closing && !saving) {Icon(painterResource(R.drawable.ic_image),contentDescription="Add an image",modifier=Modifier.size(24.dp))}
+    IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_add_label)})}
+    IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription=context.getString(R.string.core_add_task),modifier=Modifier.size(24.dp))}
+    if(id!="capture" || onPlainCaptureSave!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=ready && !closing && !saving) {Icon(painterResource(R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
     if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,false,startingVoice) {micTap()}
-    if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text("Record")}
+    if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_record))}
    }
   },save={
    if(showSaveAction) ComposerSaveAction(enabled=canSave,saving=saving,startingVoice=startingVoice) {saveNow()} else trailing?.invoke()
   })
  }
 }
-private fun languageName(tag:String)=when(tag) {"it-IT" -> "Italian";"en-US" -> "English";else -> "Auto"}
+private fun languageName(context:Context,tag:String)=when(tag) {"it-IT" -> context.getString(R.string.core_italian);"en-US" -> context.getString(R.string.core_english);else -> context.getString(R.string.core_auto)}
 @Composable private fun DictationNotice(message:String,action:String?=null,onAction:()->Unit={}) {
  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
   Text(message,Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)

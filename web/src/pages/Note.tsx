@@ -1,3 +1,4 @@
+import { getLanguage, t, useLanguage } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -39,12 +40,13 @@ function cameFromApp() {
 }
 /** The way back, named by where it goes: the previous in-app page, else All notes. */
 function Back() {
+  useLanguage();
   const inApp = cameFromApp();
   return (
     <Link
       href="/"
       className="button icon-button back"
-      aria-label={inApp ? "Back" : "All notes"}
+      aria-label={inApp ? t("slots.back") : t("app.all_notes")}
       onClick={(event) => {
         if (!inApp) return;
         event.preventDefault();
@@ -56,23 +58,22 @@ function Back() {
   );
 }
 function Diff({ before, after }: { before: string; after: string }) {
+  useLanguage();
   return (
     <div className="diff">
       {compactDiff(diffLines(before, after)).map((line, index) =>
         line.kind === "skip" ? (
           <div key={index} className="diff-skip">
-            {line.count === 1
-              ? "1 unchanged line"
-              : `${line.count} unchanged lines`}
+            {t("note.unchanged_lines", { count: line.count })}
           </div>
         ) : line.kind === "del" ? (
           <del key={index}>
-            <span className="sr-only">Removed: </span>
+            <span className="sr-only">{t("note.removed")}</span>
             {line.text || " "}
           </del>
         ) : line.kind === "add" ? (
           <ins key={index}>
-            <span className="sr-only">Added: </span>
+            <span className="sr-only">{t("note.added")}</span>
             {line.text || " "}
           </ins>
         ) : (
@@ -92,35 +93,42 @@ function Conflict({
 }: {
   saved: string | null;
   mine: string;
-  mineName: string;
+  mineName: "yours" | "this copy";
   choices: Choice[];
 }) {
+  useLanguage();
   const [comparing, setComparing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <section
       className="notice conflict-notice"
-      aria-label="Edited on two devices"
+      aria-label={t("note.edited_on_two_devices")}
     >
       <p>
-        Edited on two devices. Both versions are kept ·{" "}
+        {t("note.edited_on_two_devices_both_versions_are_kept")}{" "}
         <button
           className="link-button"
           aria-expanded={comparing}
           onClick={() => setComparing(!comparing)}
         >
-          Compare
+          {t("review.compare")}
         </button>
       </p>
       {comparing &&
         (saved === null ? (
-          <p className="muted">Opening the saved version…</p>
+          <p className="muted">{t("note.opening_the_saved_version")}</p>
         ) : (
           <>
             <p className="diff-legend">
-              <del>Only in the saved version</del>
-              <ins>Only in {mineName}</ins>
+              <del>{t("note.only_in_the_saved_version")}</del>
+              <ins>
+                {t(
+                  mineName === "yours"
+                    ? "note.only_in_yours"
+                    : "note.only_in_copy",
+                )}
+              </ins>
             </p>
             <Diff before={saved} after={mine} />
             <div className="row">
@@ -156,6 +164,7 @@ function Conflict({
   );
 }
 function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
+  useLanguage();
   const [confirm, dialog] = useConfirm();
   const toast = useToast();
   return (
@@ -165,9 +174,9 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
           <div className="row">
             <span>
               {revision.version === note.version
-                ? "Current version"
-                : `Version ${revision.version}`}{" "}
-              · {new Date(revision.changed_at).toLocaleString()}
+                ? t("note.current_version")
+                : t("note.version_value1", { value1: revision.version })}{" "}
+              · {new Date(revision.changed_at).toLocaleString(getLanguage())}
             </span>
             {revision.version !== note.version && (
               <button
@@ -176,22 +185,22 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
                   if (
                     !(await confirm({
                       opener: e.currentTarget,
-                      title: "Restore this version?",
-                      body: "The current text stays in history.",
-                      confirmLabel: "Restore",
+                      title: t("note.restore_this_version"),
+                      body: t("note.the_current_text_stays_in_history"),
+                      confirmLabel: t("note.restore"),
                     }))
                   )
                     return;
                   try {
                     await api.restoreRevision(note.id, revision.version);
                     await invalidateContent();
-                    toast.show({ message: "Version restored" });
+                    toast.show({ message: t("note.version_restored") });
                   } catch (error) {
                     toast.show({ message: failure(error) });
                   }
                 }}
               >
-                Restore
+                {t("note.restore")}
               </button>
             )}
           </div>
@@ -206,6 +215,7 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
   );
 }
 function NoteEditor({ note }: { note: Note }) {
+  useLanguage();
   const trashed = note.trashed;
   const [editing, setEditing] = useState(
     () =>
@@ -225,7 +235,7 @@ function NoteEditor({ note }: { note: Note }) {
   const [confirm, dialog] = useConfirm();
   const revisions = useHistory(note.id);
   const historyRef = useRef<HTMLDetailsElement>(null);
-  const name = note.title || "Untitled note";
+  const name = note.title || t("vocabulary.untitled_note");
   useDocumentTitle(name);
   useEffect(() => {
     if (draft.state === "saving") setEverSaved(true);
@@ -258,33 +268,33 @@ function NoteEditor({ note }: { note: Note }) {
   const leaveNote = () => (cameFromApp() ? history.back() : replace("/"));
   const status =
     draft.state === "saving"
-      ? "Saving…"
+      ? t("app.saving")
       : draft.state === "error" && draft.error
         ? draft.error.status === 0
-          ? "Can’t reach the server. Your changes are kept on this device."
+          ? t("note.can_t_reach_the_server_your_changes_are")
           : draft.error.message
         : draft.conflict
           ? ""
           : draft.dirty
-            ? "Unsaved changes on this device"
+            ? t("note.unsaved_changes_on_this_device")
             : everSaved
-              ? "Saved"
+              ? t("note.saved")
               : "";
   const menu = trashed
     ? [
         {
-          label: "Restore",
+          label: t("note.restore"),
           onSelect: () => void flag(note, "trashed", false),
         },
         {
-          label: "Delete forever",
+          label: t("note.delete_forever"),
           danger: true,
           onSelect: async () => {
             if (
               !(await confirm({
-                title: "Delete this note forever?",
-                body: "It can’t be restored afterwards.",
-                confirmLabel: "Delete forever",
+                title: t("note.delete_this_note_forever"),
+                body: t("note.it_can_t_be_restored_afterwards"),
+                confirmLabel: t("note.delete_forever"),
                 danger: true,
               }))
             )
@@ -301,11 +311,13 @@ function NoteEditor({ note }: { note: Note }) {
       ]
     : [
         {
-          label: note.pinned ? "Unpin" : "Pin",
+          label: note.pinned ? t("note.unpin") : t("slots.pin"),
           onSelect: () => void flag(note, "pinned", !note.pinned),
         },
         {
-          label: note.private ? "Let AI and agents read it" : "Make private",
+          label: note.private
+            ? t("note.let_ai_and_agents_read_it")
+            : t("note.make_private"),
           onSelect: () =>
             void api
               .flags(note.id, { private: !note.private })
@@ -314,14 +326,14 @@ function NoteEditor({ note }: { note: Note }) {
               ),
         },
         {
-          label: note.archived ? "Unarchive" : "Archive",
+          label: note.archived ? t("note.unarchive") : t("app.archive"),
           onSelect: () =>
             void flag(note, "archived", !note.archived).then(
               (done) => done && !note.archived && leaveNote(),
             ),
         },
         {
-          label: "Revision history",
+          label: t("note.revision_history"),
           onSelect: () => {
             const details = historyRef.current;
             if (!details) return;
@@ -331,7 +343,7 @@ function NoteEditor({ note }: { note: Note }) {
           },
         },
         {
-          label: "Move to trash",
+          label: t("app.move_to_trash"),
           onSelect: () =>
             void flag(note, "trashed", true).then(
               (done) => done && leaveNote(),
@@ -344,14 +356,14 @@ function NoteEditor({ note }: { note: Note }) {
       <header className="note-header">
         <div className="note-meta">
           <time dateTime={note.created_at}>
-            {new Date(note.created_at).toLocaleString(undefined, {
+            {new Date(note.created_at).toLocaleString(getLanguage(), {
               dateStyle: "long",
               timeStyle: "short",
             })}
           </time>
           {note.private && (
             <span className="chip">
-              <Icon name="lock" /> private
+              <Icon name="lock" /> {t("note.private")}
             </span>
           )}
           <Provenance note={note} />
@@ -367,20 +379,20 @@ function NoteEditor({ note }: { note: Note }) {
                 setEditing(true);
               }}
             >
-              <Icon name="edit" /> Edit
+              <Icon name="edit" /> {t("note.edit")}
             </button>
           )}
-          <MoreMenu label="More actions" items={menu} />
+          <MoreMenu label={t("note.more_actions")} items={menu} />
         </div>
       </header>
       {trashed && (
         <p className="notice">
-          In trash ·{" "}
+          {t("note.in_trash")}{" "}
           <button
             className="link-button"
             onClick={() => void flag(note, "trashed", false)}
           >
-            Restore
+            {t("note.restore")}
           </button>
         </p>
       )}
@@ -394,28 +406,28 @@ function NoteEditor({ note }: { note: Note }) {
           mineName="yours"
           choices={[
             {
-              label: "Keep mine",
+              label: t("note.keep_mine"),
               primary: true,
               run: async () => {
                 const latest = await api.note(note.id);
                 if (!draft.resumeReviewed(latest))
-                  throw new Error("Keep this page open and try again.");
+                  throw new Error(t("note.keep_this_page_open_and_try_again"));
                 if (!(await draft.save())) return;
                 if (copyId) await trashCopy(copyId);
               },
             },
             {
-              label: "Keep saved",
+              label: t("note.keep_saved"),
               run: async () => {
                 const latest = await api.note(note.id);
                 if (!draft.discard(latest))
-                  throw new Error("Keep this page open and try again.");
+                  throw new Error(t("note.keep_this_page_open_and_try_again"));
                 setEditing(false);
                 if (copyId) await trashCopy(copyId);
               },
             },
             {
-              label: "Keep both",
+              label: t("review.keep_both"),
               run: async () => {
                 let kept: string;
                 if (copyId) {
@@ -431,8 +443,8 @@ function NoteEditor({ note }: { note: Note }) {
                 setEditing(false);
                 await invalidateContent();
                 toast.show({
-                  message: "Your version is a separate note",
-                  actionLabel: "Open",
+                  message: t("note.your_version_is_a_separate_note"),
+                  actionLabel: t("slots.open"),
                   onAction: () => navigate("/n/" + kept),
                 });
               },
@@ -499,20 +511,19 @@ function NoteEditor({ note }: { note: Note }) {
       </p>
       {draft.storageFailed && (
         <p className="error" role="alert">
-          Device storage is full or unavailable; keep this tab open until saved.
+          {t("note.device_storage_is_full_or_unavailable_keep_this")}
         </p>
       )}
       {!trashed && <SuggestionLine note={note} />}
       {note.private && (
         <p className="muted">
-          Private notes stay out of AI and agent tools unless their token
-          explicitly includes them.
+          {t("note.private_notes_stay_out_of_ai_and_agent")}
         </p>
       )}
       <details className="history" ref={historyRef}>
-        <summary>Revision history</summary>
+        <summary>{t("note.revision_history")}</summary>
         {revisions.isPending ? (
-          <p className="muted">Loading history…</p>
+          <p className="muted">{t("note.loading_history")}</p>
         ) : revisions.error ? (
           <p className="error">{revisions.error.message}</p>
         ) : (
@@ -528,6 +539,7 @@ function NoteEditor({ note }: { note: Note }) {
 }
 /** A conflicted copy holds an edit that could not join its original; compare and settle it here. */
 function CopyConflict({ note, original }: { note: Note; original: string }) {
+  useLanguage();
   const [, navigate] = useLocation();
   const toast = useToast();
   const [saved, setSaved] = useState<Note | null>(null);
@@ -549,7 +561,7 @@ function CopyConflict({ note, original }: { note: Note; original: string }) {
     navigate("/n/" + original, { replace: true, state: history.state });
     toast.show({
       message,
-      actionLabel: "Undo",
+      actionLabel: t("settingsplugins.undo"),
       onAction: () =>
         void api
           .flags(note.id, { trashed: false })
@@ -564,24 +576,24 @@ function CopyConflict({ note, original }: { note: Note; original: string }) {
       mineName="this copy"
       choices={[
         {
-          label: "Keep this copy",
+          label: t("note.keep_this_copy"),
           primary: true,
           run: async () => {
             const latest = await api.note(original);
             await api.updateNote(original, note.body, latest.version);
-            await settle("Kept this copy; it moved into the original");
+            await settle(t("note.kept_this_copy_it_moved_into_the_original"));
           },
         },
         {
-          label: "Keep the original",
-          run: () => settle("Copy moved to trash"),
+          label: t("note.keep_the_original"),
+          run: () => settle(t("note.copy_moved_to_trash")),
         },
         {
-          label: "Keep both",
+          label: t("review.keep_both"),
           run: async () =>
             toast.show({
-              message: "Both notes stay",
-              actionLabel: "Open the original",
+              message: t("note.both_notes_stay"),
+              actionLabel: t("note.open_the_original"),
               onAction: () => navigate("/n/" + original),
             }),
         },
@@ -590,22 +602,23 @@ function CopyConflict({ note, original }: { note: Note; original: string }) {
   );
 }
 export default function NotePage({ id }: { id: string }) {
+  useLanguage();
   const role = useWorkspaceRole();
   const note = useNote(id);
   return note.isPending ? (
     <p className="page-status" role="status">
-      Opening note…
+      {t("note.opening_note")}
     </p>
   ) : note.error instanceof ApiError && note.error.status === 404 ? (
-    <NotFound title="This note isn’t here." />
+    <NotFound title={t("note.this_note_isn_t_here")} />
   ) : note.isError ? (
     <p className="error" role="alert">
-      {note.error.message} <Link href="/">All notes</Link>
+      {note.error.message} <Link href="/">{t("app.all_notes")}</Link>
     </p>
   ) : role === "viewer" ? (
     <div className="note-page">
       <Back />
-      <p className="muted">Can view</p>
+      <p className="muted">{t("collaboration.can_view")}</p>
       <NoteBody note={note.data} />
     </div>
   ) : (

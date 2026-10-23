@@ -9,7 +9,10 @@ import org.junit.Rule
 import org.junit.rules.Timeout
 import java.util.concurrent.TimeUnit
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application=android.app.Application::class,sdk=[28])
 class LabelsNavigationTest {
+ private val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
  @get:Rule val timeout=Timeout(10,TimeUnit.MINUTES)
  private val labels=listOf(LabelCount("project","Project",3),LabelCount("project/spunto","Project/Spunto",2),LabelCount("project/other","Project/Other",2),LabelCount("ideas","Ideas",1))
  private fun plugin(id:String,view:String,title:String,state:String?=null,filter:JsonObject=buildJsonObject {put("no_labels",true)})=buildJsonObject {
@@ -62,29 +65,29 @@ class LabelsNavigationTest {
   assertEquals(1,declaredActiveViews(manifest(task,hidden=null)).size)
  }
  @Test fun titleAndRoutesDistinguishUnavailableViewsAndExactLabelSelection() {
-  assertEquals("All notes",navigationTitle("timeline",labels,active()));assertEquals("Archive",navigationTitle("archive",labels,active()));assertEquals("Trash",navigationTitle("trash",labels,active()));assertEquals("Review",navigationTitle("review",labels,active()))
-  assertEquals("#Project/Spunto",navigationTitle("label:project/spunto",labels,active()))
-  assertEquals("Unlabeled",navigationTitle("view:label-suggestions:unlabeled",labels,active()))
-  assertEquals("View unavailable",navigationTitle("view:tasks:open",labels,manifest()))
+  assertEquals("All notes",navigationTitle(context,"timeline",labels,active()));assertEquals("Archive",navigationTitle(context,"archive",labels,active()));assertEquals("Trash",navigationTitle(context,"trash",labels,active()));assertEquals("Review",navigationTitle(context,"review",labels,active()))
+  assertEquals("#Project/Spunto",navigationTitle(context,"label:project/spunto",labels,active()))
+  assertEquals("Unlabeled",navigationTitle(context,"view:label-suggestions:unlabeled",labels,active()))
+  assertEquals("View unavailable",navigationTitle(context,"view:tasks:open",labels,manifest()))
   assertTrue(isLabelsNavigationRoute("label:project"));assertTrue(isLabelsNavigationRoute("view:tasks:open"));assertFalse(isLabelsNavigationRoute("note:fixture"));assertFalse(isLabelsNavigationRoute("search"));assertFalse(isLabelsNavigationRoute("appearance"))
  }
  @Test fun managementEncodesNestedSegmentsAndNeverBridgesDeviceCredentials() {
   val auth=config("https://SYNTHETIC.invalid:443/")
-  val target=sharedManagementTarget(auth,"https://synthetic.invalid",true,"Caffè/Spunto")
+  val target=sharedManagementTarget(context,auth,"https://synthetic.invalid",true,"Caffè/Spunto")
   assertEquals("https://synthetic.invalid/l/Caff%C3%A8/Spunto",target.url)
   assertFalse(target.url!!.contains(auth.token));assertTrue(target.message.contains("Owner sign-in"))
-  assertEquals("https://synthetic.invalid/settings/plugins",sharedManagementTarget(auth,"https://synthetic.invalid/",true).url)
-  assertEquals("http://synthetic.invalid:18215/l/project/spunto",sharedManagementTarget(config("http://synthetic.invalid:18215",true),"http://synthetic.invalid:18215/",true,"project/spunto").url)
+  assertEquals("https://synthetic.invalid/settings/plugins",sharedManagementTarget(context,auth,"https://synthetic.invalid/",true).url)
+  assertEquals("http://synthetic.invalid:18215/l/project/spunto",sharedManagementTarget(context,config("http://synthetic.invalid:18215",true),"http://synthetic.invalid:18215/",true,"project/spunto").url)
  }
  @Test fun offlineUnboundOtherServerAndReauthKeepLocalBrowsingButRefuseWebManagement() {
   val auth=config()
-  assertNull(sharedManagementTarget(null,auth.serverUrl,true).url);assertNull(sharedManagementTarget(auth.copy(token=""),auth.serverUrl,true).url)
-  assertNull(sharedManagementTarget(auth,auth.serverUrl,false).url);assertNull(sharedManagementTarget(auth,null,true).url);assertNull(sharedManagementTarget(auth,"https://another.synthetic",true).url);assertNull(sharedManagementTarget(auth,auth.serverUrl,true,needsSignIn=true).url)
-  assertNull(sharedManagementTarget(config("http://synthetic.invalid"),"http://synthetic.invalid",true).url)
+  assertNull(sharedManagementTarget(context,null,auth.serverUrl,true).url);assertNull(sharedManagementTarget(context,auth.copy(token=""),auth.serverUrl,true).url)
+  assertNull(sharedManagementTarget(context,auth,auth.serverUrl,false).url);assertNull(sharedManagementTarget(context,auth,null,true).url);assertNull(sharedManagementTarget(context,auth,"https://another.synthetic",true).url);assertNull(sharedManagementTarget(context,auth,auth.serverUrl,true,needsSignIn=true).url)
+  assertNull(sharedManagementTarget(context,config("http://synthetic.invalid"),"http://synthetic.invalid",true).url)
   assertEquals(4,labelSheetRows(labels,"",null).size);assertEquals(2,declaredActiveViews(active()).size)
  }
  @Test fun managementRejectsUnsafeRootsAndInvalidLabelPathsWithoutProducingAnyUrl() {
-  for(root in listOf("javascript:alert(1)","https://user:password@synthetic.invalid","https://synthetic.invalid/path","https://synthetic.invalid?token=fixture","https://synthetic.invalid#fragment","https://synthetic.invalid:0")) assertNull(sharedManagementTarget(config(root),root,true).url)
-  for(path in listOf("../settings","project//spunto","safe?token=fixture","#label","a/b/c/d/e/f")) assertNull(sharedManagementTarget(config(),"https://synthetic.invalid",true,path).url)
+  for(root in listOf("javascript:alert(1)","https://user:password@synthetic.invalid","https://synthetic.invalid/path","https://synthetic.invalid?token=fixture","https://synthetic.invalid#fragment","https://synthetic.invalid:0")) assertNull(sharedManagementTarget(context,config(root),root,true).url)
+  for(path in listOf("../settings","project//spunto","safe?token=fixture","#label","a/b/c/d/e/f")) assertNull(sharedManagementTarget(context,config(),"https://synthetic.invalid",true,path).url)
  }
 }

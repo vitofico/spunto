@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -5,6 +6,7 @@ import { currentOwner, startSSO, useAuth } from "../lib/query";
 import styles from "./Feature.module.css";
 
 export function AccountPanel() {
+  useLanguage();
   const auth = useAuth();
   const client = useQueryClient();
   const security = useQuery({
@@ -57,7 +59,9 @@ export function AccountPanel() {
       setLinkPassword("");
       if (!owner || owner !== currentOwner()) return;
       if (result.login_url !== "/api/v1/auth/oidc/start?reauth=oidc-link")
-        throw new Error("The sign-in verification link is unavailable.");
+        throw new Error(
+          t("accountpanel.the_sign_in_verification_link_is_unavailable"),
+        );
       startSSO();
       window.location.assign(result.login_url);
     },
@@ -70,33 +74,34 @@ export function AccountPanel() {
     options.error?.message;
   return (
     <>
-      <h1>Account</h1>
+      <h1>{t("accountpanel.account")}</h1>
       <p className="muted">
-        Manage how you sign in. Password and SSO sign-in open the same account
-        and notes.
+        {t("accountpanel.manage_how_you_sign_in_password_and_sso")}
       </p>
       {auth.session && (
         <details className="muted">
-          <summary>Account details</summary>
+          <summary>{t("accountpanel.account_details")}</summary>
           <p>
-            Account ID:{" "}
+            {t("accountpanel.account_id")}{" "}
             <code>{auth.session.user_id ?? auth.session.owner_id}</code>
           </p>
         </details>
       )}
-      {security.isPending && <p role="status">Loading sign-in settings…</p>}
+      {security.isPending && (
+        <p role="status">{t("accountpanel.loading_sign_in_settings")}</p>
+      )}
       {value && (
         <>
-          <h2>Username and password</h2>
+          <h2>{t("accountpanel.username_and_password")}</h2>
           {value.local_password_set && (
             <p>
-              Username: <strong>{value.local_username}</strong>
+              {t("accountpanel.username")}
+              <strong>{value.local_username}</strong>
             </p>
           )}
           {!value.local_password_set && (
             <p className="muted">
-              Add a username and password to this existing account. Your library
-              stays here.
+              {t("accountpanel.add_a_username_and_password_to_this_existing")}
             </p>
           )}
           {canSetPassword ? (
@@ -106,12 +111,12 @@ export function AccountPanel() {
                 setSaved(false);
                 setValidation(null);
                 if (password !== confirmation) {
-                  setValidation("The passwords do not match.");
+                  setValidation(t("accountpanel.the_passwords_do_not_match"));
                   return;
                 }
                 if (new TextEncoder().encode(password).length > 1024) {
                   setValidation(
-                    "That password is too long. Use a shorter passphrase.",
+                    t("accountpanel.that_password_is_too_long_use_a_shorter"),
                   );
                   return;
                 }
@@ -119,7 +124,7 @@ export function AccountPanel() {
               }}
             >
               <label className={styles.formField}>
-                Username
+                {t("accountpanel.username_2")}
                 <input
                   className="field"
                   value={username ?? value.local_username ?? ""}
@@ -135,12 +140,13 @@ export function AccountPanel() {
                 />
               </label>
               <p className="muted">
-                Use 3–64 letters, numbers, periods, underscores or hyphens. No
-                email address is needed. Start with a letter or number.
+                {t(
+                  "accountpanel.use_3_64_letters_numbers_periods_underscores_or",
+                )}
               </p>
               {value.local_password_set && (
                 <label className={styles.formField}>
-                  Current password
+                  {t("accountpanel.current_password")}
                   <input
                     className="field"
                     type="password"
@@ -154,7 +160,7 @@ export function AccountPanel() {
                 </label>
               )}
               <label className={styles.formField}>
-                New password
+                {t("accountpanel.new_password")}
                 <input
                   className="field"
                   type="password"
@@ -168,7 +174,7 @@ export function AccountPanel() {
                 />
               </label>
               <label className={styles.formField}>
-                Confirm new password
+                {t("accountpanel.confirm_new_password")}
                 <input
                   className="field"
                   type="password"
@@ -182,41 +188,44 @@ export function AccountPanel() {
                 />
               </label>
               <p className="muted">
-                At least 8 characters. Saving signs out other browser sessions;
-                this browser stays signed in.
+                {t("accountpanel.at_least_8_characters_saving_signs_out_other")}
               </p>
               <button className="primary" disabled={change.isPending}>
                 {change.isPending
-                  ? "Saving…"
+                  ? t("app.saving")
                   : value.local_password_set
-                    ? "Save sign-in settings"
-                    : "Add password sign-in"}
+                    ? t("accountpanel.save_sign_in_settings")
+                    : t("accountpanel.add_password_sign_in")}
               </button>
             </form>
           ) : value.reauth_url ===
             "/api/v1/auth/oidc/start?reauth=local-password" ? (
             <>
               <p className="muted">
-                Verify your SSO identity before adding password sign-in to this
-                account.
+                {t(
+                  "accountpanel.verify_your_sso_identity_before_adding_password_sign",
+                )}
               </p>
               <a
                 className="button primary"
                 href={value.reauth_url}
                 onClick={startSSO}
               >
-                Verify with SSO
+                {t("accountpanel.verify_with_sso")}
               </a>
             </>
           ) : (
             <p className="muted">
-              Sign-in verification is unavailable. Ask the server operator to
-              restore your sign-in provider.
+              {t(
+                "accountpanel.sign_in_verification_is_unavailable_ask_the_server",
+              )}
             </p>
           )}
-          <h2>Single sign-on</h2>
+          <h2>{t("accountpanel.single_sign_on")}</h2>
           {value.oidc_linked ? (
-            <p className="muted">SSO is connected to this account.</p>
+            <p className="muted">
+              {t("accountpanel.sso_is_connected_to_this_account")}
+            </p>
           ) : options.data?.oidc_enabled && value.local_password_set ? (
             <form
               onSubmit={(event) => {
@@ -225,12 +234,12 @@ export function AccountPanel() {
               }}
             >
               <p className="muted">
-                Connect {options.data.label ?? "SSO"} to this account. Verify
-                your current password, then sign in with the provider. Accounts
-                are never linked by email.
+                {t("accountpanel.connect_provider", {
+                  provider: options.data.label ?? "SSO",
+                })}
               </p>
               <label className={styles.formField}>
-                Password to connect SSO
+                {t("accountpanel.password_to_connect_sso")}
                 <input
                   className="field"
                   type="password"
@@ -243,17 +252,19 @@ export function AccountPanel() {
                 />
               </label>
               <button disabled={link.isPending}>
-                {link.isPending ? "Verifying…" : "Connect SSO"}
+                {link.isPending
+                  ? t("accountpanel.verifying")
+                  : t("accountpanel.connect_sso")}
               </button>
             </form>
           ) : (
             <p className="muted">
-              SSO is optional and is not configured for this account.
+              {t("accountpanel.sso_is_optional_and_is_not_configured_for")}
             </p>
           )}
         </>
       )}
-      {saved && <p role="status">Sign-in settings saved.</p>}
+      {saved && <p role="status">{t("accountpanel.sign_in_settings_saved")}</p>}
       {error && (
         <p className="error" role="alert">
           {error}

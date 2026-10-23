@@ -201,7 +201,7 @@ class NewFeatureWorkflowTest {
         val editArgs = commandArgs(flow.output(), "Edit brief")
         val packId = editArgs["pack_id"]!!.jsonPrimitive.content
         assertEquals(1, editArgs["expected_revision"]!!.jsonPrimitive.int)
-        val copied = resultCopyText(flow.output())
+        val copied = resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output())
         assertTrue(copied.contains("# $title"))
         assertTrue(copied.contains(goals))
         assertTrue(copied.contains("## Open questions"))
@@ -212,7 +212,7 @@ class NewFeatureWorkflowTest {
         flow.submit()
         assertEquals(2, commandArgs(flow.output(), "Edit brief")["expected_revision"]!!.jsonPrimitive.int)
         assertEquals(packId, commandArgs(flow.output(), "Edit brief")["pack_id"]!!.jsonPrimitive.content)
-        assertTrue(resultCopyText(flow.output()).contains(revised))
+        assertTrue(resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output()).contains(revised))
         // This verifies the production copy formatter, not Android clipboard delivery.
         flow.click("Keep private note copy")
         val saved = note(ids(flow.output()).single())
@@ -265,6 +265,6 @@ class NewFeatureWorkflowTest {
         assertEquals(originalBody, note(rootId)["body"]!!.jsonPrimitive.content)
         assertEquals(outcomeBody, note(outcomeId)["body"]!!.jsonPrimitive.content)
         flow.open("journal", buildJsonObject { put("note_id", rootId) })
-        assertTrue(resultCopyText(flow.output()).contains("Open · revision 3 · review 2030-03-01"))
+        assertTrue(resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output()).contains("Open · revision 3 · review 2030-03-01"))
     }
 }

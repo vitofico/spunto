@@ -1,3 +1,5 @@
+import { localizeCatalog } from "./localizePlugins";
+import { t, useLanguage } from "./i18n";
 import {
   useEffect,
   useLayoutEffect,
@@ -162,7 +164,9 @@ export async function switchWorkspace(workspace: Workspace) {
     } catch {}
   } catch (error) {
     workspaceIssue =
-      error instanceof Error ? error.message : "Could not open this space.";
+      error instanceof Error
+        ? error.message
+        : t("query.could_not_open_this_space");
     if (error instanceof ApiError && [401, 409].includes(error.status))
       next = null;
     try {
@@ -517,7 +521,19 @@ export function useLabels() {
   return useQuery({ queryKey: ["labels"], queryFn: api.labels });
 }
 export function useManifest() {
-  return useQuery({ queryKey: ["manifest"], queryFn: api.manifest });
+  const language = useLanguage();
+  // The compact manifest omits provenance; the catalog owns trusted bundled IDs.
+  const catalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    enabled: language !== "en",
+  });
+  return useQuery({
+    queryKey: ["manifest"],
+    queryFn: api.manifest,
+    select: (data) =>
+      localizeCatalog(data, language === "en" ? [] : catalog.data?.plugins),
+  });
 }
 export function useHistory(id: string) {
   return useQuery({

@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./lib/i18n";
 import {
   Component,
   lazy,
@@ -30,16 +31,21 @@ import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
 import { ActiveSharedSpace } from "./features/Collaboration";
-import { Palette } from "./components/core/Palette";
-import {
-  FirstRunGuide,
-  hasCompletedGuide,
-  markGuideCompleted,
-} from "./components/core/FirstRunGuide";
+import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
 const loadNote = () => import("./pages/Note");
 // React.lazy keeps a failed import for good, so "Try again" builds fresh ones.
 function lazyPages() {
   return {
+    Palette: lazy(() =>
+      import("./components/core/Palette").then((module) => ({
+        default: module.Palette,
+      })),
+    ),
+    FirstRunGuide: lazy(() =>
+      import("./components/core/FirstRunGuide").then((module) => ({
+        default: module.FirstRunGuide,
+      })),
+    ),
     SharedNotesPage: lazy(() => import("./pages/SharedNotes")),
     NotePage: lazy(loadNote),
     SearchPage: lazy(() => import("./pages/Search")),
@@ -103,10 +109,10 @@ export class LoadBoundary extends Component<
     if (!this.state.failed) return this.props.children;
     return (
       <div className="empty" role="alert">
-        <h1>Something didn’t load.</h1>
-        <p>Anything you typed is kept on this device.</p>
+        <h1>{t("app.something_didn_t_load")}</h1>
+        <p>{t("app.anything_you_typed_is_kept_on_this_device")}</p>
         <button className="button primary" onClick={this.retry}>
-          Try again
+          {t("app.try_again")}
         </button>
       </div>
     );
@@ -127,6 +133,7 @@ function Rail({
   blocked: boolean;
   returnFocus: RefObject<HTMLElement | null>;
 }) {
+  useLanguage();
   const [location] = useLocation();
   const hosted = useHosted();
   const labels = useLabels();
@@ -138,7 +145,7 @@ function Rail({
       <aside
         ref={rail}
         className={"rail" + (open ? " open" : "")}
-        aria-label="Navigation"
+        aria-label={t("app.navigation")}
         role={open ? "dialog" : undefined}
         aria-modal={open || undefined}
         inert={blocked}
@@ -147,7 +154,7 @@ function Rail({
           <Link
             href="/"
             className="wordmark"
-            aria-label="Spunto home"
+            aria-label={t("app.spunto_home")}
             onClick={close}
           >
             <span className="wordmark-text">spunto</span>
@@ -155,7 +162,7 @@ function Rail({
           </Link>
           <button
             className="button rail-close"
-            aria-label="Close navigation"
+            aria-label={t("app.close_navigation")}
             data-modal-initial
             onClick={close}
           >
@@ -164,14 +171,15 @@ function Rail({
         </div>
         <button
           className="row rail-search"
-          aria-label="Search and commands"
+          aria-label={t("app.search_and_commands")}
           onClick={(event) => {
             close();
             onPalette(event.currentTarget);
           }}
         >
           <span>
-            <Icon name="search" /> <span className="rail-label">Search</span>
+            <Icon name="search" />{" "}
+            <span className="rail-label">{t("app.search")}</span>
           </span>
           <kbd>{formatShortcut("mod+k")}</kbd>
         </button>
@@ -179,30 +187,30 @@ function Rail({
         <nav>
           <Link
             href="/"
-            aria-label="All notes"
+            aria-label={t("app.all_notes")}
             onClick={close}
             aria-current={location === "/" ? "page" : undefined}
           >
             <Icon name="notes" />
-            <span className="rail-label">All notes</span>
+            <span className="rail-label">{t("app.all_notes")}</span>
           </Link>
           <Link
             href="/archive"
-            aria-label="Archive"
+            aria-label={t("app.archive")}
             onClick={close}
             aria-current={location === "/archive" ? "page" : undefined}
           >
             <Icon name="archive" />
-            <span className="rail-label">Archive</span>
+            <span className="rail-label">{t("app.archive")}</span>
           </Link>
           <Link
             href="/trash"
-            aria-label="Trash"
+            aria-label={t("app.trash")}
             onClick={close}
             aria-current={location === "/trash" ? "page" : undefined}
           >
             <Icon name="trash" />
-            <span className="rail-label">Trash</span>
+            <span className="rail-label">{t("app.trash")}</span>
           </Link>
         </nav>
         {hosted && (
@@ -212,13 +220,13 @@ function Rail({
               onClick={close}
               aria-current={location.startsWith("/shared") ? "page" : undefined}
             >
-              Shared with me
+              {t("app.shared_with_me")}
             </Link>
           </nav>
         )}
         {!collapsed && <PluginRailViews />}
         <div className="label-tree">
-          <div className="overline">Labels</div>
+          <div className="overline">{t("app.labels")}</div>
           <nav>
             {labels.data?.labels.map((label) => (
               <Link
@@ -239,16 +247,16 @@ function Rail({
               </Link>
             ))}
             {labels.data?.labels.length === 0 && (
-              <p className="muted">Labels appear as you type them.</p>
+              <p className="muted">{t("app.labels_appear_as_you_type_them")}</p>
             )}
             {labels.isPending && (
               <p className="muted" role="status">
-                Loading labels…
+                {t("app.loading_labels")}
               </p>
             )}
             {labels.error && (
               <p className="error" role="alert">
-                Could not load labels.
+                {t("app.could_not_load_labels")}
               </p>
             )}
           </nav>
@@ -257,14 +265,14 @@ function Rail({
           <nav>
             <Link
               href="/settings/appearance"
-              aria-label="Settings"
+              aria-label={t("app.settings")}
               aria-current={
                 location.startsWith("/settings") ? "page" : undefined
               }
               onClick={close}
             >
               <Icon name="tune" />
-              <span className="rail-label">Settings</span>
+              <span className="rail-label">{t("app.settings")}</span>
             </Link>
           </nav>
           <p role="status">{sync.line}</p>
@@ -275,25 +283,25 @@ function Rail({
   );
 }
 /** What the keys below actually do; `?` and the palette open this list. */
-const shortcuts: [string[], string][] = [
-  [["n"], "New note"],
-  [[formatShortcut("mod+enter")], "Save the note"],
-  [[formatShortcut("mod+s")], "Save while editing"],
-  [[formatShortcut("mod+k"), "/"], "Search and commands"],
-  [["j", "k"], "Next or previous note"],
-  [["↵", "o"], "Open the note"],
-  [["e"], "Edit the note"],
-  [["p"], "Pin or unpin"],
-  [["#"], "Add a label (opens the note to edit)"],
-  [["y"], "Archive"],
-  [[formatShortcut("shift+y")], "Move to trash"],
-  [["Esc"], "Close, or go back from a note"],
-  [["["], "Collapse the navigation"],
-  [["g a"], "Go to All notes"],
-  [["g l"], "Go to the labels"],
-  [["g t"], "Go to Trash"],
-  [["g s"], "Go to Settings"],
-  [["?"], "Show these keys"],
+const shortcuts: () => [string[], string][] = () => [
+  [["n"], t("app.new_note")],
+  [[formatShortcut("mod+enter")], t("app.save_the_note")],
+  [[formatShortcut("mod+s")], t("app.save_while_editing")],
+  [[formatShortcut("mod+k"), "/"], t("app.search_and_commands")],
+  [["j", "k"], t("app.next_or_previous_note")],
+  [["↵", "o"], t("app.open_the_note")],
+  [["e"], t("app.edit_the_note")],
+  [["p"], t("app.pin_or_unpin")],
+  [["#"], t("app.add_a_label_opens_the_note_to_edit")],
+  [["y"], t("app.archive")],
+  [[formatShortcut("shift+y")], t("app.move_to_trash")],
+  [["Esc"], t("app.close_or_go_back_from_a_note")],
+  [["["], t("app.collapse_the_navigation")],
+  [["g a"], t("app.go_to_all_notes")],
+  [["g l"], t("app.go_to_the_labels")],
+  [["g t"], t("app.go_to_trash")],
+  [["g s"], t("app.go_to_settings")],
+  [["?"], t("app.show_these_keys")],
 ];
 function decoded(path: string) {
   try {
@@ -304,14 +312,14 @@ function decoded(path: string) {
 }
 /** D33 wording on wide screens; one short line on phones. */
 function UnencryptedBand() {
+  useLanguage();
   return (
     <div className="banner">
       <span className="banner-long">
-        Not encrypted · This server uses plain HTTP. Fine on your own network;
-        set up HTTPS before using it elsewhere.
+        {t("app.not_encrypted_this_server_uses_plain_http_fine")}
       </span>
       <span className="banner-short">
-        Not encrypted · This server uses plain HTTP.
+        {t("app.not_encrypted_this_server_uses_plain_http")}
       </span>
     </div>
   );
@@ -414,7 +422,7 @@ function goBack(navigate: (path: string) => void) {
   if (entryDepth > 0) history.back();
   else navigate("/");
 }
-const notes = (count: number) => `${count} ${count === 1 ? "note" : "notes"}`;
+const notes = (count: number) => t("count.note", { count });
 function useSync() {
   const meta = useApiQuery(["meta"], api.meta);
   const { online, waiting } = useSyncState();
@@ -422,17 +430,18 @@ function useSync() {
   return {
     offline,
     line: meta.isPending
-      ? "Connecting…"
+      ? t("app.connecting")
       : offline
         ? waiting
-          ? `Offline · ${notes(waiting)} waiting`
-          : "Offline"
+          ? t("app.offline_value1_waiting", { value1: notes(waiting) })
+          : t("app.offline")
         : waiting
-          ? "Saving…"
-          : "Synced",
+          ? t("app.saving")
+          : t("app.synced"),
   };
 }
 export default function App() {
+  useLanguage();
   const auth = useAuth();
   const owner = useOwner();
   const workspaceIssue = useWorkspaceIssue();
@@ -446,6 +455,8 @@ export default function App() {
     setAttempt((attempt) => attempt + 1);
   }
   const {
+    Palette,
+    FirstRunGuide,
     AuthPage,
     NotePage,
     ReviewPage,
@@ -703,13 +714,13 @@ export default function App() {
           <span className="wordmark">
             spunto<span>.</span>
           </span>
-          <p role="alert">Can’t reach the server.</p>
+          <p role="alert">{t("app.can_t_reach_the_server")}</p>
           <button
             className="button"
             disabled={auth.reconnecting}
             onClick={auth.reconnect}
           >
-            {auth.reconnecting ? "Trying…" : "Try again"}
+            {auth.reconnecting ? t("app.trying") : t("app.try_again")}
           </button>
         </div>
       </main>
@@ -725,7 +736,9 @@ export default function App() {
   if (auth.status !== "authenticated")
     return (
       <LoadBoundary location={location} onRetry={retryPages}>
-        <Suspense fallback={<main className="auth">Opening your notes…</main>}>
+        <Suspense
+          fallback={<main className="auth">{t("app.opening_your_notes")}</main>}
+        >
           <AuthPage
             setup={auth.status === "setup" || location === "/setup"}
             band={meta.data?.unencrypted ? <UnencryptedBand /> : null}
@@ -740,7 +753,7 @@ export default function App() {
       className={"app" + (collapsed ? " collapsed" : "")}
     >
       <a href="#main" className="skip-link" inert={modalOpen}>
-        Skip to notes
+        {t("app.skip_to_notes")}
       </a>
       <Rail
         collapsed={collapsed}
@@ -753,7 +766,7 @@ export default function App() {
       <header className="topbar" inert={modalOpen}>
         <button
           className="button"
-          aria-label="Open navigation"
+          aria-label={t("app.open_navigation")}
           aria-expanded={railOpen}
           onClick={(event) => {
             rememberFocus(event.currentTarget);
@@ -767,7 +780,7 @@ export default function App() {
         </Link>
         <button
           className="button"
-          aria-label="Search"
+          aria-label={t("app.search")}
           onClick={(event) => openSearch(event.currentTarget)}
         >
           <Icon name="search" />
@@ -790,7 +803,7 @@ export default function App() {
         )}
         {sync.offline && (
           <div className="banner" role="status">
-            Can’t reach the server. What you type is kept on this device.
+            {t("app.can_t_reach_the_server_what_you_type")}
           </div>
         )}
         {meta.data?.unencrypted && <UnencryptedBand />}
@@ -798,7 +811,7 @@ export default function App() {
           <Suspense
             fallback={
               <p className="page-status" role="status">
-                Opening…
+                {t("app.opening")}
               </p>
             }
           >
@@ -868,18 +881,24 @@ export default function App() {
         </LoadBoundary>
       </main>
       {palette && (
-        <Palette
-          initialResult={commandResult}
-          initialOrigin={commandOrigin}
-          restoreFocus={overlayTrigger.current}
-          onClose={() => {
-            setPalette(false);
-            setCommandResult(null);
-          }}
-          onHelp={openHelp}
-          instant={instant}
-          noteId={location.startsWith("/n/") ? location.slice(3) : undefined}
-        />
+        <LoadBoundary location={location} onRetry={retryPages}>
+          <Suspense fallback={null}>
+            <Palette
+              initialResult={commandResult}
+              initialOrigin={commandOrigin}
+              restoreFocus={overlayTrigger.current}
+              onClose={() => {
+                setPalette(false);
+                setCommandResult(null);
+              }}
+              onHelp={openHelp}
+              instant={instant}
+              noteId={
+                location.startsWith("/n/") ? location.slice(3) : undefined
+              }
+            />
+          </Suspense>
+        </LoadBoundary>
       )}{" "}
       {help && (
         <div
@@ -893,7 +912,7 @@ export default function App() {
             className="palette card"
             role="dialog"
             aria-modal="true"
-            aria-label="Keyboard shortcuts"
+            aria-label={t("app.keyboard_shortcuts")}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();
@@ -901,14 +920,16 @@ export default function App() {
               }
             }}
           >
-            <h2 className="page-title">A few keys, a little faster.</h2>
+            <h2 className="page-title">
+              {t("app.a_few_keys_a_little_faster")}
+            </h2>
             <dl className="keys">
-              {shortcuts.map(([keys, action]) => (
+              {shortcuts().map(([keys, action]) => (
                 <div key={action}>
                   <dt>
                     {keys.map((key, index) => (
                       <span key={key}>
-                        {index > 0 && " or "}
+                        {index > 0 && t("format.or")}
                         <kbd>{key}</kbd>
                       </span>
                     ))}
@@ -922,7 +943,7 @@ export default function App() {
               autoFocus
               onClick={() => setHelp(false)}
             >
-              Close
+              {t("app.close")}
             </button>
           </section>
         </div>
@@ -932,10 +953,14 @@ export default function App() {
   return (
     <>
       {guideOpen && (
-        <FirstRunGuide
-          onSkip={() => closeGuide(false)}
-          onFinish={() => closeGuide(true)}
-        />
+        <LoadBoundary location={location} onRetry={retryPages}>
+          <Suspense fallback={null}>
+            <FirstRunGuide
+              onSkip={() => closeGuide(false)}
+              onFinish={() => closeGuide(true)}
+            />
+          </Suspense>
+        </LoadBoundary>
       )}
       {!automaticGuide && app}
     </>

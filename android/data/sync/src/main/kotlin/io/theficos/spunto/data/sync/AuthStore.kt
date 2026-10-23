@@ -1,5 +1,6 @@
 package io.theficos.spunto.data.sync
 
+import io.theficos.spunto.core.model.*
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -22,7 +23,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 @Serializable data class AuthConfig(val serverUrl: String, val token: String, val deviceId: String, val name: String, val httpConsent: Boolean = false, val userId:String?=null, val workspaceId:String?=null, val workspaceRole:String?=null) {
- init { require((userId==null && workspaceId==null && workspaceRole==null) || (!userId.isNullOrBlank() && !workspaceId.isNullOrBlank() && workspaceRole in setOf("owner","editor","viewer"))) {"The server returned an incomplete account identity."} }
+ init { requireLocal((userId==null && workspaceId==null && workspaceRole==null) || (!userId.isNullOrBlank() && !workspaceId.isNullOrBlank() && workspaceRole in setOf("owner","editor","viewer")),LocalOperationProblem.AccountIdentityIncomplete) {"The server returned an incomplete account identity."} }
  val hosted get()=userId!=null
  val replicaId:String get()=if(hosted) "account-"+replicaHash(listOf(serverUrl.trimEnd('/'),userId!!,workspaceId!!)) else "legacy"
 }
@@ -49,7 +50,7 @@ class AuthStore(context: Context) {
   return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore").apply { init(KeyGenParameterSpec.Builder("spunto.device",KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setRandomizedEncryptionRequired(true).build()) }.generateKey()
  }
  suspend fun save(config: AuthConfig) {
-  val url=config.serverUrl.trimEnd('/'); require(url.startsWith("https://") || (url.startsWith("http://") && config.httpConsent)) { "Confirm the unencrypted connection before signing in." }
+  val url=config.serverUrl.trimEnd('/'); requireLocal(url.startsWith("https://") || (url.startsWith("http://") && config.httpConsent),LocalOperationProblem.UnencryptedConnectionConsentRequired) { "Confirm the unencrypted connection before signing in." }
   val cipher=Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE,key()) }
   val encrypted=cipher.doFinal(Json.encodeToString(config.copy(serverUrl=url)).toByteArray())
   val blob=Base64.encodeToString(cipher.iv+encrypted,Base64.NO_WRAP)

@@ -143,11 +143,11 @@ class PluginCatalogScrollTest {
  @Test fun scheduleLiteralsAndTemplatesRenderOnAndroidAndMalformedValuesStayUnavailable() {
   val plugin=catalog().rows.last()
   val expected=listOf("Monday 10:15 (server time) · pauses while off or waiting")
-  assertEquals(expected,pluginScheduleFacts(scheduled(plugin,"monday","10:15")))
-  assertEquals(expected,pluginScheduleFacts(scheduled(plugin,"{weekday}","{time}")))
-  assertEquals(listOf("Schedule details unavailable"),pluginScheduleFacts(scheduled(plugin,"{Weekday}","{time}")))
-  assertEquals(listOf("Schedule details unavailable"),pluginScheduleFacts(scheduled(plugin,"{missing}","{time}")))
-  assertEquals(listOf("Schedule details unavailable"),pluginScheduleFacts(scheduled(plugin,"{weekday}","{time")))
+  assertEquals(expected,pluginScheduleFacts(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,scheduled(plugin,"monday","10:15")))
+  assertEquals(expected,pluginScheduleFacts(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,scheduled(plugin,"{weekday}","{time}")))
+  assertEquals(listOf("Schedule details unavailable"),pluginScheduleFacts(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,scheduled(plugin,"{Weekday}","{time}")))
+  assertEquals(listOf("Schedule details unavailable"),pluginScheduleFacts(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,scheduled(plugin,"{missing}","{time}")))
+  assertEquals(listOf("Schedule details unavailable"),pluginScheduleFacts(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,scheduled(plugin,"{weekday}","{time")))
  }
 
  @Test fun rapidScrollReachesScheduledPluginInLastCategoryAndReturnsToHeader() {

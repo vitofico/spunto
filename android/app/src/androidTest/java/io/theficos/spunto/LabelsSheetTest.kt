@@ -20,8 +20,13 @@ class LabelsSheetTest {
   val draft=mutableStateOf("Synthetic draft remains exactly here")
   compose.setContent {SpuntoTheme("carta","light") {if(open.value) LabelsSheet(LabelsNavigationSnapshot("timeline",labels,manifest()),{routes+=it},{routes+="settings"},{management++},{management++},{open.value=false})}}
   compose.onNodeWithText("Find a label").performTextInput("SPUNTO")
-  compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag("label:project/spunto"))
-  compose.onNodeWithTag("label:project").assertExists();compose.onNodeWithTag("label:project/spunto").assertExists()
+  compose.onNode(hasSetTextAction()).assertTextEquals("SPUNTO")
+  androidx.test.espresso.Espresso.closeSoftKeyboard()
+  // The IME changes the lazy viewport; each row must be scrolled into view before checking it.
+  for(tag in listOf("label:project","label:project/spunto")) {
+   compose.onNode(hasScrollAction()).performScrollToNode(hasTestTag(tag))
+   compose.onNodeWithTag(tag).assertIsDisplayed()
+  }
   compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
   compose.runOnIdle {assertTrue(routes.isEmpty());assertEquals(0,management);assertEquals("Synthetic draft remains exactly here",draft.value);assertFalse(open.value)}
  }
@@ -57,6 +62,6 @@ class LabelsSheetTest {
   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Open tasks"));compose.onNodeWithText("Open tasks").assertIsSelected()
   compose.runOnIdle {cached.value=manifest(false)}
   compose.onNodeWithText("Open tasks").assertDoesNotExist()
-  compose.runOnIdle {assertEquals("View unavailable",navigationTitle("view:tasks:open",labels,cached.value));assertTrue(routes.isEmpty())}
+  compose.runOnIdle {assertEquals("View unavailable",navigationTitle(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext,"view:tasks:open",labels,cached.value));assertTrue(routes.isEmpty())}
  }
 }

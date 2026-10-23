@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -17,6 +19,7 @@ import io.theficos.spunto.core.design.SpuntoSpacing
 
 /** A direct destination for Ask; each question is grounded in a fresh search of the notes. */
 @Composable fun AskScreen(model:SpuntoViewModel,onNote:(String)->Unit) {
+ val context=LocalContext.current
  val manifest by model.manifest.collectAsState()
  val online by model.online.collectAsState()
  val auth by model.auth.collectAsState()
@@ -43,8 +46,8 @@ import io.theficos.spunto.core.design.SpuntoSpacing
     }
    })
   }
-  if(asking) item {Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("Reading your notes…")}}
-  if(failed && !asking) item {Text("Couldn't answer this question. Check the connection and Settings → AI models, then try again.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodyMedium)}
+  if(asking) item {Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text(context.getString(R.string.core_reading_notes))}}
+  if(failed && !asking) item {Text(context.getString(R.string.core_ask_failed),color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodyMedium)}
   answer?.takeIf {enabled}?.let {output ->
    item {HorizontalDivider();Text(asked,Modifier.padding(top=SpuntoSpacing.s20),style=MaterialTheme.typography.titleMedium)}
    item {RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote)}
@@ -53,15 +56,16 @@ import io.theficos.spunto.core.design.SpuntoSpacing
 }
 
 @Composable internal fun AskQuestionInput(question:String,enabled:Boolean,online:Boolean,asking:Boolean,onQuestion:(String)->Unit,onAsk:()->Unit) {
+ val context=LocalContext.current
  val questionLength=question.codePointCount(0,question.length)
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-  Text("Find an answer in your notes",style=MaterialTheme.typography.headlineSmall)
-  Text("Ask a question in your own words. Each question searches your notes and includes sources. Private notes stay private.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  Text(context.getString(R.string.core_find_answer),style=MaterialTheme.typography.headlineSmall)
+  Text(context.getString(R.string.core_ask_hint),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
   when {
-   !enabled -> Text("Ask is switched off. Turn on Ask in Settings → Plugins.",style=MaterialTheme.typography.bodyMedium)
-   !online -> Text("Connect to your server to ask your notes.",style=MaterialTheme.typography.bodyMedium)
+   !enabled -> Text(context.getString(R.string.core_ask_off),style=MaterialTheme.typography.bodyMedium)
+   !online -> Text(context.getString(R.string.core_ask_connect),style=MaterialTheme.typography.bodyMedium)
   }
-  OutlinedTextField(question,onQuestion,Modifier.fillMaxWidth().semantics {contentDescription="Question for your notes"},label={Text("Your question")},placeholder={Text("What did I decide about…?")},minLines=3,maxLines=6,enabled=enabled && !asking,isError=questionLength>500,supportingText={if(questionLength>450) Text("$questionLength / 500 characters")})
-  Button(onClick=onAsk,enabled=enabled && online && !asking && question.isNotBlank() && questionLength<=500,modifier=Modifier.fillMaxWidth()) {Text(if(asking) "Reading your notes…" else "Ask your notes")}
+  OutlinedTextField(question,onQuestion,Modifier.fillMaxWidth().semantics {contentDescription=context.getString(R.string.core_question_notes)},label={Text(context.getString(R.string.core_your_question))},placeholder={Text(context.getString(R.string.core_question_example))},minLines=3,maxLines=6,enabled=enabled && !asking,isError=questionLength>500,supportingText={if(questionLength>450) Text(context.getString(R.string.core_question_characters,questionLength))})
+  Button(onClick=onAsk,enabled=enabled && online && !asking && question.isNotBlank() && questionLength<=500,modifier=Modifier.fillMaxWidth()) {Text(if(asking) context.getString(R.string.core_reading_notes) else context.getString(R.string.core_ask_notes))}
  }
 }

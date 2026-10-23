@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -110,8 +111,10 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
  TappableText(text,markdownBodyStyle(machine,SpuntoType.reading).copy(color=color),tap,modifier)
 }
 @Composable private fun MarkdownBlock(current:Node,body:String,tasks:Set<Int>,machine:Boolean,links:MarkdownLinks,onToggle:((Int)->Unit)?) {
+ val resources=LocalContext.current.resources
+ fun renderInline(node:Node)=inline(node,links) {alt -> resources.getString(R.string.design_image,alt)}
  when(current) {
-  is Heading -> TappableText(inline(current,links),if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
+  is Heading -> TappableText(renderInline(current),if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
   is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current,line=1),Modifier.padding(SpuntoSpacing.s12)) }
   is IndentedCodeBlock -> TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current))
   is ThematicBreak -> HorizontalDivider()
@@ -123,7 +126,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
     val paragraph=item.firstChild
     if(line!=null && line in tasks) {
      val checked=taskMarker.find(body.lines()[line])?.groupValues?.get(1)?.equals("x",true)==true
-     val text=inline(requireNotNull(paragraph),links).let { it.subSequence(4.coerceAtMost(it.length),it.length) }
+     val text=renderInline(requireNotNull(paragraph)).let { it.subSequence(4.coerceAtMost(it.length),it.length) }
      // The whole row is one checkbox for touch and TalkBack; the box itself takes no clicks of its own.
      Row(Modifier.fillMaxWidth().heightIn(min=48.dp).toggleable(checked,enabled=onToggle!=null,role=Role.Checkbox) { onToggle?.invoke(line) },horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
       Checkbox(checked=checked,onCheckedChange=null)
@@ -131,7 +134,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
      }
     } else Row {
      Text(if(current is OrderedList) "${number++}." else "•",Modifier.width(24.dp),style=markdownBodyStyle(machine,SpuntoType.reading),color=SpuntoColors.ink3)
-     if(paragraph!=null) MarkdownText(inline(paragraph,links),machine,modifier=Modifier.weight(1f),tap=links.tap(paragraph))
+     if(paragraph!=null) MarkdownText(renderInline(paragraph),machine,modifier=Modifier.weight(1f),tap=links.tap(paragraph))
     }
     var extra=paragraph?.next
     while(extra!=null) { val child=extra;Box(Modifier.padding(start=SpuntoSpacing.s24)) { MarkdownBlock(child,body,tasks,machine,links,onToggle) };extra=child.next }
@@ -142,14 +145,14 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
    Box(Modifier.width(3.dp).fillMaxHeight().background(SpuntoColors.ruleStrong))
    Column(Modifier.padding(start=13.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) { var child=current.firstChild;while(child!=null) { MarkdownBlock(child,body,tasks,machine,links,onToggle);child=child.next } }
   }
-  else -> MarkdownText(inline(current,links),machine,tap=links.tap(current))
+  else -> MarkdownText(renderInline(current),machine,tap=links.tap(current))
  }
 }
 private fun plain(node: Node):String = when(node) { is org.commonmark.node.Text -> node.literal; is Code -> node.literal; is SoftLineBreak,is HardLineBreak -> "\n"; else -> buildString { var child=node.firstChild; while(child!=null) { append(plain(child)); child=child.next } } }
 /** Inline #labels, as the core tokenizer reads them outside code: a letter- or digit-led path of up to five segments after a space or bracket. */
 private val inlineLabel=Regex("(?<=^|[\\s(\\[])#([\\p{L}\\p{N}\\p{M}_-]+(?:/[\\p{L}\\p{N}\\p{M}_-]+){0,4})(?![\\p{L}\\p{N}\\p{M}_/-])")
 internal fun inlineLabels(text:String):List<IntRange> = inlineLabel.findAll(text).filterNot { match -> match.groupValues[1].substringBefore('/').all(Char::isDigit) }.map { it.range }.toList()
-private fun inline(node:Node,links:MarkdownLinks?=null):AnnotatedString {
+private fun inline(node:Node,links:MarkdownLinks?,imageDescription:(String)->String):AnnotatedString {
  val code=mutableListOf<IntRange>()
  val builder=AnnotatedString.Builder()
  fun walk(n:Node) {
@@ -167,7 +170,7 @@ private fun inline(node:Node,links:MarkdownLinks?=null):AnnotatedString {
     else builder.withStyle(SpanStyle(textDecoration=TextDecoration.Underline)) { children() }
    }
    is HtmlBlock,is HtmlInline -> Unit
-   is Image -> builder.append("[Image: ${plain(n)}]")
+   is Image -> builder.append(imageDescription(plain(n)))
    else -> children()
   }
  }

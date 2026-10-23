@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -11,17 +12,17 @@ import styles from "./Feature.module.css";
 import { PairDevice } from "./PairDevice";
 import { browserName, formatWhen } from "./format";
 import { ErrorLine } from "./SettingsParts";
-const clientNames: Record<string, string> = {
-  script: "Script or other tool",
+const clientNames: () => Record<string, string> = () => ({
+  script: t("settingsaccess.script_or_other_tool"),
   codex: "Codex",
   "claude-code": "Claude Code",
-  monitor: "Status monitor",
-};
-const scopeNames: Record<string, string> = {
-  read: "Reads notes",
-  write: "Reads and writes notes",
-  status: "Status only",
-};
+  monitor: t("settingsaccess.status_monitor"),
+});
+const scopeNames: () => Record<string, string> = () => ({
+  read: t("settingsaccess.reads_notes"),
+  write: t("settingsaccess.reads_and_writes_notes"),
+  status: t("settingsaccess.status_only"),
+});
 function credentialName(c: Credential) {
   return c.kind === "session" ? browserName(c.name) : c.name;
 }
@@ -29,34 +30,44 @@ function credentialFacts(c: Credential) {
   // Private and external-note limits only exist on access tokens.
   if (c.kind === "pat")
     return [
-      clientNames[c.client ?? ""] ?? c.client,
-      scopeNames[c.scope] ?? c.scope,
+      clientNames()[c.client ?? ""] ?? c.client,
+      scopeNames()[c.scope] ?? c.scope,
       c.scope === "status"
         ? null
         : c.private_ok
-          ? "Includes private notes"
-          : "Excludes private notes",
+          ? t("settingsaccess.includes_private_notes")
+          : t("settingsaccess.excludes_private_notes"),
       c.scope === "status"
         ? null
         : c.external_ok
-          ? "Includes external notes"
-          : "Excludes external notes",
+          ? t("settingsaccess.includes_external_notes")
+          : t("settingsaccess.excludes_external_notes"),
     ]
       .filter(Boolean)
       .join(" · ");
-  return c.kind === "device" ? "Android app" : null;
+  return c.kind === "device" ? t("settingsaccess.android_app") : null;
 }
 function credentialUse(c: Credential) {
   const used = c.current
-    ? "Active now"
+    ? t("settingsaccess.active_now")
     : c.last_used_at
-      ? `Last used ${formatWhen(c.last_used_at)}`
+      ? t("settingsaccess.last_used_value1", {
+          value1: formatWhen(c.last_used_at),
+        })
       : c.kind === "pat"
-        ? "Not used yet"
-        : `Signed in ${formatWhen(c.created_at)}`;
-  return c.expires_at ? `${used} · Expires ${formatWhen(c.expires_at)}` : used;
+        ? t("settingsaccess.not_used_yet")
+        : t("settingsaccess.signed_in_value1", {
+            value1: formatWhen(c.created_at),
+          });
+  return c.expires_at
+    ? t("settingsaccess.expires", {
+        usage: used,
+        date: formatWhen(c.expires_at),
+      })
+    : used;
 }
 function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
+  useLanguage();
   const query = useQuery({
     queryKey: ["credentials"],
     queryFn: api.credentials,
@@ -80,9 +91,15 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
     if (
       await confirm({
         opener,
-        title: `Revoke ${credentialName(c)}?`,
-        body: `This ${c.kind === "pat" ? "token" : "device or session"} will lose access immediately.${c.current ? " You will be signed out." : ""}`,
-        confirmLabel: "Revoke access",
+        title: t("settingsaccess.revoke_value1", { value1: credentialName(c) }),
+        body: t(
+          c.kind === "pat"
+            ? "settingsaccess.revoke_token"
+            : c.current
+              ? "settingsaccess.revoke_current"
+              : "settingsaccess.revoke_device",
+        ),
+        confirmLabel: t("settingsaccess.revoke_access"),
         danger: true,
       })
     )
@@ -91,7 +108,7 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
   return (
     <>
       {query.isPending ? (
-        <p>Loading access…</p>
+        <p>{t("settingsaccess.loading_access")}</p>
       ) : items.length ? (
         <ul className={styles.list}>
           {items.map((c) => {
@@ -105,17 +122,19 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
                     </strong>
                     {facts && <p>{facts}</p>}
                     <div className={styles.facts}>
-                      {c.current && "This browser · "}
+                      {c.current && t("settingsaccess.this_browser")}
                       {credentialUse(c)}
                     </div>
                   </div>
                   <div className={styles.actions}>
                     <button
-                      aria-label={`Revoke ${credentialName(c)}`}
+                      aria-label={t("settingsaccess.revoke_value1_2", {
+                        value1: credentialName(c),
+                      })}
                       disabled={mutation.isPending}
                       onClick={(e) => void revoke(c, e.currentTarget)}
                     >
-                      Revoke
+                      {t("settingsaccess.revoke")}
                     </button>
                   </div>
                 </div>
@@ -125,7 +144,9 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
         </ul>
       ) : (
         <p className="muted">
-          {kind === "tokens" ? "No access tokens yet." : "No other devices."}
+          {kind === "tokens"
+            ? t("settingsaccess.no_access_tokens_yet")
+            : t("settingsaccess.no_other_devices")}
         </p>
       )}
       <ErrorLine error={query.error ?? mutation.error} />
@@ -134,11 +155,14 @@ function CredentialRows({ kind }: { kind: "tokens" | "devices" }) {
   );
 }
 export function Devices() {
+  useLanguage();
   return (
     <>
-      <h1>Devices</h1>
+      <h1>{t("settings.devices")}</h1>
       <p className="muted">
-        Every browser session and connected device, with its last use.
+        {t(
+          "settingsaccess.every_browser_session_and_connected_device_with_its",
+        )}
       </p>
       <CredentialRows kind="devices" />
       <PairDevice />
@@ -146,6 +170,7 @@ export function Devices() {
   );
 }
 export function Tokens() {
+  useLanguage();
   const formId = useId();
   const [open, setOpen] = useState(false);
   const creator = useRef<HTMLButtonElement>(null);
@@ -182,10 +207,9 @@ export function Tokens() {
     (!expires || new Date(expires).getTime() > Date.now());
   return (
     <>
-      <h1>Access tokens</h1>
+      <h1>{t("settings.access_tokens")}</h1>
       <p className="muted">
-        Create a separate token for each agent or script. A read token can find
-        notes without changing them.
+        {t("settingsaccess.create_a_separate_token_for_each_agent_or")}
       </p>
       <button
         ref={creator}
@@ -195,24 +219,28 @@ export function Tokens() {
           setOpen(true);
         }}
       >
-        Create token
+        {t("settingsaccess.create_token")}
       </button>
       <CredentialRows kind="tokens" />
       {open && (
         <Dialog
-          title="Create an access token"
+          title={t("settingsaccess.create_an_access_token")}
           opener={creator.current}
           onClose={() => setOpen(false)}
           footer={
             <>
-              <button onClick={() => setOpen(false)}>Cancel</button>
+              <button onClick={() => setOpen(false)}>
+                {t("profilepanel.cancel")}
+              </button>
               <button
                 className="primary"
                 type="submit"
                 form={formId}
                 disabled={!ready}
               >
-                {create.isPending ? "Creating…" : "Create token"}
+                {create.isPending
+                  ? t("collaboration.creating")
+                  : t("settingsaccess.create_token")}
               </button>
             </>
           }
@@ -225,7 +253,7 @@ export function Tokens() {
             }}
           >
             <label className={styles.formField}>
-              Name
+              {t("settingsaccess.name")}
               <input
                 className="field"
                 value={name}
@@ -236,7 +264,7 @@ export function Tokens() {
               />
             </label>
             <label className={styles.formField}>
-              Client
+              {t("settingsaccess.client")}
               <select
                 className="field"
                 value={clientName}
@@ -244,7 +272,7 @@ export function Tokens() {
                   setClientName(e.target.value as TokenInput["client"])
                 }
               >
-                {Object.entries(clientNames).map(([value, title]) => (
+                {Object.entries(clientNames()).map(([value, title]) => (
                   <option key={value} value={value}>
                     {title}
                   </option>
@@ -252,15 +280,19 @@ export function Tokens() {
               </select>
             </label>
             <label className={styles.formField}>
-              Scope
+              {t("settingsaccess.scope")}
               <select
                 className="field"
                 value={scope}
                 onChange={(e) => setScope(e.target.value as typeof scope)}
               >
-                <option value="read">Read notes</option>
-                <option value="write">Read and write notes</option>
-                <option value="status">Status only · no note text</option>
+                <option value="read">{t("settingsaccess.read_notes")}</option>
+                <option value="write">
+                  {t("settingsaccess.read_and_write_notes")}
+                </option>
+                <option value="status">
+                  {t("settingsaccess.status_only_no_note_text")}
+                </option>
               </select>
             </label>
             {scope !== "status" && (
@@ -271,7 +303,7 @@ export function Tokens() {
                     checked={privateOk}
                     onChange={(e) => setPrivate(e.target.checked)}
                   />
-                  Include private notes
+                  {t("settingsaccess.include_private_notes")}
                 </label>
                 <label className={styles.row}>
                   <input
@@ -279,12 +311,12 @@ export function Tokens() {
                     checked={externalOk}
                     onChange={(e) => setExternal(e.target.checked)}
                   />
-                  Include external-origin notes
+                  {t("settingsaccess.include_external_origin_notes")}
                 </label>
               </>
             )}
             <label className={styles.formField}>
-              Expires at (optional)
+              {t("settingsaccess.expires_at_optional")}
               <input
                 className="field"
                 type="datetime-local"
@@ -292,7 +324,7 @@ export function Tokens() {
                 onChange={(e) => setExpires(e.target.value)}
               />
               <small>
-                Leave blank for no expiry. You can revoke access at any time.
+                {t("settingsaccess.leave_blank_for_no_expiry_you_can_revoke")}
               </small>
             </label>
           </form>
@@ -301,7 +333,7 @@ export function Tokens() {
       )}
       {secret && (
         <Dialog
-          title="Copy your token now"
+          title={t("settingsaccess.copy_your_token_now")}
           onClose={() => {
             setSecret(null);
             setCopied(false);
@@ -309,7 +341,9 @@ export function Tokens() {
           footer={
             <>
               <button onClick={() => void copyText(secret).then(setCopied)}>
-                {copied ? "Copied" : "Copy token"}
+                {copied
+                  ? t("settingsaccess.copied")
+                  : t("settingsaccess.copy_token")}
               </button>
               <button
                 className="primary"
@@ -318,15 +352,12 @@ export function Tokens() {
                   setCopied(false);
                 }}
               >
-                Done
+                {t("collaboration.done")}
               </button>
             </>
           }
         >
-          <p>
-            This is the only time it will be shown. Store it in your client’s
-            environment.
-          </p>
+          <p>{t("settingsaccess.this_is_the_only_time_it_will_be")}</p>
           <pre className={styles.copy}>{secret}</pre>
         </Dialog>
       )}
@@ -334,69 +365,77 @@ export function Tokens() {
   );
 }
 function CopySnippet({ title, text }: { title: string; text: string }) {
+  useLanguage();
   const [copied, setCopied] = useState(false);
   return (
     <>
       <h2>{title}</h2>
       <pre className={styles.copy}>{text}</pre>
       <button onClick={() => void copyText(text).then(setCopied)}>
-        {copied ? "Copied" : "Copy instructions"}
+        {copied
+          ? t("settingsaccess.copied")
+          : t("settingsaccess.copy_instructions")}
       </button>
     </>
   );
 }
 export function Agents() {
+  useLanguage();
   const query = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   const url = query.data?.mcp_url;
   const snippets = agentSnippets(query.data?.public_url ?? "", url ?? "");
   return (
     <>
-      <h1>Agents</h1>
+      <h1>{t("settings.agents")}</h1>
       <p className="muted">
-        Give each agent its own{" "}
-        <Link href="/settings/tokens">access token</Link>. Start with read
-        access and keep edit tools asking for confirmation. Set{" "}
-        <code>SPUNTO_TOKEN</code> privately in the environment that starts your
-        client.
+        {t("settingsaccess.agents_explanation")}{" "}
+        <Link href="/settings/tokens">{t("settings.access_tokens")}</Link>
       </p>
       {url ? (
         <>
           <CopySnippet
-            title="Codex · ~/.codex/config.toml"
+            title={t("settingsaccess.codex_codex_config_toml")}
             text={snippets.codex}
           />
           <p className={styles.facts}>
-            Read tools can run directly. Other tools ask first.{" "}
+            {t("settingsaccess.read_tools_can_run_directly_other_tools_ask")}{" "}
             <a
               href="https://learn.chatgpt.com/docs/extend/mcp"
               target="_blank"
               rel="noreferrer"
             >
-              Official Codex MCP setup
+              {t("settingsaccess.official_codex_mcp_setup")}
             </a>
           </p>
-          <CopySnippet title="Claude Code · .mcp.json" text={snippets.claude} />
+          <CopySnippet
+            title={t("settingsaccess.claude_code_mcp_json")}
+            text={snippets.claude}
+          />
           <p className={styles.facts}>
-            The token is expanded from your environment when Claude Code loads
-            this configuration.{" "}
+            {t(
+              "settingsaccess.the_token_is_expanded_from_your_environment_when",
+            )}{" "}
             <a
               href="https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json"
               target="_blank"
               rel="noreferrer"
             >
-              Claude Code MCP setup
+              {t("settingsaccess.claude_code_mcp_setup")}
             </a>
           </p>
-          <CopySnippet title="Scripts · HTTP API" text={snippets.script} />
+          <CopySnippet
+            title={t("settingsaccess.scripts_http_api")}
+            text={snippets.script}
+          />
           <p className={styles.facts}>
-            Send tokens in the Authorization header.{" "}
-            <a href="/api/v1/docs">API reference</a>
+            {t("settingsaccess.send_tokens_in_the_authorization_header")}{" "}
+            <a href="/api/v1/docs">{t("settingsaccess.api_reference")}</a>
           </p>
         </>
       ) : query.isPending ? (
-        <p>Loading connection details…</p>
+        <p>{t("settingsaccess.loading_connection_details")}</p>
       ) : (
-        <p>MCP is disabled by the operator.</p>
+        <p>{t("settingsaccess.mcp_is_disabled_by_the_operator")}</p>
       )}
       <ErrorLine error={query.error} />
     </>

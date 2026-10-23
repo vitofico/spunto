@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -22,8 +24,9 @@ import io.theficos.spunto.core.design.*
 /** Reused by the picker and label page; counts already include distinct descendant notes. Long-press manages a label. */
 internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(String)->Unit,onManageLabel:((String)->Unit)?=null,managementAvailable:Boolean=true) {
  items(rows,key={"label:"+it.key}) {row ->
-  SheetRow("#${row.path.substringAfterLast('/')}",row.selected,Modifier.testTag("label:"+row.key),count=row.count,depth=row.depth,description="#${row.path}, ${notesCount(row.count)}",
-   onLongClick=onManageLabel?.takeIf {managementAvailable}?.let {manage -> {manage(row.path)}},longClickLabel="Manage #${row.path} in the web app") {onLabel(row.key)}
+  val context=LocalContext.current
+  SheetRow("#${row.path.substringAfterLast('/')}",row.selected,Modifier.testTag("label:"+row.key),count=row.count,depth=row.depth,description=context.getString(R.string.core_label_count,row.path,notesCount(context.resources,row.count)),
+   onLongClick=onManageLabel?.takeIf {managementAvailable}?.let {manage -> {manage(row.path)}},longClickLabel=context.getString(R.string.core_manage_label,row.path)) {onLabel(row.key)}
  }
 }
 /** A6 row: ink text after its glyph, if any, the count in ink-3 at the right, the active one in the accent on an accent-soft pill; 48 dp tall, 16 dp per level. */
@@ -47,8 +50,9 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
 @Composable fun LabelsSheet(
  snapshot:LabelsNavigationSnapshot,onRoute:(String)->Unit,onSettings:()->Unit,
  onManageLabels:(String)->Unit,onManageViews:()->Unit,onDismiss:()->Unit,
- managementAvailable:Boolean=false,managementMessage:String="Connect and sync with your server to manage shared labels and views.",reviewWaiting:Int=0,allNotes:Int?=null,
+ managementAvailable:Boolean=false,managementMessage:String?=null,reviewWaiting:Int=0,allNotes:Int?=null,
 ) {
+ val context=LocalContext.current
  var query by remember {mutableStateOf("")};var showMore by remember {mutableStateOf(false)}
  val latest by rememberUpdatedState(snapshot)
  val views=remember(snapshot.manifest) {declaredActiveViews(snapshot.manifest)}
@@ -56,22 +60,22 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
  // Fully open from the start, and one scrolling column, so large font sizes still reach every row.
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),scrimColor=MaterialTheme.colorScheme.scrim) {
   LazyColumn(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s8,end=SpuntoSpacing.s8,bottom=SpuntoSpacing.s24)) {
-   item(key="find") {OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),placeholder={Text("Find a label")},singleLine=true)}
-   items(listOfNotNull(Triple("timeline","All notes",R.drawable.ic_notes),Triple("archive","Archive",R.drawable.ic_archive),Triple("trash","Trash",R.drawable.ic_trash),Triple("review","Review",R.drawable.ic_inbox).takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title,glyph) ->
+   item(key="find") {OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),placeholder={Text(context.getString(R.string.core_find_label))},singleLine=true)}
+   items(listOfNotNull(Triple("timeline",context.getString(R.string.core_all_notes),R.drawable.ic_notes),Triple("archive",context.getString(R.string.core_archive_title),R.drawable.ic_archive),Triple("trash",context.getString(R.string.core_trash),R.drawable.ic_trash),Triple("review",context.getString(R.string.core_review),R.drawable.ic_inbox).takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title,glyph) ->
     val count=when(route) {"timeline" -> allNotes;"review" -> reviewWaiting;else -> null}
-    SheetRow(title,snapshot.route==route,count=count,description=count?.let {"$title, ${notesCount(it)}"}.takeIf {route=="timeline"},glyph=glyph) {onRoute(route)}
+    SheetRow(title,snapshot.route==route,count=count,description=count?.let {context.getString(R.string.core_title_count,title,notesCount(context.resources,it))}.takeIf {route=="timeline"},glyph=glyph) {onRoute(route)}
    }
    if(views.isNotEmpty()) {
-    item(key="views") {SheetOverline("Views") {if(views.any {it.hidden}) TextButton(onClick={showMore=!showMore}) {Text(if(showMore) "Show fewer views" else "Show more views")}}}
+    item(key="views") {SheetOverline(context.getString(R.string.core_views)) {if(views.any {it.hidden}) TextButton(onClick={showMore=!showMore}) {Text(if(showMore) context.getString(R.string.core_fewer_views) else context.getString(R.string.core_more_views))}}}
     items(views.filter {!it.hidden || showMore},key={it.route}) {view ->
-     SheetRow(view.title,snapshot.route==view.route,onLongClick=onManageViews.takeIf {managementAvailable},longClickLabel="Manage views in the web app") {resolveViewRoute(latest.manifest,view.route)?.takeIf {!it.hidden || showMore}?.let {onRoute(it.route)}}
+     SheetRow(localizedViewTitle(context,view,snapshot.manifest,snapshot.catalog),snapshot.route==view.route,onLongClick=onManageViews.takeIf {managementAvailable},longClickLabel=context.getString(R.string.core_manage_views)) {resolveViewRoute(latest.manifest,view.route)?.takeIf {!it.hidden || showMore}?.let {onRoute(it.route)}}
     }
    }
-   item(key="labels") {SheetOverline("Labels")}
-   if(rows.isEmpty()) item(key="no-labels") {Text(if(snapshot.labels.isEmpty()) "Labels grow as you write. Type # in a note." else "No labels match this search.",Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyMedium,color=SpuntoColors.ink3)}
+   item(key="labels") {SheetOverline(context.getString(R.string.core_labels))}
+   if(rows.isEmpty()) item(key="no-labels") {Text(if(snapshot.labels.isEmpty()) context.getString(R.string.core_labels_hint) else context.getString(R.string.core_no_labels_match),Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyMedium,color=SpuntoColors.ink3)}
    labelTreeItems(rows,onLabel={key ->if(latest.labels.any {it.key==key}) onRoute("label:$key")},onManageLabel={path ->if(managementAvailable && latest.labels.any {it.path==path}) onManageLabels(path)},managementAvailable=managementAvailable)
-   item(key="manage") {Text(if(managementAvailable && rows.isNotEmpty()) "Long-press a label to rename, merge or remove it in the web app." else managementMessage,Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s12),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
-   item(key="settings") {HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s12),color=MaterialTheme.colorScheme.outlineVariant);SheetRow("Settings",false) {onSettings()}}
+   item(key="manage") {Text(if(managementAvailable && rows.isNotEmpty()) context.getString(R.string.core_long_press_label) else managementMessage ?: context.getString(R.string.core_manage_connect),Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s12),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
+   item(key="settings") {HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s12),color=MaterialTheme.colorScheme.outlineVariant);SheetRow(context.getString(R.string.core_settings),false) {onSettings()}}
   }
  }
 }

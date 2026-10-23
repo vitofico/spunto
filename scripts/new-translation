@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Start an Android and/or web translation from the English catalogs."""
+
+import argparse
+import importlib.util
+import json
+import re
+import sys
+import xml.etree.ElementTree as ET
+from copy import deepcopy
+from pathlib import Path
+
+SPEC = importlib.util.spec_from_file_location(
+    "translations", Path(__file__).with_name("check-translations.py")
+)
+translations = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(translations)
+
+
+def locale_names(value):
+    if value.startswith("b+"):
+        value = value[2:].replace("+", "-")
+    value = re.sub(r"-r([A-Z]{2}|[0-9]{3})$", r"-\1", value)
+    if not translations.LOCALE_TAG.fullmatch(value):
+        raise ValueError("use a language tag such as pt, pt-BR or zh-Hans")
+    parts = value.split("-")
+    parts = [parts[0]] + [
+        part.title() if len(part) == 4 else part.upper() for part in parts[1:]
+    ]
+    tag = "-".join(parts)
+    if len(parts) == 1:
+        qualifier = parts[0]
+    elif len(parts) == 2 and len(parts[1]) == 2 and parts[1].isalpha():
+        qualifier = parts[0] + "-r" + parts[1]
+    else:
+        qualifier = "b+" + "+".join(parts)
+    if parts[0] == "en" and len(parts) == 1:
+        raise ValueError("English is the source catalog")
+    return qualifier, tag
+
+
+def scaffold(root, language, name=None, android=True, web=True):
+    qualifier, tag = locale_names(language)
+    outputs = {}
+    destinations = []
+    if android:
+        for folder in translations.android_roots(root):
+            _, problems = translations.android_catalog(folder / "values")
+            if problems:
+                raise ValueError(
+                    f"invalid English resources in {folder}: {'; '.join(problems)}"
+                )
+            destination = folder / ("values-" + qualifier)
+            destinations.append(destination)
+            for file in sorted((folder / "values").glob("*.xml")):
+                tree = ET.Element("resources")
+                for node in ET.parse(file).getroot():
+                    if (
+                        node.tag in ("string", "plurals", "string-array")
+                        and node.get("translatable") != "false"
+                    ):
+                        tree.append(deepcopy(node))
+                if len(tree):
+                    ET.indent(tree, space="    ")
+                    outputs[destination / file.name] = (
+                        '<?xml version="1.0" encoding="utf-8"?>\n<!-- English starter: translate every entry before submitting. -->\n'
+                        + ET.tostring(tree, encoding="unicode")
+                        + "\n"
+                    )
+    if web:
+        folder = root / "web/src/locales"
+        data = translations.browser_catalog(folder / "en.json")
+        data["nativeName"] = name or tag
+        outputs[folder / (tag + ".json")] = (
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        )
+        destinations.append(folder / (tag + ".json"))
+    if not outputs:
+        raise ValueError("no English catalogs found")
+    for path in destinations:
+        if path.exists():
+            raise ValueError(f"refusing to overwrite {path}")
+    created, directories = [], []
+    try:
+        for path, content in outputs.items():
+            if not path.parent.exists():
+                path.parent.mkdir(parents=True)
+                directories.append(path.parent)
+            with path.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+            created.append(path)
+    except OSError:
+        for path in reversed(created):
+            path.unlink()
+        for path in reversed(directories):
+            path.rmdir()
+        raise
+    return list(outputs)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("language", help="language tag, for example pt-BR")
+    parser.add_argument("--name", help="native language name for the web picker")
+    parser.add_argument("--root", type=Path, default=translations.ROOT)
+    only = parser.add_mutually_exclusive_group()
+    only.add_argument("--android-only", action="store_true")
+    only.add_argument("--web-only", action="store_true")
+    args = parser.parse_args()
+    try:
+        paths = scaffold(
+            args.root,
+            args.language,
+            args.name,
+            not args.web_only,
+            not args.android_only,
+        )
+    except (OSError, ValueError, ET.ParseError) as error:
+        parser.exit(1, f"{error}\n")
+    print("\n".join(str(path.relative_to(args.root)) for path in paths))
+    print(
+        "English starter only: translate every entry, then run python3 scripts/check-translations.py."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

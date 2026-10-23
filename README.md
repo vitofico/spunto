@@ -118,7 +118,7 @@ Take your notes with you: download a Markdown ZIP from web **Settings → Data**
 
 Spunto has been [submitted to F-Droid](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/53280) and is awaiting review. It is **not listed in F-Droid** yet; use GitHub Releases or Obtainium for Android downloads.
 
-Found a bug or have an idea? [Open an issue](https://github.com/vitofico/spunto/issues) with the client, version and a reproducible example. See [Contributing](CONTRIBUTING.md) and report vulnerabilities through the [security policy](SECURITY.md). Maintained by [@vitofico](https://github.com/vitofico).
+Found a bug or have an idea? [Open an issue](https://github.com/vitofico/spunto/issues) with the client, version and a reproducible example. See [Contributing](CONTRIBUTING.md), help [translate Spunto](docs/translating.md), and report vulnerabilities through the [security policy](SECURITY.md). Maintained by [@vitofico](https://github.com/vitofico).
 
 ## License
 

@@ -4,7 +4,10 @@ import androidx.compose.runtime.mutableStateListOf
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application=android.app.Application::class,sdk=[28])
 class NavigatorTest {
+ private val context=androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
  private val forgotten=mutableListOf<String>()
  private fun navigator(vararg routes:String)=Navigator(mutableStateListOf(*routes),forgotten::add)
 
@@ -37,9 +40,9 @@ class NavigatorTest {
   assertEquals("timeline",nav.route);assertEquals(listOf("2:appearance","1:settings"),forgotten)
  }
  @Test fun everyPageHasOneTitleAndNotesShowNone() {
-  assertEquals("Settings",routeTitle("settings"));assertEquals("Appearance",routeTitle("appearance"));assertEquals("Plugins",routeTitle("plugins"))
+  assertEquals("Settings",routeTitle(context,"settings"));assertEquals("Appearance",routeTitle(context,"appearance"));assertEquals("Plugins",routeTitle(context,"plugins"))
   // A plugin page heads itself with the plugin's name.
-  assertNull(routeTitle("plugin:dictation"))
-  assertNull(routeTitle("note:a"));assertNull(routeTitle("search"));assertNull(routeTitle("timeline"))
+  assertNull(routeTitle(context,"plugin:dictation"))
+  assertNull(routeTitle(context,"note:a"));assertNull(routeTitle(context,"search"));assertNull(routeTitle(context,"timeline"))
  }
 }

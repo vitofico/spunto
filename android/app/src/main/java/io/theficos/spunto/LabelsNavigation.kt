@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.Context
+
 import io.theficos.spunto.core.model.LabelCount
 import io.theficos.spunto.core.model.fold
 import io.theficos.spunto.core.model.labelKey
@@ -15,7 +17,7 @@ data class SheetView(val pluginId:String,val id:String,val title:String,val filt
  val route get()="view:$pluginId:$id"
 }
 data class LabelTreeRow(val key:String,val path:String,val count:Int,val depth:Int,val selected:Boolean,val hasChildren:Boolean)
-data class LabelsNavigationSnapshot(val route:String,val labels:List<LabelCount>,val manifest:JsonObject)
+data class LabelsNavigationSnapshot(val route:String,val labels:List<LabelCount>,val manifest:JsonObject,val catalog:JsonObject=JsonObject(emptyMap()))
 data class SharedManagementTarget(val url:String?,val message:String)
 private val navigationPluginId=Regex("[a-z][a-z0-9-]{1,23}")
 private val navigationViewId=Regex("[a-z][a-z0-9-]{0,127}")
@@ -55,14 +57,20 @@ fun declaredActiveViews(manifest:JsonObject):List<SheetView> {
 }
 fun resolveViewRoute(manifest:JsonObject,route:String):SheetView?=declaredActiveViews(manifest).firstOrNull {it.route==route}
 fun isLabelsNavigationRoute(route:String)=route in setOf("timeline","archive","trash","review") || route.startsWith("label:") || route.startsWith("view:")
-fun navigationTitle(route:String,labels:List<LabelCount>,manifest:JsonObject):String=when {
- route=="timeline" -> "All notes"
- route=="archive" -> "Archive"
- route=="trash" -> "Trash"
- route=="review" -> "Review"
+fun navigationTitle(context:Context,route:String,labels:List<LabelCount>,manifest:JsonObject,catalog:JsonObject=JsonObject(emptyMap())):String=when {
+ route=="timeline" -> context.getString(R.string.core_all_notes)
+ route=="archive" -> context.getString(R.string.core_archive_title)
+ route=="trash" -> context.getString(R.string.core_trash)
+ route=="review" -> context.getString(R.string.core_review)
  route.startsWith("label:") -> "#"+(labels.firstOrNull {it.key==route.removePrefix("label:")}?.path ?: route.removePrefix("label:"))
- route.startsWith("view:") -> resolveViewRoute(manifest,route)?.title ?: "View unavailable"
+ route.startsWith("view:") -> resolveViewRoute(manifest,route)?.let {localizedViewTitle(context,it,manifest,catalog)} ?: context.getString(R.string.core_view_unavailable)
  else -> route.substringBefore(':').replaceFirstChar {it.uppercase()}
+}
+
+/** Only bundled plugin metadata is translated; custom view titles remain server content. */
+internal fun localizedViewTitle(context:Context,view:SheetView,manifest:JsonObject,catalog:JsonObject):String {
+ val plugin=(manifest["plugins"] as? JsonArray)?.mapNotNull {it as? JsonObject}?.firstOrNull {text(it["id"])==view.pluginId} ?: return view.title
+ return localizedPluginView(context.resources,plugin,buildJsonObject {put("id",view.id);put("title",view.title)},catalog)
 }
 
 /** Counts are authoritative Room distinct-note counts, never sums of child rows. */
@@ -87,28 +95,28 @@ private fun managementRoot(raw:String):String?=runCatching {
  URI(scheme,null,root.host.lowercase(),port,null,null,null).toASCIIString()
 }.getOrNull()
 /** Browser cookie sign-in stays separate. This produces a destination, never bridges credentials. */
-fun sharedManagementTarget(config:AuthConfig?,replicaRoot:String?,online:Boolean,labelPath:String?=null,needsSignIn:Boolean=false):SharedManagementTarget {
+fun sharedManagementTarget(context:Context,config:AuthConfig?,replicaRoot:String?,online:Boolean,labelPath:String?=null,needsSignIn:Boolean=false):SharedManagementTarget {
  fun unavailable(message:String)=SharedManagementTarget(null,message)
- if(config==null || config.token.isBlank() || needsSignIn) return unavailable("Sign in to your server, then sign in separately in the web app to manage shared settings.")
- if(!online) return unavailable("Offline. Shared label and view management needs your server.")
- val root=managementRoot(config.serverUrl) ?: return unavailable("The server address is unavailable.")
- if(root.startsWith("http://") && !config.httpConsent) return unavailable("Allow this server's plain HTTP connection before opening its web app.")
- if(root!=replicaRoot?.let(::managementRoot)) return unavailable("Sync with this server before managing shared labels or views.")
+ if(config==null || config.token.isBlank() || needsSignIn) return unavailable(context.getString(R.string.core_manage_sign_in))
+ if(!online) return unavailable(context.getString(R.string.core_manage_offline))
+ val root=managementRoot(config.serverUrl) ?: return unavailable(context.getString(R.string.core_server_address_missing))
+ if(root.startsWith("http://") && !config.httpConsent) return unavailable(context.getString(R.string.core_plain_http_allow))
+ if(root!=replicaRoot?.let(::managementRoot)) return unavailable(context.getString(R.string.core_manage_sync))
  val path=if(labelPath==null) "/settings/plugins" else {
-  if(runCatching {labelKey(labelPath)}.isFailure) return unavailable("This label is unavailable.")
+  if(runCatching {labelKey(labelPath)}.isFailure) return unavailable(context.getString(R.string.core_label_unavailable))
   "/l/"+labelPath.split('/').joinToString("/") {URLEncoder.encode(it,"UTF-8").replace("+","%20")}
  }
- return SharedManagementTarget(root+path,"Owner sign-in is required in the web app.")
+ return SharedManagementTarget(root+path,context.getString(R.string.core_owner_sign_in))
 }
 
 /** These owner-only routes intentionally open browser sign-in without a device token. */
-fun ownerWebSettingsTarget(config:AuthConfig?,replicaRoot:String?,online:Boolean,section:String,needsSignIn:Boolean=false):SharedManagementTarget {
+fun ownerWebSettingsTarget(context:Context,config:AuthConfig?,replicaRoot:String?,online:Boolean,section:String,needsSignIn:Boolean=false):SharedManagementTarget {
  fun unavailable(message:String)=SharedManagementTarget(null,message)
- if(section !in setOf("data","profile")) return unavailable("This owner setting is unavailable.")
- if(config==null || config.token.isBlank() || needsSignIn) return unavailable("Connect to your server, then sign in separately in the web app.")
- if(!online) return unavailable("Offline. Your server's export and profile settings need a connection.")
- val root=managementRoot(config.serverUrl) ?: return unavailable("The server address is unavailable.")
- if(root.startsWith("http://") && !config.httpConsent) return unavailable("Allow this server's plain HTTP connection before opening its web app.")
- if(root!=replicaRoot?.let(::managementRoot)) return unavailable("Sync with this server before opening owner settings.")
- return SharedManagementTarget("$root/settings/$section","Owner sign-in is required separately in the web app.")
+ if(section !in setOf("data","profile")) return unavailable(context.getString(R.string.core_owner_setting_missing))
+ if(config==null || config.token.isBlank() || needsSignIn) return unavailable(context.getString(R.string.core_owner_connect))
+ if(!online) return unavailable(context.getString(R.string.core_owner_offline))
+ val root=managementRoot(config.serverUrl) ?: return unavailable(context.getString(R.string.core_server_address_missing))
+ if(root.startsWith("http://") && !config.httpConsent) return unavailable(context.getString(R.string.core_plain_http_allow))
+ if(root!=replicaRoot?.let(::managementRoot)) return unavailable(context.getString(R.string.core_owner_sync))
+ return SharedManagementTarget("$root/settings/$section",context.getString(R.string.core_owner_sign_in_separate))
 }

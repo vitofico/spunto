@@ -38,7 +38,7 @@ class ApiClientTest {
  @Test fun cancelledLongPollClosesPromptly() = runBlocking { server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE));val job=launch(Dispatchers.Default){api().waitForChanges("e.1",2)};withContext(Dispatchers.IO){server.takeRequest()};withTimeout(2000){job.cancelAndJoin()} }
  @Test fun credentialPostNeverFollowsRedirectToAnotherServer() = runBlocking {val destination=MockWebServer();destination.start();try {server.enqueue(MockResponse().setResponseCode(307).setHeader("Location",destination.url("/steal")));try {api("").signIn("synthetic-password","Phone");fail("Redirect must be rejected")}catch(e:ApiException){assertEquals(307,e.status)};assertEquals(0,destination.requestCount)}finally{destination.shutdown()} }
  @Test fun latestAgentWireMetadataIsNormalized() { assertTrue(noteFromWire(buildJsonObject {put("id","fixture");put("body","owner-created");put("origin","owner");put("updated_via_agent",true)}).updatedViaAgent) }
- @Test fun plaintextNeedsExplicitConsent() { try {ApiClient(AuthConfig(server.url("/").toString(),"","",""));fail() } catch(e:IllegalArgumentException) {assertTrue(e.message!!.contains("Confirm"))} }
+ @Test fun plaintextNeedsExplicitConsent() { try {ApiClient(AuthConfig(server.url("/").toString(),"","",""));fail() } catch(e:LocalOperationException) {assertEquals(LocalOperationProblem.UnencryptedConnectionConsentRequired,e.problem);assertTrue(e.message!!.contains("Confirm"))} }
  @Test fun onlyExactSlowCommandPostsUseExtendedActualCallAndReadDeadlines() = runBlocking {
   val callTimeouts=ConcurrentLinkedQueue<Long>();val readTimeouts=ConcurrentLinkedQueue<Int>()
   val client=OkHttpClient.Builder().readTimeout(35,TimeUnit.SECONDS).callTimeout(40,TimeUnit.SECONDS)

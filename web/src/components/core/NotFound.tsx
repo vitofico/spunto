@@ -1,18 +1,20 @@
+import { t, useLanguage } from "../../lib/i18n";
 import { Link } from "wouter";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 
 /** The one "not here" state, for unknown addresses and notes that no longer exist. */
 export function NotFound({
-  title = "This page isn’t here.",
+  title = t("notfound.this_page_isn_t_here"),
 }: {
   title?: string;
 }) {
-  useDocumentTitle("Not found");
+  useLanguage();
+  useDocumentTitle(t("notfound.not_found"));
   return (
     <div className="empty">
       <h1>{title}</h1>
-      <p>It may have moved or been deleted.</p>
-      <Link href="/">Go to your notes</Link>
+      <p>{t("notfound.it_may_have_moved_or_been_deleted")}</p>
+      <Link href="/">{t("notfound.go_to_your_notes")}</Link>
     </div>
   );
 }

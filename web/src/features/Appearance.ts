@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -39,6 +40,7 @@ function safeModes(value: Record<string, unknown>) {
 export function appearanceCards(manifest?: Manifest): ThemeCard[] {
   const cards = themeCatalog.map((theme): ThemeCard => ({
     ...theme,
+    description: t(`theme.${theme.id}.description`),
     status: "available",
     tokens: 1,
     accents: [],
@@ -77,14 +79,20 @@ export function appearanceCards(manifest?: Manifest): ThemeCard[] {
     const card: ThemeCard = {
       id: incoming.id,
       name: label(incoming.name, incoming.id),
-      description: label(incoming.description, "Installed colour pack"),
+      description: label(
+        incoming.description,
+        t("appearance.installed_colour_pack"),
+      ),
       tokens: 1,
       status: available ? "available" : "failed",
       reason: available
         ? undefined
         : incoming.status === "failed"
-          ? label(incoming.reason, "This colour pack is unavailable.")
-          : "This colour pack is invalid or needs a newer client.",
+          ? label(
+              incoming.reason,
+              t("appearance.this_colour_pack_is_unavailable"),
+            )
+          : t("appearance.this_colour_pack_is_invalid_or_needs_a"),
       accents: available
         ? accents.filter((accent) => accent !== undefined)
         : [],

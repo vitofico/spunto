@@ -20,10 +20,11 @@ fun resolveThemePalette(theme:String,dark:Boolean,pack:Map<String,String>?=null)
 
 data class ThemeAccent(val id:String,val name:String,val light:Map<String,String>,val dark:Map<String,String>)
 data class AccentChoice(val id:String?,val name:String)
+enum class ThemeLocalProblem { InvalidPack, InvalidCatalog }
 data class ThemeCard(
  val id:String,val name:String,val status:String="available",val reason:String?=null,val tokens:Int=1,
  val light:Map<String,String> = emptyMap(),val dark:Map<String,String> = emptyMap(),
- val accents:List<ThemeAccent> = emptyList(),val description:String=""
+ val accents:List<ThemeAccent> = emptyList(),val description:String="",val localProblem:ThemeLocalProblem?=null
 ) {
  val available get()=status=="available"
 }
@@ -53,7 +54,10 @@ fun validateThemeCard(card:ThemeCard):ThemeCard {
    else modeError(accent.light,accent.dark)?.let { "Accent ${accent.id}: $it" }
   }
  }
- if(reason!=null) return card.copy(name=boundedThemeText(card.name,80).ifBlank { "Unavailable colour pack" },status="failed",reason=boundedThemeText(reason),light=emptyMap(),dark=emptyMap(),accents=emptyList())
+ if(reason!=null) {
+  val local=card.localProblem ?: if(card.status=="failed" && !card.reason.isNullOrBlank() && themeIdPattern.matches(card.id) && card.name.isNotBlank() && card.name.length<=80 && card.tokens==1) null else ThemeLocalProblem.InvalidPack
+  return card.copy(name=boundedThemeText(card.name,80),status="failed",reason=boundedThemeText(reason),light=emptyMap(),dark=emptyMap(),accents=emptyList(),localProblem=local)
+ }
  return card.copy(name=boundedThemeText(card.name,80),reason=null,light=card.light.filterKeys { it in themeColorRoles },dark=card.dark.filterKeys { it in themeColorRoles },accents=card.accents.map { it.copy(name=boundedThemeText(it.name,80),light=it.light.filterKeys { key -> key in themeColorRoles },dark=it.dark.filterKeys { key -> key in themeColorRoles }) })
 }
 fun validatedThemeCatalog(cards:List<ThemeCard>,authoritative:Boolean=true):ThemeCatalog {
@@ -64,7 +68,7 @@ fun validatedThemeCatalog(cards:List<ThemeCard>,authoritative:Boolean=true):Them
   if(!seen.add(card.id)) return@forEachIndexed
   val duplicate=groups.getValue(card.id).size>1
   if(card.id in builtInTokens && !duplicate) return@forEachIndexed
-  val candidate=if(duplicate) card.copy(status="failed",reason="Theme ID conflicts with another catalog entry.") else card
+  val candidate=if(duplicate) card.copy(status="failed",reason="Theme ID conflicts with another catalog entry.",localProblem=ThemeLocalProblem.InvalidPack) else card
   val checked=validateThemeCard(candidate)
   // Failure cards receive a unique display key; ambiguous custom IDs stay failed so they cannot resolve.
   val id=if(card.id in builtInTokens || !themeIdPattern.matches(card.id)) generateSequence("invalid-theme-$index") { "$it-x" }.first { key -> result.none { it.id==key } && key !in groups } else card.id

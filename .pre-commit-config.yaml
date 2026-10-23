@@ -31,3 +31,12 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: translations
+        name: Translation catalogs
+        entry: python3 scripts/check-translations.py
+        language: system
+        pass_filenames: false
+        files: ^(android/.*/src/main/res/|web/src/locales/|scripts/(check-translations\.py|new-translation|tests/test_translations\.py))

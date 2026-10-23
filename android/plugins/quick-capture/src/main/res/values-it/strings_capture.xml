@@ -1,0 +1,9 @@
+<resources>
+ <string name="capture_widget_write">Scrivi una nota</string>
+ <string name="capture_widget_description">Scrivi o detta una nota dalla schermata Home.</string>
+ <string name="capture_disabled">Acquisizione rapida disattivata. Attivala in Impostazioni → Plugin.</string>
+ <string name="capture_dictate_note">Detta una nota</string>
+ <string name="capture_from_notes">Dalle tue note</string>
+ <string name="capture_new_note">Nuova nota</string>
+ <string name="capture_dictate">Detta</string>
+</resources>

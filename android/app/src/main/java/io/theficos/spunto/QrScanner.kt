@@ -2,6 +2,8 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.theficos.spunto
 
+import android.content.res.Resources
+
 import android.content.Context
 import android.Manifest
 import android.content.pm.PackageManager
@@ -36,14 +38,15 @@ import io.theficos.spunto.core.design.SpuntoSpacing
 
 private data class QrCameraUi(
  val ready:Boolean=false,val focus:Boolean=false,val torch:Boolean=false,val light:Boolean=false,
- val error:Boolean=false,val selected:Int=0,val cameras:List<String> = emptyList(),val message:String="Starting camera…",
+ val error:Boolean=false,val selected:Int=0,val cameras:List<String> = emptyList(),val message:String="",
 )
 
 @Composable fun QrScanner(onValue:(String)->Unit) {
+ val resources=LocalContext.current.resources
  val context=LocalContext.current
  val lifecycle=LocalLifecycleOwner.current.lifecycle
  val latest by rememberUpdatedState(onValue)
- var state by remember {mutableStateOf(QrCameraUi())}
+ var state by remember {mutableStateOf(QrCameraUi(message=resources.getString(R.string.settings_starting_camera)))}
  var cameraMenu by remember {mutableStateOf(false)}
  val preview=remember(context) {QrCameraPreview(context,{state=it},{latest(it)})}
  DisposableEffect(preview,lifecycle) {
@@ -60,21 +63,22 @@ private data class QrCameraUi(
   }
   Text(state.message,style=MaterialTheme.typography.bodySmall,color=if(state.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
   FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
-   if(state.focus) TextButton(enabled=state.ready,onClick=preview::focusCenter) {Text("Focus")}
-   if(state.torch) TextButton(enabled=state.ready,onClick=preview::toggleLight) {Text(if(state.light) "Light off" else "Light on")}
+   if(state.focus) TextButton(enabled=state.ready,onClick=preview::focusCenter) {Text(resources.getString(R.string.settings_focus))}
+   if(state.torch) TextButton(enabled=state.ready,onClick=preview::toggleLight) {Text(if(state.light) resources.getString(R.string.settings_light_off) else resources.getString(R.string.settings_light_on))}
    if(state.cameras.size>1) Box {
-    TextButton(onClick={cameraMenu=true}) {Text(state.cameras.getOrElse(state.selected) {"Camera"}+" ▾")}
+    TextButton(onClick={cameraMenu=true}) {Text(state.cameras.getOrElse(state.selected) {resources.getString(R.string.settings_camera)}+" ▾")}
     DropdownMenu(expanded=cameraMenu,onDismissRequest={cameraMenu=false}) {
      state.cameras.forEachIndexed {index,label -> DropdownMenuItem(text={Text(label)},onClick={cameraMenu=false;preview.select(index)})}
     }
    }
-   if(state.error) TextButton(onClick=preview::retry) {Text("Retry camera")}
+   if(state.error) TextButton(onClick=preview::retry) {Text(resources.getString(R.string.settings_retry_camera))}
   }
  }
 }
 
 /** Camera1 only exposes the devices made public by the phone; hidden physical lenses stay hidden. */
 private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->Unit,private val found:(String)->Unit):FrameLayout(context),SurfaceHolder.Callback {
+ private val resources=context.resources
  private val surface=SurfaceView(context)
  private val handler=Handler(Looper.getMainLooper())
  private val executor=Executors.newSingleThreadExecutor()
@@ -84,9 +88,9 @@ private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->
  })}.getOrDefault(emptyList())
  private val names=cameras.mapIndexed {index,camera ->
   val same=cameras.take(index+1).count {it.rear==camera.rear}
-  (if(camera.rear) "Back camera" else "Front camera")+if(same>1) " $same" else ""
+  (if(camera.rear) resources.getString(R.string.settings_back_camera) else resources.getString(R.string.settings_front_camera))+if(same>1) " $same" else ""
  }
- private var ui=QrCameraUi(cameras=names)
+ private var ui=QrCameraUi(cameras=names,message=context.getString(R.string.settings_starting_camera))
  private var camera:Camera?=null
  private var selected=0
  private var resumed=false
@@ -103,7 +107,7 @@ private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->
   setBackgroundColor(Color.BLACK);clipChildren=true;clipToPadding=true
   addView(surface,LayoutParams(LayoutParams.MATCH_PARENT,LayoutParams.MATCH_PARENT,Gravity.CENTER))
   surface.holder.addCallback(this)
-  surface.contentDescription="Pairing QR camera preview. Tap to focus."
+  surface.contentDescription=resources.getString(R.string.settings_pairing_qr_camera_preview_tap_to_focus)
   surface.setOnTouchListener {_,event ->
    if(event.action==MotionEvent.ACTION_UP) {tappedFocus=event.x to event.y;surface.performClick();true} else true
   }
@@ -113,22 +117,22 @@ private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->
   ui=ui.copy(selected=selected,message=message,error=error);changed(ui)
  }
  fun resume() {if(!closed) {resumed=true;open()}}
- fun pause() {resumed=false;releaseCamera();ui=ui.copy(ready=false,light=false);publish("Camera paused.")}
+ fun pause() {resumed=false;releaseCamera();ui=ui.copy(ready=false,light=false);publish(resources.getString(R.string.settings_camera_paused))}
  fun close() {if(closed) return;closed=true;resumed=false;releaseCamera();gate.close();surface.holder.removeCallback(this);executor.shutdownNow();handler.removeCallbacksAndMessages(null)}
  fun retry() {if(closed) return;delivered=false;releaseCamera();open()}
  fun select(index:Int) {if(index !in cameras.indices || index==selected) return;selected=index;delivered=false;releaseCamera();open()}
  override fun surfaceCreated(holder:SurfaceHolder) {open()}
- override fun surfaceDestroyed(holder:SurfaceHolder) {releaseCamera();ui=ui.copy(ready=false,light=false);if(!closed) publish("Camera paused.")}
+ override fun surfaceDestroyed(holder:SurfaceHolder) {releaseCamera();ui=ui.copy(ready=false,light=false);if(!closed) publish(resources.getString(R.string.settings_camera_paused))}
  override fun surfaceChanged(holder:SurfaceHolder,format:Int,width:Int,height:Int) {if(camera==null) open() else updatePreview()}
  override fun onSizeChanged(width:Int,height:Int,oldWidth:Int,oldHeight:Int) {super.onSizeChanged(width,height,oldWidth,oldHeight);layoutPreview()}
 
  private fun open() {
   if(closed || !resumed || delivered || camera!=null || !surface.holder.surface.isValid) return
-  if(cameras.isEmpty()) {publish("No camera is available. Paste the pairing code above.",true);return}
+  if(cameras.isEmpty()) {publish(resources.getString(R.string.settings_no_camera_is_available_paste_the_pairing),true);return}
   if(ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) {
-   ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish("Camera permission is unavailable. Cancel scanning to allow it again, or paste the pairing code above.",true);return
+   ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish(resources.getString(R.string.settings_camera_permission_is_unavailable_cancel_scanning_to),true);return
   }
-  ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish("Starting camera…")
+  ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish(resources.getString(R.string.settings_starting_camera))
   try {
    val active=Camera.open(cameras[selected].id);camera=active
    active.setErrorCallback {_,owner ->if(camera===owner) fail()}
@@ -164,12 +168,12 @@ private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->
    repeat(2) {active.addCallbackBuffer(ByteArray(size.width*size.height*3/2))}
    active.startPreview()
    ui=ui.copy(ready=true,focus=defaultFocus!=null,torch=torch,light=false)
-   publish(if(defaultFocus!=null) "Point at the pairing QR. Tap the preview to focus; move farther away if it looks blurry." else "This camera has fixed focus. Move farther away until the QR is sharp, or choose another camera.")
+   publish(if(defaultFocus!=null) resources.getString(R.string.settings_point_at_the_pairing_qr_tap_the) else resources.getString(R.string.settings_this_camera_has_fixed_focus_move_farther))
    if(defaultFocus in setOf("auto","macro")) focusCenter()
-  } catch(_:SecurityException) {releaseCamera();ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish("Camera permission is unavailable. Cancel scanning to allow it again, or paste the pairing code above.",true)}
+  } catch(_:SecurityException) {releaseCamera();ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish(resources.getString(R.string.settings_camera_permission_is_unavailable_cancel_scanning_to),true)}
   catch(_:Exception) {fail()}
  }
- private fun fail() {releaseCamera();ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish("Camera unavailable. Close other camera apps and retry, or paste the pairing code above.",true)}
+ private fun fail() {releaseCamera();ui=ui.copy(ready=false,focus=false,torch=false,light=false);publish(resources.getString(R.string.settings_camera_unavailable_close_other_camera_apps_and),true)}
  private fun updatePreview() {
   val option=cameras.getOrNull(selected) ?: return
   val rotation=when(display?.rotation) {CameraSurface.ROTATION_90 ->90;CameraSurface.ROTATION_180 ->180;CameraSurface.ROTATION_270 ->270;else ->0}
@@ -198,7 +202,7 @@ private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->
   val active=camera ?: return
   if(!ui.torch || !ui.ready) return
   try {val parameters=active.parameters;parameters.flashMode=if(ui.light) Camera.Parameters.FLASH_MODE_OFF else Camera.Parameters.FLASH_MODE_TORCH;active.parameters=parameters;ui=ui.copy(light=!ui.light);publish()}
-  catch(_:Exception) {publish("The light could not be changed. You can keep scanning or paste the pairing code above.")}
+  catch(_:Exception) {publish(resources.getString(R.string.settings_the_light_could_not_be_changed_you))}
  }
  fun focusCenter() {focusAt(surface.width/2f,surface.height/2f)}
  private fun focusAt(x:Float,y:Float) {
@@ -215,9 +219,9 @@ private class QrCameraPreview(context:Context,private val changed:(QrCameraUi)->
    if(parameters.maxNumFocusAreas>0) parameters.focusAreas=regions
    if(parameters.maxNumMeteringAreas>0) parameters.meteringAreas=regions
    active.parameters=parameters
-   publish("Focusing… Hold the phone steady.")
-   active.autoFocus {success,owner ->if(camera===owner && resumed && !closed && focusEpoch==epoch) publish(if(success) "Focused. Keep the pairing QR in view." else "Move a little farther away, then tap to focus again.")}
-  } catch(_:Exception) {publish("Focus could not be confirmed. Move farther away or try another camera.")}
+   publish(resources.getString(R.string.settings_focusing_hold_the_phone_steady))
+   active.autoFocus {success,owner ->if(camera===owner && resumed && !closed && focusEpoch==epoch) publish(if(success) resources.getString(R.string.settings_focused_keep_the_pairing_qr_in_view) else resources.getString(R.string.settings_move_a_little_farther_away_then_tap))}
+  } catch(_:Exception) {publish(resources.getString(R.string.settings_focus_could_not_be_confirmed_move_farther))}
   if(camera===active && resumed && !closed) handler.postDelayed(focusResume,2000)
  }
  private fun resumeFocus() {

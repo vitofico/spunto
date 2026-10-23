@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.theficos.spunto
 
+import androidx.compose.ui.platform.LocalContext
+
 import android.content.*
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
@@ -32,6 +34,7 @@ import kotlinx.serialization.json.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun SpuntoApp(model:SpuntoViewModel,initialNoteId:String?=null,guideEligible:Boolean=false) {
+ val context=LocalContext.current
  val pages=rememberSaveableStateHolder()
  val nav=rememberNavigator(initialNoteId,pages)
  val route=nav.route
@@ -52,6 +55,7 @@ import kotlinx.serialization.json.*
  val navigationLabels by model.labels.collectAsState()
  val replicaState by model.repository.dao.observeState().collectAsState(initial=null)
  val manifest=model.manifest.collectAsState().value
+ val catalog=model.catalog.collectAsState().value
  val manifestRaw=remember(manifest) { manifest.toString() }
  val manifestFingerprint=remember(manifestRaw) { themeManifestFingerprint(manifestRaw) }
  var validatedManifest by remember { mutableStateOf<Pair<String,ThemeManifest>?>(null) }
@@ -64,23 +68,23 @@ import kotlinx.serialization.json.*
   CaptureSurfaces.apply(model.container.context,quick,dictate)
   val manager=model.container.context.getSystemService(ShortcutManager::class.java)
   val share=ShortcutInfo.Builder(model.container.context,"share-note").setShortLabel("spunto").setCategories(setOf("io.theficos.spunto.SHARE")).setIntent(CaptureSurfaces.intent(model.container.context).setAction(Intent.ACTION_SEND)).build()
-  manager.dynamicShortcuts=listOf(share)+if(dictate) listOf(ShortcutInfo.Builder(model.container.context,"dictate").setShortLabel("Dictate a note").setIntent(CaptureSurfaces.intent(model.container.context,true).setAction(Intent.ACTION_VIEW)).build()) else emptyList()
+  manager.dynamicShortcuts=listOf(share)+if(dictate) listOf(ShortcutInfo.Builder(model.container.context,"dictate").setShortLabel(context.getString(R.string.core_dictate_note)).setIntent(CaptureSurfaces.intent(model.container.context,true).setAction(Intent.ACTION_VIEW)).build()) else emptyList()
   }
  }
  // While a note is being edited, Back finishes the edit before leaving.
  fun navigateBack() { if(route.startsWith("note:") && noteBack!=null) noteBack?.invoke() else nav.back() }
  BackHandler(nav.canGoBack && !navigationOpen) { navigateBack() }
  BackHandler(navigationOpen) { navigationOpen=false }
- val management=sharedManagementTarget(auth,replicaState?.serverUrl,online,needsSignIn=reauth || sync==SyncStatus.NeedsSignIn)
+ val management=sharedManagementTarget(context,auth,replicaState?.serverUrl,online,needsSignIn=reauth || sync==SyncStatus.NeedsSignIn)
  fun openManagement(labelPath:String?=null) {
-  val target=sharedManagementTarget(model.auth.value,replicaState?.serverUrl,model.online.value,labelPath,model.reauthenticate.value || model.status.value==SyncStatus.NeedsSignIn)
+  val target=sharedManagementTarget(context,model.auth.value,replicaState?.serverUrl,model.online.value,labelPath,model.reauthenticate.value || model.status.value==SyncStatus.NeedsSignIn)
   val url=target.url
   if(url==null) {model.message.value=target.message;return}
   try {
    model.container.context.startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
    navigationOpen=false
-  } catch(_:ActivityNotFoundException) {model.message.value="No browser is available to open shared settings."}
-  catch(_:SecurityException) {model.message.value="Couldn't open shared settings in your browser."}
+  } catch(_:ActivityNotFoundException) {model.message.value=context.getString(R.string.core_no_browser)}
+  catch(_:SecurityException) {model.message.value=context.getString(R.string.core_open_shared_failed)}
  }
  LaunchedEffect(mode) { applyWindowNightMode(model.container.context,mode) }
  val dark=mode=="dark" || mode=="system" && isSystemInDarkTheme()
@@ -114,23 +118,23 @@ import kotlinx.serialization.json.*
   var createdFrom by rememberSaveable { mutableStateOf("") }
   var createdTo by rememberSaveable { mutableStateOf("") }
   Scaffold(topBar={TopAppBar(title={
-   if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=Modifier.semantics {contentDescription="Choose labels and views"}) {Text("${navigationTitle(route,navigationLabels,manifest)} ▾",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
-   else routeTitle(route)?.let { Text(it,maxLines=1,overflow=TextOverflow.Ellipsis) }
-  },navigationIcon={if(!isLabelsNavigationRoute(route)) IconButton(onClick=::navigateBack) {Icon(painterResource(R.drawable.ic_arrow_back),contentDescription="Back",modifier=Modifier.size(24.dp))}},actions={
-   if((isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={nav.open("ask")},modifier=Modifier.semantics {contentDescription="Ask your notes"}) {Text("Ask")}
-   if(isLabelsNavigationRoute(route)) IconButton(onClick={nav.open("search")}) {Icon(painterResource(R.drawable.ic_search),contentDescription="Search",modifier=Modifier.size(24.dp))}
+   if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
+   else routeTitle(context,route)?.let { Text(it,maxLines=1,overflow=TextOverflow.Ellipsis) }
+  },navigationIcon={if(!isLabelsNavigationRoute(route)) IconButton(onClick=::navigateBack) {Icon(painterResource(R.drawable.ic_arrow_back),contentDescription=context.getString(R.string.core_back),modifier=Modifier.size(24.dp))}},actions={
+   if((isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={nav.open("ask")},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_ask_notes)}) {Text(context.getString(R.string.core_ask))}
+   if(isLabelsNavigationRoute(route)) IconButton(onClick={nav.open("search")}) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(24.dp))}
    if(filterable) IconButton(onClick={filtersOpen=true}) {
-    BadgedBox(badge={if(createdFrom.isNotBlank() || createdTo.isNotBlank()) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=if(createdFrom.isNotBlank() || createdTo.isNotBlank()) "Filters applied" else "Filter notes",modifier=Modifier.size(24.dp))}
+    BadgedBox(badge={if(createdFrom.isNotBlank() || createdTo.isNotBlank()) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=if(createdFrom.isNotBlank() || createdTo.isNotBlank()) context.getString(R.string.core_filters_applied) else context.getString(R.string.core_filter_notes),modifier=Modifier.size(24.dp))}
    }
    if(route=="timeline") IconButton(onClick={nav.open("settings")},modifier=Modifier.size(48.dp)) {
-    Icon(painterResource(R.drawable.ic_settings),contentDescription="Settings",modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
+    Icon(painterResource(R.drawable.ic_settings),contentDescription=context.getString(R.string.core_settings),modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    topBar.actions?.invoke(this)
   },windowInsets=WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal+WindowInsetsSides.Top))},bottomBar={bottomBar.content?.let { bar -> Surface(color=MaterialTheme.colorScheme.background) { Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),contentAlignment=Alignment.Center) { Box(Modifier.widthIn(max=640.dp)) { bar() } } } }},snackbarHost={SnackbarHost(snackbar)},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
-    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value)
+    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value)
     StatusLines(model)
     if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}
@@ -139,7 +143,7 @@ import kotlinx.serialization.json.*
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="ask" -> AskScreen(model,onNote=openNote)
-     route=="settings" -> SettingsScreen(model,appearanceSummary(activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
+     route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote=openNote)
      route=="review" -> ReviewScreen(model,openNote)
      route=="appearance" -> AppearanceScreen(requestedTheme,mode,black,wallpaper,{ choice ->

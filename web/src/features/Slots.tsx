@@ -1,3 +1,5 @@
+import { useManifest } from "../lib/query";
+import { getLanguage, t, useLanguage } from "../lib/i18n";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -7,14 +9,16 @@ import { useToast } from "../components/core/Toast";
 import { createIdempotencyKey } from "../lib/drafts";
 import { copyText } from "./copy";
 import type { Args, Annotation, Note, Plugin, Suggestion } from "../lib/types";
-import { VocabularyOutput, outputText, validComponent } from "./Vocabulary";
+import { SuggestionPreview } from "./LazyPluginViews";
+import { VocabularyOutput } from "./Vocabulary";
+import { outputText, validComponent } from "./vocabularyData";
 import { Dialog } from "./Dialog";
-import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
+import { suggestionTitle } from "./suggestionTitle";
 import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
 export function usePlugins() {
-  return useQuery({ queryKey: ["manifest"], queryFn: api.manifest });
+  return useManifest();
 }
 export function activePlugins(plugins: Plugin[] | undefined) {
   return (plugins ?? [])
@@ -36,6 +40,7 @@ export function visibleSuggestions(
   );
 }
 export function ReviewLine() {
+  useLanguage();
   const manifest = usePlugins();
   const active = new Set(
     activePlugins(manifest.data?.plugins).map((p) => p.id),
@@ -49,7 +54,8 @@ export function ReviewLine() {
     query.data?.suggestions.filter((s) => active.has(s.plugin)).length ?? 0;
   return count >= 3 ? (
     <p className={styles.reviewLine}>
-      {plural(count, "suggestion")} · <Link href="/review">Review</Link>
+      {plural(count, "suggestion")} ·{" "}
+      <Link href="/review">{t("review.review")}</Link>
     </p>
   ) : null;
 }
@@ -62,6 +68,7 @@ export function SuggestionLine({
   onReview?: () => void;
   editing?: boolean;
 }) {
+  useLanguage();
   const manifest = usePlugins();
   const client = useQueryClient();
   const [expanded, setExpanded] = useState(false);
@@ -125,7 +132,7 @@ export function SuggestionLine({
   return (
     <div
       className={styles.suggestions}
-      aria-label="Suggestions"
+      aria-label={t("slots.suggestions")}
       onKeyDown={(e) => {
         if (
           e.target instanceof HTMLInputElement ||
@@ -156,7 +163,10 @@ export function SuggestionLine({
     >
       {(expanded ? suggestions : suggestions.slice(0, 3)).map((s) => {
         const by = manifest.data?.plugins.find((p) => p.id === s.plugin)?.name;
-        const provenance = `Suggested by ${by}${s.reason ? `: ${s.reason}` : ""}`;
+        const provenance = t("slots.suggested_by_value1_value2", {
+          value1: by ?? s.plugin,
+          value2: s.reason ? `: ${s.reason}` : "",
+        });
         return (
           <span className={styles.suggestionGroup} key={s.id}>
             <button
@@ -187,14 +197,16 @@ export function SuggestionLine({
               }}
             >
               {suggestionTitle(s)}
-              {s.payload.is_new === true && <small>new</small>}
+              {s.payload.is_new === true && <small>{t("slots.new")}</small>}
             </button>
             <span id={`${describe}-${s.id}`} hidden>
               {provenance}
             </span>
             <button
               className={styles.dismiss}
-              aria-label={`Dismiss ${suggestionTitle(s)}`}
+              aria-label={t("slots.dismiss_value1", {
+                value1: suggestionTitle(s),
+              })}
               disabled={decision.isPending}
               onClick={() => decision.mutate({ id: s.id, action: "dismiss" })}
             >
@@ -210,14 +222,16 @@ export function SuggestionLine({
       )}
       <button
         className={styles.dismiss}
-        aria-label={`Dismiss ${plural(suggestions.length, "suggestion")}`}
+        aria-label={t("slots.dismiss_value1", {
+          value1: plural(suggestions.length, "suggestion"),
+        })}
         disabled={decision.isPending}
         onClick={() => {
           for (const s of suggestions)
             decision.mutate({ id: s.id, action: "dismiss" });
         }}
       >
-        Dismiss
+        {t("review.dismiss")}
       </button>
       {decision.isError && (
         <p className="error" role="alert">
@@ -231,7 +245,9 @@ export function SuggestionLine({
           onClose={() => setPreview(null)}
           footer={
             <>
-              <button onClick={() => setPreview(null)}>Cancel</button>
+              <button onClick={() => setPreview(null)}>
+                {t("profilepanel.cancel")}
+              </button>
               <button
                 className="primary"
                 disabled={
@@ -242,7 +258,7 @@ export function SuggestionLine({
                   decision.mutate({ id: preview.id, action: "accept" })
                 }
               >
-                Apply
+                {t("review.apply")}
               </button>
             </>
           }
@@ -275,6 +291,7 @@ function panelItems(items: unknown[]) {
   }, 0);
 }
 export function EntryMeta({ note }: { note: Note }) {
+  useLanguage();
   const manifest = usePlugins();
   for (const plugin of activePlugins(manifest.data?.plugins)) {
     const annotation = note.annotations?.find(
@@ -296,6 +313,7 @@ function PanelSection({
   note: Note;
   annotation?: Annotation;
 }) {
+  useLanguage();
   const panel = plugin.contributes?.panel as
     { title?: string; mode?: string; route?: string } | undefined;
   const excludedInput =
@@ -349,7 +367,7 @@ function PanelSection({
       }}
     >
       <summary>
-        {panel?.title ?? plugin.name} · {count} {count === 1 ? "item" : "items"}
+        {panel?.title ?? plugin.name} · {plural(count, "item")}
       </summary>
       <VocabularyOutput
         value={output}
@@ -365,6 +383,7 @@ function PanelSection({
   );
 }
 export function NotePanel({ note }: { note: Note }) {
+  useLanguage();
   const manifest = usePlugins();
   const plugins = activePlugins(manifest.data?.plugins).filter(
     (p) =>
@@ -373,7 +392,7 @@ export function NotePanel({ note }: { note: Note }) {
   );
   if (!plugins.length) return null;
   return (
-    <aside className={styles.panel} aria-label="About this note">
+    <aside className={styles.panel} aria-label={t("slots.about_this_note")}>
       {plugins.map((p) => (
         <PanelSection
           key={p.id}
@@ -396,6 +415,7 @@ export function PluginNoteSlots({
   onReview?: () => void;
   editing?: boolean;
 }) {
+  useLanguage();
   return (
     <>
       <SuggestionLine note={note} onReview={onReview} editing={editing} />
@@ -404,6 +424,7 @@ export function PluginNoteSlots({
   );
 }
 export function DailySlip() {
+  useLanguage();
   const manifest = usePlugins();
   const client = useQueryClient();
   const toast = useToast();
@@ -446,8 +467,8 @@ export function DailySlip() {
       refresh();
       if (archived)
         toast.show({
-          message: "Archived",
-          actionLabel: "Undo",
+          message: t("slots.archived"),
+          actionLabel: t("settingsplugins.undo"),
           onAction: () => archive.mutate({ id, archived: false }),
         });
     },
@@ -459,8 +480,8 @@ export function DailySlip() {
   return (
     <section className={styles.slip}>
       <p className="overline">
-        From your notes ·{" "}
-        {new Date(slip.note.created_at).toLocaleDateString(undefined, {
+        {t("slots.from_your_notes")}{" "}
+        {new Date(slip.note.created_at).toLocaleDateString(getLanguage(), {
           dateStyle: "long",
         })}
       </p>
@@ -468,15 +489,17 @@ export function DailySlip() {
         <NoteBody note={slip.note} clamp />
       </blockquote>
       <div className={styles.row}>
-        <Link href={`/n/${encodeURIComponent(slip.note_id)}`}>Open</Link>
+        <Link href={`/n/${encodeURIComponent(slip.note_id)}`}>
+          {t("slots.open")}
+        </Link>
         <button
           disabled={archive.isPending}
           onClick={() => archive.mutate({ id: slip.note_id, archived: true })}
         >
-          Archive
+          {t("app.archive")}
         </button>
         <button
-          aria-label="Not today"
+          aria-label={t("slots.not_today")}
           disabled={dismiss.isPending}
           onClick={() => dismiss.mutate(slip)}
         >
@@ -492,6 +515,7 @@ export function DailySlip() {
   );
 }
 export function PluginRailViews() {
+  useLanguage();
   const manifest = usePlugins();
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const client = useQueryClient();
@@ -511,7 +535,7 @@ export function PluginRailViews() {
   if (!views.length) return null;
   return (
     <section className={styles.railGroup}>
-      <h3>Views</h3>
+      <h3>{t("slots.views")}</h3>
       {views
         .filter((v) => !settings.data?.hidden_views.includes(v.key))
         .map((v) => (
@@ -525,7 +549,8 @@ export function PluginRailViews() {
       {views.some((v) => settings.data?.hidden_views.includes(v.key)) && (
         <>
           <button onClick={() => setMore(!more)} aria-expanded={more}>
-            Show {more ? "fewer" : "more"} views
+            {t("settingsplugins.show")}
+            {more ? "fewer" : "more"} {t("slots.views_2")}
           </button>
           {more &&
             views
@@ -541,7 +566,7 @@ export function PluginRailViews() {
                     onClick={() => pin.mutate(v.key)}
                     disabled={pin.isPending}
                   >
-                    Pin
+                    {t("slots.pin")}
                   </button>
                 </div>
               ))}
@@ -555,7 +580,13 @@ export type CommandOrigin = { plugin: string; command: string; args?: Args };
 function saveCommandIds(plugin: Plugin | undefined) {
   return new Set(
     (plugin?.contributes?.commands ?? [])
-      .filter((c) => !c.where?.length && c.title === "Save as note")
+      .filter(
+        (c) =>
+          !c.where?.length &&
+          (c.id === "save-answer" ||
+            c.id === "save-translation" ||
+            c.id === "save-development"),
+      )
       .map((c) => c.id),
   );
 }
@@ -590,6 +621,7 @@ export function CommandResult({
   onDismiss?: () => void;
   origin?: CommandOrigin;
 }) {
+  useLanguage();
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState<{ id?: string } | null>(null);
   const client = useQueryClient();
@@ -611,7 +643,7 @@ export function CommandResult({
   const genericSave = !!plugin && !plugin.creates;
   const formLabel =
     plugin?.contributes?.commands?.find((c) => c.id === currentOrigin?.command)
-      ?.title ?? "Run";
+      ?.title ?? t("settingsplugins.run");
   useEffect(() => {
     if (appliedSession.current === session) return;
     appliedSession.current = session;
@@ -711,7 +743,7 @@ export function CommandResult({
           disabled={!text}
           onClick={() => void copyText(text).then(setCopied)}
         >
-          {copied ? "Copied" : "Copy text"}
+          {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
         </button>
         {genericSave && (
           <button
@@ -720,16 +752,18 @@ export function CommandResult({
             onClick={() => save.mutate()}
           >
             {saved
-              ? "Saved as note"
+              ? t("slots.saved_as_note")
               : save.isPending
-                ? "Saving…"
-                : "Save as note"}
+                ? t("app.saving")
+                : t("slots.save_as_note")}
           </button>
         )}
         {saved?.id && (
-          <Link href={`/n/${encodeURIComponent(saved.id)}`}>Open note</Link>
+          <Link href={`/n/${encodeURIComponent(saved.id)}`}>
+            {t("slots.open_note")}
+          </Link>
         )}
-        {onDismiss && <button onClick={onDismiss}>Back</button>}
+        {onDismiss && <button onClick={onDismiss}>{t("slots.back")}</button>}
       </footer>
       {save.isError && (
         <p role="alert" className="error">
@@ -757,6 +791,7 @@ export function SlashCommands({
   query: string;
   onChoose: (choice: CommandChoice) => void;
 }) {
+  useLanguage();
   return <PluginCommands query={query} where="slash" onChoose={onChoose} />;
 }
 export function PaletteCommands({
@@ -768,6 +803,7 @@ export function PaletteCommands({
   noteId?: string;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
 }) {
+  useLanguage();
   // One row per command: a note action that is also a palette command runs on the open note.
   return (
     <PluginCommands
@@ -797,6 +833,7 @@ export function PluginCommands({
   /** Rows look and line up like the palette's own rows. */
   inPalette?: boolean;
 }) {
+  useLanguage();
   const manifest = usePlugins();
   const places = Array.isArray(where) ? where : [where];
   const slash = places.includes("slash");
@@ -897,7 +934,7 @@ export function PluginCommands({
     <div
       className={slash ? styles.slash : inPalette ? "palette-group" : undefined}
       role={slash ? "listbox" : undefined}
-      aria-label={slash ? "Commands" : undefined}
+      aria-label={slash ? t("slots.commands") : undefined}
     >
       {commands.map((c, index) => (
         <button

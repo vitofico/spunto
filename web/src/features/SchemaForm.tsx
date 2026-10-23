@@ -1,107 +1,26 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { Args, Json, Schema } from "../lib/types";
 import { choiceLabel, humanize } from "./format";
 import styles from "./Feature.module.css";
-const keys = new Set([
-  "type",
-  "properties",
-  "required",
-  "additionalProperties",
-  "title",
-  "description",
-  "enum",
-  "default",
-  "minimum",
-  "maximum",
-  "minLength",
-  "maxLength",
-  "items",
-  "format",
-  "x-secret",
-  "x-scope",
-]);
-export function validSchema(value: unknown, root = true): value is Schema {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const schema = value as Record<string, unknown>;
-  if (Object.keys(schema).some((key) => !keys.has(key))) return false;
-  if (
-    schema["x-secret"] !== undefined &&
-    typeof schema["x-secret"] !== "boolean"
-  )
-    return false;
-  if (schema["x-secret"] && (schema.type !== "string" || "default" in schema))
-    return false;
-  if (schema["x-scope"] !== undefined && schema["x-scope"] !== "device")
-    return false;
-  if (
-    schema.format !== undefined &&
-    !["time", "label"].includes(String(schema.format))
-  )
-    return false;
-  if (root) {
-    if (schema.type !== "object" || schema.additionalProperties === true)
-      return false;
-    const props = schema.properties ?? {};
-    if (!props || typeof props !== "object" || Array.isArray(props))
-      return false;
-    if (
-      Object.keys(props).some((key) =>
-        ["__proto__", "prototype", "constructor"].includes(key),
-      )
-    )
-      return false;
-    if (Object.values(props).some((prop) => !validSchema(prop, false)))
-      return false;
-    if (
-      schema.required !== undefined &&
-      (!Array.isArray(schema.required) ||
-        schema.required.some(
-          (key) => typeof key !== "string" || !(key in props),
-        ))
-    )
-      return false;
-  } else if (
-    !["string", "boolean", "integer", "number", "array"].includes(
-      String(schema.type),
-    )
-  )
-    return false;
-  if (
-    schema.type === "array" &&
-    (!validSchema(schema.items, false) ||
-      (schema.items as Schema).type !== "string")
-  )
-    return false;
-  if (
-    schema.enum !== undefined &&
-    (!Array.isArray(schema.enum) ||
-      !schema.enum.length ||
-      schema.enum.some(
-        (x) => !["string", "number", "boolean"].includes(typeof x),
-      ))
-  )
-    return false;
-  for (const key of ["minimum", "maximum", "minLength", "maxLength"])
-    if (
-      schema[key] !== undefined &&
-      (typeof schema[key] !== "number" || !Number.isFinite(schema[key]))
-    )
-      return false;
-  return true;
-}
+import { validSchema } from "./validSchema";
+export { validSchema } from "./validSchema";
 export function validateSettings(schema: Schema, values: Args): string | null {
-  if (!validSchema(schema)) return "This settings schema is unavailable.";
+  if (!validSchema(schema))
+    return t("schemaform.this_settings_schema_is_unavailable");
   const properties = schema.properties ?? {};
   if (Object.keys(values).some((key) => !Object.hasOwn(properties, key)))
-    return "Unknown setting.";
+    return t("schemaform.unknown_setting");
   for (const [key, prop] of Object.entries(properties)) {
     if (prop["x-secret"]) continue;
     const value = values[key];
     if (value === undefined) {
       if (schema.required?.includes(key))
-        return `${prop.title ?? humanize(key)} is required.`;
+        return t("schemaform.value1_is_required", {
+          value1: prop.title ?? humanize(key),
+        });
       continue;
     }
     const type = prop.type;
@@ -116,25 +35,33 @@ export function validateSettings(schema: Schema, values: Args): string | null {
               Number.isFinite(value) &&
               (type !== "integer" || Number.isInteger(value));
     if (!valid || (prop.enum && !prop.enum.includes(value)))
-      return `${prop.title ?? humanize(key)} has an invalid value.`;
+      return t("schemaform.value1_has_an_invalid_value", {
+        value1: prop.title ?? humanize(key),
+      });
     if (
       typeof value === "number" &&
       (value < (prop.minimum ?? -Infinity) ||
         value > (prop.maximum ?? Infinity))
     )
-      return `${prop.title ?? humanize(key)} is outside its range.`;
+      return t("schemaform.value1_is_outside_its_range", {
+        value1: prop.title ?? humanize(key),
+      });
     if (
       typeof value === "string" &&
       ([...value].length < (prop.minLength ?? 0) ||
         [...value].length > (prop.maxLength ?? 100000))
     )
-      return `${prop.title ?? humanize(key)} has an invalid length.`;
+      return t("schemaform.value1_has_an_invalid_length", {
+        value1: prop.title ?? humanize(key),
+      });
     if (
       typeof value === "string" &&
       (prop as Record<string, unknown>).format === "time" &&
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)
     )
-      return `${prop.title ?? humanize(key)} must be a time.`;
+      return t("schemaform.value1_must_be_a_time", {
+        value1: prop.title ?? humanize(key),
+      });
   }
   return null;
 }
@@ -151,6 +78,7 @@ function StringList({
   disabled: boolean;
   labels?: boolean;
 }) {
+  useLanguage();
   const options = useQuery({
     queryKey: ["labels"],
     queryFn: api.labels,
@@ -166,7 +94,7 @@ function StringList({
             {text}{" "}
             <button
               type="button"
-              aria-label={`Remove ${text}`}
+              aria-label={t("schemaform.remove_value1", { value1: text })}
               disabled={disabled}
               onClick={() => onChange(value.filter((_, index) => index !== i))}
             >
@@ -185,7 +113,7 @@ function StringList({
       <div className={styles.row}>
         <input
           className="field"
-          aria-label={`Add ${label}`}
+          aria-label={t("schemaform.add_value1", { value1: label })}
           list={labels ? listId : undefined}
           value={entry}
           disabled={disabled}
@@ -208,7 +136,7 @@ function StringList({
             setEntry("");
           }}
         >
-          Add
+          {t("schemaform.add")}
         </button>
       </div>
     </div>
@@ -222,7 +150,7 @@ export function SchemaForm({
   onSave,
   disabled = false,
   busy = false,
-  submitLabel = "Save settings",
+  submitLabel = t("schemaform.save_settings"),
   hiddenFields = [],
 }: {
   schema: Schema;
@@ -235,6 +163,7 @@ export function SchemaForm({
   submitLabel?: string;
   hiddenFields?: string[];
 }) {
+  useLanguage();
   const id = useId();
   const [values, setValues] = useState<Args>(
     () =>
@@ -259,7 +188,7 @@ export function SchemaForm({
   if (!validSchema(schema))
     return (
       <p className="error" role="alert">
-        This settings schema is unavailable.
+        {t("schemaform.this_settings_schema_is_unavailable")}
       </p>
     );
   return (
@@ -284,7 +213,10 @@ export function SchemaForm({
             <div className={styles.formField} key={key}>
               <span>{label}</span>
               <span className={styles.secret}>
-                Set in the environment · {secrets[key]?.set ? "Set" : "Not set"}
+                {t("schemaform.set_in_the_environment")}
+                {secrets[key]?.set
+                  ? t("schemaform.set")
+                  : t("schemaform.not_set")}
                 <br />
                 <code>
                   SPUNTO_PLUGIN_{pluginId.replaceAll("-", "_").toUpperCase()}_
@@ -398,7 +330,9 @@ export function SchemaForm({
                 }
               />
             )}
-            {extra["x-scope"] === "device" && <small>This browser only</small>}
+            {extra["x-scope"] === "device" && (
+              <small>{t("schemaform.this_browser_only")}</small>
+            )}
             {prop.description && <small>{prop.description}</small>}
           </div>
         );
@@ -412,7 +346,7 @@ export function SchemaForm({
         (prop) => !prop["x-secret"],
       ) && (
         <button className="primary" disabled={disabled || busy}>
-          {busy ? "Saving…" : submitLabel}
+          {busy ? t("app.saving") : submitLabel}
         </button>
       )}
     </form>

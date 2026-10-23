@@ -72,7 +72,7 @@ class NativePluginControlsTest {
     return JsonObject(serverRow+("plugins_rev" to JsonPrimitive(revision)))
    }
   }
-  val actions=withContext(Dispatchers.Main) {NativePluginManagerActions(scope,{config},{true},{"a"},{api},{nativePluginCatalog(state.value.catalog,state.value.manifest)},
+  val actions=withContext(Dispatchers.Main) {NativePluginManagerActions(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,scope,{config},{true},{"a"},{api},{nativePluginCatalog(state.value.catalog,state.value.manifest)},
    {_,snapshot -> fence.publish(ticket,snapshot.manifest,snapshot.catalog)?.let {state.value=it;true} ?: false},
    {_,_,receipt -> fence.acknowledge(ticket,receipt)?.let {state.value=it;true} ?: false},
    {_,_ -> NativePluginPage()},{_,_,_ ->},{_,_ ->},{})}

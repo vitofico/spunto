@@ -10,6 +10,9 @@ For a bug report, include the app/server version, platform, expected behavior an
 reproduction steps. Screenshots and logs help when they contain no personal
 notes or credentials. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.
 
+To correct wording or add a language, follow the [translation guide](docs/translating.md).
+Translation files are discovered automatically; no application-code changes are needed.
+
 ## Working on the code
 
 Start with the [development documentation](docs/README.md) and the repository's

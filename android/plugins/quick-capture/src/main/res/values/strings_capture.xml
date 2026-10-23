@@ -1,0 +1,9 @@
+<resources>
+ <string name="capture_widget_write">Write a note</string>
+ <string name="capture_widget_description">Write or dictate a note from your home screen.</string>
+ <string name="capture_disabled">Quick capture is off. Turn it on in Settings → Plugins.</string>
+ <string name="capture_dictate_note">Dictate a note</string>
+ <string name="capture_from_notes">From your notes</string>
+ <string name="capture_new_note">New note</string>
+ <string name="capture_dictate">Dictate</string>
+</resources>

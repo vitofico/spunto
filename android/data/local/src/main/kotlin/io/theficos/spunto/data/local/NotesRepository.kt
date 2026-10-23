@@ -104,7 +104,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    missing
   }
   lease.accepted=write.sequence
-  require(!unavailable) { "This note is no longer available." }
+  requireLocal(!unavailable,LocalOperationProblem.NoteUnavailable) { "This note is no longer available." }
   if(commit && lease.noteId!=null) lease.committedBody=write.body
   return true
  }
@@ -119,11 +119,11 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   if(write==null) return@withLock save()
   val lease=write.lease
   fun current()=synchronized(editors) {lease.active && write.sequence>=lease.accepted && write.sequence==lease.sequence.get()}
-  require(current()) {"The editor changed. Save the current text with this recording."}
+  requireLocal(current(),LocalOperationProblem.EditorChanged) {"The editor changed. Save the current text with this recording."}
   val result=db.withTransaction {
    dao.putDraft(DraftEntity(lease.draftId,write.body,System.currentTimeMillis()))
    val value=save()
-   require(current()) {"The editor changed while this recording was saved. Try again."}
+   requireLocal(current(),LocalOperationProblem.EditorChangedWhileSaving) {"The editor changed while this recording was saved. Try again."}
    dao.draftSnapshot(lease.draftId)?.takeIf {it.body==write.body}?.let {dao.clearDraftSnapshot(it.id,it.body,it.updatedAt)}
    value
   }
@@ -136,7 +136,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  val refused = dao.refusedOutbox().map { rows -> rows.filter { it.noteId!=null }.associate { it.noteId!! to it.error!! } }
  /** The way out of a refused change that never loses words: the text becomes a new note, and the original follows the server again. */
  suspend fun keepRefusedAsNewNote(id:String):String = db.withTransaction {
-  val note=dao.get(id)?.note(); require(note!=null) { "This note is no longer available." }
+  val note=dao.get(id)?.note(); requireLocal(note!=null,LocalOperationProblem.NoteUnavailable) { "This note is no longer available." }
   val copy=save(note.body)
   if(note.pinned || note.privateNote) setFlags(copy,pinned=note.pinned.takeIf { it },privateNote=note.privateNote.takeIf { it })
   dao.outbox().filter { it.noteId==id }.forEach { dao.removeOutbox(it.opId) }
@@ -151,7 +151,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  val conflicts = dao.conflicts().map { rows -> rows.map { it.note() } }
  suspend fun keepConflictCopy(copyId:String) = db.withTransaction {
   val copy=dao.get(copyId)?.note(); val original=copy?.conflictOf?.let { dao.get(it) }
-  require(copy!=null && original!=null && dao.tombstone(original.id)==null) { "The original note is no longer on this phone." }
+  requireLocal(copy!=null && original!=null && dao.tombstone(original.id)==null,LocalOperationProblem.OriginalUnavailable) { "The original note is no longer on this phone." }
   save(copy.body,original.id); setFlags(copyId,trashed=true)
  }
  /** Canonical server rows own coalescing; pending local snapshots stay available offline. */
@@ -177,7 +177,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   editorMutex.withLock {
    db.withTransaction {
     val before=dao.get(id)
-    require(before!=null && dao.tombstone(id)==null) { "This note is no longer available." }
+    requireLocal(before!=null && dao.tombstone(id)==null,LocalOperationProblem.NoteUnavailable) { "This note is no longer available." }
     val acknowledged=dao.draftSnapshot(id)?.takeIf { it.body==before.body }
     save(revision.body,id,historyKind="restore")
     acknowledged?.let { dao.clearDraftSnapshot(it.id,it.body,it.updatedAt) }
@@ -186,7 +186,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   }
  }
  suspend fun save(body: String,id: String? = null,sourceUrl: String? = null,sourceKind: String = "android",sourceRef: String? = null,historyKind:String="edit",baseVersion:Int?=null): String {
-  require(body.toByteArray().size <= 1_000_000) { "Note is too large." }
+  requireLocal(body.toByteArray().size <= 1_000_000,LocalOperationProblem.NoteTooLarge) { "Note is too large." }
   val noteId = id ?: uuidV7()
   db.withTransaction {
    val old = dao.get(noteId); val now = System.currentTimeMillis()
@@ -253,7 +253,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  }
  suspend fun decideSuggestion(id: String, decision: String) {
   require(decision in listOf("accept","dismiss"))
-  var rejection:String?=null
+  var rejection:LocalOperationException?=null
   var unchangedDecision=false
   db.withTransaction {
    val cached=dao.output("suggestion",id)
@@ -264,7 +264,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
     if(status=="accepted") {unchangedDecision=true;return@withTransaction}
     if(status!="pending") {
      unchangedDecision=true
-     rejection="This suggestion is no longer pending. Review a current proposal instead."
+     rejection=LocalOperationException(LocalOperationProblem.SuggestionNoLongerPending,"This suggestion is no longer pending. Review a current proposal instead.")
      return@withTransaction
     }
    }
@@ -281,12 +281,12 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
      val op=Json.decodeFromString<OutboxOperation>(row.payload)
      (op.noteId==target || target in op.affectedNoteIds) && (op.type in setOf("note.create","note.update","note.restore") || op.type=="suggestion.decide" && op.decision=="accept")
     }.getOrDefault(true) }
-    suspend fun reject(message:String,supersede:Boolean=true) {
-     rejection=message
+    suspend fun reject(problem:LocalOperationProblem,diagnostic:String,supersede:Boolean=true) {
+     rejection=LocalOperationException(problem,diagnostic)
      if(supersede && cached!=null) dao.putOutput(cached.copy(payload=JsonObject(data+mapOf("status" to JsonPrimitive("superseded"))).toString()))
     }
     if(action=="label_change") {
-     reject("Review label changes in the authenticated web Review page to check their impact.",supersede=false)
+     reject(LocalOperationProblem.LabelReviewOnWebRequired,"Review label changes in the authenticated web Review page to check their impact.",supersede=false)
      return@withTransaction
     }
     if(action=="replace_body") {
@@ -294,14 +294,14 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
      val proposedVersion=version(data["note_version"])
      val proposedBody=payload["body"] as? JsonPrimitive
      if(current==null || proposedVersion==null || current.serverRev!=proposedVersion || bodyPending(current.id) || proposedBody==null || !proposedBody.isString || proposedBody.content.toByteArray().size>1_000_000) {
-      reject("This replacement is superseded. Compare the current note before applying a new proposal.")
+      reject(LocalOperationProblem.ReplacementSuperseded,"This replacement is superseded. Compare the current note before applying a new proposal.")
       return@withTransaction
      }
     }
     val mergeSource=if(action=="merge_notes") live(text("source_id")) else null
     val mergeTarget=if(action=="merge_notes") live(text("target_id")) else null
     if(action=="merge_notes" && (mergeSource==null || mergeTarget==null || mergeSource.id==mergeTarget.id || noteId!=mergeTarget.id || version(payload["source_version"])!=mergeSource.serverRev || version(payload["target_version"])!=mergeTarget.serverRev || bodyPending(mergeSource.id) || bodyPending(mergeTarget.id) || (mergeTarget.body+"\n\n"+mergeSource.body).toByteArray().size>1_000_000)) {
-     reject("This merge is superseded. Compare both live notes again before merging.")
+     reject(LocalOperationProblem.MergeSuperseded,"This merge is superseded. Compare both live notes again before merging.")
      return@withTransaction
     }
     val body=when(action) {
@@ -316,12 +316,12 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    }
    if(cached!=null && data!=null) dao.putOutput(cached.copy(payload=JsonObject(data+mapOf("status" to JsonPrimitive(if(decision=="accept") "accepted" else "dismissed"))).toString()))
    enqueue(OutboxOperation(type="suggestion.decide",noteId=noteId,suggestionId=id,decision=decision,affectedNoteIds=affected.toList()))
-  }; if(!unchangedDecision) onChange();rejection?.let {throw IllegalArgumentException(it)}
+  }; if(!unchangedDecision) onChange();rejection?.let {throw it}
  }
  suspend fun queueImage(noteId:String,path:String,mime:String):String = db.withTransaction {
-  val note=dao.get(noteId);require(note!=null && !note.trashed && dao.tombstone(noteId)==null) {"This note is no longer available."}
+  val note=dao.get(noteId);requireLocal(note!=null && !note.trashed && dao.tombstone(noteId)==null,LocalOperationProblem.NoteUnavailable) {"This note is no longer available."}
   require(mime.startsWith("image/"))
-  require(java.io.File(path).isFile && java.io.File(path).length() in 1..IMAGE_IMPORT_LIMIT) {"Choose an image of at most 5 MB."}
+  requireLocal(java.io.File(path).isFile && java.io.File(path).length() in 1..IMAGE_IMPORT_LIMIT,LocalOperationProblem.ImageTooLarge) {"Choose an image of at most 5 MB."}
   val id=uuidV7();val marker="[image:$id]"
   save(note.body+"\n\n"+marker,noteId)
   dao.putAttachment(AttachmentEntity(id,noteId,path,mime,marker=marker,serverUrl=dao.state()?.serverUrl.orEmpty()))
@@ -335,8 +335,8 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   val file=java.io.File(path).canonicalFile
   val metadata=inspectRecording(file,maximum)
   db.withTransaction {
-   val note=dao.get(noteId);require(note!=null && !note.trashed && dao.tombstone(noteId)==null) {"This note is no longer available."}
-   dao.recordingFile(file.absolutePath)?.let {require(it.state=="retained") {"Retain the recording from its original journal before reusing its bytes."}}
+   val note=dao.get(noteId);requireLocal(note!=null && !note.trashed && dao.tombstone(noteId)==null,LocalOperationProblem.NoteUnavailable) {"This note is no longer available."}
+   dao.recordingFile(file.absolutePath)?.let {requireLocal(it.state=="retained",LocalOperationProblem.RecordingJournalRequired) {"Retain the recording from its original journal before reusing its bytes."}}
    val id=uuidV7();val marker="[recording:$id]";save(note.body+"\n\n"+marker,noteId)
    val state=dao.state();dao.putAttachment(AttachmentEntity(id,noteId,file.absolutePath,mime,kind="recording",durationMs=metadata.durationMs,byteSize=metadata.byteSize,sha256=metadata.sha256,serverUrl=state?.serverUrl.orEmpty(),marker=marker,status=if(recordingPluginFacts(state).captureAllowed) "queued" else "paused"))
    onChange();id

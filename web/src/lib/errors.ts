@@ -1,46 +1,61 @@
+import { t } from "./i18n";
 // Codes whose wording depends on what this client does next (drafts, sign-in), so
 // the client's sentence wins. Every other failure shows the server's own detail.
-const messages: Record<string, string> = {
-  identity_changed:
-    "Your account or space changed. Reopen this note to continue.",
-  draft_recovery_required:
-    "Sign-in changed, but an earlier draft needs recovery. Both copies are kept on this browser. Do not clear browser storage.",
-  unauthenticated: "Sign in again to save. Your draft is kept on this device.",
-  wrong_password: "That password didn’t work.",
-  wrong_setup_code: "That setup code didn’t work.",
-  setup_required: "Finish setup first.",
-  setup_done: "Setup is complete. Sign in.",
-  version_conflict:
-    "Your edit was preserved as a conflict copy. Review it before continuing.",
-  permissions_changed: "The permission list changed. Review it again.",
-  pinned_by_environment: "This setting is managed by the server environment.",
-  password_from_environment:
-    "The password is managed by the server environment.",
-};
+const messages: () => Record<string, string> = () => ({
+  identity_changed: t("errors.your_account_or_space_changed_reopen_this_note"),
+  draft_recovery_required: t(
+    "errors.sign_in_changed_but_an_earlier_draft_needs",
+  ),
+  unauthenticated: t("errors.sign_in_again_to_save_your_draft_is"),
+  wrong_password: t("errors.that_password_didn_t_work"),
+  wrong_setup_code: t("errors.that_setup_code_didn_t_work"),
+  setup_required: t("errors.finish_setup_first"),
+  setup_done: t("errors.setup_is_complete_sign_in"),
+  version_conflict: t("errors.your_edit_was_preserved_as_a_conflict_copy"),
+  permissions_changed: t("errors.the_permission_list_changed_review_it_again"),
+  pinned_by_environment: t(
+    "errors.this_setting_is_managed_by_the_server_environment",
+  ),
+  password_from_environment: t(
+    "errors.the_password_is_managed_by_the_server_environment",
+  ),
+});
 function fallback(status: number) {
   return status === 0
-    ? "Can’t reach the server. What you type is kept on this device."
+    ? t("app.can_t_reach_the_server_what_you_type")
     : status === 403
-      ? "This action is not permitted."
+      ? t("errors.this_action_is_not_permitted")
       : status === 404
-        ? "This item is unavailable."
+        ? t("errors.this_item_is_unavailable")
         : status === 422
-          ? "Check the information and try again."
+          ? t("errors.check_the_information_and_try_again")
           : status === 429
-            ? "Wait a little before trying again."
-            : "The server could not complete this action. Try again.";
+            ? t("errors.wait_a_little_before_trying_again")
+            : t("errors.the_server_could_not_complete_this_action_try");
+}
+/** Keep client validation messages reactive when the UI language changes. */
+export class LocalizedError extends Error {
+  constructor(readonly key: string) {
+    super();
+  }
+  get message() {
+    return t(this.key);
+  }
 }
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     readonly conflictId?: string,
-    detail?: string,
+    readonly detail?: string,
     /** Seconds the server asked to wait (Retry-After). */
     readonly retryAfter?: number,
   ) {
-    super(messages[code] ?? detail ?? fallback(status));
+    super();
     this.name = "ApiError";
+  }
+  get message() {
+    return messages()[this.code] ?? this.detail ?? fallback(this.status);
   }
   get retryable() {
     return this.status === 0 || this.status >= 500 || this.status === 429;

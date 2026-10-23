@@ -43,7 +43,7 @@ class DictationTest {
   val session=DictationSession(backgroundScope,{engine},object:AudioFocus { override fun acquire()=true; override fun release() {} },{})
   session.start("kept",4,4,"it-IT",true); runCurrent()
   engine.emit(SpeechEvent.Error(SpeechFailure.Language)); runCurrent()
-  assertEquals(DictationPhase.NeedsLanguage,session.state.value.phase); assertEquals("Italian needs a one-time download to work offline",session.state.value.message)
+  assertEquals(DictationPhase.NeedsLanguage,session.state.value.phase); assertEquals(DictationNoticeKind.LanguageDownload,session.state.value.notice); assertEquals("it-IT",session.state.value.language)
   session.clearNotice()
   assertEquals(DictationState(text="kept"),session.state.value)
  }

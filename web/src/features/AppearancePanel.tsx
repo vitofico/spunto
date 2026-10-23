@@ -1,3 +1,5 @@
+import { LanguagePicker } from "../components/core/LanguagePicker";
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -16,6 +18,7 @@ import styles from "./Feature.module.css";
 import "../styles/theme-previews.css";
 
 export function AppearancePanel() {
+  useLanguage();
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const manifest = useQuery({ queryKey: ["manifest"], queryFn: api.manifest });
   const client = useQueryClient();
@@ -111,11 +114,16 @@ export function AppearancePanel() {
     device.mode === "dark" || (device.mode === "system" && systemDark);
   return (
     <>
-      <h1>Appearance</h1>
-      <p className="muted">A quiet page, in your colours.</p>
+      <h1>{t("appearancepanel.appearance")}</h1>
+      <LanguagePicker />
+      <p className="muted">
+        {t("appearancepanel.a_quiet_page_in_your_colours")}
+      </p>
       {ready && requested !== selected.theme && (
         <p className={styles.facts}>
-          The saved colour pack is unavailable. Using Carta until it returns.
+          {t(
+            "appearancepanel.the_saved_colour_pack_is_unavailable_using_carta",
+          )}
         </p>
       )}
       <div className={styles.themes}>
@@ -150,8 +158,8 @@ export function AppearancePanel() {
                 style={colors}
                 aria-hidden="true"
               >
-                <small>Today · 09:41</small>
-                <p>Leave room for the next thought.</p>
+                <small>{t("appearancepanel.today_09_41")}</small>
+                <p>{t("appearancepanel.leave_room_for_the_next_thought")}</p>
                 <span className={styles.previewLabel}>#ideas</span>
                 <br />
                 <span className={styles.pill}>#notebook</span>
@@ -168,8 +176,10 @@ export function AppearancePanel() {
                 {selected.theme === card.id ? " ✓" : ""}
                 <small id={`theme-${card.id}-about`}>
                   {card.status === "failed"
-                    ? (card.reason ?? "This pack is unavailable.")
-                    : (card.description ?? "Installed colour pack")}
+                    ? (card.reason ??
+                      t("appearancepanel.this_pack_is_unavailable"))
+                    : (card.description ??
+                      t("appearance.installed_colour_pack"))}
                 </small>
               </span>
             </button>
@@ -178,29 +188,34 @@ export function AppearancePanel() {
       </div>
       {!!active?.accents.length && (
         <>
-          <h2>Accent</h2>
-          <div className={styles.segments} role="group" aria-label="Accent">
-            {[{ id: null, name: "Default" }, ...active.accents].map(
-              (choice) => (
-                <button
-                  key={choice.id ?? "default"}
-                  aria-pressed={selected.accent === choice.id}
-                  disabled={save.isPending}
-                  onClick={() =>
-                    device.theme
-                      ? storeDevice({ ...device, accent: choice.id })
-                      : save.mutate({ theme_accent: choice.id })
-                  }
-                >
-                  {choice.name}
-                </button>
-              ),
-            )}
+          <h2>{t("appearancepanel.accent")}</h2>
+          <div
+            className={styles.segments}
+            role="group"
+            aria-label={t("appearancepanel.accent")}
+          >
+            {[
+              { id: null, name: t("appearancepanel.default") },
+              ...active.accents,
+            ].map((choice) => (
+              <button
+                key={choice.id ?? "default"}
+                aria-pressed={selected.accent === choice.id}
+                disabled={save.isPending}
+                onClick={() =>
+                  device.theme
+                    ? storeDevice({ ...device, accent: choice.id })
+                    : save.mutate({ theme_accent: choice.id })
+                }
+              >
+                {choice.name}
+              </button>
+            ))}
           </div>
         </>
       )}
       <label className={`${styles.row} ${styles.formField}`}>
-        <span>Use a different theme on this device</span>
+        <span>{t("appearancepanel.use_a_different_theme_on_this_device")}</span>
         <input
           className={styles.switch}
           type="checkbox"
@@ -217,26 +232,35 @@ export function AppearancePanel() {
       </label>
       {device.theme && (
         <p className={styles.facts}>
-          Other devices use{" "}
-          {cards.find((card) => card.id === instance)?.name ??
-            "the instance theme"}
-          .
+          {t("appearancepanel.other_devices_theme", {
+            theme:
+              cards.find((card) => card.id === instance)?.name ??
+              t("appearancepanel.the_instance_theme"),
+          })}
         </p>
       )}
-      <h2>Mode</h2>
-      <div className={styles.segments} role="group" aria-label="Mode">
+      <h2>{t("appearancepanel.mode")}</h2>
+      <div
+        className={styles.segments}
+        role="group"
+        aria-label={t("appearancepanel.mode")}
+      >
         {(["system", "light", "dark"] as const).map((mode) => (
           <button
             key={mode}
             aria-pressed={device.mode === mode}
             onClick={() => storeDevice({ ...device, mode })}
           >
-            {mode[0].toUpperCase() + mode.slice(1)}
+            {t(`appearance.mode.${mode}`)}
           </button>
         ))}
       </div>
-      <h2>Reading face</h2>
-      <div className={styles.segments} role="group" aria-label="Reading face">
+      <h2>{t("appearancepanel.reading_face")}</h2>
+      <div
+        className={styles.segments}
+        role="group"
+        aria-label={t("appearancepanel.reading_face")}
+      >
         {["serif", "sans"].map((value) => (
           <button
             key={value}
@@ -246,16 +270,20 @@ export function AppearancePanel() {
               preference("reading-face", value);
             }}
           >
-            {value[0].toUpperCase() + value.slice(1)}
+            {t(`appearance.reading.${value}`)}
           </button>
         ))}
       </div>
-      <h2>Text size</h2>
-      <div className={styles.segments} role="group" aria-label="Text size">
+      <h2>{t("appearancepanel.text_size")}</h2>
+      <div
+        className={styles.segments}
+        role="group"
+        aria-label={t("appearancepanel.text_size")}
+      >
         {[
-          ["s", "Small · 16"],
-          ["m", "Medium · 17"],
-          ["l", "Large · 19"],
+          ["s", t("appearancepanel.small_16")],
+          ["m", t("appearancepanel.medium_17")],
+          ["l", t("appearancepanel.large_19")],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -270,7 +298,7 @@ export function AppearancePanel() {
         ))}
       </div>
       <p className={styles.facts}>
-        Mode, reading face and text size apply to this browser.
+        {t("appearancepanel.mode_reading_face_and_text_size_apply_to")}
       </p>
       {(save.error ?? query.error) && (
         <p className="error" role="alert">

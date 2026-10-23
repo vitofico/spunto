@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.res.Resources
+
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 

@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useSearch as useLocationSearch } from "wouter";
 import { fold, useSearch } from "../lib";
@@ -68,6 +69,7 @@ function markMatches(body: HTMLElement, words: string[]) {
   }
 }
 export default function SearchPage() {
+  useLanguage();
   const [, navigate] = useLocation();
   const params = new URLSearchParams(useLocationSearch());
   const [q, setQ] = useState(params.get("q") ?? "");
@@ -78,7 +80,7 @@ export default function SearchPage() {
   const recent = params.get("sort") === "recent";
   const results = useRef<HTMLDivElement>(null);
   useDocumentTitle(
-    submitted.trim() ? `“${submitted.trim()}” · Search` : "Search",
+    submitted.trim() ? `“${submitted.trim()}” · Search` : t("app.search"),
   );
   /** Filters live in the address, so Back, reload and shared links keep them. */
   function update(next: Record<string, string>) {
@@ -127,7 +129,7 @@ export default function SearchPage() {
   });
   return (
     <>
-      <h1 className="page-title">Search your notes</h1>
+      <h1 className="page-title">{t("search.search_your_notes")}</h1>
       <form
         className="search-form"
         role="search"
@@ -141,27 +143,27 @@ export default function SearchPage() {
             ref={field}
             className="field"
             type="search"
-            aria-label="Search notes"
+            aria-label={t("search.search_notes")}
             aria-invalid={tooLong || undefined}
             aria-describedby={tooLong ? "search-too-long" : undefined}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             autoFocus
-            placeholder="A word, a phrase, a #label…"
+            placeholder={t("search.a_word_a_phrase_a_label")}
           />
-          <button className="button primary">Search</button>
+          <button className="button primary">{t("app.search")}</button>
         </div>
         {tooLong && (
           <p id="search-too-long" className="error" role="alert">
-            Searches can be up to {LIMIT} characters. This one has {q.length}.
+            {t("search.too_long", { limit: LIMIT, count: q.length })}
           </p>
         )}
         <div className="search-filters">
           <label className="date-filter">
-            From
+            {t("search.from")}
             <input
               className="field"
-              aria-label="From date"
+              aria-label={t("search.from_date")}
               type="date"
               value={from}
               max={to || undefined}
@@ -171,10 +173,10 @@ export default function SearchPage() {
             />
           </label>
           <label className="date-filter">
-            To
+            {t("search.to")}
             <input
               className="field"
-              aria-label="To date"
+              aria-label={t("search.to_date")}
               type="date"
               value={to}
               min={from || undefined}
@@ -191,7 +193,7 @@ export default function SearchPage() {
                 update({ archived: e.target.checked ? "1" : "" })
               }
             />
-            Include archive
+            {t("search.include_archive")}
           </label>
           <label>
             <input
@@ -201,56 +203,56 @@ export default function SearchPage() {
                 update({ sort: e.target.checked ? "recent" : "" })
               }
             />
-            Newest first
+            {t("search.newest_first")}
           </label>
         </div>
         {badDates && (
           <p id="search-dates" className="error" role="alert">
-            The start date is after the end date.
+            {t("search.the_start_date_is_after_the_end_date")}
           </p>
         )}
       </form>
       {!submitted.trim() && (
         <p className="page-status">
-          Search for a word, a phrase, or a #label to find a note.
+          {t("search.search_for_a_word_a_phrase_or_a")}
         </p>
       )}
       {enabled && shown.isPending && (
         <p className="page-status" role="status">
-          Searching your notes…
+          {t("search.searching_your_notes")}
         </p>
       )}
       {shown.error && (
         <p className="error" role="alert">
           {shown.error.message}{" "}
           <button className="button" onClick={() => void shown.refetch()}>
-            Try again
+            {t("app.try_again")}
           </button>
         </p>
       )}
       {semantic === "unavailable" && !shown.error && (
         <p className="muted" role="status">
-          Similar meaning is unavailable. Showing keyword matches.
+          {t("search.similar_meaning_is_unavailable_showing_keyword_matches")}
         </p>
       )}
       {enabled && !shown.isPending && !all.length && !shown.error && (
         <div className="empty">
-          <h2>No notes match ‘{submitted.trim()}’.</h2>
-          <p>
-            Try fewer words. Search ignores accents, so perche finds perché.
-          </p>
+          <h2>{t("search.no_results", { query: submitted.trim() })}</h2>
+          <p>{t("search.try_fewer_words_search_ignores_accents_so_perche")}</p>
         </div>
       )}
       <p className="sr-only" role="status">
         {enabled && !shown.isPending && !shown.error
-          ? `${all.length}${shown.hasNextPage ? " or more" : ""} ${all.length === 1 ? "note" : "notes"} found`
+          ? t(shown.hasNextPage ? "search.found_more" : "search.found", {
+              count: all.length,
+            })
           : ""}
       </p>
       <div ref={results}>
         {all.map((note) => (
           <div key={note.id}>
             {note.match === "meaning" && (
-              <p className="muted">≈ similar meaning</p>
+              <p className="muted">{t("search.similar_meaning")}</p>
             )}
             <NoteCard note={note} />
           </div>
@@ -263,8 +265,8 @@ export default function SearchPage() {
           disabled={shown.isFetchingNextPage}
         >
           {shown.isFetchingNextPage
-            ? "Loading more results…"
-            : "Load more results"}
+            ? t("search.loading_more_results")
+            : t("search.load_more_results")}
         </button>
       )}
     </>

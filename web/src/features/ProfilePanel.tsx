@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -15,19 +16,20 @@ export function ProfilePanel({
 }: {
   onShowGuide?: (trigger: HTMLElement) => void;
 }) {
+  useLanguage();
   const hosted = useHosted();
   return (
     <>
-      <h1>Profile</h1>
+      <h1>{t("profilepanel.profile")}</h1>
       {hosted ? <DisplayName /> : <Password />}
       {onShowGuide && (
         <>
-          <h2>Guide</h2>
+          <h2>{t("profilepanel.guide")}</h2>
           <p className="muted">
-            The four first-run steps: writing, labels, search and settings.
+            {t("profilepanel.the_four_first_run_steps_writing_labels_search")}
           </p>
           <button onClick={(event) => onShowGuide(event.currentTarget)}>
-            Show guide
+            {t("profilepanel.show_guide")}
           </button>
         </>
       )}
@@ -38,6 +40,7 @@ export function ProfilePanel({
 
 /** Hosted spaces keep the optional display name; a single-owner install has no use for it. */
 function DisplayName() {
+  useLanguage();
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const client = useQueryClient();
   const [draft, setDraft] = useState<string | null>(null);
@@ -65,8 +68,11 @@ function DisplayName() {
   return (
     <>
       <p className="muted">
-        Optional display name for this space. Manage your username, password and
-        optional SSO in <Link href="/settings/account">Account settings</Link>.
+        {t("profilepanel.account_explanation")}{" "}
+        <Link href="/settings/account">
+          {t("profilepanel.account_settings")}
+        </Link>
+        .
       </p>
       <form
         onSubmit={(event) => {
@@ -75,7 +81,9 @@ function DisplayName() {
         }}
       >
         <div className={styles.formField}>
-          <label htmlFor="owner-display-name">Display name (optional)</label>
+          <label htmlFor="owner-display-name">
+            {t("profilepanel.display_name_optional")}
+          </label>
           <input
             className="field"
             id="owner-display-name"
@@ -90,18 +98,20 @@ function DisplayName() {
             aria-describedby="display-name-help"
           />
           <small id="display-name-help">
-            Up to 80 characters. Leave blank to clear your name.
+            {t("profilepanel.up_to_80_characters_leave_blank_to_clear")}
           </small>
         </div>
         <button
           className="primary"
           disabled={!query.data || save.isPending || name.trim() === saved}
         >
-          {save.isPending ? "Saving…" : "Save profile"}
+          {save.isPending ? t("app.saving") : t("profilepanel.save_profile")}
         </button>
       </form>
-      {query.isPending && <p role="status">Loading profile…</p>}
-      {save.isSuccess && <p role="status">Profile saved.</p>}
+      {query.isPending && (
+        <p role="status">{t("profilepanel.loading_profile")}</p>
+      )}
+      {save.isSuccess && <p role="status">{t("profilepanel.profile_saved")}</p>}
       {error && (
         <p className="error" role="alert">
           {error.message}
@@ -112,6 +122,7 @@ function DisplayName() {
 }
 
 function Password() {
+  useLanguage();
   const query = useQuery({
     queryKey: ["session"],
     queryFn: () => api.session(),
@@ -127,12 +138,9 @@ function Password() {
   });
   return (
     <>
-      <h2>Password</h2>
+      <h2>{t("profilepanel.password")}</h2>
       {query.data?.password_managed ? (
-        <p className={styles.secret}>
-          Set in the environment. Change <code>SPUNTO_OWNER_PASSWORD</code> or{" "}
-          <code>SPUNTO_OWNER_PASSWORD_HASH</code> and restart the server.
-        </p>
+        <p className={styles.secret}>{t("profilepanel.managed_password")}</p>
       ) : (
         <form
           onSubmit={(e) => {
@@ -141,7 +149,7 @@ function Password() {
           }}
         >
           <label className={styles.formField}>
-            New password
+            {t("accountpanel.new_password")}
             <input
               className="field"
               type="password"
@@ -153,11 +161,12 @@ function Password() {
               onChange={(e) => setPassword(e.target.value)}
             />
             <small>
-              At least 12 characters. Changing it signs out your web sessions;
-              paired devices and access tokens keep working.
+              {t("profilepanel.at_least_12_characters_changing_it_signs_out")}
             </small>
           </label>
-          <button disabled={!password}>Change password…</button>
+          <button disabled={!password}>
+            {t("profilepanel.change_password")}
+          </button>
         </form>
       )}
       {!confirm && change.error && (
@@ -167,25 +176,24 @@ function Password() {
       )}
       {confirm && (
         <Dialog
-          title="Change your password?"
+          title={t("profilepanel.change_your_password")}
           onClose={() => setConfirm(false)}
           footer={
             <>
-              <button onClick={() => setConfirm(false)}>Cancel</button>
+              <button onClick={() => setConfirm(false)}>
+                {t("profilepanel.cancel")}
+              </button>
               <button
                 className="primary"
                 disabled={change.isPending}
                 onClick={() => change.mutate()}
               >
-                Change password
+                {t("profilepanel.change_password_2")}
               </button>
             </>
           }
         >
-          <p>
-            Your web sessions will be signed out. Device and access tokens keep
-            their current access.
-          </p>
+          <p>{t("profilepanel.your_web_sessions_will_be_signed_out_device")}</p>
           {change.error && (
             <p className="error" role="alert">
               {change.error.message}
@@ -209,6 +217,7 @@ function unsentNotes() {
 }
 
 function SignOut() {
+  useLanguage();
   const auth = useAuth();
   const [, navigate] = useLocation();
   const [confirm, dialog] = useConfirm();
@@ -219,9 +228,11 @@ function SignOut() {
       unsent &&
       !(await confirm({
         opener,
-        title: "Sign out?",
-        body: `${plural(unsent, "unsent note")} on this browser will be erased.`,
-        confirmLabel: "Sign out and erase",
+        title: t("profilepanel.sign_out"),
+        body: t("profilepanel.value1_on_this_browser_will_be_erased", {
+          value1: plural(unsent, "unsent_note"),
+        }),
+        confirmLabel: t("profilepanel.sign_out_and_erase"),
         danger: true,
       }))
     )
@@ -236,12 +247,12 @@ function SignOut() {
   };
   return (
     <>
-      <h2>Sign out</h2>
+      <h2>{t("profilepanel.sign_out_2")}</h2>
       <p className="muted">
-        Signs this browser out. Other devices stay signed in.
+        {t("profilepanel.signs_this_browser_out_other_devices_stay_signed")}
       </p>
       <button disabled={pending} onClick={(e) => void signOut(e.currentTarget)}>
-        {pending ? "Signing out…" : "Sign out"}
+        {pending ? t("profilepanel.signing_out") : t("profilepanel.sign_out_2")}
       </button>
       {dialog}
     </>

@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -10,6 +11,7 @@ import {
   useWorkspaceRole,
   type AccessGrant,
 } from "../lib";
+import { choiceLabel } from "./format";
 import { Dialog } from "./Dialog";
 import { ErrorLine } from "./SettingsParts";
 import styles from "./Feature.module.css";
@@ -21,6 +23,7 @@ function GrantForm({
   add: (account: string, role: "editor" | "viewer") => void;
   pending: boolean;
 }) {
+  useLanguage();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("viewer");
   return (
@@ -32,7 +35,7 @@ function GrantForm({
       }}
     >
       <label>
-        Username or verified email
+        {t("collaboration.username_or_verified_email")}
         <input
           className="field"
           type="text"
@@ -45,18 +48,18 @@ function GrantForm({
         />
       </label>
       <label>
-        Access
+        {t("collaboration.access")}
         <select
           className="field"
           value={role}
           onChange={(event) => setRole(event.target.value as typeof role)}
         >
-          <option value="viewer">Can view</option>
-          <option value="editor">Can edit</option>
+          <option value="viewer">{t("collaboration.can_view")}</option>
+          <option value="editor">{t("collaboration.can_edit")}</option>
         </select>
       </label>
       <button disabled={pending || !email.trim()}>
-        {pending ? "Adding…" : "Give access"}
+        {pending ? t("collaboration.adding") : t("collaboration.give_access")}
       </button>
     </form>
   );
@@ -70,6 +73,7 @@ function Grants({
   remove?: (userId: string) => void;
   pending: boolean;
 }) {
+  useLanguage();
   return (
     <ul className={styles.grantList}>
       {grants.map((grant) => (
@@ -82,15 +86,17 @@ function Grants({
             {grant.display_name && (grant.username || grant.email) && (
               <small>{grant.username || grant.email}</small>
             )}
-            <small>{grant.role}</small>
+            <small>{choiceLabel(grant.role)}</small>
           </div>
           {remove && grant.role !== "owner" && (
             <button
               disabled={pending}
               onClick={() => remove(grant.user_id)}
-              aria-label={`Remove access for ${grant.username || grant.email || grant.user_id}`}
+              aria-label={t("collaboration.remove_access_for_value1", {
+                value1: grant.username || grant.email || grant.user_id,
+              })}
             >
-              Remove access
+              {t("collaboration.remove_access")}
             </button>
           )}
         </li>
@@ -99,20 +105,19 @@ function Grants({
   );
 }
 export function SpacesPanel() {
+  useLanguage();
   const hosted = useHosted();
   return hosted ? (
     <HostedSpaces />
   ) : (
     <>
-      <h1>Spaces</h1>
-      <p>
-        Your notes are in your personal space. Shared spaces are available on a
-        hosted server.
-      </p>
+      <h1>{t("collaboration.spaces")}</h1>
+      <p>{t("collaboration.your_notes_are_in_your_personal_space_shared")}</p>
     </>
   );
 }
 function HostedSpaces() {
+  useLanguage();
   useOwner();
   const session = currentSession();
   const role = useWorkspaceRole();
@@ -167,13 +172,12 @@ function HostedSpaces() {
   });
   return (
     <>
-      <h1>Spaces</h1>
+      <h1>{t("collaboration.spaces")}</h1>
       <p className="muted">
-        Keep your own notes in your personal space. Create a shared space when a
-        group needs the same notes and labels.
+        {t("collaboration.keep_your_own_notes_in_your_personal_space")}
       </p>
       <label className={styles.formField}>
-        Current space
+        {t("collaboration.current_space")}
         <select
           className="field"
           value={workspace?.id ?? session?.workspace_id ?? ""}
@@ -182,14 +186,15 @@ function HostedSpaces() {
         >
           {spaces.data?.workspaces.map((space) => (
             <option value={space.id} key={space.id}>
-              {space.personal ? "Personal" : space.name} · {space.role}
+              {space.personal ? t("collaboration.personal") : space.name} ·{" "}
+              {choiceLabel(space.role)}
             </option>
           ))}
         </select>
       </label>
       {workspace && !workspace.personal && (
         <>
-          <h2>Members</h2>
+          <h2>{t("collaboration.members")}</h2>
           <Grants
             grants={members.data?.members ?? []}
             remove={role === "owner" ? (id) => remove.mutate(id) : undefined}
@@ -203,7 +208,7 @@ function HostedSpaces() {
           )}
         </>
       )}
-      <h2>Create a shared space</h2>
+      <h2>{t("collaboration.create_a_shared_space")}</h2>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -211,7 +216,7 @@ function HostedSpaces() {
         }}
       >
         <label className={styles.formField}>
-          Space name
+          {t("collaboration.space_name")}
           <input
             className="field"
             required
@@ -221,7 +226,9 @@ function HostedSpaces() {
           />
         </label>
         <button disabled={create.isPending || !name.trim()}>
-          {create.isPending ? "Creating…" : "Create shared space"}
+          {create.isPending
+            ? t("collaboration.creating")
+            : t("collaboration.create_shared_space")}
         </button>
       </form>
       <ErrorLine
@@ -238,6 +245,7 @@ function HostedSpaces() {
   );
 }
 export function ShareNote({ id }: { id: string }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const hosted = useHosted();
@@ -245,7 +253,7 @@ export function ShareNote({ id }: { id: string }) {
   return hosted && role === "owner" ? (
     <>
       <button ref={trigger} className="button" onClick={() => setOpen(true)}>
-        Share
+        {t("collaboration.share")}
       </button>
       {open && (
         <NoteShareDialog
@@ -266,6 +274,7 @@ function NoteShareDialog({
   opener: HTMLElement | null;
   close: () => void;
 }) {
+  useLanguage();
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["note-shares", id],
@@ -289,15 +298,12 @@ function NoteShareDialog({
   });
   return (
     <Dialog
-      title="Share this note"
+      title={t("collaboration.share_this_note")}
       opener={opener}
       onClose={close}
-      footer={<button onClick={close}>Done</button>}
+      footer={<button onClick={close}>{t("collaboration.done")}</button>}
     >
-      <p>
-        Give an existing account access to this note. Other notes and labels
-        stay in their space.
-      </p>
+      <p>{t("collaboration.give_an_existing_account_access_to_this_note")}</p>
       <Grants
         grants={query.data?.shares ?? []}
         remove={(userId) => remove.mutate(userId)}
@@ -313,6 +319,7 @@ function NoteShareDialog({
 }
 
 export function ActiveSharedSpace() {
+  useLanguage();
   const spaces = useQuery({
     queryKey: ["workspaces"],
     queryFn: api.workspaces,
@@ -323,7 +330,7 @@ export function ActiveSharedSpace() {
   );
   return workspace && !workspace.personal ? (
     <Link href="/settings/spaces" className="muted">
-      {workspace.name} · {workspace.role}
+      {workspace.name} · {choiceLabel(workspace.role)}
     </Link>
   ) : null;
 }

@@ -8,6 +8,8 @@ internal fun pluginFixture(id:String="voice-memos",on:Boolean=true,state:String=
  put("id",id);put("name",id);put("description","Synthetic plugin");put("kind","server");put("category","capture");put("api","1.0");put("version","1.0.0");put("switch",if(on) "on" else "off");put("state",state);put("pinned_by_env",0);put("permissions",JsonArray(permissions.map(::JsonPrimitive)));put("granted",JsonArray(permissions.map(::JsonPrimitive)));put("can_enable",true);put("can_delete_data",true)
 }
 internal fun pluginCatalogFixture(vararg plugins:JsonObject,revision:Long=3)=buildJsonObject {put("plugins_rev",revision);put("plugins",JsonArray(plugins.toList()))}
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application=android.app.Application::class,sdk=[28])
 class NativePluginFactsTest {
  @Test fun savedHostWaitingAndAuthoredCatalogFixturesKeepOwnerIntentAndStrictPins() {
   val data=javaClass.getResourceAsStream("/native-plugin-catalog-fixtures.json")!!.bufferedReader().use {Json.parseToJsonElement(it.readText()).jsonObject}
@@ -25,10 +27,10 @@ class NativePluginFactsTest {
   val catalog=nativePluginCatalog(pluginCatalogFixture(pluginFixture(),pluginFixture("failed-plugin",state="failed")),pluginCatalogFixture())
   assertTrue(catalog.valid);assertEquals(2,catalog.onCount);assertTrue(catalog.rows.all {it.wantedOn && !it.activeContribution && it.canDisable})
   // The row says the missing model once, in its waiting line; the plugin page still lists every destination.
-  val waiting=catalog.rows.first();assertEquals(emptyList<String>(),waiting.facts);assertEquals("Needs a transcription model",pluginWaitingLine(waiting))
-  assertEquals(listOf("Transcription: no model is set up"),pluginDestinationFacts(waiting))
+  val waiting=catalog.rows.first();assertEquals(emptyList<String>(),waiting.facts(settingsTestResources()));assertEquals("Needs a transcription model",pluginWaitingLine(settingsTestResources(),waiting))
+  assertEquals(listOf("Transcription: no model is set up"),pluginDestinationFacts(settingsTestResources(),waiting))
   val vision=NativePluginFacts(JsonObject(pluginFixture("image-text",permissions=listOf("ai.chat","ai.vision"))+("ai_destinations" to buildJsonObject {put("chat",buildJsonObject {put("model","qwen3.5");put("host","ollama.home.arpa");put("leaves_network",false)})})))
-  assertEquals("Needs a vision model",pluginWaitingLine(vision));assertEquals(listOf("Chat: note text to qwen3.5 at ollama.home.arpa, on your network"),vision.facts)
+  assertEquals("Needs a vision model",pluginWaitingLine(settingsTestResources(),vision));assertEquals(listOf("Chat: note text to qwen3.5 at ollama.home.arpa, on your network"),vision.facts(settingsTestResources()))
  }
  @Test fun onlyExactEnvironmentPinsUnlockAndCapabilitiesFailClosed() {
   listOf("true","1").forEach {assertEquals(EnvironmentPin.Managed,environmentPin(Json.parseToJsonElement(it)))}
@@ -53,9 +55,9 @@ class NativePluginFactsTest {
    "settings" to Json.parseToJsonElement("""{"weekday":"sunday","time":"18:00"}"""),
    "contributes" to Json.parseToJsonElement("""{"schedules":[{"weekday":"{weekday}","time":"{time}"}]}""")
   )))
-  assertTrue(facts.facts.any {it.contains("cloud-model at ollama.synthetic.lan, outside your network")})
-  assertTrue(facts.facts.any {it.contains("embed-model at ollama.synthetic.lan, on your network")})
-  assertTrue(facts.facts.any {it.contains("Fetches")});assertTrue(facts.facts.any {it.contains("Talks to api.synthetic.example")});assertTrue(facts.facts.any {it.startsWith("Sunday 18:00 (server time)")})
+  assertTrue(facts.facts(settingsTestResources()).any {it.contains("cloud-model at ollama.synthetic.lan, outside your network")})
+  assertTrue(facts.facts(settingsTestResources()).any {it.contains("embed-model at ollama.synthetic.lan, on your network")})
+  assertTrue(facts.facts(settingsTestResources()).any {it.contains("Fetches")});assertTrue(facts.facts(settingsTestResources()).any {it.contains("Talks to api.synthetic.example")});assertTrue(facts.facts(settingsTestResources()).any {it.startsWith("Sunday 18:00 (server time)")})
  }
  @Test fun settingsRemoveSecretValuesAndScopeCacheByInstanceAndContract() {
   val raw=Json.parseToJsonElement("""{"schema":{"type":"object","properties":{"bot_token":{"type":"string","x-secret":true},"language":{"type":"string","default":"en"}}},"values":{"bot_token":"synthetic-private-placeholder","language":"it","unknown":"drop"},"secrets":{"bot_token":{"set":true,"value":"synthetic-private-placeholder"}}}""").jsonObject
@@ -88,8 +90,10 @@ class NativePluginFactsTest {
   assertEquals("data",nativePluginCatalog(pluginCatalogFixture(row),pluginCatalogFixture()).rows.single().category)
   listOf(JsonPrimitive("nonsense"),JsonPrimitive(""),JsonNull,JsonPrimitive(1)).forEach {assertFalse(NativePluginFacts(JsonObject(row+("category" to it))).valid)}
  }
- @Test fun permissionSentencesReadAfterItWill() {
-  assertEquals(listOf("Read attachments","Fetch the linked page","Use the vision model","Never read private notes","Process audio","Add labels"),
-   listOf("Reads attachments","Fetches the linked page","Uses the vision model","Never reads private notes","Process audio","Adds labels").map(::pluginWillSentence))
+ @Test fun customPermissionSentencesRemainAuthoredAndBuiltinPermissionsUseIds() {
+  val custom=NativePluginFacts(JsonObject(pluginFixture()+mapOf("permission_sentences" to JsonArray(listOf(JsonPrimitive("Author-provided access sentence"))))))
+  assertEquals(listOf("Author-provided access sentence"),custom.permissionLines(settingsTestResources("de")))
+  val bundled=NativePluginFacts(JsonObject(pluginFixture(permissions=listOf("notes.read"))+mapOf("origin" to JsonPrimitive("bundled"))))
+  assertEquals(listOf("Liest nicht private Notizen"),bundled.permissionLines(settingsTestResources("de")))
  }
 }

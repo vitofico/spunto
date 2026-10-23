@@ -99,12 +99,12 @@ abstract class LockedActivity: FragmentActivity() {
        androidx.core.view.WindowCompat.getInsetsController(dialog,dialog.decorView).apply {isAppearanceLightStatusBars=darkIcons;isAppearanceLightNavigationBars=darkIcons}
       } }
       Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
-       Text("Spunto is locked", style = MaterialTheme.typography.headlineLarge)
-       Spacer(Modifier.height(SpuntoSpacing.s16)); Text("Unlock with a strong biometric or this phone's PIN, pattern or password.")
+       Text(getString(R.string.sys_lock_title), style = MaterialTheme.typography.headlineLarge)
+       Spacer(Modifier.height(SpuntoSpacing.s16)); Text(getString(R.string.sys_lock_description))
        if(error.isNotEmpty()) Text(error)
-       Spacer(Modifier.height(SpuntoSpacing.s20)); Button(onClick = { authenticate(null) }) { Text("Unlock Spunto") }
-       TextButton(onClick = { authenticate(null, credentialOnly = true) }) { Text("Use screen lock") }
-       TextButton(onClick = { closeLockedActivity() }) { Text("Close") }
+       Spacer(Modifier.height(SpuntoSpacing.s20)); Button(onClick = { authenticate(null) }) { Text(getString(R.string.sys_unlock)) }
+       TextButton(onClick = { authenticate(null, credentialOnly = true) }) { Text(getString(R.string.sys_screen_lock)) }
+       TextButton(onClick = { closeLockedActivity() }) { Text(getString(R.string.sys_close)) }
       }}
      }
      BackHandler { closeLockedActivity() }
@@ -142,7 +142,7 @@ abstract class LockedActivity: FragmentActivity() {
    promptState.biometricActive=false
    if(promptState.cancelling) finishCancellation(expected!!) else succeed(expected!!)
   }
-  override fun onAuthenticationFailed() {if(current(expected) && !promptState.cancelling) error="Not recognized. Try again or use your screen lock."}
+  override fun onAuthenticationFailed() {if(current(expected) && !promptState.cancelling) error=getString(R.string.sys_not_recognized)}
   override fun onAuthenticationError(code:Int,message:CharSequence) {
    if(!current(expected)) return
    promptState.biometricActive=false
@@ -153,7 +153,7 @@ abstract class LockedActivity: FragmentActivity() {
     promptState.transitioning=true
     window.decorView.post {promptState.transitioning=false;authenticate(setting,credentialOnly=true)}
    } else if(code==BiometricPrompt.ERROR_USER_CANCELED) cancelled(expected!!)
-   else fail(expected!!,"Unlock was not completed. Try again or use your screen lock.")
+   else fail(expected!!,getString(R.string.sys_unlock_incomplete))
   }
  })
  private fun finishCancellation(expected:Long) {
@@ -176,13 +176,13 @@ abstract class LockedActivity: FragmentActivity() {
  private fun cancelled(expected:Long) {
   val changingSetting=promptState.setting!=null
   val exit=!changingSetting && !unlocked
-  fail(expected,if(changingSetting) "Authentication cancelled. App lock setting unchanged." else "Unlock cancelled. Your notes stay locked.")
+  fail(expected,if(changingSetting) getString(R.string.sys_setting_cancelled) else getString(R.string.sys_unlock_cancelled))
   if(exit) finish()
  }
  private fun authenticate(setting: Boolean?, credentialOnly: Boolean = false) {
   if(!resumed || isFinishing || promptState.token!=null || promptState.transitioning || promptState.cancelling) return
   val keyguard = getSystemService(KeyguardManager::class.java)
-  if(!keyguard.isDeviceSecure) { report("Set a phone PIN, pattern or password in Android Settings first."); return }
+  if(!keyguard.isDeviceSecure) { report(getString(R.string.sys_set_phone_lock)); return }
   promptState.token = appLock.begin(); promptState.setting = setting; error = ""
   val expected=promptState.token!!
   prompt=buildPrompt(expected)
@@ -191,26 +191,26 @@ abstract class LockedActivity: FragmentActivity() {
   val authenticators = if(credentialOnly) BiometricManager.Authenticators.DEVICE_CREDENTIAL else strong
   promptState.awaitingCredential=credentialOnly
   if(BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) { screenCredential(); return }
-  val info = BiometricPrompt.PromptInfo.Builder().setTitle("Unlock Spunto").setSubtitle("Use this phone's biometric or screen lock").setAllowedAuthenticators(authenticators)
-  if(!credentialOnly) info.setNegativeButtonText("Use screen lock")
-  try { promptState.biometricActive=true;prompt.authenticate(info.build()) } catch(_: Exception) { promptState.biometricActive=false;fail(expected,"Authentication is unavailable. Use your screen lock.") }
+  val info = BiometricPrompt.PromptInfo.Builder().setTitle(getString(R.string.sys_unlock)).setSubtitle(getString(R.string.sys_biometric_subtitle)).setAllowedAuthenticators(authenticators)
+  if(!credentialOnly) info.setNegativeButtonText(getString(R.string.sys_screen_lock))
+  try { promptState.biometricActive=true;prompt.authenticate(info.build()) } catch(_: Exception) { promptState.biometricActive=false;fail(expected,getString(R.string.sys_auth_unavailable)) }
  }
  @Suppress("DEPRECATION")
  private fun screenCredential() {
   val expected=promptState.token ?: return
-  val intent = getSystemService(KeyguardManager::class.java).createConfirmDeviceCredentialIntent("Unlock Spunto", "Use this phone's PIN, pattern or password")
-  if(intent == null) { fail(expected,"Set a secure screen lock in Android Settings first."); return }
+  val intent = getSystemService(KeyguardManager::class.java).createConfirmDeviceCredentialIntent(getString(R.string.sys_unlock), getString(R.string.sys_credential_subtitle))
+  if(intent == null) { fail(expected,getString(R.string.sys_secure_lock_required)); return }
   promptState.awaitingCredential = true
   promptState.credentialToken=expected
-  try { credential.launch(intent) } catch(_: Exception) { promptState.awaitingCredential = false;promptState.credentialToken=null; fail(expected,"Screen lock authentication is unavailable.") }
+  try { credential.launch(intent) } catch(_: Exception) { promptState.awaitingCredential = false;promptState.credentialToken=null; fail(expected,getString(R.string.sys_credential_unavailable)) }
  }
  private fun succeed(expected:Long) {
   if(!current(expected)) return
-  if(!appLock.complete(expected)) { promptState.token = null;promptState.setting=null;promptState.awaitingCredential=false; error = "Unlock expired. Try again."; return }
+  if(!appLock.complete(expected)) { promptState.token = null;promptState.setting=null;promptState.awaitingCredential=false; error = getString(R.string.sys_unlock_expired); return }
   promptState.awaitingCredential=false
   promptState.token = null
   try { promptState.setting?.let(appLock::configure); promptState.setting = null; error = "" }
-  catch(_: Exception) { appLock.lock(); error = "Couldn't save the phone lock setting." }
+  catch(_: Exception) { appLock.lock(); error = getString(R.string.sys_lock_save_failed) }
  }
  private fun report(message: String) {error=message;if(unlocked) Toast.makeText(this,message,Toast.LENGTH_LONG).show()}
  private fun fail(expected:Long,message: String) { if(!current(expected)) return; appLock.cancel(expected); promptState.token = null; promptState.setting = null;promptState.awaitingCredential=false; report(message) }

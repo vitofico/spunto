@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
 import { api, type PairingCode } from "../lib/api";
@@ -18,6 +19,7 @@ export function pairingPayload(pairing: PairingCode): string {
 }
 
 function PairingQR({ payload }: { payload: string }) {
+  useLanguage();
   const { path, size } = useMemo(() => {
     const qr = qrcode(0, "M");
     qr.addData(payload);
@@ -33,7 +35,7 @@ function PairingQR({ payload }: { payload: string }) {
     <svg
       className={styles.qr}
       role="img"
-      aria-label="Android pairing code"
+      aria-label={t("pairdevice.android_pairing_code")}
       viewBox={`0 0 ${size} ${size}`}
       shapeRendering="crispEdges"
     >
@@ -44,6 +46,7 @@ function PairingQR({ payload }: { payload: string }) {
 }
 
 export function PairDevice() {
+  useLanguage();
   const [pairing, setPairing] = useState<PairingCode | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +81,7 @@ export function PairDevice() {
       setError(
         error instanceof Error
           ? error.message
-          : "Could not create a pairing code.",
+          : t("pairdevice.could_not_create_a_pairing_code"),
       );
     } finally {
       if (current === generation.current) setPending(false);
@@ -95,33 +98,31 @@ export function PairDevice() {
   return (
     <>
       <button ref={trigger} onClick={() => void create()} disabled={pending}>
-        {pending ? "Creating code…" : "Pair an Android device"}
+        {pending
+          ? t("pairdevice.creating_code")
+          : t("pairdevice.pair_an_android_device")}
       </button>
       {error && <p role="alert">{error}</p>}
       {pairing && (
         <Dialog
-          title="Pair an Android device"
+          title={t("pairdevice.pair_an_android_device")}
           opener={trigger.current}
           onClose={close}
-          footer={<button onClick={close}>Close</button>}
+          footer={<button onClick={close}>{t("app.close")}</button>}
         >
           {expired ? (
             <>
-              <p>This pairing code expired.</p>
+              <p>{t("pairdevice.this_pairing_code_expired")}</p>
               <button onClick={() => void create()} disabled={pending}>
-                Create a new code
+                {t("pairdevice.create_a_new_code")}
               </button>
             </>
           ) : (
             <>
-              <p>Open Spunto on your phone and choose Scan pairing code.</p>
+              <p>{t("pairdevice.open_spunto_on_your_phone_and_choose_scan")}</p>
               <PairingQR payload={payload} />
-              <p>
-                Connects to {pairing.public_url}. The code can be used once.
-              </p>
-              <p>
-                Expires in {minutes} {minutes === 1 ? "minute" : "minutes"}.
-              </p>
+              <p>{t("pairdevice.connection", { url: pairing.public_url })}</p>
+              <p>{t("pairdevice.expiry", { count: minutes })}</p>
               <button
                 onClick={async () => {
                   if (Date.parse(pairing.expires_at) <= Date.now()) {
@@ -130,12 +131,12 @@ export function PairDevice() {
                   }
                   setCopyStatus(
                     (await copyText(payload))
-                      ? "Copied."
-                      : "Copy failed. Scan the code instead.",
+                      ? t("pairdevice.copied")
+                      : t("pairdevice.copy_failed_scan_the_code_instead"),
                   );
                 }}
               >
-                Copy pairing code
+                {t("pairdevice.copy_pairing_code")}
               </button>
               <p role="status">{copyStatus}</p>
             </>

@@ -31,11 +31,19 @@ class ThemeCatalogTest {
   val good=pack()
   val badDark=good.copy(dark=good.dark+mapOf("ink-3" to good.dark.getValue("sunken")))
   val broken=validateThemeCard(badDark)
-  assertFalse(broken.available);assertTrue(broken.reason!!.contains("dark: ink-3 on"));assertTrue(broken.light.isEmpty())
+  assertEquals(ThemeLocalProblem.InvalidPack,broken.localProblem);assertFalse(broken.available);assertTrue(broken.reason!!.contains("dark: ink-3 on"));assertTrue(broken.light.isEmpty())
   val cases=listOf(good.copy(tokens=2),good.copy(light=good.light-"warn"),good.copy(light=good.light+mapOf("paper" to "url(https://example.invalid/font)")),good.copy(accents=good.accents+good.accents),good.copy(accents=listOf(good.accents.single().copy(dark=mapOf("accent" to "#FFFFFF")))),good.copy(status="unknown"))
   cases.forEach { assertFalse(validateThemeCard(it).available) }
   val failed=validateThemeCard(good.copy(status="failed",reason="dark: ink-3 on sunken"))
-  assertEquals("dark: ink-3 on sunken",failed.reason);assertTrue(failed.accents.isEmpty())
+  assertNull(failed.localProblem);assertEquals("dark: ink-3 on sunken",failed.reason);assertTrue(failed.accents.isEmpty())
+ }
+ @Test fun localFailuresHaveTypedProvenanceAndDoNotInventAnEnglishDisplayName() {
+  val blank=validateThemeCard(pack().copy(name=""))
+  assertEquals(ThemeLocalProblem.InvalidPack,blank.localProblem);assertEquals("",blank.name)
+  val duplicate=validatedThemeCatalog(listOf(pack(),pack())).cards.first {it.id=="fixture-pack"}
+  assertEquals(ThemeLocalProblem.InvalidPack,duplicate.localProblem)
+  val remote=validateThemeCard(pack().copy(status="failed",reason="Un mensaje del servidor"))
+  assertNull(remote.localProblem);assertEquals("Un mensaje del servidor",remote.reason)
  }
  @Test fun failedMissingAndDuplicateIdsCannotResurrectAnOlderValidPalette() {
   val good=pack();val saved=resolveThemeSelection(good.id,"blue-accent",validatedThemeCatalog(listOf(good)))

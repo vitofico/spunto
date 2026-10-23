@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import io.theficos.spunto.core.model.LocalOperationException
+
 import android.content.Context
 import android.media.*
 import androidx.compose.foundation.layout.*
@@ -63,10 +65,11 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
 }
 
 @Composable internal fun RecordingPlaybackControls(playing:Boolean,loading:Boolean,elapsed:Long,duration:Long,onToggle:()->Unit,onStop:()->Unit) {
+ val context=LocalContext.current
  Row {
-  TextButton(onClick=onToggle,enabled=!loading,modifier=Modifier.semantics {contentDescription=if(playing) "Pause recording" else "Play recording"}) {Text(if(loading) "Loading…" else if(playing) "Pause" else "Play")}
-  TextButton(onClick=onStop,modifier=Modifier.semantics {contentDescription="Stop playback"}) {Text("Stop")}
-  Text("${recordingTime(elapsed)} / ${recordingTime(duration)}",Modifier.padding(SpuntoSpacing.s12).semantics {contentDescription="Playback elapsed ${recordingTime(elapsed)}, duration ${recordingTime(duration)}"})
+  TextButton(onClick=onToggle,enabled=!loading,modifier=Modifier.semantics {contentDescription=if(playing) context.getString(R.string.core_pause_recording) else context.getString(R.string.core_play_recording)}) {Text(if(loading) context.getString(R.string.core_loading) else if(playing) context.getString(R.string.core_pause) else context.getString(R.string.core_play))}
+  TextButton(onClick=onStop,modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_stop_playback)}) {Text(context.getString(R.string.core_stop))}
+  Text("${recordingTime(elapsed)} / ${recordingTime(duration)}",Modifier.padding(SpuntoSpacing.s12).semantics {contentDescription=context.getString(R.string.core_playback_elapsed,recordingTime(elapsed),recordingTime(duration))})
  }
 }
 
@@ -81,7 +84,7 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
 }
 
 /** Validated local bytes first. Remote bytes are fetched only on Play with header authentication. */
-@Composable fun AttachmentPlayer(model:SpuntoViewModel,attachmentId:String,label:String="Recording",attachment:AttachmentEntity?=null) {
+@Composable fun AttachmentPlayer(model:SpuntoViewModel,attachmentId:String,label:String?=null,attachment:AttachmentEntity?=null) {
  val context=LocalContext.current
  val auth by model.auth.collectAsState()
  val latestAuth by rememberUpdatedState(auth)
@@ -97,15 +100,15 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
   val state=model.repository.dao.state()
   val maximum=maxOf(state?.maxUploadBytes?:LEGACY_UPLOAD_LIMIT,attachment?.byteSize?:0)
   val root=config?.serverUrl?.trimEnd('/')?:state?.serverUrl?.trimEnd('/').orEmpty()
-  require(attachment==null || attachment.serverUrl.isEmpty() || attachment.serverUrl.trimEnd('/')==root) {"Reconnect to this recording's original server to play it."}
+  require(attachment==null || attachment.serverUrl.isEmpty() || attachment.serverUrl.trimEnd('/')==root) {context.getString(R.string.core_recording_reconnect)}
   val file=withContext(Dispatchers.IO) {
    val local=attachment?.localPath?.takeIf {it.isNotEmpty()}?.let(::File)?.canonicalFile
    val owned=model.container.recordingDirectory.canonicalFile
    if(local?.isFile==true && local.parentFile==owned) local
    else {
-    val selected=requireNotNull(config) {"Connect to your server to download this recording."}
+    val selected=requireNotNull(config) {context.getString(R.string.core_recording_connect)}
     val id=attachment?.remoteId?:attachmentId
-    require(java.util.UUID.fromString(id).toString()==id) {"Recording link is unavailable."}
+    require(java.util.UUID.fromString(id).toString()==id) {context.getString(R.string.core_recording_link_missing)}
     val instance=io.theficos.spunto.data.sync.replicaHash(listOf(selected.serverUrl.trimEnd('/'),selected.replicaId))
     recordingCacheMutex.withLock {
      val directory=File(context.cacheDir,"recordings")
@@ -121,15 +124,15 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
    }
   }
   val metadata=withContext(Dispatchers.IO) {inspectRecording(file,maximum)}
-  require(attachment==null || attachment.sha256.isEmpty() || attachment.sha256==metadata.sha256) {"Recording bytes changed. Your clip is kept."}
-  require(config==null || latestAuth==config) {"Sign in again before playing this recording."}
+  require(attachment==null || attachment.sha256.isEmpty() || attachment.sha256==metadata.sha256) {context.getString(R.string.core_recording_bytes_changed)}
+  require(config==null || latestAuth==config) {context.getString(R.string.core_recording_sign_in)}
   RecordingPlaybackFile(file,metadata.durationMs)
  }
  val latestLoad by rememberUpdatedState(loadRecording)
  val loader=remember(attachmentId) {RecordingLoadCoordinator(scope,{latestLoad()},ready={recording ->
   duration=recording.durationMs;preparing=true
-  playback.play(recording.file) {preparing=false;playbackError="Couldn't play this recording. Your clip is kept."}
- },errorMessage={failure ->if(failure is IllegalArgumentException) failure.message.orEmpty() else "Couldn't load this recording. Your clip is kept."},release={playbackError="";preparing=false;playback.release()})}
+  playback.play(recording.file) {preparing=false;playbackError=context.getString(R.string.core_recording_play_failed)}
+ },errorMessage={failure ->if(failure is LocalOperationException) localOperationMessage(context.resources,failure) else if(failure is IllegalArgumentException) failure.message.orEmpty() else context.getString(R.string.core_recording_load_failed)},release={playbackError="";preparing=false;playback.release()})}
  val load by loader.state.collectAsState()
  RecordingPlaybackLifecycle(playback) {loader.cancel();playbackError="";preparing=false}
  DisposableEffect(loader,auth?.serverUrl) {onDispose {loader.stop()}}
@@ -142,9 +145,9 @@ internal class RecordingPlayback(context:Context,focusFactory:((()->Unit)->Audio
  val error=load.error.ifEmpty {playbackError}
  Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer) {
   Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
-   Text(label,style=MaterialTheme.typography.labelLarge)
+   Text(label ?: context.getString(R.string.core_recording),style=MaterialTheme.typography.labelLarge)
    RecordingPlaybackControls(playing,load.loading || preparing,elapsed,duration,{play()},{loader.stop()})
-   attachment?.let {item ->Text(when(item.status) {"local-only"->"Kept on this phone · Save to attach";"uploaded"->"Saved recording";"paused"->"Sync paused · Voice memos is off";"failed"->"Upload failed · Your clip stays on this phone";"uploading"->"Uploading recording";else->"Recording waiting to sync"},style=MaterialTheme.typography.bodySmall)}
+   attachment?.let {item ->Text(when(item.status) {"local-only"->context.getString(R.string.core_recording_kept);"uploaded"->context.getString(R.string.core_recording_saved);"paused"->context.getString(R.string.core_recording_paused);"failed"->context.getString(R.string.core_recording_upload_failed);"uploading"->context.getString(R.string.core_recording_uploading);else->context.getString(R.string.core_recording_waiting)},style=MaterialTheme.typography.bodySmall)}
    if(error.isNotEmpty()) Text(error,style=MaterialTheme.typography.bodySmall)
   }
  }

@@ -63,8 +63,8 @@ object CaptureSurfaces {
  }
 }
 /** "FROM YOUR NOTES · 19 MARCH 2025", as the timeline's slip writes it; a slip saved before its date was kept shows no date. */
-internal fun slipOverline(writtenAt:Long,zone:ZoneId=ZoneId.systemDefault(),locale:Locale=Locale.getDefault())=
- ("From your notes"+if(writtenAt>0) " · "+DateTimeFormatter.ofPattern("d MMMM yyyy",locale).format(Instant.ofEpochMilli(writtenAt).atZone(zone)) else "").uppercase(locale)
+internal fun slipOverline(writtenAt:Long,label:String,zone:ZoneId=ZoneId.systemDefault(),locale:Locale=Locale.getDefault())=
+ (label+if(writtenAt>0) " · "+DateTimeFormatter.ofPattern("d MMMM yyyy",locale).format(Instant.ofEpochMilli(writtenAt).atZone(zone)) else "").uppercase(locale)
 /** 03 A11: a paper "Write a note" pill with a mic when dictation is on; a taller widget adds the day's slip. */
 class CaptureWidget : GlanceAppWidget() {
  override val sizeMode=SizeMode.Exact
@@ -75,17 +75,17 @@ class CaptureWidget : GlanceAppWidget() {
  val pill=GlanceModifier.fillMaxWidth().height(48.dp).cornerRadius(24.dp).background(color("paper"))
  Column(GlanceModifier.fillMaxSize().padding(4.dp)) {
   if(!CaptureSurfaces.enabled(context,"quick-capture")) {
-   Box(pill.padding(horizontal=20.dp),contentAlignment=Alignment.CenterStart) { Text("Quick capture is off. Turn it on in Settings → Plugins.",style=TextStyle(color=color("ink-2"),fontSize=13.sp),maxLines=2) }
+   Box(pill.padding(horizontal=20.dp),contentAlignment=Alignment.CenterStart) { Text(context.getString(R.string.capture_disabled),style=TextStyle(color=color("ink-2"),fontSize=13.sp),maxLines=2) }
    return@Column
   }
   Row(pill,verticalAlignment=Alignment.CenterVertically) {
    Row(GlanceModifier.defaultWeight().fillMaxHeight().padding(start=20.dp).clickable(actionStartActivity(CaptureSurfaces.intent(context))),verticalAlignment=Alignment.CenterVertically) {
     Image(ImageProvider(R.drawable.ic_pencil),null,GlanceModifier.size(20.dp),colorFilter=ColorFilter.tint(color("ink-2")))
     Spacer(GlanceModifier.width(12.dp))
-    Text("Write a note",style=TextStyle(color=color("ink-2"),fontSize=16.sp),maxLines=1)
+    Text(context.getString(R.string.capture_widget_write),style=TextStyle(color=color("ink-2"),fontSize=16.sp),maxLines=1)
    }
    if(CaptureSurfaces.enabled(context,"dictation")) Box(GlanceModifier.size(48.dp).clickable(actionStartActivity(CaptureSurfaces.intent(context,true))),contentAlignment=Alignment.Center) {
-    Image(ImageProvider(R.drawable.ic_mic),"Dictate a note",GlanceModifier.size(22.dp),colorFilter=ColorFilter.tint(color("accent")))
+    Image(ImageProvider(R.drawable.ic_mic),context.getString(R.string.capture_dictate_note),GlanceModifier.size(22.dp),colorFilter=ColorFilter.tint(color("accent")))
    }
   }
   val slip=context.getSharedPreferences("device-surfaces",Context.MODE_PRIVATE)
@@ -93,7 +93,7 @@ class CaptureWidget : GlanceAppWidget() {
   if(slipId!=null && LocalSize.current.height>=110.dp) {
    Spacer(GlanceModifier.height(8.dp))
    Column(GlanceModifier.fillMaxWidth().defaultWeight().cornerRadius(16.dp).background(color("paper")).padding(horizontal=20.dp,vertical=10.dp).clickable(actionStartActivity(Intent().setClassName(context.packageName,"io.theficos.spunto.MainActivity").putExtra("noteId",slipId)))) {
-    Text(slipOverline(slip.getLong("slip-at",0L)),style=TextStyle(color=color("ink-3"),fontSize=11.sp,fontWeight=FontWeight.Medium))
+    Text(slipOverline(slip.getLong("slip-at",0L),context.getString(R.string.capture_from_notes),locale=context.resources.configuration.locales[0]),style=TextStyle(color=color("ink-3"),fontSize=11.sp,fontWeight=FontWeight.Medium))
     Spacer(GlanceModifier.height(4.dp))
     Text(slip.getString("slip-text","").orEmpty(),style=TextStyle(color=color("ink"),fontSize=15.sp,fontFamily=FontFamily.Serif),maxLines=2)
    }
@@ -103,7 +103,7 @@ class CaptureWidget : GlanceAppWidget() {
 class CaptureWidgetReceiver : GlanceAppWidgetReceiver() { override val glanceAppWidget = CaptureWidget() }
 open class NewNoteTile : TileService() {
  protected open val dictate=false
- override fun onStartListening() { qsTile?.apply { state=if(CaptureSurfaces.enabled(this@NewNoteTile,"quick-capture") && (!dictate || CaptureSurfaces.enabled(this@NewNoteTile,"dictation"))) Tile.STATE_ACTIVE else Tile.STATE_UNAVAILABLE; updateTile() } }
+ override fun onStartListening() { qsTile?.apply { label=getString(if(dictate) R.string.capture_dictate else R.string.capture_new_note);state=if(CaptureSurfaces.enabled(this@NewNoteTile,"quick-capture") && (!dictate || CaptureSurfaces.enabled(this@NewNoteTile,"dictation"))) Tile.STATE_ACTIVE else Tile.STATE_UNAVAILABLE; updateTile() } }
  override fun onClick() {
   if(!CaptureSurfaces.enabled(this,"quick-capture") || dictate && !CaptureSurfaces.enabled(this,"dictation")) return
   val intent=CaptureSurfaces.intent(this,dictate)

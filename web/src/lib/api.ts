@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import createClient from "openapi-fetch";
 import type { paths } from "./api-types";
 import { ApiError, problem, safeError } from "./errors";
@@ -545,7 +546,9 @@ export const api = {
         422,
         "validation_failed",
         undefined,
-        `This file is too large. The server accepts files up to ${Math.max(1, Math.floor(maximum / 1_000_000))} MB.`,
+        t("api.this_file_is_too_large_the_server_accepts", {
+          value1: Math.max(1, Math.floor(maximum / 1_000_000)),
+        }),
       );
     const form = new FormData();
     form.append("file", file);

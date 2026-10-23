@@ -180,7 +180,7 @@ class RecordingSessionTest {
   val source=Source(100,delayMs=10);val encoder=Encoder();val outcome=CompletableDeferred<RecordingOutcome>();val session=RecordingSession(scope,{source},{encoder},Focus(),onOutcome={outcome.complete(it)},isEnabled={true})
   session.start("limit",File(folder,"limit.ogg.partial"),maximumBytes=100_000)
   val state=withTimeout(3000) {session.state.first {it.phase==RecordingPhase.Ready}}
-  assertEquals("recording_limit",(outcome.await() as RecordingOutcome.Ready).reason);assertEquals(11,encoder.samples.size);assertTrue(state.recording!!.byteSize<=100_000);assertTrue(state.message.contains("clip stays"));assertTrue(source.closed)
+  assertEquals("recording_limit",(outcome.await() as RecordingOutcome.Ready).reason);assertEquals(11,encoder.samples.size);assertTrue(state.recording!!.byteSize<=100_000);assertEquals(RecordingNotice.Stopped,state.notice);assertTrue(source.closed)
  }
 
  @Test fun visiblePartialsAreJournaledAtMostOncePerSecondAndFinalWordsAlwaysPersist()=runBlocking {

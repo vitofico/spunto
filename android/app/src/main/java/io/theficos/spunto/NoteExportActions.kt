@@ -48,7 +48,7 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
 
 /** [content] gets Share and Save actions and whether they can run now; by default two text buttons. */
 @Composable internal fun NoteExportActions(model:SpuntoViewModel,note:Note,enabled:Boolean,content:@Composable (share:()->Unit,save:()->Unit,available:Boolean)->Unit={share,save,available ->
- Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {TextButton(onClick=share,enabled=available) {Text("Share")};TextButton(onClick=save,enabled=available) {Text("Save Markdown")}}
+ Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {TextButton(onClick=share,enabled=available) {Text(androidx.compose.ui.res.stringResource(R.string.core_share))};TextButton(onClick=save,enabled=available) {Text(androidx.compose.ui.res.stringResource(R.string.core_save_markdown_short))}}
 }) {
  val credentials by model.auth.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null)
@@ -71,7 +71,7 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
  val currentEnabled by rememberUpdatedState(enabled)
  fun cancel() {session.cancel();request=null;selected=null;approval=null}
  fun allowed(expected:NoteExportStamp)=currentEnabled && currentStamp==expected && model.container.appLock.state.value.unlocked
- fun changed() {cancel();model.message.value="Note or account changed. Finish editing, then start sharing or saving again."}
+ fun changed() {cancel();model.message.value=context.getString(R.string.core_export_changed)}
  DisposableEffect(session) {onDispose {session.cancel()}}
  LaunchedEffect(stamp,enabled) {if(!enabled || request?.stamp?.let {it!=stamp}==true || approval?.stamp?.let {it!=stamp}==true) cancel()}
  val documentContract=remember {object:ActivityResultContracts.CreateDocument("text/markdown") {
@@ -93,23 +93,23 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
     if(fresh.note.privateNote && approved==null) {approval=ExportApproval(action,fresh.stamp);return@launch}
     approval=null
     if(action==ExportAction.Share) {
-     context.startActivity(Intent.createChooser(shareNoteIntent(fresh.note),"Share note"))
+     context.startActivity(Intent.createChooser(shareNoteIntent(fresh.note),context.getString(R.string.core_share_note)))
     } else {
      val attempt=session.begin(fresh.stamp);request=attempt
-     document.launch(markdownFileName(fresh.note.title))
+     document.launch(markdownFileName(context,fresh.note.title))
     }
    } catch(cancelled:CancellationException) {throw cancelled}
-   catch(_:ActivityNotFoundException) {cancel();model.message.value="No app is available to share or save this note."}
-   catch(_:Exception) {cancel();model.message.value="Couldn't share or save this note. Your note and draft are unchanged."}
+   catch(_:ActivityNotFoundException) {cancel();model.message.value=context.getString(R.string.core_export_no_app)}
+   catch(_:Exception) {cancel();model.message.value=context.getString(R.string.core_export_failed)}
    finally {busy=false}
   }
  }
  Column {content({begin(ExportAction.Share)},{begin(ExportAction.Save)},enabled && gate.unlocked && !busy && request==null)}
  if(gate.unlocked) approval?.let {pending ->
-  AlertDialog(onDismissRequest={approval=null},title={Text(if(pending.action==ExportAction.Share) "Share private note?" else "Save private note?")},text={Text("This exports the saved Markdown outside Spunto. Attachment files aren't included. The copy won't be protected by Spunto's app lock.")},confirmButton={TextButton(onClick={begin(pending.action,pending.stamp)},enabled=!busy) {Text("Continue")}},dismissButton={TextButton(onClick={approval=null}) {Text("Cancel")}})
+  AlertDialog(onDismissRequest={approval=null},title={Text(if(pending.action==ExportAction.Share) context.getString(R.string.core_share_private) else context.getString(R.string.core_save_private))},text={Text(context.getString(R.string.core_private_export_warning))},confirmButton={TextButton(onClick={begin(pending.action,pending.stamp)},enabled=!busy) {Text(context.getString(R.string.core_continue))}},dismissButton={TextButton(onClick={approval=null}) {Text(context.getString(R.string.core_cancel))}})
  }
  if(gate.unlocked) selected?.let {destination ->
-  AlertDialog(onDismissRequest={cancel()},title={Text("Save selected Markdown?")},text={Text("Save the unchanged note text to the document you selected. Attachment files aren't included. You may need to unlock Spunto after using the document picker.")},confirmButton={TextButton(enabled=!busy,onClick={
+  AlertDialog(onDismissRequest={cancel()},title={Text(context.getString(R.string.core_save_selected_question))},text={Text(context.getString(R.string.core_save_selected_warning))},confirmButton={TextButton(enabled=!busy,onClick={
    if(busy) return@TextButton
    busy=true
    scope.launch {
@@ -124,13 +124,13 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
        ensureActive()
        check(afterOpen?.stamp==fresh.stamp && allowed(fresh.stamp) && session.owns(destination.request,fresh.stamp,model.container.appLock.state.value.unlocked))
        writeNoteMarkdown(output,fresh.note.body) {ensureActive();allowed(fresh.stamp) && session.owns(destination.request,fresh.stamp,model.container.appLock.state.value.unlocked)}
-      } ?: error("Document unavailable")
+      } ?: error(context.getString(R.string.core_document_unavailable))
      }
-     cancel();model.message.value="Markdown saved. Attachment files weren't included."
+     cancel();model.message.value=context.getString(R.string.core_markdown_saved)
     } catch(cancelled:CancellationException) {throw cancelled}
-    catch(_:Exception) {cancel();model.message.value="Couldn't finish saving. The selected document may be empty or incomplete; your note and draft are unchanged."}
+    catch(_:Exception) {cancel();model.message.value=context.getString(R.string.core_save_incomplete)}
     finally {busy=false}
    }
-  }) {Text("Save selected Markdown")}},dismissButton={TextButton(onClick={cancel()},enabled=!busy) {Text("Cancel")}})
+  }) {Text(context.getString(R.string.core_save_selected))}},dismissButton={TextButton(onClick={cancel()},enabled=!busy) {Text(context.getString(R.string.core_cancel))}})
  }
 }

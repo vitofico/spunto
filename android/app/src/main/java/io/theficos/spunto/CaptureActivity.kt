@@ -43,12 +43,12 @@ class CaptureActivity:LockedActivity() {
    lifecycleScope.launch {
     if(selection.isBlank()) { finish();return@launch }
     val body=selection.lines().joinToString("\n") { "> $it" }
-    if(!launchState.selectionStarted) {launchState.selectionStarted=true;model.task {try {launchState.selectionId=model.repository.create(body,sourceKind="selection",sourceRef=referrer?.host)} catch(error:Exception) {launchState.selectionError="Couldn't save this selection. Your existing notes and drafts are kept.";throw error}}}
+    if(!launchState.selectionStarted) {launchState.selectionStarted=true;model.task {try {launchState.selectionId=model.repository.create(body,sourceKind="selection",sourceRef=referrer?.host)} catch(error:Exception) {launchState.selectionError=getString(R.string.core_selection_save_failed);throw error}}}
     setProtectedContent { SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(shape=MaterialTheme.shapes.large) {
      val id=launchState.selectionId
-     if(id==null) Column(Modifier.padding(SpuntoSpacing.s20)) {Text(launchState.selectionError.ifEmpty {"Saving selection…"});if(launchState.selectionError.isNotEmpty()) TextButton(onClick={finish()}) {Text("Close")}}
-     else if(!launchState.opened) TextButton(onClick={launchState.opened=true}) {Text("Saved to spunto · Add a thought")}
-     else Column(Modifier.padding(SpuntoSpacing.s20)) {Text("Add a thought");Composer(model,id,body,startNewParagraph=true,onRecordingSaved={finish()},onSave={finish()})}
+     if(id==null) Column(Modifier.padding(SpuntoSpacing.s20)) {Text(launchState.selectionError.ifEmpty {getString(R.string.core_saving_selection)});if(launchState.selectionError.isNotEmpty()) TextButton(onClick={finish()}) {Text(getString(R.string.core_close))}}
+     else if(!launchState.opened) TextButton(onClick={launchState.opened=true}) {Text(getString(R.string.core_saved_add_thought))}
+     else Column(Modifier.padding(SpuntoSpacing.s20)) {Text(getString(R.string.core_add_thought));Composer(model,id,body,startNewParagraph=true,onRecordingSaved={finish()},onSave={finish()})}
     } } } }
     while(launchState.selectionId==null && launchState.selectionError.isEmpty()) delay(50)
     if(launchState.selectionError.isNotEmpty()) return@launch
@@ -69,8 +69,8 @@ class CaptureActivity:LockedActivity() {
       // A share (03 A3): what came in, sunken and quoted on save; an optional thought; up to three recent labels.
       // A3 puts Save in the header row: the composer's bar docks there instead of under the field.
       val header=remember { BottomBarSlot() }
-      if(sharing) Row(verticalAlignment=Alignment.CenterVertically) { Text("Save to spunto",style=MaterialTheme.typography.titleMedium);Box(Modifier.weight(1f)) { header.content?.invoke() } }
-      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text("Close") } }
+      if(sharing) Row(verticalAlignment=Alignment.CenterVertically) { Text(getString(R.string.core_save_spunto),style=MaterialTheme.typography.titleMedium);Box(Modifier.weight(1f)) { header.content?.invoke() } }
+      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text(getString(R.string.core_close)) } }
       if(error.isNotEmpty()) Text(error)
       if(shared.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
        Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
@@ -79,10 +79,10 @@ class CaptureActivity:LockedActivity() {
         (source?.let {Uri.parse(it).host} ?: referrer?.host)?.let {Text(it,style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)}
        }
       }
-      if(image!=null) coil.compose.AsyncImage(model=image,contentDescription="Shared image",modifier=Modifier.fillMaxWidth().heightIn(max=180.dp))
+      if(image!=null) coil.compose.AsyncImage(model=image,contentDescription=getString(R.string.core_shared_image),modifier=Modifier.fillMaxWidth().heightIn(max=180.dp))
       val labels by model.labels.collectAsState()
       var chosen by remember { mutableStateOf(emptySet<String>()) }
-      CompositionLocalProvider(LocalBottomBar provides header.takeIf { sharing }) { Composer(model,draftId=shareKey,initial="",autoFocus=!sharing,autoDictate=intent.getBooleanExtra("dictate",false),canSaveEmpty=sharing,allowVoiceCapture=!sharing,tools=!sharing,placeholder=if(sharing) "Add a thought (optional)" else "What's on your mind?",onPlainCaptureSave=if(!sharing) {body,ref ->model.repository.create(body,sourceRef=ref);finish();null} else null,onRecordingSaved={finish()},onSave={comment -> saveShare(comment,shared,source,image,shareKey,chosen.joinToString(" ") {"#$it"})}) }
+      CompositionLocalProvider(LocalBottomBar provides header.takeIf { sharing }) { Composer(model,draftId=shareKey,initial="",autoFocus=!sharing,autoDictate=intent.getBooleanExtra("dictate",false),canSaveEmpty=sharing,allowVoiceCapture=!sharing,tools=!sharing,placeholder=if(sharing) getString(R.string.core_thought_optional) else getString(R.string.core_placeholder),onPlainCaptureSave=if(!sharing) {body,ref ->model.repository.create(body,sourceRef=ref);finish();null} else null,onRecordingSaved={finish()},onSave={comment -> saveShare(comment,shared,source,image,shareKey,chosen.joinToString(" ") {"#$it"})}) }
       if(sharing) Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
        labels.filter {'/' !in it.key}.sortedByDescending {it.count}.take(3).forEach {label -> FilterChip(selected=label.path in chosen,onClick={chosen=if(label.path in chosen) chosen-label.path else chosen+label.path},label={Text("#${label.path}")})}
       }
@@ -99,7 +99,7 @@ class CaptureActivity:LockedActivity() {
    val attachment=if(image!=null) withContext(Dispatchers.IO) {
     val folder=model.container.privateDirectory("pending-attachments")
     val target=File(folder,java.util.UUID.randomUUID().toString())
-    try { requireNotNull(contentResolver.openInputStream(image)) { "The shared image is no longer available." }.use { input -> target.outputStream().use { input.copyTo(it) } };target }
+    try { requireNotNull(contentResolver.openInputStream(image)) { getString(R.string.core_shared_image_missing) }.use { input -> target.outputStream().use { input.copyTo(it) } };target }
     catch(error:Exception) { target.delete();throw error }
    } else null
    try {

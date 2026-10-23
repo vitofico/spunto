@@ -1,0 +1,9 @@
+<resources>
+ <string name="capture_widget_write">Écrire une note</string>
+ <string name="capture_widget_description">Écrivez ou dictez une note depuis votre écran d’accueil.</string>
+ <string name="capture_disabled">La capture rapide est désactivée. Activez-la dans Paramètres → Extensions.</string>
+ <string name="capture_dictate_note">Dicter une note</string>
+ <string name="capture_from_notes">Dans vos notes</string>
+ <string name="capture_new_note">Nouvelle note</string>
+ <string name="capture_dictate">Dicter</string>
+</resources>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_problem_note_unavailable">Diese Notiz ist nicht mehr verfügbar.</string>
+    <string name="local_problem_editor_changed">Der Text hat sich geändert. Speichere den aktuellen Text mit dieser Aufnahme.</string>
+    <string name="local_problem_editor_changed_while_saving">Der Text wurde beim Speichern dieser Aufnahme geändert. Versuche es erneut.</string>
+    <string name="local_problem_original_unavailable">Die ursprüngliche Notiz befindet sich nicht mehr auf diesem Telefon.</string>
+    <string name="local_problem_note_too_large">Die Notiz ist zu groß.</string>
+    <string name="local_problem_image_too_large">Wähle ein Bild mit höchstens 5 MB.</string>
+    <string name="local_problem_recording_journal_required">Speichere die Aufnahme aus ihrem ursprünglichen Entwurf, bevor du ihre Audiodaten erneut verwendest.</string>
+    <string name="local_problem_recording_path_invalid">Der Aufnahmepfad liegt außerhalb des Aufnahmespeichers dieses Telefons.</string>
+    <string name="local_problem_voice_memos_disabled">Aktiviere Sprachmemos vor der Aufnahme.</string>
+    <string name="local_problem_recording_unavailable">Die Aufnahme ist nicht verfügbar.</string>
+    <string name="local_problem_recording_already_handled">Die Aufnahme wurde bereits verworfen oder gespeichert.</string>
+    <string name="local_problem_recording_state_changed">Der Aufnahmestatus hat sich geändert.</string>
+    <string name="local_problem_recording_not_ready">Beende die Aufnahme oder stelle sie wieder her, bevor du speicherst.</string>
+    <string name="local_problem_recording_original_note_required">Behalte diese Aufnahme bei ihrer ursprünglichen Notiz.</string>
+    <string name="local_problem_recording_current_editor_required">Verwende den aktuellen Editor dieser Aufnahme.</string>
+    <string name="local_problem_recording_changed">Die Aufnahmedaten haben sich geändert.</string>
+    <string name="local_problem_recording_original_server_required">Verbinde dich erneut mit dem ursprünglichen Server der Aufnahme.</string>
+    <string name="local_problem_note_changed_while_saving">Die Notiz wurde beim Speichern der Aufnahme geändert.</string>
+    <string name="local_problem_note_changed_during_recording">Die Notiz wurde während der Aufnahme geändert. Behalte den aktuellen Text, bevor du den Clip anhängst.</string>
+    <string name="local_problem_recording_attachment_must_be_removed">Entferne den Notizanhang, um eine bereits gespeicherte Aufnahme zu löschen.</string>
+    <string name="local_problem_recording_invalid">Diese Aufnahme ist unvollständig, beschädigt oder wird nicht unterstützt. Dein Clip bleibt erhalten.</string>
+    <string name="local_problem_recording_limit_or_unavailable">Die Aufnahme überschreitet das Uploadlimit oder ist nicht verfügbar.</string>
+    <string name="local_problem_attachment_limit_or_unavailable">Der Anhang überschreitet das Uploadlimit oder ist nicht verfügbar.</string>
+    <string name="local_problem_recording_nothing_to_recover">Die Aufnahme enthält keine abgeschlossenen Audiodaten zur Wiederherstellung.</string>
+    <string name="local_problem_unencrypted_connection_consent_required">Bestätige die unverschlüsselte Verbindung, bevor du dich verbindest.</string>
+    <string name="local_problem_server_root_required">Verwende die Stamm-URL des Servers.</string>
+    <string name="local_problem_account_identity_incomplete">Der Server hat eine unvollständige Kontoidentität zurückgegeben.</string>
+    <string name="local_problem_attachment_id_invalid">Ungültige Anhang-ID.</string>
+    <string name="local_problem_label_invalid">Labels benötigen 1 bis 5 Abschnitte aus Buchstaben, Ziffern, Unterstrichen oder Bindestrichen.</string>
+    <string name="local_problem_unfinished_code_block">Schließe den unvollständigen Codeblock, bevor du Labels hinzufügst.</string>
+    <string name="local_problem_suggestion_no_longer_pending">Dieser Vorschlag steht nicht mehr aus. Prüfe einen aktuellen Vorschlag.</string>
+    <string name="local_problem_label_review_on_web_required">Prüfe Labeländerungen nach der Anmeldung auf der Prüfseite im Web, um ihre Auswirkungen zu sehen.</string>
+    <string name="local_problem_replacement_superseded">Diese Ersetzung ist überholt. Vergleiche die aktuelle Notiz, bevor du einen neuen Vorschlag anwendest.</string>
+    <string name="local_problem_merge_superseded">Diese Zusammenführung ist überholt. Vergleiche beide aktuellen Notizen erneut, bevor du sie zusammenführst.</string>
+</resources>

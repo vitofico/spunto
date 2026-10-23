@@ -66,7 +66,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   viewModelScope.launch {container.database.dao().observeState().collect(::publishPluginReplica)}
  }
  internal val pluginManager:NativePluginManagerActions by lazy {NativePluginManagerActions(
-  viewModelScope,{auth.value},{online.value},{pluginEpoch.value},
+  container.context.resources,viewModelScope,{auth.value},{online.value},{pluginEpoch.value},
   {config -> object:NativePluginBackend {
    private val api=ApiClient(config)
    private suspend fun <T> read(block:suspend ()->T):T=try {block()} catch(error:ApiException) {if(error.status==401 && auth.value==config) reauthenticate.value=true;throw error}
@@ -129,7 +129,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   val url=pluginWebUrl(config.serverUrl,config.httpConsent,path) ?: return
   container.context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
  }
- fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException -> apiErrorMessage(e); e is IllegalArgumentException -> e.message.orEmpty(); else -> "Server unreachable. Your notes stay on this phone." } } }
+ fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException -> apiErrorMessage(container.context.resources,e); e is LocalOperationException -> localOperationMessage(container.context.resources,e); e is IllegalArgumentException -> e.message.orEmpty(); else -> container.context.getString(R.string.sys_server_unreachable) } } }
  fun synchronize()=task { val result=container.sync.sync(); if(result==SyncStatus.NeedsSignIn) reauthenticate.value=true; refreshPluginManager()?.join() }
  suspend fun saveLocal(body:String,id:String?=null):String { android.os.Trace.beginSection("spunto.local-save");return try { repository.save(body,id) } finally { android.os.Trace.endSection() } }
  fun save(body:String,id:String?=null,done:(String)->Unit={})=task { val noteId=saveLocal(body,id);repository.clearDraft(id?:"capture",body);done(noteId) }
@@ -140,16 +140,16 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  fun decide(id:String,decision:String)=task { repository.decideSuggestion(id,decision) }
  /** The sign-in form's problem; sign-in failures never reach [message] or [reauthenticate]. */
  internal val signInProblem=MutableStateFlow<SignInProblem?>(null)
- fun login(server:String,password:String,code:String,name:String,consent:Boolean)=viewModelScope.launch { signInProblem.value=null; try { signIn(server,password,code,name,consent);message.value="" } catch(e:CancellationException) { throw e } catch(e:Exception) { signInProblem.value=signInProblem(e,code.isNotBlank()) } }
+ fun login(server:String,password:String,code:String,name:String,consent:Boolean)=viewModelScope.launch { signInProblem.value=null; try { signIn(server,password,code,name,consent);message.value="" } catch(e:CancellationException) { throw e } catch(e:Exception) { signInProblem.value=signInProblem(container.context.resources,e,code.isNotBlank()) } }
  private suspend fun signIn(server:String,password:String,code:String,name:String,consent:Boolean) {
   val previous=container.auth.config.first()
-  require(previous==null || previous.replicaId==container.replicaId) {"The account changed. Continue from the current account."}
-  if(reauthenticate.value && notes.value.isNotEmpty()) require(previous?.serverUrl?.trimEnd('/')==server.trimEnd('/')) {"Sign in again to the same server. Sign out before connecting another instance."}
+  require(previous==null || previous.replicaId==container.replicaId) {container.context.getString(R.string.sys_account_changed)}
+  if(reauthenticate.value && notes.value.isNotEmpty()) require(previous?.serverUrl?.trimEnd('/')==server.trimEnd('/')) {container.context.getString(R.string.sys_same_server)}
   val config=AuthConfig(server.trimEnd('/'),"","",name,consent)
   val device=if(code.isNotBlank()) ApiClient(config).pairingExchange(code.trim(),name) else ApiClient(config).signIn(password,name)
   val accepted=config.accept(device)
-  require(container.auth.config.first()==previous) {"The account changed while pairing. Try again from the current account."}
-  if(reauthenticate.value && previous?.hosted==true) require(previous.replicaId==accepted.replicaId) {"Pair the same account and space again. Sign out before changing accounts."}
+  require(container.auth.config.first()==previous) {container.context.getString(R.string.sys_account_changed_pairing)}
+  if(reauthenticate.value && previous?.hosted==true) require(previous.replicaId==accepted.replicaId) {container.context.getString(R.string.sys_same_account)}
   container.auth.save(accepted);reauthenticate.value=false
   if(accepted.replicaId==container.replicaId) synchronize()
  }
@@ -158,7 +158,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  fun signOut()=task {
   val config=container.auth.config.first()?.takeIf {it.replicaId==container.replicaId};val reachable=online.value
   config?.let {container.auth.clear()};reauthenticate.value=false
-  if(config!=null && reachable && !ApiClient(config).signOut()) message.value="Signed out. This phone stays listed under Devices in the web app until you remove it there."
+  if(config!=null && reachable && !ApiClient(config).signOut()) message.value=container.context.getString(R.string.sys_signed_out_listed)
  }
  fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(ApiClient(config).request(path,method,body)) }
  fun ask(question:String,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {

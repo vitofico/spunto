@@ -1,14 +1,15 @@
+import { LanguagePicker } from "../components/core/LanguagePicker";
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearch } from "wouter";
 import { useAuth } from "../lib";
-import { ApiError } from "../lib/errors";
+import { ApiError, LocalizedError } from "../lib/errors";
 import { api } from "../lib/api";
 import type { AuthOptions } from "../lib/types";
 import { startSSO } from "../lib/query";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
-const seconds = (count: number) =>
-  `${count} ${count === 1 ? "second" : "seconds"}`;
+const seconds = (count: number) => t("count.second", { count });
 export default function AuthPage({
   setup = false,
   band,
@@ -17,10 +18,11 @@ export default function AuthPage({
   /** The plain-HTTP band: shown here too, where the password is typed. */
   band?: ReactNode;
 }) {
+  useLanguage();
   const auth = useAuth();
   const search = useSearch();
   const [options, setOptions] = useState<AuthOptions | null>(null);
-  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [register, setRegister] = useState(
     new URLSearchParams(search).get("register") === "1",
@@ -30,7 +32,7 @@ export default function AuthPage({
   const [confirmation, setConfirmation] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   // While the server's back-off lasts, the button waits and the line counts down.
   const [waitUntil, setWaitUntil] = useState(0);
   const [now, setNow] = useState(Date.now);
@@ -61,7 +63,11 @@ export default function AuthPage({
         })
         .catch(() => {
           if (!cancelled)
-            setOptionsError("Could not load sign-in options. Try again.");
+            setOptionsError(
+              new LocalizedError(
+                "auth.could_not_load_sign_in_options_try_again",
+              ),
+            );
         });
     }
     return () => {
@@ -78,12 +84,18 @@ export default function AuthPage({
   const oidc =
     !setup && (options?.mode === "oidc" || options?.oidc_enabled === true);
   useDocumentTitle(
-    setup ? "Set up" : registering ? "Create your account" : "Sign in",
+    setup
+      ? t("auth.set_up")
+      : registering
+        ? t("auth.create_your_account")
+        : t("auth.sign_in"),
   );
   const message =
     waiting > 0
-      ? `Too many tries. Try again in ${seconds(waiting)}.`
-      : (error ?? auth.error?.message ?? null);
+      ? t("auth.too_many_tries_try_again_in_value1", {
+          value1: seconds(waiting),
+        })
+      : (error?.message ?? auth.error?.message ?? null);
   return (
     <main className="auth">
       <form
@@ -93,12 +105,18 @@ export default function AuthPage({
           setError(null);
           setInvalid(null);
           if (registering && password !== confirmation) {
-            setError("The passwords do not match.");
+            setError(
+              new LocalizedError("accountpanel.the_passwords_do_not_match"),
+            );
             setInvalid("password");
             return;
           }
           if (new TextEncoder().encode(password).length > 1024) {
-            setError("That password is too long. Use a shorter passphrase.");
+            setError(
+              new LocalizedError(
+                "accountpanel.that_password_is_too_long_use_a_shorter",
+              ),
+            );
             setInvalid("password");
             return;
           }
@@ -121,7 +139,9 @@ export default function AuthPage({
               setWaitUntil(Date.now() + failure.retryAfter * 1000);
             }
             setError(
-              failure instanceof Error ? failure.message : "Could not sign in.",
+              failure instanceof Error
+                ? failure
+                : new LocalizedError("auth.could_not_sign_in"),
             );
             const code = failure instanceof ApiError ? failure.code : "";
             const field =
@@ -151,36 +171,36 @@ export default function AuthPage({
         <div className="wordmark">
           spunto<span>.</span>
         </div>
+        <LanguagePicker />
         <h1>
           {setup
-            ? "Create your home"
+            ? t("auth.create_your_home")
             : registering
-              ? "Create your account"
+              ? t("auth.create_your_account")
               : hosted || oidc || !options
-                ? "Sign in to Spunto"
-                : "Unlock your Spunto"}
+                ? t("auth.sign_in_to_spunto")
+                : t("auth.unlock_your_spunto")}
         </h1>
         {!setup && !options && !optionsError && (
-          <p role="status">Loading sign-in options…</p>
+          <p role="status">{t("auth.loading_sign_in_options")}</p>
         )}
         {optionsError && (
           <>
             <p className="error" role="alert">
-              {optionsError}
+              {optionsError.message}
             </p>
             <button type="button" onClick={() => setAttempt(attempt + 1)}>
-              Try again
+              {t("app.try_again")}
             </button>
           </>
         )}
         {setup ? (
           <>
             <p className="muted">
-              A quiet home for your notes. Use the setup code printed in the
-              server log.
+              {t("auth.a_quiet_home_for_your_notes_use_the")}
             </p>
             <label>
-              Setup code
+              {t("auth.setup_code")}
               <input
                 ref={codeField}
                 className="field"
@@ -196,28 +216,26 @@ export default function AuthPage({
           </>
         ) : options?.mode === "local" ? (
           <p className="muted">
-            Enter the existing owner password for this Spunto. There is no
-            username to enter.
+            {t("auth.enter_the_existing_owner_password_for_this_spunto")}
           </p>
         ) : hosted ? (
           <p className="muted">
             {registering
-              ? "Choose a username for your personal notes. No email address is required."
-              : "Use your username and password to open your notes."}
+              ? t("auth.choose_a_username_for_your_personal_notes_no")
+              : t("auth.use_your_username_and_password_to_open_your")}
           </p>
         ) : null}
         {band}
         {hosted && register && !options.registration_enabled && (
           <p className="muted">
-            Username/password signup is disabled on this server. Sign in to an
-            existing account{oidc ? " or use SSO" : ""}.
+            {t(oidc ? "auth.signup_disabled_sso" : "auth.signup_disabled")}
           </p>
         )}
         {passwordEnabled && (
           <>
             {hosted && (
               <label>
-                Username
+                {t("accountpanel.username_2")}
                 <input
                   className="field"
                   value={username}
@@ -235,12 +253,13 @@ export default function AuthPage({
             )}
             {registering && (
               <p className="muted">
-                Use 3–64 letters, numbers, periods, underscores or hyphens.
-                Start with a letter or number.
+                {t("auth.use_3_64_letters_numbers_periods_underscores_or")}
               </p>
             )}
             <label>
-              {setup ? "Choose your password" : "Password"}
+              {setup
+                ? t("auth.choose_your_password")
+                : t("profilepanel.password")}
               <input
                 ref={passwordField}
                 className="field"
@@ -260,7 +279,7 @@ export default function AuthPage({
             </label>
             {registering && (
               <label>
-                Confirm password
+                {t("auth.confirm_password")}
                 <input
                   className="field"
                   type="password"
@@ -279,12 +298,12 @@ export default function AuthPage({
             </p>
             <button className="button primary" disabled={busy || waiting > 0}>
               {busy
-                ? "Signing in…"
+                ? t("auth.signing_in")
                 : setup
-                  ? "Create your home"
+                  ? t("auth.create_your_home")
                   : registering
-                    ? "Create account"
-                    : "Sign in"}
+                    ? t("auth.create_account")
+                    : t("auth.sign_in")}
             </button>
           </>
         )}
@@ -295,8 +314,8 @@ export default function AuthPage({
             onClick={startSSO}
           >
             {options?.label
-              ? `Continue with ${options.label}`
-              : "Continue with SSO"}
+              ? t("auth.continue_with_value1", { value1: options.label })
+              : t("auth.continue_with_sso")}
           </a>
         )}
         {hosted && options.registration_enabled && (
@@ -310,7 +329,9 @@ export default function AuthPage({
               setError(null);
             }}
           >
-            {registering ? "Use an existing account" : "Create an account"}
+            {registering
+              ? t("auth.use_an_existing_account")
+              : t("auth.create_an_account")}
           </button>
         )}
       </form>

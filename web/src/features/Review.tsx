@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -11,7 +12,8 @@ import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
 import { labelChangeImpact } from "./labelChange";
 import { activePlugins, usePlugins } from "./Slots";
 export function ReviewPage() {
-  useDocumentTitle("Review");
+  useLanguage();
+  useDocumentTitle(t("review.review"));
   const [, navigate] = useLocation();
   const query = useQuery({
     queryKey: ["suggestions", "review"],
@@ -104,33 +106,35 @@ export function ReviewPage() {
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   });
-  const groups = ["Notes", "Labels", "Duplicates"];
+  const groups = [t("review.notes"), t("app.labels"), t("review.duplicates")];
   const group = (s: Suggestion) =>
     s.action === "label_change"
-      ? "Labels"
+      ? t("app.labels")
       : s.action === "merge_notes"
-        ? "Duplicates"
-        : "Notes";
+        ? t("review.duplicates")
+        : t("review.notes");
   return (
     <div className={styles.review}>
       <div className={styles.reviewHeader}>
-        <h1 className="page-title">Review</h1>
+        <h1 className="page-title">{t("review.review")}</h1>
         {suggestions.length > 0 && (
-          <span className={styles.facts}>{suggestions.length} waiting</span>
+          <span className={styles.facts}>
+            {t("review.waiting_count", { count: suggestions.length })}
+          </span>
         )}
       </div>
       {query.isPending ? (
-        <p>Loading suggestions…</p>
+        <p>{t("review.loading_suggestions")}</p>
       ) : query.isError ? (
         <p className="error" role="alert">
           {query.error.message}
         </p>
       ) : !suggestions.length ? (
         <div className="empty">
-          <h2>All caught up.</h2>
+          <h2>{t("review.all_caught_up")}</h2>
           {skip.length > 0 && (
             <button onClick={() => setSkip([])}>
-              Return to skipped suggestions
+              {t("review.return_to_skipped_suggestions")}
             </button>
           )}
         </div>
@@ -144,15 +148,15 @@ export function ReviewPage() {
                 setSkip([]);
               }}
             >
-              {one ? "Grouped queue" : "One by one"}
+              {one ? t("review.grouped_queue") : t("review.one_by_one")}
             </button>
             {one && (
               <small className={styles.facts}>
-                a Apply · s Skip · x Dismiss
+                {t("review.a_apply_s_skip_x_dismiss")}
               </small>
             )}
           </div>
-          {(one ? ["Current"] : groups).map((name) => {
+          {(one ? [t("review.current")] : groups).map((name) => {
             const items = one
               ? suggestions.slice(0, 1)
               : suggestions.filter((s) => group(s) === name);
@@ -178,32 +182,34 @@ export function ReviewPage() {
                         onClick={(e) => apply(s, e.currentTarget)}
                       >
                         {!navigator.onLine
-                          ? "Needs a connection"
+                          ? t("review.needs_a_connection")
                           : [
                                 "replace_body",
                                 "merge_notes",
                                 "label_change",
                               ].includes(s.action)
-                            ? "Compare"
-                            : "Apply"}
+                            ? t("review.compare")
+                            : t("review.apply")}
                       </button>
                       {one && (
                         <button onClick={() => setSkip([...skip, s.id])}>
-                          Skip
+                          {t("review.skip")}
                         </button>
                       )}
                       <button
                         disabled={decide.isPending}
                         onClick={() => decide.mutate({ s, action: "dismiss" })}
                       >
-                        {s.action === "merge_notes" ? "Keep both" : "Dismiss"}
+                        {s.action === "merge_notes"
+                          ? t("review.keep_both")
+                          : t("review.dismiss")}
                       </button>
                     </div>
                   </article>
                 ))}
                 {items.length > 3 && !expanded.includes(name) && (
                   <button onClick={() => setExpanded([...expanded, name])}>
-                    {items.length - 3} more
+                    {items.length - 3} {t("review.more")}
                   </button>
                 )}
               </section>
@@ -223,7 +229,9 @@ export function ReviewPage() {
           onClose={() => setPreview(null)}
           footer={
             <>
-              <button onClick={() => setPreview(null)}>Cancel</button>
+              <button onClick={() => setPreview(null)}>
+                {t("profilepanel.cancel")}
+              </button>
               <button
                 className="primary"
                 disabled={
@@ -232,7 +240,9 @@ export function ReviewPage() {
                 }
                 onClick={() => decide.mutate({ s: preview, action: "accept" })}
               >
-                {preview.action === "merge_notes" ? "Merge notes" : "Apply"}
+                {preview.action === "merge_notes"
+                  ? t("review.merge_notes")
+                  : t("review.apply")}
               </button>
             </>
           }

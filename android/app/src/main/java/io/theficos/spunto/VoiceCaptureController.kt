@@ -53,17 +53,17 @@ class VoiceCaptureController(
  val hasSession get()=state.value.id!=null && state.value.id!=retainedId && state.value.phase!=RecordingPhase.Discarded
  fun policy(facts:RecordingPluginFacts) {allowed=facts.captureAllowed;if(!allowed) session.onForegroundChanged(false)}
  suspend fun start(text:String,start:Int,end:Int,language:String) {
-  require(Build.VERSION.SDK_INT>=33) {"Voice recording needs Android 13 or newer."}
-  require(allowed) {"Enable Voice memos before recording."}
-  check(starting.compareAndSet(false,true)) {"Recording is already starting."}
+  require(Build.VERSION.SDK_INT>=33) {context.getString(R.string.sys_recording_android13)}
+  require(allowed) {context.getString(R.string.sys_enable_voice)}
+  check(starting.compareAndSet(false,true)) {context.getString(R.string.sys_recording_starting)}
   synchronized(inputLock) {ownerInput=EditorInput(text,start,end,inputRevision)}
   var journal:RecordingDraftEntity?=null
   var handedOff=false
   try {
    recovery.await()
-   check(foreground && allowed) {"Recording stopped. Your text is kept."}
+   check(foreground && allowed) {context.getString(R.string.sys_recording_stopped_text_kept)}
    val lease=currentLease()
-   require(notes.dao.recordingSnapshots().none {it.draftId==lease.draftId && it.state in setOf("capturing","interrupted","recoverable","ready")}) {"Recover, save or discard the recording already kept with this draft."}
+   require(notes.dao.recordingSnapshots().none {it.draftId==lease.draftId && it.state in setOf("capturing","interrupted","recoverable","ready")}) {context.getString(R.string.sys_previous_recording)}
    val row=withContext(NonCancellable) {beginJournal(lease.draftId,lease.noteId).also {journal=it}}
    currentCoroutineContext().ensureActive()
    withContext(Dispatchers.Main.immediate) {

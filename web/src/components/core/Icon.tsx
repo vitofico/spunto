@@ -1,3 +1,4 @@
+import { useLanguage } from "../../lib/i18n";
 import type { CSSProperties } from "react";
 const glyphs = {
   menu: <path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h15" />,
@@ -90,6 +91,7 @@ export function Icon({
   name: keyof typeof glyphs;
   style?: CSSProperties;
 }) {
+  useLanguage();
   return (
     <svg
       className="icon"

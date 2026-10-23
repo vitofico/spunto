@@ -1539,3 +1539,9 @@ mark[data-match] {
   align-items: center;
   justify-content: center;
 }
+
+.language-picker {
+  display: grid;
+  gap: 0.5rem;
+  max-inline-size: 24rem;
+}

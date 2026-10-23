@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { willSentence } from "../src/features/format";
+import { willSentence } from "../src/features/willSentence";
 
 // This suite uses the packaged app and real API. Fixture-only suites also run
 // against Vite when working on individual components.

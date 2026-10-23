@@ -30,7 +30,8 @@ sealed interface RecordingOutcome {
  data class Discarded(val id:String):RecordingOutcome
 }
 enum class RecordingPhase { Idle,Starting,Recording,Stopping,Ready,Failed,Discarded }
-data class RecordingState(val phase:RecordingPhase=RecordingPhase.Idle,val id:String?=null,val durationMs:Long=0,val level:Float=0f,val text:String="",val textRevision:Long=0,val partialSpan:IntRange?=null,val recordingOnly:Boolean=true,val message:String="",val recording:ReadyRecording?=null)
+enum class RecordingNotice { Starting, LiveTextUnavailable, StorageRetry, RecordingLocal, FinalizationRetry, Kept, Stopped, Permission, Android13Required, MicrophoneBusy, Unavailable }
+data class RecordingState(val phase:RecordingPhase=RecordingPhase.Idle,val id:String?=null,val durationMs:Long=0,val level:Float=0f,val text:String="",val textRevision:Long=0,val partialSpan:IntRange?=null,val recordingOnly:Boolean=true,val notice:RecordingNotice?=null,val recording:ReadyRecording?=null)
 class RecordingFailure(val reason:String):Exception(reason)
 
 /** Explicit-start foreground session. The existing ordinary DictationSession is not changed. */
@@ -72,7 +73,7 @@ class RecordingSession(
   target=file;sessionId=id;stopping.set(false);discarded.set(false);discardAttempts.set(0)
   val token=++generation
   synchronized(textLock) {textBuffer=RecordingTextBuffer(initialText,selectionStart,selectionEnd)}
-  mutable.value=RecordingState(RecordingPhase.Starting,id,text=initialText,message="Starting recording…")
+  mutable.value=RecordingState(RecordingPhase.Starting,id,text=initialText,notice=RecordingNotice.Starting)
   job=scope.launch(Dispatchers.IO) {
    var encoder:RecordingEncoder?=null;var frames=0L;var failure:String?=null
    var lastSpeech=nanoTime();var captured=false;var lastPartialWrite=Long.MIN_VALUE
@@ -86,13 +87,13 @@ class RecordingSession(
     while(true) when(val event=events.tryReceive().getOrNull()?:break) {
      is SpeechEvent.Partial -> {lastSpeech=nanoTime();val snapshot=textChange {buffer ->val prior=buffer.snapshot();buffer.partial(event.text).also {value ->captured=captured || event.text.isNotBlank() && value.text!=prior.text}};val now=nanoTime();if(lastPartialWrite==Long.MIN_VALUE || now-lastPartialWrite>=1_000_000_000L) {persistText(snapshot);lastPartialWrite=now}}
      is SpeechEvent.Final -> {lastSpeech=nanoTime();val snapshot=textChange {buffer ->val prior=buffer.snapshot();buffer.final(event.text).also {value ->captured=captured || event.text.isNotBlank() && value.text!=prior.text}};persistText(snapshot)}
-     is SpeechEvent.Error -> {recognition?.close();recognition=null;mutable.update {it.copy(recordingOnly=true,message="Recording · live text unavailable; transcription after sync")}}
+     is SpeechEvent.Error -> {recognition?.close();recognition=null;mutable.update {it.copy(recordingOnly=true,notice=RecordingNotice.LiveTextUnavailable)}}
      else -> Unit
     }
-    if(overflow.get() || stalled.get()) {recognition?.close();recognition=null;mutable.update {it.copy(recordingOnly=true,message="Recording · live text unavailable; transcription after sync")}}
+    if(overflow.get() || stalled.get()) {recognition?.close();recognition=null;mutable.update {it.copy(recordingOnly=true,notice=RecordingNotice.LiveTextUnavailable)}}
    }
    suspend fun publish(outcome:RecordingOutcome):Boolean {
-    return try {onOutcome(outcome);true} catch(cancelled:CancellationException) {throw cancelled} catch(_:Exception) {mutable.update {it.copy(message="Recording kept locally · storage needs retry")};false}
+    return try {onOutcome(outcome);true} catch(cancelled:CancellationException) {throw cancelled} catch(_:Exception) {mutable.update {it.copy(notice=RecordingNotice.StorageRetry)};false}
    }
    try {
     if(stopping.get() || !isEnabled()) throw RecordingFailure("interrupted")
@@ -102,7 +103,7 @@ class RecordingSession(
     recognition=try {recognitionFactory?.open(language) {event ->
      if(token==generation && !discarded.get() && !events.trySend(event).isSuccess) overflow.set(true)
     }} catch(cancelled:CancellationException) {throw cancelled} catch(_:Exception) {null}
-    mutable.update {it.copy(phase=RecordingPhase.Recording,recordingOnly=recognition==null,message=if(recognition==null) "Recording · live text unavailable; transcription after sync" else "Recording · on this phone")}
+    mutable.update {it.copy(phase=RecordingPhase.Recording,recordingOnly=recognition==null,notice=if(recognition==null) RecordingNotice.LiveTextUnavailable else RecordingNotice.RecordingLocal)}
     reader=CoroutineScope(currentCoroutineContext()).launch(Dispatchers.IO) {
      try {
       val chunk=ShortArray(1600);var lastAudio=nanoTime()
@@ -157,16 +158,16 @@ class RecordingSession(
        (if(file.name.endsWith(".partial")) File(file.parentFile,file.name.removeSuffix(".partial")).also {require(!it.exists());Files.move(file.toPath(),it.toPath(),StandardCopyOption.ATOMIC_MOVE)} else file).also {final -> java.nio.channels.FileChannel.open(final.parentFile.toPath(),java.nio.file.StandardOpenOption.READ).use {it.force(true)}}
       } catch(_:Exception) {null}
       if(finalized==null) {
-       mutable.update {it.copy(phase=RecordingPhase.Failed,message="Recording kept locally · finalization needs retry")}
+       mutable.update {it.copy(phase=RecordingPhase.Failed,notice=RecordingNotice.FinalizationRetry)}
        publish(RecordingOutcome.Interrupted(id,"file_finalize_failed"))
        return@withContext
       }
       target=finalized
       val ready=ReadyRecording(id,finalized.absolutePath,frames*1000/RECORDING_RATE,finalized.length(),textSnapshot().text,captured)
       val persisted=publish(RecordingOutcome.Ready(ready,failure))
-      mutable.update {it.copy(phase=if(persisted) RecordingPhase.Ready else RecordingPhase.Failed,level=0f,recording=ready.copy(text=it.text),message=if(!persisted) "Recording kept locally · storage needs retry" else if(failure==null) "Recording kept on this phone · Save to attach" else "Recording stopped. Your clip stays on this phone.")}
+      mutable.update {it.copy(phase=if(persisted) RecordingPhase.Ready else RecordingPhase.Failed,level=0f,recording=ready.copy(text=it.text),notice=if(!persisted) RecordingNotice.StorageRetry else if(failure==null) RecordingNotice.Kept else RecordingNotice.Stopped)}
      } else {
-      mutable.update {it.copy(phase=RecordingPhase.Failed,level=0f,message=when(failure) {"permission_required"->"Allow microphone permission to record.";"android_13_required"->"Voice recording needs Android 13 or newer.";"microphone_busy"->"The microphone is in use by another app.";else->"Recording unavailable. Your text is kept."})}
+      mutable.update {it.copy(phase=RecordingPhase.Failed,level=0f,notice=when(failure) {"permission_required"->RecordingNotice.Permission;"android_13_required"->RecordingNotice.Android13Required;"microphone_busy"->RecordingNotice.MicrophoneBusy;else->RecordingNotice.Unavailable})}
       publish(RecordingOutcome.Interrupted(id,failure?:"empty_recording"))
      }
     }

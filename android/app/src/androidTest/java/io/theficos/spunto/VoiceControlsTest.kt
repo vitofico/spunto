@@ -23,7 +23,7 @@ class VoiceControlsTest {
  private fun draft(state:String="recoverable")=RecordingDraftEntity(id,"synthetic",null,"/synthetic/partial","/synthetic/final","https://synthetic.invalid",state,1,durationMs=61_000)
  @Test fun recordingOnlyWaitingShowsAccessibleElapsedLevelAndExplicitStop() {
   var stops=0;var discards=0
-  compose.setContent {SpuntoTheme {VoiceControls(RecordingState(RecordingPhase.Recording,id,durationMs=61_000,level=.25f,message="Recording · live text unavailable; transcription after sync"),false,null,emptyList(),true,{stops++},{discards++},{})}}
+  compose.setContent {SpuntoTheme {VoiceControls(RecordingState(RecordingPhase.Recording,id,durationMs=61_000,level=.25f,notice=RecordingNotice.LiveTextUnavailable),false,null,emptyList(),true,{stops++},{discards++},{})}}
   compose.onNodeWithContentDescription("Recording elapsed 1:01").assertExists()
   compose.onNodeWithContentDescription("Microphone level").assertExists()
   compose.onNodeWithText("Live text unavailable. Server transcription needs a transcription model; your recording is kept.").assertExists()

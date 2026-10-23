@@ -1,5 +1,6 @@
 package io.theficos.spunto.data.local
 
+import io.theficos.spunto.core.model.*
 import androidx.room.withTransaction
 import io.theficos.spunto.core.model.uuidV7
 import kotlinx.coroutines.Dispatchers
@@ -38,17 +39,17 @@ class RecordingRepository(private val notes:NotesRepository,directory:File) {
  private val folder=directory.canonicalFile
  private val dao=notes.dao
  val drafts=dao.recordings()
- private fun owned(path:String):File {val file=File(path).canonicalFile;require(file.parentFile==folder) {"Recording path is outside this phone's recording store."};return file}
+ private fun owned(path:String):File {val file=File(path).canonicalFile;requireLocal(file.parentFile==folder,LocalOperationProblem.RecordingPathInvalid) {"Recording path is outside this phone's recording store."};return file}
  suspend fun begin(draftId:String="capture",noteId:String?=null):RecordingDraftEntity=notes.db.withTransaction {
-  val state=dao.state();require(recordingPluginFacts(state).captureAllowed) {"Enable Voice memos before recording."}
-  if(noteId!=null) require(dao.get(noteId)!=null && dao.tombstone(noteId)==null && dao.get(noteId)?.trashed==false) {"This note is no longer available."}
+  val state=dao.state();requireLocal(recordingPluginFacts(state).captureAllowed,LocalOperationProblem.VoiceMemosDisabled) {"Enable Voice memos before recording."}
+  if(noteId!=null) requireLocal(dao.get(noteId)!=null && dao.tombstone(noteId)==null && dao.get(noteId)?.trashed==false,LocalOperationProblem.NoteUnavailable) {"This note is no longer available."}
   val initial=noteId?.let {dao.get(it)?.note()}
   val id=uuidV7();val row=RecordingDraftEntity(id,draftId,noteId,File(folder,"$id.ogg.partial").absolutePath,File(folder,"$id.ogg").absolutePath,state?.serverUrl.orEmpty(),"capturing",System.currentTimeMillis(),maximumBytes=state?.maxUploadBytes?:LEGACY_UPLOAD_LIMIT,baseBodyHash=initial?.bodyHash,baseVersion=initial?.serverRev)
   dao.putRecording(row);row
  }
  suspend fun complete(id:String,capturedText:Boolean=false):RecordingDraftEntity=withContext(Dispatchers.IO) {
-  val before=dao.recording(id)?:error("Recording is unavailable.")
-  require(before.state in setOf("capturing","interrupted","ready","recoverable")) {"Recording was discarded or retained."}
+  val before=dao.recording(id)?:throw LocalOperationException(LocalOperationProblem.RecordingUnavailable,"Recording is unavailable.")
+  requireLocal(before.state in setOf("capturing","interrupted","ready","recoverable"),LocalOperationProblem.RecordingAlreadyHandled) {"Recording was discarded or retained."}
   val final=owned(before.finalPath);val partial=owned(before.localPath)
   val source=if(final.isFile) final else partial
   val metadata=if(before.state=="interrupted") recoverInterruptedRecording(source,before.maximumBytes) else inspectRecording(source,before.maximumBytes)
@@ -56,7 +57,7 @@ class RecordingRepository(private val notes:NotesRepository,directory:File) {
   if(source!=final) {require(!final.exists());Files.move(source.toPath(),final.toPath(),StandardCopyOption.ATOMIC_MOVE)}
   syncRecordingDirectory(folder)
   notes.db.withTransaction {
-   val current=dao.recording(id);require(current==before) {"Recording state changed."}
+   val current=dao.recording(id);requireLocal(current==before,LocalOperationProblem.RecordingStateChanged) {"Recording state changed."}
    before.copy(state=if(before.state=="interrupted") "recoverable" else "ready",durationMs=metadata.durationMs,byteSize=metadata.byteSize,sha256=metadata.sha256,capturedText=capturedText || before.capturedText,error=null).also {dao.putRecording(it)}
   }
  }
@@ -72,21 +73,21 @@ class RecordingRepository(private val notes:NotesRepository,directory:File) {
   return dao.recordingSnapshots().filter {it.state in setOf("interrupted","recoverable","ready")}
  }
  suspend fun retain(id:String,body:String,noteId:String?=null,privateNote:Boolean=false,captureDraft:DraftEntity?=null,sourceKind:String="android",editorWrite:EditorWrite?=null):String=withContext(Dispatchers.IO) {
-  val before=dao.recording(id)?:error("Recording is unavailable.")
+  val before=dao.recording(id)?:throw LocalOperationException(LocalOperationProblem.RecordingUnavailable,"Recording is unavailable.")
   if(before.state=="retained") return@withContext requireNotNull(before.noteId)
-  require(before.state in setOf("ready","recoverable")) {"Finish or recover the recording before saving."}
-  require(before.noteId==null || noteId==null || before.noteId==noteId) {"Keep this recording with its original note."}
+  requireLocal(before.state in setOf("ready","recoverable"),LocalOperationProblem.RecordingNotReady) {"Finish or recover the recording before saving."}
+  requireLocal(before.noteId==null || noteId==null || before.noteId==noteId,LocalOperationProblem.RecordingOriginalNoteRequired) {"Keep this recording with its original note."}
   val targetId=noteId?:before.noteId
-  editorWrite?.let {require(it.body==body && it.lease.draftId==before.draftId && it.lease.noteId==targetId) {"Use this recording’s current editor."}}
+  editorWrite?.let {requireLocal(it.body==body && it.lease.draftId==before.draftId && it.lease.noteId==targetId,LocalOperationProblem.RecordingCurrentEditorRequired) {"Use this recording’s current editor."}}
   val targetBefore=targetId?.let {dao.get(it)}
   val file=owned(before.finalPath);val metadata=inspectRecording(file,before.maximumBytes)
-  require(metadata.sha256==before.sha256 && metadata.byteSize==before.byteSize) {"Recording bytes changed."}
+  requireLocal(metadata.sha256==before.sha256 && metadata.byteSize==before.byteSize,LocalOperationProblem.RecordingChanged) {"Recording bytes changed."}
   notes.retainRecordingEditor(editorWrite) { notes.db.withTransaction {
-   require(dao.recording(id)==before) {"Recording state changed."}
+   requireLocal(dao.recording(id)==before,LocalOperationProblem.RecordingStateChanged) {"Recording state changed."}
    val root=dao.state()?.serverUrl.orEmpty()
-   require(before.serverUrl.isEmpty() || root.isEmpty() || before.serverUrl==root) {"Reconnect to the recording's original server."}
+   requireLocal(before.serverUrl.isEmpty() || root.isEmpty() || before.serverUrl==root,LocalOperationProblem.RecordingOriginalServerRequired) {"Reconnect to the recording's original server."}
    val target=noteId?:before.noteId
-   if(target!=null) {val current=dao.get(target);require(current!=null && dao.tombstone(target)==null && !current.trashed) {"This note is no longer available."};require(targetBefore!=null && current.body==targetBefore.body && current.serverRev==targetBefore.serverRev) {"The note changed while the recording was being saved."};if(before.noteId==target && before.baseBodyHash!=null) require(current.note().bodyHash==before.baseBodyHash || current.body==body || editorWrite?.lease?.committedBody==current.body) {"The note changed during recording. Keep the current text before attaching the clip."}}
+   if(target!=null) {val current=dao.get(target);requireLocal(current!=null && dao.tombstone(target)==null && !current.trashed,LocalOperationProblem.NoteUnavailable) {"This note is no longer available."};requireLocal(targetBefore!=null && current.body==targetBefore.body && current.serverRev==targetBefore.serverRev,LocalOperationProblem.NoteChangedWhileSaving) {"The note changed while the recording was being saved."};if(before.noteId==target && before.baseBodyHash!=null) requireLocal(current.note().bodyHash==before.baseBodyHash || current.body==body || editorWrite?.lease?.committedBody==current.body,LocalOperationProblem.NoteChangedDuringRecording) {"The note changed during recording. Keep the current text before attaching the clip."}}
    val marker="[recording:$id]";val text=if(marker in body) body else if(body.isEmpty()) marker else body+"\n\n"+marker
    val saved=notes.save(text,target,sourceKind=sourceKind,sourceRef=if(target==null && sourceKind=="android" && before.capturedText) "dictation" else null)
    if(target==null && privateNote) notes.setFlags(saved,privateNote=true)
@@ -101,7 +102,7 @@ class RecordingRepository(private val notes:NotesRepository,directory:File) {
  suspend fun discard(id:String)=withContext(Dispatchers.IO) {
   val files=notes.db.withTransaction {
    val row=dao.recording(id)?:return@withTransaction emptyList<File>()
-   require(row.state!="retained") {"Remove the note attachment instead of discarding a retained recording."}
+   requireLocal(row.state!="retained",LocalOperationProblem.RecordingAttachmentMustBeRemoved) {"Remove the note attachment instead of discarding a retained recording."}
    dao.putRecording(row.copy(state="discarded"))
    listOf(owned(row.localPath),owned(row.finalPath)).filter {dao.attachmentReferences(it.absolutePath)==0}
   }

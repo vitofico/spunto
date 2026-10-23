@@ -57,6 +57,6 @@ class LabelsSheetTest {
   compose.onNode(hasScrollAction()).performScrollToNode(hasText("Open tasks"));compose.onNodeWithText("Open tasks").assertIsSelected()
   compose.runOnIdle {cached.value=manifest(false)}
   compose.onNodeWithText("Open tasks").assertDoesNotExist()
-  compose.runOnIdle {assertEquals("View unavailable",navigationTitle("view:tasks:open",labels,cached.value));assertTrue(routes.isEmpty())}
+  compose.runOnIdle {assertEquals("View unavailable",navigationTitle(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext,"view:tasks:open",labels,cached.value));assertTrue(routes.isEmpty())}
  }
 }

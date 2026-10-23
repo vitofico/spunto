@@ -1,3 +1,5 @@
+import { localizeCatalog } from "../lib/localizePlugins";
+import { t, useLanguage } from "../lib/i18n";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -14,7 +16,12 @@ import {
   usePluginActions,
 } from "./SettingsPlugins";
 export function Data() {
-  const catalog = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
+  useLanguage();
+  const catalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    select: (data) => localizeCatalog(data),
+  });
   const status = useQuery({ queryKey: ["status"], queryFn: api.status });
   const client = useQueryClient();
   const toast = useToast();
@@ -37,7 +44,7 @@ export function Data() {
         method: "POST",
       }),
     onSuccess: () => {
-      toast.show({ message: "Trash emptied" });
+      toast.show({ message: t("settingsdata.trash_emptied") });
       for (const key of ["notes", "status", "labels"])
         void client.invalidateQueries({ queryKey: [key] });
     },
@@ -53,41 +60,48 @@ export function Data() {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : "Export failed.");
+      setExportError(
+        error instanceof Error
+          ? error.message
+          : t("settingsdata.export_failed"),
+      );
     } finally {
       setExporting(false);
     }
   };
   return (
     <>
-      <h1>Data</h1>
-      <h2>Export</h2>
+      <h1>{t("settings.data")}</h1>
+      <h2>{t("settingsdata.export")}</h2>
       <p className="muted">
-        All your notes as Markdown, their metadata and attachments in one ZIP.
+        {t("settingsdata.all_your_notes_as_markdown_their_metadata_and")}
       </p>
       <button
         className="primary"
         disabled={exporting}
         onClick={() => void exportData()}
       >
-        {exporting ? "Preparing export…" : "Export notes"}
+        {exporting
+          ? t("settingsdata.preparing_export")
+          : t("settingsdata.export_notes")}
       </button>
       {exportError && (
         <p role="alert" className="error">
           {exportError}
         </p>
       )}
-      <h2>Import Markdown</h2>
+      <h2>{t("markdownimport.import_markdown")}</h2>
       {importer?.state === "enabled" ? (
         <MarkdownImport />
       ) : importer && importer.state !== "removed" ? (
         <>
           <p className="muted">
-            Import a Markdown ZIP, such as a Spunto export or an Obsidian vault.
-            The {importer.name} plugin reads it; turn it on to choose a file.
+            {t("settingsdata.import_explanation", { plugin: importer.name })}
           </p>
           {importer.pinned_by_env ? (
-            <p className={styles.facts}>Set in the environment · Off</p>
+            <p className={styles.facts}>
+              {t("settingsdata.set_in_the_environment_off")}
+            </p>
           ) : (
             <button
               ref={enabler}
@@ -97,22 +111,19 @@ export function Data() {
                 setEnable(true);
               }}
             >
-              Turn on {importer.name}…
+              {t("settingsdata.turn_on_plugin", { plugin: importer.name })}
             </button>
           )}
         </>
       ) : (
         <p className="muted">
-          Markdown import is not available on this server.
+          {t("settingsdata.markdown_import_is_not_available_on_this_server")}
         </p>
       )}
-      <h2>Trash</h2>
-      <p className="muted">
-        {plural(count, "note")} in Trash. Notes there are deleted for good after
-        30 days.
-      </p>
+      <h2>{t("app.trash")}</h2>
+      <p className="muted">{t("settingsdata.trash_count", { count })}</p>
       <div className={styles.row}>
-        <Link href="/trash">Open Trash</Link>
+        <Link href="/trash">{t("settingsdata.open_trash")}</Link>
         {count > 0 && (
           <button
             className="danger"
@@ -121,16 +132,23 @@ export function Data() {
               if (
                 await confirm({
                   opener: e.currentTarget,
-                  title: `Delete ${plural(count, "note")} for good?`,
-                  body: `This permanently deletes ${plural(count, "trashed note")} and their attachments. This cannot be undone.`,
-                  confirmLabel: `Delete ${plural(count, "note")}`,
+                  title: t("settingsdata.delete_value1_for_good", {
+                    value1: plural(count, "note"),
+                  }),
+                  body: t(
+                    "settingsdata.this_permanently_deletes_value1_and_their_attachments_this",
+                    { value1: plural(count, "trashed_note") },
+                  ),
+                  confirmLabel: t("settingsdata.delete_value1", {
+                    value1: plural(count, "note"),
+                  }),
                   danger: true,
                 })
               )
                 deletion.mutate();
             }}
           >
-            Empty trash…
+            {t("settingsdata.empty_trash")}
           </button>
         )}
       </div>

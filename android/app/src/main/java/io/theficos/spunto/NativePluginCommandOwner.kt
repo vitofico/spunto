@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.res.Resources
+
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.JsonObject

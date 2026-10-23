@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_problem_note_unavailable">Cette note n’est plus disponible.</string>
+    <string name="local_problem_editor_changed">Le texte a changé. Enregistrez le texte actuel avec cet enregistrement.</string>
+    <string name="local_problem_editor_changed_while_saving">Le texte a changé pendant l’enregistrement de cet audio. Réessayez.</string>
+    <string name="local_problem_original_unavailable">La note d’origine n’est plus sur ce téléphone.</string>
+    <string name="local_problem_note_too_large">La note est trop volumineuse.</string>
+    <string name="local_problem_image_too_large">Choisissez une image de 5 Mo maximum.</string>
+    <string name="local_problem_recording_journal_required">Enregistrez l’audio depuis son brouillon d’origine avant de le réutiliser.</string>
+    <string name="local_problem_recording_path_invalid">Le chemin est hors du stockage des enregistrements de ce téléphone.</string>
+    <string name="local_problem_voice_memos_disabled">Activez les mémos vocaux avant d’enregistrer.</string>
+    <string name="local_problem_recording_unavailable">L’enregistrement est indisponible.</string>
+    <string name="local_problem_recording_already_handled">L’enregistrement a déjà été supprimé ou conservé.</string>
+    <string name="local_problem_recording_state_changed">L’état de l’enregistrement a changé.</string>
+    <string name="local_problem_recording_not_ready">Terminez ou récupérez l’enregistrement avant de sauvegarder.</string>
+    <string name="local_problem_recording_original_note_required">Conservez cet enregistrement avec sa note d’origine.</string>
+    <string name="local_problem_recording_current_editor_required">Utilisez l’éditeur actuel de cet enregistrement.</string>
+    <string name="local_problem_recording_changed">Les données de l’enregistrement ont changé.</string>
+    <string name="local_problem_recording_original_server_required">Reconnectez-vous au serveur d’origine de l’enregistrement.</string>
+    <string name="local_problem_note_changed_while_saving">La note a changé pendant la sauvegarde de l’enregistrement.</string>
+    <string name="local_problem_note_changed_during_recording">La note a changé pendant l’enregistrement. Conservez le texte actuel avant de joindre l’extrait.</string>
+    <string name="local_problem_recording_attachment_must_be_removed">Retirez la pièce jointe de la note pour supprimer un enregistrement déjà conservé.</string>
+    <string name="local_problem_recording_invalid">Cet enregistrement est incomplet, endommagé ou non pris en charge. Votre extrait est conservé.</string>
+    <string name="local_problem_recording_limit_or_unavailable">L’enregistrement dépasse la limite d’envoi ou est indisponible.</string>
+    <string name="local_problem_attachment_limit_or_unavailable">La pièce jointe dépasse la limite d’envoi ou est indisponible.</string>
+    <string name="local_problem_recording_nothing_to_recover">L’enregistrement ne contient aucun audio complet à récupérer.</string>
+    <string name="local_problem_unencrypted_connection_consent_required">Confirmez la connexion non chiffrée avant de vous connecter.</string>
+    <string name="local_problem_server_root_required">Utilisez l’URL racine du serveur.</string>
+    <string name="local_problem_account_identity_incomplete">Le serveur a renvoyé une identité de compte incomplète.</string>
+    <string name="local_problem_attachment_id_invalid">Identifiant de pièce jointe invalide.</string>
+    <string name="local_problem_label_invalid">Les étiquettes nécessitent de 1 à 5 segments de lettres, chiffres, tirets bas ou tirets.</string>
+    <string name="local_problem_unfinished_code_block">Fermez le bloc de code inachevé avant d’ajouter des étiquettes.</string>
+    <string name="local_problem_suggestion_no_longer_pending">Cette suggestion n’est plus en attente. Vérifiez une proposition actuelle.</string>
+    <string name="local_problem_label_review_on_web_required">Vérifiez les changements d’étiquettes sur la page Vérifier du web après connexion pour examiner leur impact.</string>
+    <string name="local_problem_replacement_superseded">Ce remplacement est dépassé. Comparez la note actuelle avant d’appliquer une nouvelle proposition.</string>
+    <string name="local_problem_merge_superseded">Cette fusion est dépassée. Comparez à nouveau les deux notes actuelles avant de les fusionner.</string>
+</resources>

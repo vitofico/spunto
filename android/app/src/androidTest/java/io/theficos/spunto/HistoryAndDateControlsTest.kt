@@ -41,7 +41,7 @@ class HistoryAndDateControlsTest {
  @Test fun offlineCanonicalHistoryRestoresTheExactSelectedBodyAndGuardsAnActiveEditor() {
   val revision=RevisionEntity(id="server/e/2",noteId="synthetic-note",body="Synthetic historical words",at=2000,version=2,historySource="server",changeKind="restore")
   var editing by mutableStateOf(true);var restored:RevisionEntity?=null
-  compose.setContent { SpuntoTheme("carta","light") { LazyColumn { revisionHistoryItems(listOf(revision),false,HistoryRefreshResult.Cached("unavailable"),editing) {restored=it} } } }
+  compose.setContent { SpuntoTheme("carta","light") { LazyColumn { revisionHistoryItems(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext,listOf(revision),false,HistoryRefreshResult.Cached("unavailable"),editing) {restored=it} } } }
   compose.onNodeWithText("Showing history saved on this phone.").assertIsDisplayed();compose.onNodeWithText("Finish editing before restoring a version.").assertIsDisplayed()
   compose.onNode(hasClickAction() and hasText("Version 2",substring=true)).assertTextContains("Restored",substring=true).performClick()
   compose.onNodeWithText("Restore this version").assertIsNotEnabled();compose.runOnIdle {editing=false}

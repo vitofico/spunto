@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.res.Resources
+
 import io.theficos.spunto.data.sync.ApiException
 import io.theficos.spunto.data.sync.AuthConfig
 import kotlinx.coroutines.*
@@ -23,6 +25,7 @@ internal data class PluginPageState(val id:String?=null,val page:NativePluginPag
 
 /** Requests and their UI receipts belong to the exact owner credential and current attempt. */
 internal class NativePluginManagerActions(
+ private val resources:Resources,
  private val scope:CoroutineScope,
  private val owner:()->AuthConfig?,
  private val online:()->Boolean,
@@ -87,19 +90,19 @@ internal class NativePluginManagerActions(
     }
     val row=api.toggle(id,on,if(on) permissions else emptyList());ensureActive()
     if(!owns(config,attempt)) return@launch
-    require(row.pluginText("id")==id && row.pluginText("switch") in setOf("on","off") && row.pluginLong("plugins_rev")!=null) {"The server did not acknowledge this switch."}
+    require(row.pluginText("id")==id && row.pluginText("switch") in setOf("on","off") && row.pluginLong("plugins_rev")!=null) {resources.getString(R.string.settings_the_server_did_not_acknowledge_this_switch)}
     if(epoch()!=expectedEpoch || !owns(config,attempt)) return@launch
-    if(!acknowledge(config,expectedEpoch,row)) {if(owns(config,attempt)) onComplete(PluginToggleResult.Failed("Plugin facts changed. Refresh before trying again."));return@launch}
+    if(!acknowledge(config,expectedEpoch,row)) {if(owns(config,attempt)) onComplete(PluginToggleResult.Failed(resources.getString(R.string.settings_plugin_facts_changed_refresh_before_trying_again)));return@launch}
     if(!owns(config,attempt) || epoch()!=expectedEpoch) return@launch
     if(!on && row.pluginText("switch")=="off" && NativePluginFacts(row).canEnable) {
      val receipt=PluginUndo(id,config.serverUrl.trimEnd('/'),permissions,plugin.granted.orEmpty().toSet(),now()+7000)
      undo.value=receipt;expiry=scope.launch {delay(7000);if(undo.value===receipt) undo.value=null}
     }
-    if(row.pluginText("switch")!=(if(on) "on" else "off")) report("The plugin changed on the server. Its current switch is shown.")
+    if(row.pluginText("switch")!=(if(on) "on" else "off")) report(resources.getString(R.string.settings_the_plugin_changed_on_the_server_its))
     var refreshFailed=false
     try {val snapshot=snapshot(api,expectedEpoch);ensureActive();if(owns(config,attempt) && epoch()==expectedEpoch) publish(config,snapshot)}
     catch(cancelled:CancellationException) {throw cancelled}
-    catch(error:Exception) {refreshFailed=true;if(owns(config,attempt)) report("Switch saved. Refresh unavailable.")}
+    catch(error:Exception) {refreshFailed=true;if(owns(config,attempt)) report(resources.getString(R.string.settings_switch_saved_refresh_unavailable))}
     if(owns(config,attempt) && epoch()==expectedEpoch) onComplete(PluginToggleResult.Applied(row,refreshFailed))
    } catch(cancelled:CancellationException) {throw cancelled}
    catch(error:Exception) {
@@ -141,5 +144,5 @@ internal class NativePluginManagerActions(
   }
  }
  fun closePage() {pageGeneration++;pageJob?.cancel();pageJob=null;page.value=PluginPageState()}
- private fun errorCode(error:Exception)=if(error is ApiException) error.detail.ifBlank {"The server couldn't update plugins. Try again."} else "Couldn't reach your server. Cached plugin facts stay on this phone."
+ private fun errorCode(error:Exception)=if(error is ApiException) error.detail.ifBlank {resources.getString(R.string.settings_the_server_couldn_t_update_plugins_try)} else resources.getString(R.string.settings_couldn_t_reach_your_server_cached_plugin)
 }

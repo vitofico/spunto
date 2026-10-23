@@ -227,6 +227,14 @@ class NotesRepositoryTest {
   assertTrue(repo.history(id).first().any {it.body=="B" && it.changeKind=="restore"})
  }
 
+ @Test fun oversizedNoteReturnsTypedGuidanceBeforeAnyWrite()=runBlocking {
+  val before=repo.dao.all();val pending=repo.dao.outbox()
+  val failure=runCatching {repo.create("x".repeat(1_000_001))}.exceptionOrNull()
+  assertTrue(failure is LocalOperationException)
+  assertEquals(LocalOperationProblem.NoteTooLarge,(failure as LocalOperationException).problem)
+  assertEquals(before,repo.dao.all());assertEquals(pending,repo.dao.outbox())
+ }
+
  private suspend fun suggestion(id:String,noteId:String?,action:String,payload:JsonObject,version:JsonElement?=null) {
   val data=buildJsonObject {put("action",action);put("payload",payload);put("status","pending");version?.let {put("note_version",it)}}
   repo.dao.putOutput(PluginOutputEntity("suggestion",id,noteId,data.toString()))
@@ -242,7 +250,7 @@ class NotesRepositoryTest {
    suggestion(proposal,id,"replace_body",buildJsonObject {put("body","Model replacement")},version)
    val notes=repo.dao.all();val outbox=repo.dao.outbox();val history=repo.dao.history(id).first()
    val failure=runCatching {repo.decideSuggestion(proposal,"accept")}.exceptionOrNull()
-   assertTrue(mode,failure is IllegalArgumentException);assertTrue(failure!!.message.orEmpty().contains("superseded"))
+   assertTrue(mode,failure is LocalOperationException);assertEquals(LocalOperationProblem.ReplacementSuperseded,(failure as LocalOperationException).problem);assertTrue(failure.message.orEmpty().contains("superseded"))
    assertEquals(mode,notes,repo.dao.all());assertEquals(mode,outbox,repo.dao.outbox());assertEquals(mode,history,repo.dao.history(id).first())
    assertEquals("superseded",suggestionStatus(proposal));if(mode=="missing_note") assertNull(repo.dao.get(id))
   }
@@ -263,7 +271,7 @@ class NotesRepositoryTest {
    val proposal="label-"+index;suggestion(proposal,null,"label_change",payload)
    val notes=repo.dao.all();val outbox=repo.dao.outbox()
    val failure=runCatching {repo.decideSuggestion(proposal,"accept")}.exceptionOrNull()
-   assertTrue(failure is IllegalArgumentException);assertTrue(failure!!.message.orEmpty().contains("web Review"))
+   assertTrue(failure is LocalOperationException);assertEquals(LocalOperationProblem.LabelReviewOnWebRequired,(failure as LocalOperationException).problem);assertTrue(failure.message.orEmpty().contains("web Review"))
    assertEquals(notes,repo.dao.all());assertEquals(outbox,repo.dao.outbox());assertEquals("pending",suggestionStatus(proposal))
    repo.decideSuggestion(proposal,"dismiss");assertEquals("dismissed",suggestionStatus(proposal))
   }
@@ -324,7 +332,7 @@ class NotesRepositoryTest {
    val notes=repo.dao.all();val history=repo.dao.history(id).first();val outbox=repo.dao.outbox();val cached=repo.dao.output("suggestion",proposal)
    val failure=runCatching {tracked.decideSuggestion(proposal,"accept")}.exceptionOrNull()
    assertEquals(0,changes)
-   assertTrue(status,failure is IllegalArgumentException);assertTrue(failure!!.message.orEmpty().contains("no longer pending"))
+   assertTrue(status,failure is LocalOperationException);assertEquals(LocalOperationProblem.SuggestionNoLongerPending,(failure as LocalOperationException).problem);assertTrue(failure.message.orEmpty().contains("no longer pending"))
    assertEquals(notes,repo.dao.all());assertEquals(history,repo.dao.history(id).first());assertEquals(outbox,repo.dao.outbox());assertEquals(cached,repo.dao.output("suggestion",proposal))
   }
  }

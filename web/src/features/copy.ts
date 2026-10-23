@@ -1,3 +1,4 @@
+import { t } from "../lib/i18n";
 /** Copy only on an owner action; the temporary field also works on plain-HTTP LANs. */
 export async function copyText(value: string): Promise<boolean> {
   try {
@@ -12,7 +13,7 @@ export async function copyText(value: string): Promise<boolean> {
   const field = document.createElement("textarea");
   field.className = "copy-helper";
   field.value = value;
-  field.setAttribute("aria-label", "Text to copy");
+  field.setAttribute("aria-label", t("copy.text_to_copy"));
   document.body.append(field);
   field.select();
   try {

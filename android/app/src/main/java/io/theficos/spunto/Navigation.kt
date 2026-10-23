@@ -1,5 +1,7 @@
 package io.theficos.spunto
 
+import android.content.Context
+
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.*
@@ -36,8 +38,8 @@ import androidx.compose.ui.Alignment
 val LocalNavigator=staticCompositionLocalOf<Navigator> { error("Navigator is provided by SpuntoApp.") }
 
 /** Top bar title of a page; null for pages that show none (a note, search, a plugin page, which heads itself) and for the filter routes, whose title is the labels switcher. */
-fun routeTitle(route:String):String?=when(route) {
- "settings" -> "Settings"; "appearance" -> "Appearance"; "plugins" -> "Plugins"; "ask" -> "Ask your notes"
+fun routeTitle(context:Context,route:String):String?=when(route) {
+ "settings" -> context.getString(R.string.core_settings); "appearance" -> context.getString(R.string.core_appearance); "plugins" -> context.getString(R.string.core_plugins); "ask" -> context.getString(R.string.core_ask_notes)
  else -> null
 }
 

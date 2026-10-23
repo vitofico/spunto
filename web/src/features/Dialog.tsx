@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import styles from "./Feature.module.css";
 export function Dialog({
@@ -14,6 +15,7 @@ export function Dialog({
   /** The control that opened it, for a click: WebKit doesn't focus a clicked button. */
   opener?: HTMLElement | null;
 }) {
+  useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -50,7 +52,9 @@ export function Dialog({
     >
       <h2 id={titleId}>{title}</h2>
       {children}
-      <footer>{footer ?? <button onClick={onClose}>Close</button>}</footer>
+      <footer>
+        {footer ?? <button onClick={onClose}>{t("app.close")}</button>}
+      </footer>
     </dialog>
   );
 }

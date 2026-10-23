@@ -1,6 +1,8 @@
-/** "1 record", "2 records"; pass the plural when it is not just "s". */
-export function plural(count: number, one: string, many = `${one}s`) {
-  return `${count.toLocaleString()} ${count === 1 ? one : many}`;
+import { willSentence as englishWillSentence } from "./willSentence";
+import { getLanguage, hasTranslation, t } from "../lib/i18n";
+/** A localized count; the catalog supplies every grammatical form. */
+export function plural(count: number, key: string) {
+  return t(`count.${key}`, { count });
 }
 
 /** Sizes in the unit people read: "24 bytes", "3.4 KB", "12 MB". */
@@ -12,12 +14,12 @@ export function formatBytes(bytes: number) {
       : bytes < 1_000_000_000
         ? [bytes / 1_000_000, "MB"]
         : [bytes / 1_000_000_000, "GB"];
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: value < 10 ? 1 : 0 })} ${unit}`;
+  return `${value.toLocaleString(getLanguage(), { maximumFractionDigits: value < 10 ? 1 : 0 })} ${unit}`;
 }
 
 /** A date and time in words: "21 Oct 2026, 14:32". */
 export function formatWhen(value: string | number) {
-  return new Date(value).toLocaleString(undefined, {
+  return new Date(value).toLocaleString(getLanguage(), {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -34,10 +36,17 @@ const words: Record<string, string> = {
 
 /** A setting key as a label when the schema gives no title: "min_notes" → "Minimum notes". */
 export function humanize(key: string) {
+  if (hasTranslation(`choice.${key}`)) return t(`choice.${key}`);
   const text = key
     .split(/[_\-\s]+/)
     .filter(Boolean)
-    .map((word) => words[word.toLowerCase()] ?? word.toLowerCase())
+    .map((word) =>
+      word === "min"
+        ? t("format.minimum")
+        : word === "max"
+          ? t("format.maximum")
+          : (words[word.toLowerCase()] ?? word.toLowerCase()),
+    )
     .join(" ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -51,7 +60,7 @@ export function choiceLabel(choice: unknown) {
   if (/^[a-z]{2}$/.test(choice)) {
     try {
       return (
-        new Intl.DisplayNames(undefined, { type: "language" }).of(choice) ??
+        new Intl.DisplayNames(getLanguage(), { type: "language" }).of(choice) ??
         choice.toUpperCase()
       );
     } catch {
@@ -63,16 +72,7 @@ export function choiceLabel(choice: unknown) {
 
 /** A permission sentence read after "It will", as on the phone: "Reads attachments" → "Read attachments", "Never reads" → "Never read". */
 export function willSentence(sentence: string): string {
-  if (sentence.startsWith("Never "))
-    return "Never " + willSentence(sentence.slice(6));
-  const verb = sentence.split(" ", 1)[0];
-  const base =
-    verb.length < 4 || !verb.endsWith("s") || verb.endsWith("ss")
-      ? verb
-      : /(ch|sh|x|ss)es$/.test(verb)
-        ? verb.slice(0, -2)
-        : verb.slice(0, -1);
-  return base + sentence.slice(verb.length);
+  return getLanguage() === "en" ? englishWillSentence(sentence) : sentence;
 }
 
 /** "Chrome on macOS" from a browser's user agent; anything unrecognised stays as it is. */
@@ -101,6 +101,7 @@ export function browserName(agent: string) {
             : /Linux/.test(agent)
               ? "Linux"
               : null;
-  if (browser && system) return `${browser} on ${system}`;
+  if (browser && system)
+    return t("format.browser_on_system", { browser, system });
   return browser ?? system ?? agent;
 }

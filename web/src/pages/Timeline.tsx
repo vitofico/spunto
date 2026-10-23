@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import {
   useEffect,
   useId,
@@ -33,20 +34,20 @@ import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
 import { groupedNotes, NoteCard } from "../components/core/NoteCard";
 
-const notesCount = (count: number) =>
-  `${count} ${count === 1 ? "note" : "notes"}`;
+const notesCount = (count: number) => t("count.note", { count });
 /** Mirrors the server's label rule, so the dialog can say what is wrong before sending. */
 function labelProblem(path: string, current: string) {
   const segments = path.split("/");
-  if (!path) return "Type a label name.";
-  if (fold(path) === fold(current)) return "That is already this label’s name.";
+  if (!path) return t("timeline.type_a_label_name");
+  if (fold(path) === fold(current))
+    return t("timeline.that_is_already_this_label_s_name");
   if (
     path.length > 128 ||
     segments.length > 5 ||
     /^\d+$/.test(segments[0]) ||
     segments.some((segment) => !/^[\p{L}\p{N}_-]+$/u.test(segment))
   )
-    return "Use letters, digits, - and _, with / between up to 5 levels.";
+    return t("timeline.use_letters_digits_and_with_between_up_to");
   return null;
 }
 
@@ -57,6 +58,7 @@ function LabelMenu({
   disabled: boolean;
   onChoose: (action: "rename" | "merge" | "remove") => void;
 }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -72,9 +74,9 @@ function LabelMenu({
     return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
   const items: ["rename" | "merge" | "remove", string][] = [
-    ["rename", "Rename"],
-    ["merge", "Merge into…"],
-    ["remove", "Remove label"],
+    ["rename", t("timeline.rename")],
+    ["merge", t("timeline.merge_into")],
+    ["remove", t("timeline.remove_label")],
   ];
   function choose(action: "rename" | "merge" | "remove") {
     setOpen(false);
@@ -87,7 +89,7 @@ function LabelMenu({
       <button
         ref={trigger}
         className="button icon-button"
-        aria-label="Label actions"
+        aria-label={t("timeline.label_actions")}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
@@ -101,7 +103,7 @@ function LabelMenu({
           ref={menu}
           id={id}
           role="menu"
-          aria-label="Label actions"
+          aria-label={t("timeline.label_actions")}
           className="menu"
           onKeyDown={(event) => {
             const entries = [
@@ -149,6 +151,7 @@ function LabelDialog({
   merge: boolean;
   onClose: () => void;
 }) {
+  useLanguage();
   const [, navigate] = useLocation();
   const toast = useToast();
   const labels = useLabels();
@@ -185,12 +188,14 @@ function LabelDialog({
     onClose();
     navigate("/l/" + path, { replace: true, state: history.state });
     toast.show({
-      message: `${exists ? "Merged" : "Renamed"} in ${notesCount(result.rewritten)}`,
+      message: t(exists ? "timeline.merged_count" : "timeline.renamed_count", {
+        count: result.rewritten,
+      }),
       // Renaming back is exact only when the new name was unused before.
       ...(exists
         ? {}
         : {
-            actionLabel: "Undo",
+            actionLabel: t("settingsplugins.undo"),
             onAction: () =>
               void api.renameLabel(path, label).then(() => {
                 void queryClient.invalidateQueries();
@@ -208,11 +213,15 @@ function LabelDialog({
     rename.error?.message;
   return (
     <Dialog
-      title={merge ? `Merge #${label} into…` : `Rename #${label}`}
+      title={
+        merge
+          ? t("timeline.merge_value1_into", { value1: label })
+          : t("timeline.rename_value1", { value1: label })
+      }
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose}>Cancel</button>
+          <button onClick={onClose}>{t("profilepanel.cancel")}</button>
           <button
             className="primary"
             type="submit"
@@ -220,10 +229,10 @@ function LabelDialog({
             disabled={rename.isPending || (impact.isPending && !problem)}
           >
             {exists && !problem
-              ? `Merge into #${path}`
+              ? t("timeline.merge_into_value1", { value1: path })
               : merge
-                ? "Merge"
-                : "Rename"}
+                ? t("timeline.merge")
+                : t("timeline.rename")}
           </button>
         </>
       }
@@ -237,7 +246,7 @@ function LabelDialog({
         }}
       >
         <label className="stack">
-          {merge ? "Existing label" : "New name"}
+          {merge ? t("timeline.existing_label") : t("timeline.new_name")}
           <input
             className="field"
             value={target}
@@ -265,16 +274,24 @@ function LabelDialog({
           {error ||
             (problem
               ? merge
-                ? "Choose the label these notes should move to."
-                : "Rename changes the label in every note that has it."
+                ? t("timeline.choose_the_label_these_notes_should_move_to")
+                : t("timeline.rename_changes_the_label_in_every_note_that")
               : count === undefined
-                ? "Counting notes…"
+                ? t("timeline.counting_notes")
                 : !count
-                  ? `No notes use #${label} yet.`
+                  ? t("timeline.no_notes_use_value1_yet", { value1: label })
                   : exists
-                    ? `#${path} already exists. Merge ${notesCount(count)} into it?`
-                    : `Renames #${label} in ${notesCount(count)}.` +
-                      (children ? " Its child labels are renamed too." : ""))}
+                    ? t("timeline.value1_already_exists_merge_value2_into_it", {
+                        value1: path,
+                        value2: notesCount(count),
+                      })
+                    : t("timeline.renames_value1_in_value2", {
+                        value1: label,
+                        value2: notesCount(count),
+                      }) +
+                      (children
+                        ? t("timeline.its_child_labels_are_renamed_too")
+                        : ""))}
         </p>
       </form>
     </Dialog>
@@ -290,6 +307,7 @@ function Empty({
   title: string;
   children?: ReactNode;
 }) {
+  useLanguage();
   return (
     <div className="empty">
       <Heading>{title}</Heading>
@@ -307,6 +325,7 @@ export default function Timeline({
   label?: string;
   focusComposer?: boolean;
 }) {
+  const language = useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
   const [, navigate] = useLocation();
   const toast = useToast();
@@ -336,16 +355,16 @@ export default function Timeline({
     [notes.data],
   );
   const today = new Date().toDateString();
-  const groups = useMemo(() => groupedNotes(all), [all, today]);
+  const groups = useMemo(() => groupedNotes(all), [all, today, language]);
   const count =
     labels.data?.labels.find((l) => fold(l.path) === fold(label ?? ""))
       ?.count ?? all.length;
   const title = label
     ? "#" + label
     : view === "archive"
-      ? "Archive"
+      ? t("app.archive")
       : view === "trash"
-        ? "Trash"
+        ? t("app.trash")
         : pluginView?.title;
   useDocumentTitle(title);
   const EmptyHeading = label || view !== "timeline" ? "h2" : "h1";
@@ -389,17 +408,25 @@ export default function Timeline({
       })
       .catch(() => null);
     const ok = await confirm({
-      title: `Remove #${label}?`,
+      title: t("timeline.remove_value1", { value1: label }),
       body:
-        (impact ? `Takes #${label} out of ${notesCount(impact.notes)}. ` : "") +
-        "The note text stays; child labels are removed too.",
-      confirmLabel: "Remove label",
+        (impact
+          ? t("timeline.takes_value1_out_of_value2", {
+              value1: label,
+              value2: notesCount(impact.notes),
+            })
+          : "") + t("timeline.the_note_text_stays_child_labels_are_removed"),
+      confirmLabel: t("timeline.remove_label"),
       danger: true,
     });
     if (!ok) return;
     const result = await remove.mutateAsync(label);
     navigate("/");
-    toast.show({ message: `Removed from ${notesCount(result.rewritten)}` });
+    toast.show({
+      message: t("timeline.removed_from_value1", {
+        value1: notesCount(result.rewritten),
+      }),
+    });
   }
   async function emptyTrash() {
     setEmptyBusy(true);
@@ -415,9 +442,11 @@ export default function Timeline({
       setEmptyBusy(false);
       if (
         await confirm({
-          title: `Delete ${notesCount(total)} forever?`,
-          body: "This can’t be undone.",
-          confirmLabel: "Delete forever",
+          title: t("timeline.delete_value1_forever", {
+            value1: notesCount(total),
+          }),
+          body: t("timeline.this_can_t_be_undone"),
+          confirmLabel: t("note.delete_forever"),
           danger: true,
         })
       ) {
@@ -428,14 +457,14 @@ export default function Timeline({
       setEmptyError(
         error instanceof Error
           ? error.message
-          : "Could not empty trash. Try again.",
+          : t("timeline.could_not_empty_trash_try_again"),
       );
     } finally {
       setEmptyBusy(false);
     }
   }
   if (view.includes("/") && manifest.data && !pluginView)
-    return <NotFound title="This view isn’t here." />;
+    return <NotFound title={t("timeline.this_view_isn_t_here")} />;
   const suggested = plugins.some((plugin) => plugin.id === "label-suggestions");
   return (
     <>
@@ -475,7 +504,9 @@ export default function Timeline({
               <span className="chip">
                 <span>#{label}</span>
                 <button
-                  aria-label={`Don’t add #${label} to this note`}
+                  aria-label={t("timeline.don_t_add_value1_to_this_note", {
+                    value1: label,
+                  })}
                   onClick={() => {
                     setAddLabel(false);
                     document.getElementById("composer")?.focus();
@@ -484,7 +515,7 @@ export default function Timeline({
                   <Icon name="close" />
                 </button>
               </span>
-              <span className="muted">added when you save</span>
+              <span className="muted">{t("timeline.added_when_you_save")}</span>
             </p>
           )}
           <Editor
@@ -503,8 +534,7 @@ export default function Timeline({
           />
           {draft.storageFailed && (
             <p className="error" role="alert">
-              Device storage is full or unavailable; keep this tab open until
-              saved.
+              {t("note.device_storage_is_full_or_unavailable_keep_this")}
             </p>
           )}
           <ReviewLine />
@@ -512,18 +542,20 @@ export default function Timeline({
         </>
       )}
       {view === "trash" && all.length > 0 && (
-        <p className="muted">Notes here are deleted for good after 30 days.</p>
+        <p className="muted">
+          {t("timeline.notes_here_are_deleted_for_good_after_30")}
+        </p>
       )}
       {notes.isPending && (
         <p className="page-status" role="status">
-          Loading notes…
+          {t("timeline.loading_notes")}
         </p>
       )}
       {notes.isError && (
         <p className="error" role="alert">
           {notes.error.message}{" "}
           <button className="button" onClick={() => void notes.refetch()}>
-            Try again
+            {t("app.try_again")}
           </button>
         </p>
       )}
@@ -531,30 +563,41 @@ export default function Timeline({
         !all.length &&
         !notes.isError &&
         (label ? (
-          <Empty heading={EmptyHeading} title={`Nothing under #${label} yet.`}>
-            {canEdit && <p>Notes you write here get #{label} automatically.</p>}
+          <Empty
+            heading={EmptyHeading}
+            title={t("timeline.nothing_under_value1_yet", { value1: label })}
+          >
+            {canEdit && <p>{t("timeline.automatic_label", { label })}</p>}
           </Empty>
         ) : view === "archive" ? (
-          <Empty heading={EmptyHeading} title="Nothing archived.">
-            <p>Archive keeps a note out of the timeline without deleting it.</p>
+          <Empty heading={EmptyHeading} title={t("timeline.nothing_archived")}>
+            <p>{t("timeline.archive_keeps_a_note_out_of_the_timeline")}</p>
           </Empty>
         ) : view === "trash" ? (
-          <Empty heading={EmptyHeading} title="Trash is empty.">
-            <p>Deleted notes stay here for 30 days.</p>
+          <Empty heading={EmptyHeading} title={t("timeline.trash_is_empty")}>
+            <p>{t("timeline.deleted_notes_stay_here_for_30_days")}</p>
           </Empty>
         ) : view === "timeline" && canEdit ? (
-          <Empty heading={EmptyHeading} title="A quiet place for loose ideas.">
+          <Empty
+            heading={EmptyHeading}
+            title={t("timeline.a_quiet_place_for_loose_ideas")}
+          >
             <p>
-              Write anything above and press {formatShortcut("mod+enter")}. Add
-              #labels anywhere
-              {suggested ? ", or let them be suggested later" : ""}. Connect
-              Claude Code or Codex in Settings → Agents.
+              {t(
+                suggested
+                  ? "timeline.empty_help_suggestions"
+                  : "timeline.empty_help",
+                { shortcut: formatShortcut("mod+enter") },
+              )}
             </p>
           </Empty>
         ) : (
-          <Empty heading={EmptyHeading} title="No notes here yet." />
+          <Empty
+            heading={EmptyHeading}
+            title={t("timeline.no_notes_here_yet")}
+          />
         ))}
-      <section aria-label="Notes" aria-busy={notes.isPending}>
+      <section aria-label={t("review.notes")} aria-busy={notes.isPending}>
         {groups.map((group) => (
           <section key={group.title} aria-label={group.title}>
             <h2 className="overline day">{group.title}</h2>
@@ -571,7 +614,9 @@ export default function Timeline({
           disabled={notes.isFetchingNextPage}
           onClick={() => void notes.fetchNextPage()}
         >
-          {notes.isFetchingNextPage ? "Loading more notes…" : "Load more notes"}
+          {notes.isFetchingNextPage
+            ? t("timeline.loading_more_notes")
+            : t("timeline.load_more_notes")}
         </button>
       )}
       {view === "trash" && canEdit && all.length > 0 && (
@@ -580,7 +625,7 @@ export default function Timeline({
           disabled={emptyBusy}
           onClick={() => void emptyTrash()}
         >
-          {emptyBusy ? "Counting notes…" : "Empty trash"}
+          {emptyBusy ? t("timeline.counting_notes") : t("timeline.empty_trash")}
         </button>
       )}
       {emptyError && (

@@ -7,6 +7,8 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application=android.app.Application::class,sdk=[28])
 class NativePluginManagerActionsTest {
  private class Harness {
   val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
@@ -48,7 +50,7 @@ class NativePluginManagerActionsTest {
     return if(omitRevision) row else JsonObject(row+("plugins_rev" to JsonPrimitive(revision)))
    }
   }
-  val actions=NativePluginManagerActions(scope,{config},{online},{epoch},{beforeBackend();backend},{nativePluginCatalog(catalog,manifest)},
+  val actions=NativePluginManagerActions(settingsTestResources(),scope,{config},{online},{epoch},{beforeBackend();backend},{nativePluginCatalog(catalog,manifest)},
    {_,snapshot -> fence.publish(ticket,snapshot.manifest,snapshot.catalog)?.let {catalog=it.catalog;manifest=it.manifest;publications++;true} ?: false},
    {_,_,row -> fence.acknowledge(ticket,row)?.let {catalog=it.catalog;manifest=it.manifest;true} ?: false},
    {_,_ -> NativePluginPage()},{_,_,_ -> cached++},{_,_ ->},{errors+=it},{clock})

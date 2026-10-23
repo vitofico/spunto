@@ -1,3 +1,4 @@
+import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { AppearancePanel } from "./AppearancePanel";
@@ -12,17 +13,17 @@ import { PluginManager, PluginPage } from "./SettingsPlugins";
 import { Devices, Tokens, Agents } from "./SettingsAccess";
 import { Data } from "./SettingsData";
 export { StatusPage } from "./SettingsStatus";
-const sections = [
-  ["account", "Account"],
-  ["spaces", "Spaces"],
-  ["profile", "Profile"],
-  ["appearance", "Appearance"],
-  ["plugins", "Plugins"],
-  ["devices", "Devices"],
-  ["tokens", "Access tokens"],
-  ["agents", "Agents"],
+const sections = () => [
+  ["account", t("accountpanel.account")],
+  ["spaces", t("collaboration.spaces")],
+  ["profile", t("profilepanel.profile")],
+  ["appearance", t("appearancepanel.appearance")],
+  ["plugins", t("settings.plugins")],
+  ["devices", t("settings.devices")],
+  ["tokens", t("settings.access_tokens")],
+  ["agents", t("settings.agents")],
   ["ai", "AI"],
-  ["data", "Data"],
+  ["data", t("settings.data")],
 ];
 export function SettingsPage({
   section = "appearance",
@@ -31,10 +32,11 @@ export function SettingsPage({
   section?: string;
   onShowGuide?: (trigger: HTMLElement) => void;
 }) {
+  useLanguage();
   const hosted = useHosted();
   const parts = section.replace(/^\//, "").split("/");
   const selected = parts[0] || "appearance";
-  const visible = sections.filter(
+  const visible = sections().filter(
     ([id]) => (id !== "account" && id !== "spaces") || hosted,
   );
   const title = visible.find(([id]) => id === selected)?.[1];
@@ -58,9 +60,13 @@ export function SettingsPage({
   return (
     <div className={styles.settings}>
       {!(selected === "plugins" && parts[1]) && (
-        <PageTitle page={`Settings · ${title ?? "Unavailable"}`} />
+        <PageTitle
+          page={t("settings.settings_value1", {
+            value1: title ?? t("settings.unavailable"),
+          })}
+        />
       )}
-      <nav ref={navRef} className={styles.nav} aria-label="Settings">
+      <nav ref={navRef} className={styles.nav} aria-label={t("app.settings")}>
         {visible.map(([id, title]) => (
           <Link
             href={`/settings/${id}`}
@@ -98,8 +104,8 @@ export function SettingsPage({
           <Data />
         ) : (
           <>
-            <h1>Settings</h1>
-            <p>That settings section is unavailable.</p>
+            <h1>{t("app.settings")}</h1>
+            <p>{t("settings.that_settings_section_is_unavailable")}</p>
           </>
         )}
       </section>

@@ -27,10 +27,10 @@ private fun JSONObject.colours(key:String)=optJSONObject(key)?.let { values -> t
 private fun JSONObject.themePalette()=validateThemePalette(ThemePalette(themeString("id"),themeString("accent").takeIf { it.isNotEmpty() },tokenVersion(),colours("light"),colours("dark")))
 private fun JSONObject.themeCard():ThemeCard {
  val rawAccents=opt("accents")
- if(rawAccents!=null && rawAccents !is JSONArray) return ThemeCard(themeString("id"),themeString("name"),status="failed",reason="Theme accents must be an array.")
+ if(rawAccents!=null && rawAccents !is JSONArray) return ThemeCard(themeString("id"),themeString("name"),status="failed",reason="Theme accents must be an array.",localProblem=ThemeLocalProblem.InvalidPack)
  val accents=mutableListOf<ThemeAccent>()
  if(rawAccents is JSONArray) for(index in 0 until rawAccents.length()) {
-  val accent=rawAccents.optJSONObject(index) ?: return ThemeCard(themeString("id"),themeString("name"),status="failed",reason="Theme accent requires an object.")
+  val accent=rawAccents.optJSONObject(index) ?: return ThemeCard(themeString("id"),themeString("name"),status="failed",reason="Theme accent requires an object.",localProblem=ThemeLocalProblem.InvalidPack)
   accents.add(ThemeAccent(accent.themeString("id"),accent.themeString("name"),accent.colours("light"),accent.colours("dark")))
  }
  return ThemeCard(themeString("id"),themeString("name"),themeString("status"),themeString("reason").takeIf { it.isNotBlank() },tokenVersion(),colours("light"),colours("dark"),accents)
@@ -39,12 +39,12 @@ private fun JSONObject.themeCard():ThemeCard {
 fun decodeThemeManifest(raw:String):ThemeManifest = runCatching {
  val document=JSONObject(raw)
  val rawCatalog=document.opt("theme_catalog")
- val cards=if(rawCatalog is JSONArray) (0 until rawCatalog.length()).map { index -> rawCatalog.optJSONObject(index)?.themeCard() ?: ThemeCard("invalid-theme-$index","Unavailable colour pack",status="failed",reason="Theme card requires an object.") } else if(document.has("theme_catalog")) listOf(ThemeCard("invalid-catalog","Unavailable colour catalog",status="failed",reason="Theme catalog must be an array.")) else emptyList()
+ val cards=if(rawCatalog is JSONArray) (0 until rawCatalog.length()).map { index -> rawCatalog.optJSONObject(index)?.themeCard() ?: ThemeCard("invalid-theme-$index","",status="failed",reason="Theme card requires an object.",localProblem=ThemeLocalProblem.InvalidPack) } else if(document.has("theme_catalog")) listOf(ThemeCard("invalid-catalog","",status="failed",reason="Theme catalog must be an array.",localProblem=ThemeLocalProblem.InvalidCatalog)) else emptyList()
  val catalog=validatedThemeCatalog(cards,document.has("theme_catalog"))
  val selected=document.optJSONObject("theme")?.themePalette()
  val instance=resolveThemeSelection(selected?.id ?: "carta",selected?.accent,catalog,selected)
  ThemeManifest(catalog,instance)
-}.getOrElse { ThemeManifest(validatedThemeCatalog(listOf(ThemeCard("invalid-catalog","Unavailable colour catalog",status="failed",reason="Theme catalog could not be read."))),resolveThemeSelection("carta",null)) }
+}.getOrElse { ThemeManifest(validatedThemeCatalog(listOf(ThemeCard("invalid-catalog","",status="failed",reason="Theme catalog could not be read.",localProblem=ThemeLocalProblem.InvalidCatalog))),resolveThemeSelection("carta",null)) }
 fun themeManifestFingerprint(raw:String):String = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 data class SelectedThemeSnapshot(val overriding:Boolean,val requestedTheme:String,val requestedAccent:String?,val fingerprint:String,val palette:ThemePalette)
 private fun paletteJson(palette:ThemePalette)=JSONObject().put("id",palette.id).put("accent",palette.accent ?: JSONObject.NULL).put("tokens",palette.tokens).put("light",JSONObject(palette.light)).put("dark",JSONObject(palette.dark))

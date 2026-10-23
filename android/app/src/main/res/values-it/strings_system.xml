@@ -1,9 +1,7 @@
 <resources>
  <string name="sys_lock_title">Spunto è bloccato</string>
- <string name="sys_lock_description">Sblocca con un dato biometrico sicuro o con PIN, sequenza o password del telefono.</string>
  <string name="sys_unlock">Sblocca Spunto</string>
  <string name="sys_screen_lock">Usa blocco schermo</string>
- <string name="sys_close">Chiudi</string>
  <string name="sys_not_recognized">Non riconosciuto. Riprova o usa il blocco schermo.</string>
  <string name="sys_unlock_incomplete">Sblocco non completato. Riprova o usa il blocco schermo.</string>
  <string name="sys_setting_cancelled">Autenticazione annullata. Impostazione del blocco invariata.</string>

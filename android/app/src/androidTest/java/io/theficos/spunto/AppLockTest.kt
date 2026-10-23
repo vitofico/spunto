@@ -204,7 +204,7 @@ class AppLockTest {
   configure(true)
   try {
    ActivityScenario.launch(MainActivity::class.java).use {scenario ->
-    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.text?.toString()=="Spunto is locked"}}
+    waitFor {nodes(instrumentation.uiAutomation.rootInActiveWindow).any {it.contentDescription?.toString()==app.getString(R.string.sys_lock_title)}}
     shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
     waitFor("Back to dismiss the secure lock dialog and close the activity") {scenario.state==Lifecycle.State.DESTROYED}
     assertFalse(app.container.appLock.state.value.unlocked)

@@ -1,9 +1,7 @@
 <resources>
  <string name="sys_lock_title">Spunto is locked</string>
- <string name="sys_lock_description">Unlock with a strong biometric or this phone\'s PIN, pattern or password.</string>
  <string name="sys_unlock">Unlock Spunto</string>
  <string name="sys_screen_lock">Use screen lock</string>
- <string name="sys_close">Close</string>
  <string name="sys_not_recognized">Not recognized. Try again or use your screen lock.</string>
  <string name="sys_unlock_incomplete">Unlock was not completed. Try again or use your screen lock.</string>
  <string name="sys_setting_cancelled">Authentication cancelled. App lock setting unchanged.</string>

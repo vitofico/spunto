@@ -68,13 +68,14 @@ fun storeSelectedThemeSnapshot(preferences:SharedPreferences,snapshot:SelectedTh
  val raw=JSONObject().put("overriding",snapshot.overriding).put("requestedTheme",snapshot.requestedTheme).put("requestedAccent",requestedAccent ?: JSONObject.NULL).put("fingerprint",snapshot.fingerprint).put("palette",paletteJson(palette)).toString()
  preferences.edit().putString("theme-snapshot",raw).apply()
 }
-/** Theme and accent change together; reset leaves every other device and note preference intact. */
-fun applyDeviceTheme(preferences:SharedPreferences,theme:String?,accent:String?,palette:ThemePalette,fingerprint:String) {
+/** Theme and accent change together; explicit palette choices can replace wallpaper colours atomically. */
+fun applyDeviceTheme(preferences:SharedPreferences,theme:String?,accent:String?,palette:ThemePalette,fingerprint:String,clearWallpaper:Boolean=false) {
  val validated=validateThemePalette(palette) ?: return
  val requestedAccent=if(theme==null) validated.accent else accent
  val raw=JSONObject().put("overriding",theme!=null).put("requestedTheme",theme ?: validated.id).put("requestedAccent",requestedAccent ?: JSONObject.NULL).put("fingerprint",fingerprint).put("palette",paletteJson(validated)).toString()
  preferences.edit().apply {
   if(theme==null) remove("theme").remove("theme-accent") else { putString("theme",theme);if(accent==null) remove("theme-accent") else putString("theme-accent",accent) }
+  if(clearWallpaper) putBoolean("wallpaper",false)
   putString("theme-snapshot",raw)
  }.apply()
 }

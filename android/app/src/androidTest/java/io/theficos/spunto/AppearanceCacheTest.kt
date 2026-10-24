@@ -64,6 +64,43 @@ class AppearanceCacheTest {
   assertFalse(preferences.contains("theme"));assertFalse(preferences.contains("theme-accent"));assertEquals(instance,readSelectedThemeSnapshot(preferences,fingerprint))
   preserved.forEach { (key,value) -> assertEquals(key,value,preferences.all[key]) }
  }
+ @Test fun explicitPaletteChoiceClearsWallpaperAtomicallyWithoutChangingOtherPreferencesOrNamespaces() {
+  val preferences=fixturePreferences();val other=fixturePreferences()
+  preferences.edit().putBoolean("wallpaper",true).putString("mode","dark").putBoolean("black",true).putString("reading-face","sans").putString("reading-size","L").putString("retained-draft-sentinel","Synthetic fixture draft").commit()
+  other.edit().putBoolean("wallpaper",true).putString("theme","salvia").putString("mode","light").commit()
+  val untouched=preferences.all.filterKeys {it !in setOf("theme","theme-accent","theme-snapshot","wallpaper")}
+  val otherBefore=other.all.toMap()
+  val raw=manifest(pack());val fingerprint=themeManifestFingerprint(raw)
+  val selected=resolveThemeSelection("fixture-pack","blue-accent",decodeThemeManifest(raw).catalog)
+  // Cache restoration has no explicit user palette intent and must preserve wallpaper colours.
+  applyDeviceTheme(preferences,"fixture-pack","blue-accent",selected,fingerprint)
+  assertTrue(preferences.getBoolean("wallpaper",false))
+  val observed=mutableListOf<Map<String,*>>()
+  val listener=SharedPreferences.OnSharedPreferenceChangeListener {source,_ -> observed.add(source.all.toMap())}
+  preferences.registerOnSharedPreferenceChangeListener(listener)
+  try {
+   InstrumentationRegistry.getInstrumentation().runOnMainSync {applyDeviceTheme(preferences,"corallo",null,resolveThemeSelection("corallo",null),fingerprint,clearWallpaper=true)}
+   InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+   assertFalse(preferences.getBoolean("wallpaper",true))
+   assertEquals("corallo",preferences.getString("theme",null));assertFalse(preferences.contains("theme-accent"))
+   assertEquals(resolveThemeSelection("corallo",null),readSelectedThemeSnapshot(preferences,fingerprint))
+   assertTrue("The preference listener must observe a receipt",observed.isNotEmpty())
+   observed.forEach {receipt ->
+    assertEquals(false,receipt["wallpaper"]);assertEquals("corallo",receipt["theme"]);assertFalse(receipt.containsKey("theme-accent"))
+    assertEquals("corallo",JSONObject(receipt["theme-snapshot"] as String).getJSONObject("palette").getString("id"))
+   }
+  } finally {preferences.unregisterOnSharedPreferenceChangeListener(listener)}
+  // The separate wallpaper control can be enabled again after an explicit palette selection.
+  preferences.edit().putBoolean("wallpaper",true).commit()
+  applyDeviceTheme(preferences,"fixture-pack","blue-accent",selected,fingerprint)
+  assertTrue(preferences.getBoolean("wallpaper",false));assertEquals(selected,readSelectedThemeSnapshot(preferences,fingerprint))
+  // Resetting to an instance palette is another explicit choice, including its selected accent.
+  applyDeviceTheme(preferences,null,null,selected,fingerprint,clearWallpaper=true)
+  assertFalse(preferences.getBoolean("wallpaper",true));assertFalse(preferences.contains("theme"));assertFalse(preferences.contains("theme-accent"))
+  assertEquals(selected,readSelectedThemeSnapshot(preferences,fingerprint))
+  assertEquals(untouched,preferences.all.filterKeys {it !in setOf("theme","theme-accent","theme-snapshot","wallpaper")})
+  assertEquals(otherBefore,other.all)
+ }
  @Test fun malformedRuntimeCatalogsAndTamperedSnapshotsNeverSupplyColours() {
   val documents=listOf("not json","{\"theme_catalog\":{}}","{\"theme_catalog\":[null,12,\"pack\"]}","{\"theme_catalog\":[{\"id\":\"fixture-pack\",\"name\":\"Fixture\",\"status\":\"available\",\"tokens\":\"1\"}]}")
   documents.forEach { raw -> val parsed=decodeThemeManifest(raw);assertEquals("carta",parsed.instance.id);assertTrue(parsed.catalog.cards.any { !it.available });assertEquals(parsed.catalog.cards.size,parsed.catalog.cards.map { it.id }.distinct().size) }

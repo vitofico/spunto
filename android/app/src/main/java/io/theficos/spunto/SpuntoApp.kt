@@ -117,9 +117,15 @@ import kotlinx.serialization.json.*
   key(nav.stateKey) { pages.SaveableStateProvider(nav.stateKey) {
   var createdFrom by rememberSaveable { mutableStateOf("") }
   var createdTo by rememberSaveable { mutableStateOf("") }
-  Scaffold(topBar={TopAppBar(title={
+  val brandedHeader=route=="timeline" && !WindowInsets.isImeVisible
+  Scaffold(topBar={Column {
+   if(brandedHeader) Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal))) {
+    SpuntoWave(Modifier.align(Alignment.CenterEnd).width(180.dp).height(68.dp),alpha=.45f)
+    SpuntoWordmark(Modifier.padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s12))
+   }
+   TopAppBar(title={
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
-   else routeTitle(context,route)?.let { Text(it,maxLines=1,overflow=TextOverflow.Ellipsis) }
+   else routeTitle(context,route)?.let { Text(it,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis) }
   },navigationIcon={if(!isLabelsNavigationRoute(route)) IconButton(onClick=::navigateBack) {Icon(painterResource(R.drawable.ic_arrow_back),contentDescription=context.getString(R.string.core_back),modifier=Modifier.size(24.dp))}},actions={
    if((isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={nav.open("ask")},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_ask_notes)}) {Text(context.getString(R.string.core_ask))}
    if(isLabelsNavigationRoute(route)) IconButton(onClick={nav.open("search")}) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(24.dp))}
@@ -130,7 +136,8 @@ import kotlinx.serialization.json.*
     Icon(painterResource(R.drawable.ic_settings),contentDescription=context.getString(R.string.core_settings),modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
    }
    topBar.actions?.invoke(this)
-  },windowInsets=WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal+WindowInsetsSides.Top))},bottomBar={bottomBar.content?.let { bar -> Surface(color=MaterialTheme.colorScheme.background) { Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),contentAlignment=Alignment.Center) { Box(Modifier.widthIn(max=640.dp)) { bar() } } } }},snackbarHost={SnackbarHost(snackbar)},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
+  },windowInsets=WindowInsets.safeDrawing.only(if(brandedHeader) WindowInsetsSides.Horizontal else WindowInsetsSides.Horizontal+WindowInsetsSides.Top))
+  }},bottomBar={bottomBar.content?.let { bar -> Surface(color=MaterialTheme.colorScheme.background) { Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),contentAlignment=Alignment.Center) { Box(Modifier.widthIn(max=640.dp)) { bar() } } } }},snackbarHost={SnackbarHost(snackbar)},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})

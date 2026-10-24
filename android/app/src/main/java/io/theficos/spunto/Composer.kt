@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
@@ -333,10 +334,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   if(restart) start() else session.clearNotice()
  }}
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-  Surface(shape=MaterialTheme.shapes.medium,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent) {
+  Surface(shape=MaterialTheme.shapes.large,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,border=if(boxed) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null) {
    Column(Modifier.fillMaxWidth().padding(if(boxed) SpuntoSpacing.s16 else 0.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Box(Modifier.fillMaxWidth().heightIn(min=if(boxed) 96.dp else 48.dp)) {
-     if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
+     if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=if(boxed) MaterialTheme.typography.bodyLarge else SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
      BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription=context.getString(R.string.core_note_text) },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
     }
     fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}

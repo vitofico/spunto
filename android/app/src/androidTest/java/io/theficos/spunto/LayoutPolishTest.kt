@@ -5,6 +5,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import android.content.res.Configuration
+import androidx.test.platform.app.InstrumentationRegistry
+import java.util.Locale
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
@@ -52,6 +58,38 @@ class LayoutPolishTest {
   save.performClick()
   compose.onNodeWithText("Saving…").assertIsDisplayed().assertIsNotEnabled()
   compose.runOnIdle {assertEquals(1,saves)}
+ }
+
+ @OptIn(ExperimentalMaterial3Api::class)
+ @Test fun localizedDoneAndSavingStayInsideTheAppBarAtTwoHundredPercent() {
+  val base=InstrumentationRegistry.getInstrumentation().targetContext
+  val language=mutableStateOf("en");val saving=mutableStateOf(false);var completions=0
+  compose.setContent {
+   val configuration=Configuration(base.resources.configuration).apply {setLocale(Locale.forLanguageTag(language.value))}
+   val context=base.createConfigurationContext(configuration)
+   CompositionLocalProvider(LocalContext provides context,LocalConfiguration provides configuration) {
+    CompactLargeText {
+     TopAppBar(modifier=Modifier.testTag("compact-note-bar"),title={Text("Note",maxLines=1)},windowInsets=WindowInsets(0,0,0,0),
+      navigationIcon={IconButton(onClick={}) {Text("‹")}},actions={
+       IconButton(onClick={}) {Text("•")}
+       NoteDoneAction(saving.value,!saving.value) {completions++;saving.value=true}
+      })
+    }
+   }
+  }
+  for(tag in listOf("en","es","it","fr","de")) {
+   compose.runOnIdle {language.value=tag;saving.value=false}
+   val configuration=Configuration(base.resources.configuration).apply {setLocale(Locale.forLanguageTag(tag))}
+   val context=base.createConfigurationContext(configuration)
+   val done=compose.onNodeWithText(context.getString(R.string.core_done))
+   done.assertIsDisplayed().assertIsEnabled().performClick()
+   val progress=compose.onNodeWithText(context.getString(R.string.core_saving))
+   progress.assertIsDisplayed().assertIsNotEnabled()
+   val frame=compose.onNodeWithTag("compact-note-bar").fetchSemanticsNode().boundsInRoot
+   val label=progress.fetchSemanticsNode().boundsInRoot
+   assertTrue("Saving label must remain inside the 320dp app bar for $tag",label.left>=frame.left && label.right<=frame.right && label.top>=frame.top && label.bottom<=frame.bottom)
+  }
+  compose.runOnIdle {assertEquals(5,completions)}
  }
 
  @Test fun longSyncStatusKeepsItsActionVisibleAndSeparate() {

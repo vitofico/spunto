@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.SpuntoColors
 import io.theficos.spunto.core.design.SpuntoTheme
+import io.theficos.spunto.core.design.SpuntoWordmark
 import io.theficos.spunto.core.design.SpuntoType
 import kotlinx.coroutines.*
 import androidx.lifecycle.lifecycleScope
@@ -70,7 +71,7 @@ class CaptureActivity:LockedActivity() {
       // A3 puts Save in the header row: the composer's bar docks there instead of under the field.
       val header=remember { BottomBarSlot() }
       if(sharing) Row(verticalAlignment=Alignment.CenterVertically) { Text(getString(R.string.core_save_spunto),style=MaterialTheme.typography.titleMedium);Box(Modifier.weight(1f)) { header.content?.invoke() } }
-      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text("spunto.",style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text(getString(R.string.core_close)) } }
+      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { SpuntoWordmark(style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text(getString(R.string.core_close)) } }
       if(error.isNotEmpty()) Text(error)
       if(shared.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
        Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {

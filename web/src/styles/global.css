@@ -140,7 +140,7 @@ button.primary {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--field);
-  border-radius: var(--r-12);
+  border-radius: var(--r-14);
   background: var(--raised);
   padding: var(--s-12);
 }
@@ -177,7 +177,7 @@ select.field {
 .card {
   border: 1px solid var(--rule);
   background: var(--raised);
-  border-radius: var(--r-14);
+  border-radius: var(--r-20);
   padding: var(--s-20);
 }
 .page-title {
@@ -220,7 +220,7 @@ pre {
   padding-left: 248px;
 }
 .app.collapsed {
-  padding-left: 76px;
+  padding-left: max(76px, 4.75rem);
 }
 .rail {
   position: fixed;
@@ -236,10 +236,11 @@ pre {
   z-index: 20;
 }
 .collapsed .rail {
-  width: 76px;
+  width: max(76px, 4.75rem);
   padding: var(--s-32) var(--s-12);
 }
 .wordmark {
+  white-space: nowrap;
   font: 600 1.875rem/1 var(--f-serif);
   color: var(--ink);
   letter-spacing: -0.025em;
@@ -329,7 +330,6 @@ kbd {
   color: var(--ink-3);
 }
 .collapsed .rail-label,
-.collapsed .wordmark-text,
 .collapsed .label-tree,
 .collapsed .rail .overline,
 .collapsed .rail-search kbd,
@@ -364,7 +364,7 @@ kbd {
   position: relative;
   border: 1px solid var(--field);
   background: var(--raised);
-  border-radius: var(--r-14);
+  border-radius: var(--r-20);
   margin-bottom: var(--s-32);
 }
 .editor-wrap {
@@ -404,7 +404,7 @@ kbd {
 /* Browsers treat every focused text area as :focus-visible, so the editors mark
    focus with one rounded accent edge instead of an outer ring. */
 .note-editor {
-  border-radius: var(--r-14);
+  border-radius: var(--r-20);
 }
 .composer:has(textarea:focus) {
   border-color: var(--accent);
@@ -1544,4 +1544,73 @@ mark[data-match] {
   display: grid;
   gap: 0.5rem;
   max-inline-size: 24rem;
+}
+
+/* An open thread belongs to brand and quiet chrome, never to the note body. */
+.rail-heading,
+.topbar,
+.auth {
+  position: relative;
+  isolation: isolate;
+}
+.rail-heading::before,
+.topbar::before,
+.auth::before,
+.empty::before {
+  content: "";
+  display: block;
+  background: var(--accent);
+  mask: url("/brand-wave.svg") center / contain no-repeat;
+  pointer-events: none;
+}
+.rail-heading::before,
+.topbar::before,
+.auth::before {
+  position: absolute;
+  z-index: -1;
+  opacity: 0.26;
+}
+.rail-heading::before {
+  inline-size: 58%;
+  block-size: 64px;
+  inset-inline-end: 0;
+  inset-block-start: -24px;
+}
+.topbar::before {
+  inline-size: min(32%, 10rem);
+  block-size: 52px;
+  inset-inline-end: var(--s-24);
+  inset-block-start: 0;
+  opacity: 0.17;
+}
+.auth::before {
+  inline-size: min(74vw, 36rem);
+  block-size: clamp(6rem, 24vw, 13rem);
+  inset-inline-end: 0;
+  inset-block-start: 0;
+}
+.empty::before {
+  inline-size: min(60%, 14rem);
+  block-size: 64px;
+  margin-block-end: var(--s-16);
+  opacity: 0.38;
+}
+.day {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+}
+.day::after {
+  content: "";
+  flex: 1;
+  block-size: 1px;
+  background: var(--rule);
+}
+@media (min-width: 1024px) {
+  .collapsed .wordmark {
+    font-size: 0.9375rem;
+  }
+  .collapsed .rail-heading::before {
+    display: none;
+  }
 }

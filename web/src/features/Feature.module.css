@@ -312,7 +312,7 @@
   display: block;
   max-width: none;
   border: 1px solid var(--field);
-  border-radius: var(--r-12);
+  border-radius: var(--r-14);
   padding: 0;
   font-weight: 400;
   text-align: left;
@@ -327,26 +327,21 @@
   outline-offset: var(--s-2);
 }
 .preview {
+  position: relative;
   display: block;
-  padding: var(--s-16);
-  min-height: 160px;
+  block-size: 112px;
   background: var(--paper);
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-.preview p {
-  font: var(--t-body-sm) var(--f-serif);
-}
-.preview small {
-  color: var(--ink-3);
-}
-.previewLabel {
   color: var(--accent);
-  font: var(--t-body-sm) var(--f-serif);
+  overflow: hidden;
 }
-.preview .pill {
-  padding: var(--s-2) var(--s-8);
-  white-space: nowrap;
+.preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  mask: url("/brand-wave.svg") center / 100% 100% no-repeat;
+  opacity: 0.65;
+  pointer-events: none;
 }
 .themeName {
   display: block;
@@ -358,33 +353,6 @@
   color: var(--ink-2);
   display: block;
   margin-top: var(--s-4);
-}
-.swatches {
-  display: flex;
-  margin-top: var(--s-12);
-  gap: var(--s-4);
-}
-.swatches span {
-  height: 14px;
-  width: 22px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-4);
-  min-width: 0;
-}
-.paper {
-  background: var(--paper);
-}
-.ink {
-  background: var(--ink);
-}
-.accent {
-  background: var(--accent);
-}
-.accentSoft {
-  background: var(--accent-soft);
-}
-.highlight {
-  background: var(--highlight);
 }
 .pill {
   display: inline-flex;

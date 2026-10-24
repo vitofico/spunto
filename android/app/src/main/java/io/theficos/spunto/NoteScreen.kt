@@ -62,6 +62,7 @@ import kotlinx.serialization.json.*
  var historyResult by remember(id) { mutableStateOf<HistoryRefreshResult?>(null) }
  var recordingTarget by remember(id) {mutableStateOf<String?>(null)}
  val nav=LocalNavigator.current
+ val doneInTopBar=LocalTopBar.current!=null
  LaunchedEffect(id) { if(model.historyFor.value==id) model.historyFor.value=null }
  val value=note?.takeIf {it.id==id} ?: run { if(loaded.second) Text(context.getString(R.string.core_note_missing),Modifier.padding(SpuntoSpacing.s20),color=MaterialTheme.colorScheme.onSurfaceVariant);return }
  val online by model.online.collectAsState()
@@ -84,7 +85,8 @@ import kotlinx.serialization.json.*
  BackHandler(editing) {finishEditing()}
  TopBarActions {
   IconToggleButton(checked=value.pinned,onCheckedChange={model.flags(id,pinned=it)},enabled=!restoring,colors=IconButtonDefaults.iconToggleButtonColors(checkedContentColor=MaterialTheme.colorScheme.onSurface)) {Icon(painterResource(if(value.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin),contentDescription=context.getString(R.string.core_pin_note),modifier=Modifier.size(24.dp))}
-  if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_note_actions),modifier=Modifier.size(24.dp))}
+  if(editing && doneInTopBar) NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)
+  else if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_note_actions),modifier=Modifier.size(24.dp))}
  }
  LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
  LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
@@ -95,9 +97,8 @@ import kotlinx.serialization.json.*
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
   refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code)}}
   item {
-   if(editing) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,trailing={
-    Button(enabled=!finishing && !restoring && finishEditor!=null,onClick={finishEditing()},modifier=Modifier.heightIn(min=48.dp)) {Text(if(finishing) context.getString(R.string.core_saving) else context.getString(R.string.core_done))}
-   },onSave={editing=false})
+   if(editing) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,
+    trailing=if(doneInTopBar) null else ({NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)}),onSave={editing=false})
    // Tapping the text edits it in place with the caret where the finger landed (A5); links, labels and checkboxes keep their own taps.
    // Each touch first forgets the last place, so a tap beside the text opens the editor at the end.
    else Box(Modifier.fillMaxWidth().pointerInput(Unit) {awaitEachGesture {awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial);caret=null}}.clickable(enabled=!value.trashed && !restoring,onClickLabel=context.getString(R.string.core_edit_note),interactionSource=remember {MutableInteractionSource()},indication=null) {editing=true}) {
@@ -128,6 +129,15 @@ import kotlinx.serialization.json.*
   ModalBottomSheet(onDismissRequest={recordingTarget=null}) {Column(Modifier.padding(SpuntoSpacing.s20)) {AttachmentPlayer(model,target.substringAfterLast('/'),label,attachments.firstOrNull {it.kind=="recording" && it.remoteId==target.substringAfterLast('/')});Spacer(Modifier.height(SpuntoSpacing.s32))}}
  }
  commandResult?.takeIf {online && model.container.manifest.enabled(it.string("plugin_id"))}?.let {result ->CommandResultSheet(model,result,onNote,{commandResult=it},{commandResult=null})}
+}
+
+/** The complete action label remains accessible when a long saving state needs an ellipsis in a narrow app bar. */
+@Composable internal fun NoteDoneAction(saving:Boolean,enabled:Boolean,onDone:()->Unit) {
+ val context=LocalContext.current
+ Button(onClick=onDone,enabled=enabled,modifier=Modifier.padding(end=SpuntoSpacing.s8).widthIn(max=160.dp).heightIn(min=48.dp),
+  contentPadding=PaddingValues(horizontal=SpuntoSpacing.s16,vertical=SpuntoSpacing.s12)) {
+  Text(context.getString(if(saving) R.string.core_saving else R.string.core_done),maxLines=1,overflow=TextOverflow.Ellipsis)
+ }
 }
 
 /** 03 R9: four core tiles, then plugin verbs between hairlines, then Private, History, export and trash. Shared by the note's ⋮ and a timeline long-press. */

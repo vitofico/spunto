@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
+import io.theficos.spunto.core.design.builtInThemes
 import java.io.File
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -41,16 +42,16 @@ class UnlockScreenTest {
  }
 
  @Test fun actionsStayDistinctWithoutAnExtraCloseButtonOrEditablePin() {
-  val mode=mutableStateOf("light");var unlocks=0;var credentials=0
-  compose.setContent {SpuntoTheme("carta",mode.value) {UnlockScreen("",{unlocks++},{credentials++})}}
-  for(theme in listOf("light","dark")) {
-   compose.runOnIdle {mode.value=theme}
+  val theme=mutableStateOf("carta");val mode=mutableStateOf("light");var unlocks=0;var credentials=0
+  compose.setContent {SpuntoTheme(theme.value,mode.value) {UnlockScreen("",{unlocks++},{credentials++})}}
+  for(choice in builtInThemes) for(selectedMode in listOf("light","dark")) {
+   compose.runOnIdle {theme.value=choice.id;mode.value=selectedMode}
    compose.onNodeWithContentDescription(base.getString(R.string.sys_lock_title)).assertIsDisplayed()
    compose.onAllNodes(hasClickAction()).assertCountEquals(2)
    compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
    compose.onNodeWithText("Close").assertDoesNotExist()
    compose.onNodeWithText("Spunto is locked").assertDoesNotExist()
-   preview("unlock-$theme")
+   preview("unlock-${choice.id}-$selectedMode")
   }
   compose.onNodeWithText(base.getString(R.string.sys_unlock)).assertHeightIsAtLeast(48.dp).performClick()
   compose.runOnIdle {assertEquals(1,unlocks);assertEquals(0,credentials)}

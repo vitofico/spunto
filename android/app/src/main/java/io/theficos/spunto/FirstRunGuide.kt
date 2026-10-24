@@ -76,6 +76,7 @@ private fun guideSteps(context:android.content.Context)=listOf(
     }
     // Short screens and enlarged text give the explanation and actions one scroll area.
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s24)) {
+     io.theficos.spunto.core.design.SpuntoWordmark()
      GuideContent(step,if(step==guideSteps.lastIndex && onConnect==null) current.copy(caption=context.getString(R.string.core_already_connected)) else current)
      if(compact) actions()
     }

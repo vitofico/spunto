@@ -138,7 +138,13 @@ import io.theficos.spunto.core.design.SpuntoSpacing
  val resources=LocalContext.current.resources
  Box(Modifier.fillMaxSize().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
   Column(Modifier.widthIn(max=560.dp).fillMaxWidth()) {
-   Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16),content=content)
+   Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
+    Box(Modifier.fillMaxWidth()) {
+     io.theficos.spunto.core.design.SpuntoWave(Modifier.align(Alignment.CenterEnd).width(140.dp).height(52.dp),alpha=.4f)
+     io.theficos.spunto.core.design.SpuntoWordmark()
+    }
+    content()
+   }
    actions?.let {Column(Modifier.fillMaxWidth().padding(start=SpuntoSpacing.s24,end=SpuntoSpacing.s24,bottom=SpuntoSpacing.s16),content=it)}
   }
  }

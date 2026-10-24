@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import org.json.JSONObject
 import org.json.JSONArray
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -102,6 +104,7 @@ fun applyDeviceTheme(preferences:SharedPreferences,theme:String?,accent:String?,
 
 fun tokenColor(value: String) = Color(value.removePrefix("#").toLong(16) or 0xff000000L)
 private val LocalSpuntoTheme = compositionLocalOf { false }
+private val spuntoShapes=Shapes(extraSmall=RoundedCornerShape(6.dp),small=RoundedCornerShape(10.dp),medium=RoundedCornerShape(16.dp),large=RoundedCornerShape(22.dp),extraLarge=RoundedCornerShape(28.dp))
 private tailrec fun Context.activity():Activity? = when(this) { is Activity -> this; is ContextWrapper -> baseContext.activity(); else -> null }
 fun useDarkSystemBarIcons(background:Color):Boolean = background.luminance()>0.1791288f
 fun blackPalette(theme:String,values:Map<String,String>):Map<String,String> {
@@ -152,6 +155,6 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
  val type=remember(face,size) { spuntoType(face,size) }
  val roles=remember(values,selected,dark) { spuntoColorRoles(values,builtInTokens[selected]?.get(if(dark) "dark" else "light")) }
  CompositionLocalProvider(LocalSpuntoTheme provides true,LocalSpuntoType provides type,LocalSpuntoColors provides roles) {
-  MaterialTheme(colorScheme=dynamic,typography=spuntoMaterialTypography,content=content)
+  MaterialTheme(colorScheme=dynamic,typography=spuntoMaterialTypography,shapes=spuntoShapes,content=content)
  }
 }

@@ -1,4 +1,5 @@
 <resources>
+ <string name="sys_welcome_back">Bentornato</string>
  <string name="sys_lock_title">Spunto è bloccato</string>
  <string name="sys_unlock">Sblocca Spunto</string>
  <string name="sys_screen_lock">Usa blocco schermo</string>

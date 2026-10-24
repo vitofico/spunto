@@ -157,20 +157,7 @@ export function AppearancePanel() {
                 data-theme-preview={card.id}
                 style={colors}
                 aria-hidden="true"
-              >
-                <small>{t("appearancepanel.today_09_41")}</small>
-                <p>{t("appearancepanel.leave_room_for_the_next_thought")}</p>
-                <span className={styles.previewLabel}>#ideas</span>
-                <br />
-                <span className={styles.pill}>#notebook</span>
-                <span className={styles.swatches}>
-                  {["paper", "ink", "accent", "accentSoft", "highlight"].map(
-                    (role) => (
-                      <span key={role} className={styles[role]} />
-                    ),
-                  )}
-                </span>
-              </span>
+              ></span>
               <span className={styles.themeName}>
                 {card.name}
                 {selected.theme === card.id ? " ✓" : ""}

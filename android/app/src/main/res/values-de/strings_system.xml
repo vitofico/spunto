@@ -1,4 +1,5 @@
 <resources>
+ <string name="sys_welcome_back">Willkommen zurück</string>
  <string name="sys_lock_title">Spunto ist gesperrt</string>
  <string name="sys_unlock">Spunto entsperren</string>
  <string name="sys_screen_lock">Displaysperre verwenden</string>

@@ -1,5 +1,4 @@
 <resources>
-    <string name="spunto_wordmark" translatable="false">spunto</string>
  <string name="app_name" translatable="false">Spunto</string>
  <string name="new_note">New note</string>
  <string name="application_id" translatable="false">io.theficos.spunto</string>

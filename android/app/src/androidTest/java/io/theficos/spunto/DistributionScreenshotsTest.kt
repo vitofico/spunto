@@ -106,7 +106,12 @@ class DistributionScreenshotsTest {
   compose.onNodeWithContentDescription("More note actions").assertIsDisplayed()
   capture("3.png")
   compose.onNodeWithContentDescription("Back",useUnmergedTree=true).performClick()
-  hideKeyboard(awaitVisible=true)
+  waitForDisplayed(hasSetTextAction() and hasText("#imperial"))
+  // Returning from a note restores the spent focus flag; the keyboard may already be hidden.
+  hideKeyboard()
+  compose.onNodeWithContentDescription("Back",useUnmergedTree=true).performClick()
+  waitForDisplayed(hasContentDescription("Choose labels and views"))
+  hideKeyboard()
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
   waitForDisplayed(hasSetTextAction() and hasText("Find a label"))
   waitForDisplayed(hasContentDescription("Drag handle"))

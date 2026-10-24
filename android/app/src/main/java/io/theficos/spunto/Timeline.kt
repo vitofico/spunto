@@ -183,8 +183,9 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
    // Meta line (03 §5.1): pin glyph, time, sync ring, the one plugin token; sans in ink-3.
    Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
     if(note.pinned) Icon(painterResource(R.drawable.ic_pin),contentDescription=null,modifier=Modifier.size(14.dp),tint=SpuntoColors.ink3)
-    Text(listOfNotNull(time ?: noteTime(note.createdAt,locale),meta.takeIf(String::isNotEmpty)).joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
+    Text(listOfNotNull(time ?: noteTime(note.createdAt,locale),meta.takeIf(String::isNotEmpty)).joinToString(" · "),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     if(note.pending) Text("◯",style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
+    if(onActions!=null) IconButton(onClick=onActions) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(20.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
    }
    FoldedBody(note.body) { text -> Markdown(text,note.machine,onLink={ if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(it.startsWith("/a/")) onNote(note.id) },onLabel={ nav.filter("label:$it") }) { model.toggleTask(note,it) } }
    val provenance=buildList {

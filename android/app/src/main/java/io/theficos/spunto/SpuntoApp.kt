@@ -155,13 +155,13 @@ import kotlinx.serialization.json.*
      route=="review" -> ReviewScreen(model,openNote)
      route=="appearance" -> AppearanceScreen(requestedTheme,mode,black,wallpaper,{ choice ->
       val selected=resolveThemeSelection(choice,null,appearanceManifest?.catalog)
-      applyDeviceTheme(model.container.preferences,choice,null,selected,manifestFingerprint);theme=choice;accent=null;themeOverride=true
+      applyDeviceTheme(model.container.preferences,choice,null,selected,manifestFingerprint,clearWallpaper=true);theme=choice;accent=null;themeOverride=true;wallpaper=false
      },{mode=it;model.container.preferences.edit().putString("mode",it).apply()},{black=it;model.container.preferences.edit().putBoolean("black",it).apply()},{wallpaper=it;model.container.preferences.edit().putBoolean("wallpaper",it).apply()},themeOverride=themeOverride,onUseInstance={
       val selected=appearanceManifest?.instance ?: resolveThemeSelection(instance?.string("id") ?: "carta",instance?.string("accent")?.takeIf { it.isNotBlank() })
-      applyDeviceTheme(model.container.preferences,null,null,selected,manifestFingerprint);themeOverride=false;accent=null
+      applyDeviceTheme(model.container.preferences,null,null,selected,manifestFingerprint,clearWallpaper=true);themeOverride=false;accent=null;wallpaper=false
      },catalog=appearanceManifest?.catalog ?: ThemeCatalog(builtInThemeCards,false),accent=if(themeOverride) accent else activeSelection.accent,onAccent={ choice ->
       val selected=resolveThemeSelection(requestedTheme,choice,appearanceManifest?.catalog)
-      applyDeviceTheme(model.container.preferences,requestedTheme,choice,selected,manifestFingerprint);theme=requestedTheme;accent=choice;themeOverride=true
+      applyDeviceTheme(model.container.preferences,requestedTheme,choice,selected,manifestFingerprint,clearWallpaper=true);theme=requestedTheme;accent=choice;themeOverride=true;wallpaper=false
      },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()})
      route=="plugins" -> PluginsScreen(model) { nav.open("plugin:$it") }
      route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))

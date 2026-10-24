@@ -14,6 +14,8 @@ With **App lock** enabled, opening or returning to the locked app starts system 
 
 The `spunto.` wordmark always includes its period in the active theme's accent colour. The same decorative wave follows built-in palettes, installed colour packs and wallpaper colours. Note content keeps its selected reading face and size. In the app shell, **Done** stays in the note editor's top bar while optional tools stay beside the keyboard; embedded editors keep their own toolbar action.
 
+Choosing a theme, a custom accent, or the instance theme applies that palette's colours and turns off **Wallpaper colours**. Turning **Wallpaper colours** on afterwards uses the phone's wallpaper palette until the next explicit colour choice. Mode, pure black, reading preferences and note drafts are preserved.
+
 [Obtainium setup](../docs/android-distribution.md#obtainium) tracks stable Android releases directly from GitHub. F-Droid submission and external review are pending; Spunto is not listed there. Read the [privacy policy](../PRIVACY.md) for local storage, optional permissions and server/AI boundaries.
 
 ## Build locally

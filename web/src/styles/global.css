@@ -241,6 +241,8 @@ pre {
 }
 .wordmark {
   white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
   font: 600 1.875rem/1 var(--f-serif);
   color: var(--ink);
   letter-spacing: -0.025em;
@@ -1546,14 +1548,16 @@ mark[data-match] {
   max-inline-size: 24rem;
 }
 
-/* An open thread belongs to brand and quiet chrome, never to the note body. */
-.rail-heading,
+/* The wave sits behind compact chrome and fades before note content. */
+.rail {
+  isolation: isolate;
+}
 .topbar,
 .auth {
   position: relative;
   isolation: isolate;
 }
-.rail-heading::before,
+.rail::before,
 .topbar::before,
 .auth::before,
 .empty::before {
@@ -1563,25 +1567,41 @@ mark[data-match] {
   mask: url("/brand-wave.svg") center / contain no-repeat;
   pointer-events: none;
 }
-.rail-heading::before,
+.rail::before,
 .topbar::before,
 .auth::before {
   position: absolute;
   z-index: -1;
   opacity: 0.26;
 }
-.rail-heading::before {
-  inline-size: 58%;
-  block-size: 64px;
+.rail::before,
+.topbar::before {
+  mask-image:
+    url("/brand-wave.svg"), linear-gradient(to bottom, #000, transparent);
+  mask-size: 100% 100%;
+  mask-composite: intersect;
+}
+.rail::before {
+  inline-size: 100%;
+  block-size: 160px;
   inset-inline-end: 0;
   inset-block-start: -24px;
+  opacity: 0.34;
 }
 .topbar::before {
-  inline-size: min(32%, 10rem);
-  block-size: 52px;
-  inset-inline-end: var(--s-24);
-  inset-block-start: 0;
-  opacity: 0.17;
+  inline-size: 100%;
+  block-size: 120px;
+  inset-inline-end: 0;
+  inset-block-start: -24px;
+  opacity: 0.3;
+}
+/* Opaque backing also keeps minimum-contrast colour packs clear of the strands. */
+.rail-heading .wordmark,
+.rail-search,
+.topbar > .button,
+.topbar .wordmark {
+  background: var(--paper);
+  box-shadow: 0 0 0 var(--s-4) var(--paper);
 }
 .auth::before {
   inline-size: min(74vw, 36rem);
@@ -1609,8 +1629,5 @@ mark[data-match] {
 @media (min-width: 1024px) {
   .collapsed .wordmark {
     font-size: 0.9375rem;
-  }
-  .collapsed .rail-heading::before {
-    display: none;
   }
 }

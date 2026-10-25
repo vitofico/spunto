@@ -122,4 +122,21 @@ test("the complete wordmark follows every theme accent, including the collapsed 
     path: test.info().outputPath("wave-appearance-mobile.png"),
     fullPage: true,
   });
+  await page.evaluate(() => {
+    document.documentElement.dir = "rtl";
+  });
+  const mobileWordmark = page.locator(".topbar .wordmark");
+  await expect(mobileWordmark).toHaveCSS("direction", "ltr");
+  await expect
+    .poll(() =>
+      mobileWordmark.evaluate((element) => {
+        const text = document.createRange();
+        text.selectNodeContents(element.firstChild!);
+        return (
+          element.querySelector("span")!.getBoundingClientRect().left >=
+          text.getBoundingClientRect().right - 1
+        );
+      }),
+    )
+    .toBe(true);
 });

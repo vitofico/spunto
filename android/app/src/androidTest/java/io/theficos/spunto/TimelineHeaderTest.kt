@@ -30,10 +30,13 @@ import io.theficos.spunto.core.design.SpuntoTheme
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.floor
 
 /** Header-only layout fixtures: no notes, account, authentication, network or retained state. */
 class TimelineHeaderTest {
  @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
+ @Volatile private var fixtureDensity:Float?=null
+ private val assertionDensity get()=fixtureDensity ?: compose.density.density
  private val clicks=mutableListOf<String>()
  private val controls=listOf("Choose labels and views","Ask your notes","Search","Filter notes","Settings")
 
@@ -63,8 +66,16 @@ class TimelineHeaderTest {
   assertTargets()
  }
 
+ @Test fun native320dpPhoneUsesTwoRowsWithoutShrinkingTargets() {
+  content(320,1f)
+  assertEquals("The narrow fixture must keep real device dp",compose.density.density,assertionDensity,.0001f)
+  assertEquals(104f,headerHeight(),.5f)
+  assertTargets()
+ }
+
  @Test fun narrowLargeTextAndRtlKeepControlsOnTwoFunctionalRows() {
   content(320,2f,LayoutDirection.Rtl)
+  assertEquals("The narrow fixture must keep real device dp",compose.density.density,assertionDensity,.0001f)
   assertTrue(headerHeight() in 104f..128f)
   captureEvidence("fixture-narrow-200pct-rtl-ask.png")
   assertTargets()
@@ -89,29 +100,31 @@ class TimelineHeaderTest {
  }
 
  @Test fun safeCutoutsChooseLayoutFromUsableWidth() {
-  compose.setContent {SpuntoTheme("carta","light") {Surface(Modifier.width(400.dp).height(300.dp)) {
+  compose.setContent {GeometryFixture(400) {SpuntoTheme("carta","light") {Surface(Modifier.width(400.dp).height(300.dp)) {
    Column {header(WindowInsets(left=40.dp,right=40.dp))}
-  }}}
+  }}}}
+  assertWidth(400)
   assertEquals(104f,headerHeight(),.5f)
   assertTargets()
   val frame=compose.onNodeWithTag("timeline-header").fetchSemanticsNode().boundsInRoot
   for(label in controls) {
    val touch=compose.onNodeWithContentDescription(label).fetchSemanticsNode().touchBoundsInRoot
-   assertTrue("$label avoids cutouts",touch.left>=frame.left+39.5f*compose.density.density && touch.right<=frame.right-39.5f*compose.density.density)
+   assertTrue("$label avoids cutouts",touch.left>=frame.left+39.5f*assertionDensity && touch.right<=frame.right-39.5f*assertionDensity)
   }
  }
 
  @Test fun minimumContrastAccentNeverTintsTheControlSurface() {
-  compose.setContent {SpuntoTheme("carta","light") {
+  compose.setContent {GeometryFixture(360) {SpuntoTheme("carta","light") {
    MaterialTheme(colorScheme=MaterialTheme.colorScheme.copy(background=Color.White,surface=Color.White,primary=Color(0xff767676))) {
     Box(Modifier.width(360.dp)) {header(WindowInsets(top=40.dp))}
    }
-  }}
+  }}}
+  assertWidth(360)
   val image=compose.onNodeWithTag("timeline-header").captureToImage().toPixelMap()
   val ask=compose.onNodeWithContentDescription("Ask your notes").fetchSemanticsNode().boundsInRoot
   val frame=compose.onNodeWithTag("timeline-header").fetchSemanticsNode().boundsInRoot
   // Clear padding beside the accent-coloured glyph, at the glyph's vertical centre.
-  val x=(ask.left-frame.left+2*compose.density.density).toInt()
+  val x=(ask.left-frame.left+2*assertionDensity).toInt()
   val y=(ask.center.y-frame.top).toInt()
   assertEquals(Color.White,image[x,y])
  }
@@ -152,12 +165,28 @@ class TimelineHeaderTest {
  }
 
  private fun content(width:Int,scale:Float,direction:LayoutDirection=LayoutDirection.Ltr,extra:Boolean=false) {
-  compose.setContent {
-   val density=LocalDensity.current
-   CompositionLocalProvider(LocalDensity provides Density(density.density,scale),LocalLayoutDirection provides direction) {
-    SpuntoTheme("carta","light") {Surface(Modifier.width(width.dp).height(300.dp)) {Column {header(extra=extra)}}}
-   }
+  compose.setContent {GeometryFixture(width,scale,direction) {
+   SpuntoTheme("carta","light") {Surface(Modifier.width(width.dp).height(300.dp)) {Column {header(extra=extra)}}}
+  }}
+  assertWidth(width)
+ }
+
+ /** Provide the requested logical width even when the test host is only320dp wide. */
+ @Composable private fun GeometryFixture(width:Int,scale:Float=1f,direction:LayoutDirection=LayoutDirection.Ltr,content:@Composable ()->Unit) {
+  val nativeDensity=LocalDensity.current.density
+  BoxWithConstraints {
+   val fitDensity=constraints.maxWidth.toFloat()/width
+   // Quarter steps keep48dp targets on integral pixels. Never grow or clip the host.
+   val renderedDensity=if(fitDensity>=nativeDensity) nativeDensity else floor(fitDensity*4)/4
+   check(renderedDensity>0f)
+   SideEffect {fixtureDensity=renderedDensity}
+   CompositionLocalProvider(LocalDensity provides Density(renderedDensity,scale),LocalLayoutDirection provides direction,content=content)
   }
+ }
+
+ private fun assertWidth(expected:Int) {
+  val frame=compose.onNodeWithTag("timeline-header").fetchSemanticsNode().boundsInRoot
+  assertEquals("The requested logical width must actually be rendered",expected.toFloat(),frame.width/assertionDensity,.5f)
  }
  @Composable private fun header(insets:WindowInsets=WindowInsets(0,0,0,0),extra:Boolean=false) {
   TimelineHeader(windowInsets=insets,hasAdditionalActions=extra,selector={modifier ->
@@ -174,7 +203,7 @@ class TimelineHeaderTest {
    }
   })
  }
- private fun headerHeight()=compose.onNodeWithTag("timeline-header").fetchSemanticsNode().boundsInRoot.height/compose.density.density
+ private fun headerHeight()=compose.onNodeWithTag("timeline-header").fetchSemanticsNode().boundsInRoot.height/assertionDensity
  private fun assertTargets(labels:List<String> = controls) {
   val frame=compose.onNodeWithTag("timeline-header").fetchSemanticsNode().boundsInRoot
   val bounds=labels.map {compose.onNodeWithContentDescription(it).fetchSemanticsNode().touchBoundsInRoot}
@@ -184,8 +213,8 @@ class TimelineHeaderTest {
   for(label in labels) {
    val node=compose.onNodeWithContentDescription(label).assertIsDisplayed().assertHasClickAction().fetchSemanticsNode()
    val touch=node.touchBoundsInRoot
-   assertTrue("$label width",touch.width/compose.density.density>=47.9f)
-   assertTrue("$label height",touch.height/compose.density.density>=47.9f)
+   assertTrue("$label width",touch.width/assertionDensity>=47.9f)
+   assertTrue("$label height",touch.height/assertionDensity>=47.9f)
    assertTrue("$label stays inside header",touch.left>=frame.left-.5f && touch.right<=frame.right+.5f && touch.top>=frame.top-.5f && touch.bottom<=frame.bottom+.5f)
   }
  }

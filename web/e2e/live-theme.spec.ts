@@ -151,7 +151,7 @@ test("live theme controls recolor the wordmark, labels, Ask, and wave without re
     await expect
       .poll(() =>
         page
-          .locator(".rail-heading")
+          .locator(".rail")
           .evaluate(
             (element) => getComputedStyle(element, "::before").backgroundColor,
           ),

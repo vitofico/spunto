@@ -42,6 +42,35 @@ test("the complete wordmark follows every theme accent, including the collapsed 
   await expect(
     page.getByRole("heading", { name: "Appearance", exact: true }),
   ).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const mode of ["light", "dark", "light"]) {
+      const mismatches = await page.evaluate(
+        async ({ width, mode }) => {
+          const controls = document.querySelectorAll(
+            width < 1024 ? ".topbar > .button" : ".rail-search",
+          );
+          document.documentElement.dataset.mode = mode;
+          const start = performance.now();
+          const mismatches = [];
+          do {
+            const paper = getComputedStyle(document.body).backgroundColor;
+            for (const control of controls) {
+              const background = getComputedStyle(control).backgroundColor;
+              if (background !== paper)
+                mismatches.push({ mode, width, background, paper });
+            }
+            await new Promise(requestAnimationFrame);
+          } while (performance.now() - start < 160);
+          return mismatches;
+        },
+        { width, mode },
+      );
+      expect(mismatches).toEqual([]);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 844 });
   const wordmark = page.locator(".rail-heading .wordmark");
   const dot = wordmark.locator("span:last-child");
   for (const theme of ["carta", "ardesia", "salvia", "corallo", "elettrica"]) {
@@ -122,4 +151,21 @@ test("the complete wordmark follows every theme accent, including the collapsed 
     path: test.info().outputPath("wave-appearance-mobile.png"),
     fullPage: true,
   });
+  await page.evaluate(() => {
+    document.documentElement.dir = "rtl";
+  });
+  const mobileWordmark = page.locator(".topbar .wordmark");
+  await expect(mobileWordmark).toHaveCSS("direction", "ltr");
+  await expect
+    .poll(() =>
+      mobileWordmark.evaluate((element) => {
+        const text = document.createRange();
+        text.selectNodeContents(element.firstChild!);
+        return (
+          element.querySelector("span")!.getBoundingClientRect().left >=
+          text.getBoundingClientRect().right - 1
+        );
+      }),
+    )
+    .toBe(true);
 });

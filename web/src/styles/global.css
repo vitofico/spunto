@@ -1603,6 +1603,10 @@ mark[data-match] {
   background: var(--paper);
   box-shadow: 0 0 0 var(--s-4) var(--paper);
 }
+/* Paper and glyph colours must change together when the theme changes. */
+.topbar > .button {
+  transition: none;
+}
 .auth::before {
   inline-size: min(74vw, 36rem);
   block-size: clamp(6rem, 24vw, 13rem);

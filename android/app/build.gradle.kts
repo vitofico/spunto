@@ -13,7 +13,8 @@ val spuntoVersionName = providers.gradleProperty("spuntoVersionName").orNull?.al
 android {
  namespace = "io.theficos.spunto"
  compileSdk = 35
- defaultConfig { applicationId = "io.theficos.spunto"; minSdk = 26; targetSdk = 35; versionCode = spuntoVersionCode; versionName = spuntoVersionName; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; testInstrumentationRunnerArguments["timeout_msec"] = "600000" }
+ // Match the generated app locale config; omit only unsupported library translations, not densities.
+ defaultConfig { applicationId = "io.theficos.spunto"; minSdk = 26; targetSdk = 35; versionCode = spuntoVersionCode; versionName = spuntoVersionName; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; testInstrumentationRunnerArguments["timeout_msec"] = "600000"; resourceConfigurations += listOf("en", "it", "fr", "es", "de") }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
  buildFeatures { compose = true }
@@ -21,9 +22,10 @@ android {
  testOptions { unitTests.isIncludeAndroidResources = true }
  // Compile original profiles with the R8 mapping; synthetic profile rewriting can race.
  experimentalProperties["android.experimental.art-profile-r8-rewriting"] = false
+ // Remove unreachable resources from both APKs; keep the approved art and fonts explicitly.
  buildTypes {
-  debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug"; resValue("string", "app_name", "Spunto Debug"); resValue("string", "application_id", "io.theficos.spunto.debug"); isMinifyEnabled = true; proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-debug.pro"); testProguardFiles("proguard-android-test.pro") }
-  release { isMinifyEnabled = true; vcsInfo.include = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
+  debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug"; resValue("string", "app_name", "Spunto Debug"); resValue("string", "application_id", "io.theficos.spunto.debug"); isMinifyEnabled = true; isShrinkResources = true; proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-debug.pro"); testProguardFiles("proguard-android-test.pro") }
+  release { isMinifyEnabled = true; isShrinkResources = true; vcsInfo.include = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
  }
 }
 baselineProfile { mergeIntoMain = true; saveInSrc = true; automaticGenerationDuringBuild = false }

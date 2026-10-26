@@ -532,3 +532,23 @@ test("label dialogs return focus to Label actions on Cancel and Escape", async (
     await expect(actions).toBeFocused();
   }
 });
+
+test("focusing compact capture keeps a task target still through the first click", async ({
+  page,
+}) => {
+  const saved = await fixture(page);
+  await page.goto("/");
+  const card = page.locator("article.entry").filter({ hasText: initial.title });
+  await expect(card).toHaveCount(1);
+  await page.evaluate(() => document.fonts.ready);
+  const before = await card.boundingBox();
+  await page.getByLabel("New note").focus();
+  expect((await card.boundingBox())?.y).toBe(before?.y);
+  const tools = await page
+    .locator(".composer-tools > .row:first-child")
+    .boundingBox();
+  const day = await page.locator(".day").first().boundingBox();
+  expect(tools!.y + tools!.height).toBeLessThanOrEqual(day!.y);
+  await card.getByRole("checkbox").click();
+  await expect.poll(() => saved.patchVersions.length).toBe(1);
+});

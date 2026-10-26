@@ -3,6 +3,7 @@ package io.theficos.spunto
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.espresso.Espresso.pressBack
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -43,7 +44,9 @@ class SettingsBackNavigationTest {
     settingsVisible()
    }
    if(systemBack) pressBack() else compose.onNodeWithContentDescription("Back").performClick()
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
+   closeSoftKeyboard()
+   compose.waitUntil(5000) {compose.onAllNodesWithText("spunto.").fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes  ⌄")
    compose.onAllNodesWithText("Settings").assertCountEquals(0)
   } finally {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}
  }

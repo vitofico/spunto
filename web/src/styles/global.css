@@ -1753,7 +1753,7 @@ mark[data-match] {
   align-items: center;
   min-height: 76px;
   border-radius: 12px;
-  margin-bottom: 36px;
+  margin-bottom: 64px;
   padding: 8px 14px;
   gap: 0 10px;
 }
@@ -1791,10 +1791,12 @@ mark[data-match] {
 .composer.compact .primary:disabled {
   opacity: 0.8;
 }
+/* Focus tools use the existing gap so blur cannot move a task between pointer down and click. */
 .composer.compact:focus-within .composer-tools > .row:first-child {
   display: flex;
-  grid-column: 1 / -1;
-  grid-row: 2;
+  position: absolute;
+  top: 100%;
+  left: 14px;
   padding: 6px 0 0;
 }
 .composer.compact > .error {

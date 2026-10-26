@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Run the native suite locally on a deliberately selected disposable emulator.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ "${ANDROID_SERIAL:-}" != emulator-* ]]; then
+  echo 'Set ANDROID_SERIAL=emulator-<port> to a disposable emulator; physical devices are refused.' >&2
+  exit 2
+fi
+adb_command=(adb -s "$ANDROID_SERIAL")
+if [[ "$("${adb_command[@]}" shell getprop ro.kernel.qemu | tr -d '\r')" != 1 ]]; then
+  echo "Selected device is not an Android emulator." >&2
+  exit 2
+fi
+if [[ "$("${adb_command[@]}" shell getprop sys.boot_completed | tr -d '\r')" != 1 ]]; then
+  echo "Wait for the selected emulator to finish booting." >&2
+  exit 2
+fi
+for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
+  "${adb_command[@]}" shell settings put global "$setting" 0
+done
+cd "$ROOT/android"
+scripts/dgradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+# A disposable AVD can contain a debug build signed by another checkout. Reset
+# only these debug identities before installation; the release identity stays.
+for package in io.theficos.spunto.debug.test io.theficos.spunto.debug; do
+  if "${adb_command[@]}" shell pm path "$package" | grep -q '^package:'; then
+    "${adb_command[@]}" uninstall "$package"
+  fi
+done
+"${adb_command[@]}" install -r app/build/outputs/apk/debug/app-debug.apk
+"${adb_command[@]}" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+# A fresh debug sandbox matches CI's disposable AVD. The release app has a
+# separate package and is never cleared or uninstalled by this command.
+"${adb_command[@]}" shell pm clear io.theficos.spunto.debug
+"${adb_command[@]}" shell pm clear io.theficos.spunto.debug.test
+instrument_args=()
+if [[ -n "${SPUNTO_NATIVE_CLASS:-}" ]]; then
+  instrument_args=(-e class "$SPUNTO_NATIVE_CLASS")
+fi
+log_file="${SPUNTO_NATIVE_LOG:-$(mktemp "${TMPDIR:-/tmp}/spunto-native.XXXXXX")}"
+echo "Instrumentation output: $log_file"
+"${adb_command[@]}" shell am instrument -w "${instrument_args[@]}" \
+  io.theficos.spunto.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$log_file"
+# adb/am can exit zero even when instrumentation fails or crashes. Require the
+# runner's positive test summary as well as the absence of failure markers.
+if grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_RESULT: shortMsg=' "$log_file" || \
+  ! grep -Eq '^OK \([1-9][0-9]* tests?\)' "$log_file"; then
+  echo "Native tests failed or did not produce a non-empty successful summary: $log_file" >&2
+  exit 1
+fi

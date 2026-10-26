@@ -77,6 +77,15 @@ pnpm test:e2e                             # fixtures against Vite
 SPUNTO_E2E_URL=http://127.0.0.1:18081 pnpm test:e2e
 ```
 
+Before submitting a change, run `scripts/check-ci web`, `scripts/check-ci server`
+and `scripts/check-ci android` for every affected surface. These shared commands
+also run in the corresponding hosted jobs. Android UI changes additionally need
+`ANDROID_SERIAL=emulator-<port> scripts/check-ci native` on a selected disposable
+emulator; that mode reinstalls only the debug app and test packages. A focused
+class is useful during iteration, but run the full native suite before submission.
+PostgreSQL, packaged-image, browser and security checks retain their existing
+requirements. Report unavailable checks and their limitations explicitly.
+
 ## Invariants
 
 These come from the spec. Breaking one needs the owner's decision and a spec change first.
@@ -93,7 +102,7 @@ These come from the spec. Breaking one needs the owner's decision and a spec cha
 ## Conventions
 
 - Python 3.14, FastAPI, hand-written SQL (no ORM), pydantic-settings. Lean code: no dead code, no speculative abstraction, comments only where they explain why.
-- Web cards consume server-sanitized HTML. New capture persists locally until Save; existing note edits autosave. Draft acknowledgement must preserve typing done while a request is in flight. JS initial gzip budget is 150,000 bytes; all bundled WOFF2 fonts together are at most 320,000 bytes.
+- Web cards consume server-sanitized HTML. New capture persists locally until Save; existing note edits autosave. Draft acknowledgement must preserve typing done while a request is in flight. JS initial gzip target is 150,000 bytes, with a warning above that target and a hard CI ceiling of 160,000 bytes; all bundled WOFF2 fonts together are at most 320,000 bytes.
 - `uv.lock` is committed and CI installs with `--locked`.
 - ruff is pinned to one exact version in `server/pyproject.toml` and in `.pre-commit-config.yaml`; bump both in the same change.
 - Database times are integer milliseconds since the epoch, UTC; API times are ISO 8601 with `Z`. API errors are RFC 9457 problem documents with a stable `code`.

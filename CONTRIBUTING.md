@@ -28,6 +28,43 @@ contracts live in `spec/`.
 - Before submitting, run `pre-commit run --all-files` and the checks required by
   the affected project instructions. Use synthetic fixtures for tests.
 
+`scripts/check-ci` runs the web, SQLite server and Android build checks together.
+Use `scripts/check-ci web`, `server` or `android` for a focused change. These are
+the same commands used by the hosted jobs, including production bundle and APK
+budgets. Generated API and theme checks preserve local files and ignore unrelated
+uncommitted work. See `scripts/check-ci --help` for prerequisites and the browser
+mode. PostgreSQL, packaged-image, emulator and security checks remain additional
+gates; run the affected ones before submission. Android CI passes a disposable
+server URL for real sync integration; local Android checks without that fixture
+do not establish real-server acceptance.
+
+For Android UI changes, run `ANDROID_SERIAL=emulator-<port> scripts/check-ci native`
+against a disposable, booted emulator. The command builds and installs the debug
+app and instrumentation APK, reinstalls their debug packages with fresh data,
+runs the native suite, and retains
+its output. It refuses physical devices and leaves the release package alone.
+Use `SPUNTO_NATIVE_CLASS` for a focused class or `Class#method` during iteration;
+run the full suite before submission. `SPUNTO_NATIVE_LOG` selects the log path.
+Match CI's API 35 emulator and its default narrow viewport for layout changes.
+The local smoke validation used API 36 at 320x640; it does not replace the
+hosted API 35 run. Both runners disable system animations before instrumentation.
+Local Docker Gradle commands use a separate cache per checkout and serialize
+access with a shared container lock, so parallel terminals wait instead of racing
+Gradle's process IDs. The first run after this change fills a fresh cache. The
+debug signing key remains in its existing shared volume, preserving upgrade
+signatures. Changes to the build Dockerfile automatically select a fresh image.
+Shared preflight and native build commands use two Gradle workers, disable
+project parallelism and disable filesystem watching to bound memory use during
+concurrent local work and match hosted validation.
+
+Android checks retain the 15,000,000-byte compressed ZIP payload gate in Gradle.
+The debug APK container may be up to 25,000,000 bytes to accommodate signing and
+alignment overhead. Signed releases keep their separate 15,000,000-byte gate.
+
+The initial JavaScript gzip target is 150,000 bytes. Builds warn above that
+target and fail above 160,000 bytes, leaving room for small compression changes
+while catching substantial growth. The combined WOFF2 font cap is 320,000 bytes.
+
 Keep changes focused, add tests for meaningful behavior changes, and explain the
 problem, resulting behavior and validation in your pull request. Preserve
 existing release tags and never commit signing keys, local databases, private

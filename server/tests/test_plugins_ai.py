@@ -100,7 +100,7 @@ async def ai_host(server):
         chat_model="fixture-chat",
         embed_model="fixture-embed",
         rate_per_min=100000,
-        timeout_s=0.08,
+        timeout_s=5,
     )
     settings = server.services.settings.model_copy(
         update={
@@ -269,6 +269,12 @@ async def test_every_plugin_provider_failures_leave_owner_and_derived_data_uncha
     host, provider = ai_host
     _, _, target = await seed(host)
     before = await state(host)
+    if mode == "slow":
+        # Only the timeout contract needs an 80 ms deadline. Other scenarios do
+        # real SQLite work and must tolerate concurrent build/CI scheduling.
+        host.settings.ai_profiles["fixture"] = host.settings.ai_profiles["fixture"].model_copy(
+            update={"timeout_s": 0.08}
+        )
     provider.mode = mode
     ctx = Ctx(host, plugin_id, principal=OWNER)
     if plugin_id == "label-suggestions":

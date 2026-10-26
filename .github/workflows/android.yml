@@ -3,9 +3,9 @@ name: Android
 on:
   push:
     branches: [main]
-    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
+    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   pull_request:
-    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
+    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -51,8 +51,6 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
         with:
           packages: "platform-tools platforms;android-35 build-tools;34.0.0"
-      - name: Android versioning and distribution checks
-        run: python3 -m unittest discover -s ../scripts/tests -p 'test_*.py'
       - name: Disposable synthetic server
         run: |
           docker build -t spunto:android-ci -f ../server/Dockerfile .. > "$RUNNER_TEMP/spunto-server-build.log" 2>&1
@@ -68,14 +66,9 @@ jobs:
           curl -sf http://127.0.0.1:18085/readyz >/dev/null
       - name: Unit tests, real server sync, lint and installable APKs
         run: >-
-          ./gradlew --no-daemon :core:model:test testDebugUnitTest
-          :core:design:lintDebug :core:plugins:lintDebug :data:local:lintDebug :data:sync:lintDebug
-          :plugins:dictation:lintDebug :plugins:quick-capture:lintDebug :app:lintDebug
-          :app:assembleDebug :app:assembleDebugAndroidTest
+          ../scripts/check-ci android
           -PspuntoIntegrationUrl=http://127.0.0.1:18085
           '-PspuntoIntegrationPassword=browser acceptance password'
-      - name: APK size budget
-        run: python3 ../scripts/check-apk-size.py app/build/outputs/apk/debug/app-debug.apk
       - name: Remove synthetic server
         if: always()
         run: docker rm -f spunto-android-ci || true
@@ -136,7 +129,15 @@ jobs:
           sudo chmod a+rw /dev/kvm
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y libpulse0
-          sdkmanager "system-images;android-35;google_apis;x86_64"
+          # The SDK host occasionally serves an incomplete ZIP. Retry package
+          # installation only; failing tests are never rerun automatically.
+          for attempt in 1 2 3; do
+            if sdkmanager "system-images;android-35;google_apis;x86_64"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep "$((attempt * 5))"
+          done
           echo no | avdmanager create avd -n spunto-ci -k "system-images;android-35;google_apis;x86_64"
           printf 'ANDROID_AVD_HOME=%s\n' "$ANDROID_AVD_HOME"
           "$ANDROID_HOME/emulator/emulator" -version 2>&1 | tee "$RUNNER_TEMP/spunto-emulator-checks.log"
@@ -145,7 +146,7 @@ jobs:
           "$ANDROID_HOME/emulator/emulator" -list-avds | tee "$RUNNER_TEMP/spunto-avds.log"
           grep -Fx spunto-ci "$RUNNER_TEMP/spunto-avds.log"
       - name: Installable APKs for native integration
-        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+        run: ./gradlew --no-daemon --max-workers=2 --no-parallel --no-watch-fs :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Native capture and Room integration
         run: |
           set -euo pipefail
@@ -189,7 +190,10 @@ jobs:
             sleep 2
           done
           test "$(adb -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = 1
-          ./gradlew --no-daemon :app:connectedDebugAndroidTest
+          for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
+            adb -s emulator-5554 shell settings put global "$setting" 0
+          done
+          ./gradlew --no-daemon --max-workers=2 --no-parallel --no-watch-fs :app:connectedDebugAndroidTest
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:

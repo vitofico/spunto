@@ -282,7 +282,12 @@ test("compact navigation, date search, checklist and private flags remain usable
   await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("link", { name: "All notes", exact: false }).click();
-  await page.getByRole("link", { name: /, A first thought$/ }).click();
+  const card = page.locator("article.entry").filter({ hasText: initial.title });
+  const passage = card.locator(".note-body p").first();
+  await expect(passage).toHaveText("A first thought #ideas");
+  // Open the visible passage at its first words, clear of the embedded label link.
+  await passage.click({ position: { x: 8, y: 8 } });
+  await expect(page).toHaveURL(new RegExp("/n/" + initial.id + "$"));
   await page.getByRole("checkbox").click();
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "More actions" }).click();

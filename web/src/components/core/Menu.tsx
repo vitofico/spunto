@@ -12,9 +12,11 @@ export type MenuItem = {
 export function MoreMenu({
   label,
   items,
+  disabled = false,
 }: {
   label: string;
   items: MenuItem[];
+  disabled?: boolean;
 }) {
   useLanguage();
   const [open, setOpen] = useState(false);
@@ -40,6 +42,7 @@ export function MoreMenu({
     <div className="more" data-open={open || undefined}>
       <button
         ref={trigger}
+        disabled={disabled}
         className="button icon-button"
         aria-label={label}
         aria-haspopup="menu"

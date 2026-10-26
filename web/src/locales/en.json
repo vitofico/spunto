@@ -1043,6 +1043,11 @@
     "note.more_actions": "More actions",
     "note.only_in_yours": "Only in yours",
     "note.only_in_copy": "Only in this copy",
-    "format.or": " or "
+    "format.or": " or ",
+    "appearance.background_style": "Background style",
+    "appearance.background_help": "Plain paper or ink waves. Saved in this browser.",
+    "appearance.background_plain": "Plain",
+    "appearance.background_artwork": "Artwork",
+    "appearance.colour_theme": "Colour theme"
   }
 }

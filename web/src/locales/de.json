@@ -1043,6 +1043,11 @@
     "note.more_actions": "Weitere Aktionen",
     "note.only_in_yours": "Nur in deiner Version",
     "note.only_in_copy": "Nur in dieser Kopie",
-    "format.or": " oder "
+    "format.or": " oder ",
+    "appearance.background_style": "Hintergrundstil",
+    "appearance.background_help": "Wähle eine schlichte Seite oder Tintenwellen. Diese Wahl bleibt in diesem Browser und behält dein Farbthema bei.",
+    "appearance.background_plain": "Schlicht",
+    "appearance.background_artwork": "Illustration",
+    "appearance.colour_theme": "Farbthema"
   }
 }

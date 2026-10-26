@@ -18,7 +18,7 @@ import io.theficos.spunto.core.design.*
 @Composable internal fun UnlockScreen(error:String,onUnlock:()->Unit,onScreenLock:()->Unit) {
  val context=LocalContext.current
  Surface(Modifier.fillMaxSize()) {
-  BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
+  BoxWithConstraints(Modifier.fillMaxSize().spuntoBackground().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
    val viewport=maxHeight
    Column(
     Modifier.widthIn(max=560.dp).fillMaxWidth().verticalScroll(rememberScrollState())

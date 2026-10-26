@@ -39,6 +39,14 @@ class LayoutPolishTest {
   compose.onNodeWithText("Show more").assertHasClickAction().performClick()
   compose.onNodeWithText("Synthetic tail line").assertExists();compose.onNodeWithText("Show less").assertExists()
  }
+ @Test fun compactProseUsesTwoLinesWithAnEllipsis() {
+  val text=(1..20).joinToString(" ") {"A readable synthetic paragraph"}
+  compose.setContent {SpuntoTheme("carta","light") {Box(Modifier.width(240.dp)) {io.theficos.spunto.core.design.Markdown(text,maxLines=2)}}}
+  val layouts=mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+  compose.onNodeWithText(text).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) {get ->assertTrue(get(layouts))}
+  assertEquals(2,layouts.single().lineCount)
+  assertTrue(layouts.single().isLineEllipsized(1))
+ }
  @Test fun saveStaysVisibleBesideScrollingToolsAtTwoHundredPercent() {
   var saves=0
   val saving=mutableStateOf(false)

@@ -3,6 +3,7 @@ package io.theficos.spunto
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import io.theficos.spunto.core.model.labelKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -36,33 +37,53 @@ class NativeNavigationTest {
  }
  private fun sheetList()=compose.onNode(hasScrollAction() and hasAnyAncestor(isDialog()))
  private fun assertDraft(body:String) {runBlocking {assertEquals(body,container.repository.draft("capture").first()?.body)}}
+ private fun homeTitle() {
+  // The approved idle home and focused app bar have different decorative chevrons.
+  closeSoftKeyboard()
+  compose.waitUntil(5000) {compose.onAllNodesWithText("spunto.").fetchSemanticsNodes().isNotEmpty()}
+  compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes  ⌄")
+ }
  private fun waitForFilterSheet() {
   val title=hasText("Filter notes") and hasAnyAncestor(isDialog())
   // The dialog can enter semantics before its sheet is positioned on screen.
   compose.waitUntil(10_000) {compose.onAllNodes(title).fetchSemanticsNodes(atLeastOneRootRequired=false).size==1 && compose.onNode(title).isDisplayed()}
  }
+ private fun openFilters() {
+  homeTitle()
+  val picker=compose.onNodeWithContentDescription("Choose labels and views").fetchSemanticsNode().boundsInRoot
+  // Cached list rows can expose clipped More nodes at y=0; use the actual header row.
+  val sameHeaderRow=SemanticsMatcher("More action in the notes-picker row") {
+   val bounds=it.boundsInRoot
+   bounds.height>0 && bounds.center.y in picker.top..picker.bottom
+  }
+  compose.onNode(hasContentDescription(container.context.getString(R.string.core_more_actions)) and sameHeaderRow).assertIsDisplayed().performClick()
+  compose.onNodeWithText("Filter notes").assertHasClickAction().performClick()
+  waitForFilterSheet()
+ }
+ private fun todayFilter()=compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_today)))
 
  @Test fun dateFiltersStayOffTheTimelineAndApplyOnlyAfterConfirmation() {
   waitForCapture()
   compose.onNodeWithText("Dates").assertDoesNotExist()
   compose.onNodeWithText("Date filter").assertDoesNotExist()
-  compose.onNodeWithContentDescription("Filter notes").performClick()
-  waitForFilterSheet()
+  todayFilter().assertDoesNotExist()
+  openFilters()
   compose.onNodeWithText("Filter notes").assertIsDisplayed()
   compose.onNodeWithText("Last 7 days").performClick()
   compose.onNodeWithText("Cancel").performScrollTo().performClick()
-  compose.onNodeWithContentDescription("Filter notes").assertIsDisplayed().performClick()
-  waitForFilterSheet()
+  todayFilter().assertDoesNotExist()
+  compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_last_week))).assertDoesNotExist()
+  openFilters()
   compose.onNodeWithText("Today").performClick()
   compose.onNodeWithText("Apply filters").performScrollTo().performClick()
-  compose.onNodeWithContentDescription("Filters applied").assertIsDisplayed()
+  todayFilter().assertIsDisplayed().assertIsSelected()
   compose.onNodeWithText("Filter notes").assertDoesNotExist()
   compose.onNodeWithText("Clear dates").assertDoesNotExist()
-  compose.onNodeWithContentDescription("Filters applied").performClick()
-  waitForFilterSheet()
+  openFilters()
   compose.onNodeWithText("Clear dates").performScrollTo().performClick()
   compose.onNodeWithText("Apply filters").performScrollTo().performClick()
-  compose.onNodeWithContentDescription("Filter notes").assertIsDisplayed()
+  todayFilter().assertDoesNotExist()
+  homeTitle()
  }
 
  @Test fun timelineTitleSearchAndDismissKeepActualRouteAndCaptureDraft() {
@@ -73,7 +94,7 @@ class NativeNavigationTest {
   val body="Synthetic root navigation draft ${System.nanoTime()}"
   try {
    waitForCapture()
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
+   homeTitle()
    runBlocking {authority.requireCurrent()}
    compose.onNodeWithContentDescription("Note text").performTextReplacement(body)
    compose.mainClock.advanceTimeBy(400);compose.waitForIdle()
@@ -85,7 +106,7 @@ class NativeNavigationTest {
    assertDraft(body)
    compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
    compose.onNode(labelFilterMatcher()).assertDoesNotExist()
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
+   homeTitle()
    waitForCapture(body);compose.onNodeWithContentDescription("Note text").assertTextEquals(body)
    assertDraft(body)
   } finally {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}
@@ -127,7 +148,7 @@ class NativeNavigationTest {
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist();assertDraft(draftBody)
    openSheet()
    compose.onNodeWithText("All notes").performClick()
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
+   homeTitle()
    waitForCapture(draftBody);compose.onNodeWithContentDescription("Note text").assertTextEquals(draftBody)
    assertDraft(draftBody)
   } finally {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}

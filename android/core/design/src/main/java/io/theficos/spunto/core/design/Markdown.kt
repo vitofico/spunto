@@ -1,6 +1,9 @@
 package io.theficos.spunto.core.design
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -17,6 +20,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -24,6 +28,7 @@ import org.commonmark.node.*
 import org.commonmark.parser.Parser
 import org.commonmark.parser.IncludeSourceSpans
 
+val LocalCompactMarkdown=compositionLocalOf {false}
 private val parser=Parser.builder().includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES).build()
 private val taskMarker=Regex("^\\s*(?:[-*+]|[0-9]+[.)]) \\[([ xX])] ")
 private val attachmentTarget=Regex("^/a/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -74,11 +79,17 @@ fun hasOpenTasks(body:String):Boolean {
  walk(parser.parse(body));return found
 }
 /** Native text renderer; raw HTML is never executed. Taps outside links and labels fall through to the caller (open or edit the note); [onText] hears where in the source a finger lands on the text first (null when unmapped). */
-@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, onToggle: ((Int)->Unit)? = null) {
+@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, maxLines:Int?=null, onToggle: ((Int)->Unit)? = null) {
  val document=remember(body) { parser.parse(body) }
  val tasks=remember(body) { checklistLines(body).toSet() }
  val uri=LocalUriHandler.current
  val links=MarkdownLinks(MaterialTheme.colorScheme.primary,SpuntoColors.ruleStrong,{ target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } },onLabel,onText,body)
+ if(maxLines!=null) {
+  val resources=LocalContext.current.resources
+  val excerpt=inline(document,links) {alt -> resources.getString(R.string.design_image,alt)}
+  Text(excerpt,style=markdownBodyStyle(machine,SpuntoType.reading).copy(color=MaterialTheme.colorScheme.onSurface),maxLines=maxLines,overflow=TextOverflow.Ellipsis)
+  return
+ }
  Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
   var node=document.firstChild
   while(node!=null) { MarkdownBlock(node,body,tasks,machine,links,onToggle);node=node.next }
@@ -129,7 +140,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
      val text=renderInline(requireNotNull(paragraph)).let { it.subSequence(4.coerceAtMost(it.length),it.length) }
      // The whole row is one checkbox for touch and TalkBack; the box itself takes no clicks of its own.
      Row(Modifier.fillMaxWidth().heightIn(min=48.dp).toggleable(checked,enabled=onToggle!=null,role=Role.Checkbox) { onToggle?.invoke(line) },horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
-      Checkbox(checked=checked,onCheckedChange=null)
+      if(LocalCompactMarkdown.current) Box(Modifier.size(20.dp).border(1.dp,MaterialTheme.colorScheme.onSurfaceVariant,CircleShape).background(if(checked) MaterialTheme.colorScheme.primary else Color.Transparent,CircleShape).clearAndSetSemantics {},contentAlignment=Alignment.Center) {if(checked) Text("✓",color=MaterialTheme.colorScheme.onPrimary,style=MaterialTheme.typography.labelSmall)} else Checkbox(checked=checked,onCheckedChange=null)
       MarkdownText(text,machine,if(checked) SpuntoColors.ink3 else MaterialTheme.colorScheme.onSurface,Modifier.weight(1f))
      }
     } else Row {
@@ -170,6 +181,9 @@ private fun inline(node:Node,links:MarkdownLinks?,imageDescription:(String)->Str
     else builder.withStyle(SpanStyle(textDecoration=TextDecoration.Underline)) { children() }
    }
    is HtmlBlock,is HtmlInline -> Unit
+   is org.commonmark.node.Paragraph,is Heading -> {if(builder.length>0) builder.append("\n");children()}
+   is FencedCodeBlock -> {if(builder.length>0) builder.append("\n");val start=builder.length;builder.append(n.literal.trimEnd());code+=start until builder.length}
+   is IndentedCodeBlock -> {if(builder.length>0) builder.append("\n");val start=builder.length;builder.append(n.literal.trimEnd());code+=start until builder.length}
    is Image -> builder.append(imageDescription(plain(n)))
    else -> children()
   }

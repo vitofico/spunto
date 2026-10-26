@@ -81,6 +81,7 @@ interface Props {
   upload?: (file: File) => Promise<{ snippet: string }>;
   placeholder?: string;
   autoFocus?: boolean;
+  compact?: boolean;
   /** Where the caret starts when the editor opens focused; the end of the text by default. */
   caret?: number;
   note?: boolean;
@@ -96,6 +97,7 @@ export function Editor({
   upload,
   placeholder = t("editor.what_s_on_your_mind"),
   autoFocus = false,
+  compact = false,
   caret: initialCaret,
   note = false,
   busy = false,
@@ -135,11 +137,19 @@ export function Editor({
   const saving = note && busy;
   useLayoutEffect(() => {
     const el = input.current;
-    if (el) {
+    if (!el) return;
+    const resize = () => {
       el.style.height = "auto";
-      el.style.height = Math.max(note ? 280 : 114, el.scrollHeight) + "px";
+      el.style.height =
+        Math.max(note ? 280 : compact ? 48 : 114, el.scrollHeight) + "px";
+    };
+    resize();
+    if (compact && window.ResizeObserver) {
+      const observer = new ResizeObserver(() => requestAnimationFrame(resize));
+      observer.observe(el.parentElement!);
+      return () => observer.disconnect();
     }
-  }, [body, note]);
+  }, [body, note, compact]);
   useLayoutEffect(() => {
     const el = input.current;
     if (!autoFocus || !el) return;
@@ -180,7 +190,11 @@ export function Editor({
     );
   }
   return (
-    <div className={note ? "note-editor" : "composer"}>
+    <div
+      className={
+        note ? "note-editor" : "composer" + (compact ? " compact" : "")
+      }
+    >
       <div className="editor-wrap">
         <pre className="highlight" aria-hidden="true">
           {highlightedParts(body).map((p) => (
@@ -192,6 +206,7 @@ export function Editor({
         </pre>
         <textarea
           ref={input}
+          rows={compact ? 1 : undefined}
           id={id}
           aria-label={note ? t("editor.edit_note") : t("app.new_note")}
           aria-autocomplete="list"

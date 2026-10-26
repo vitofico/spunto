@@ -39,7 +39,7 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
 }
 
 /** 05 §8.4 (R24): compact theme cards and "Only on this phone"; mode, pure black and wallpaper colours; the reading face and size. */
-@Composable fun AppearanceScreen(theme:String,mode:String,black:Boolean,wallpaper:Boolean,onTheme:(String)->Unit,onMode:(String)->Unit,onBlack:(Boolean)->Unit,onWallpaper:(Boolean)->Unit,themeOverride:Boolean=true,onUseInstance:(()->Unit)?=null,catalog:ThemeCatalog=ThemeCatalog(builtInThemeCards,false),accent:String?=null,onAccent:((String?)->Unit)?=null,instanceName:String="Carta",readingFace:String="serif",readingSize:String="M",onReadingFace:(String)->Unit={},onReadingSize:(String)->Unit={}) {
+@Composable fun AppearanceScreen(theme:String,mode:String,black:Boolean,wallpaper:Boolean,onTheme:(String)->Unit,onMode:(String)->Unit,onBlack:(Boolean)->Unit,onWallpaper:(Boolean)->Unit,themeOverride:Boolean=true,onUseInstance:(()->Unit)?=null,catalog:ThemeCatalog=ThemeCatalog(builtInThemeCards,false),accent:String?=null,onAccent:((String?)->Unit)?=null,instanceName:String="Carta",readingFace:String="serif",readingSize:String="M",onReadingFace:(String)->Unit={},onReadingSize:(String)->Unit={},backgroundStyle:String="artwork",onBackgroundStyle:(String)->Unit={}) {
  val resources=LocalContext.current.resources
  val dark=mode=="dark" || mode=="system" && isSystemInDarkTheme()
  val selectedCard=catalog.cards.firstOrNull { it.id==theme && it.available }
@@ -47,6 +47,21 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
  val accentChoices=themeAccentChoices(selectedCard)
  val instance=boundedThemeText(instanceName,80).ifBlank {resources.getString(R.string.settings_unavailable_colour_pack)}
  LazyColumn(contentPadding=PaddingValues(bottom=SpuntoSpacing.s24)) {
+  item {
+   SettingsSection(resources.getString(R.string.settings_background_style))
+   AppearanceGroup {
+    Row(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12).selectableGroup(),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+     listOf("plain" to resources.getString(R.string.settings_background_plain),"artwork" to resources.getString(R.string.settings_background_artwork)).forEach { (value,label) ->
+      val selected=normalizedBackgroundStyle(backgroundStyle)==value
+      Column(Modifier.weight(1f).clip(MaterialTheme.shapes.small).selectable(selected,role=Role.RadioButton,onClick={onBackgroundStyle(value)}).border(if(selected) 2.dp else 1.dp,if(selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,MaterialTheme.shapes.small)) {
+       Box(Modifier.fillMaxWidth().height(96.dp).spuntoBackground(style=value).clearAndSetSemantics {})
+       Text(label,Modifier.padding(SpuntoSpacing.s12),style=MaterialTheme.typography.labelLarge)
+      }
+     }
+    }
+    Text(resources.getString(R.string.settings_background_help),Modifier.padding(horizontal=SpuntoSpacing.s16).padding(bottom=SpuntoSpacing.s12),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   }
+  }
   item {
    SettingsSection(resources.getString(R.string.settings_theme))
    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8)) {
@@ -115,8 +130,7 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
  Column(modifier.clip(shape).background(paper).then(choice).border(if(chosen) 2.dp else 1.dp,if(chosen) MaterialTheme.colorScheme.primary else rule,shape)) {
   if(palette!=null) {
    val accentColor=tokenColor(palette.getValue("accent"))
-   Box(Modifier.fillMaxWidth().height(76.dp).clearAndSetSemantics {}) {
-    SpuntoWave(Modifier.fillMaxWidth().height(52.dp).align(Alignment.TopCenter).padding(top=SpuntoSpacing.s8),color=accentColor,alpha=.8f)
+   Box(Modifier.fillMaxWidth().height(76.dp).spuntoBackground(style="artwork",paper=paper,accent=accentColor).clearAndSetSemantics {}) {
     Text(resources.getString(R.string.settings_a_loose_idea),Modifier.align(Alignment.BottomStart).padding(start=SpuntoSpacing.s12,end=SpuntoSpacing.s8,bottom=SpuntoSpacing.s4),style=SpuntoType.readingSmall,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis)
     if(chosen) Box(Modifier.align(Alignment.TopEnd).padding(SpuntoSpacing.s8).size(22.dp).background(MaterialTheme.colorScheme.primary,CircleShape),contentAlignment=Alignment.Center) {
      Text("✓",color=MaterialTheme.colorScheme.onPrimary,style=MaterialTheme.typography.labelMedium)

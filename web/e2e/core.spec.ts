@@ -196,7 +196,7 @@ test("all plugins off is complete; capture, label completion and keyboard palett
 }, testInfo) => {
   const state = await fixture(page);
   await page.goto("/");
-  await expect(page.getByLabel("New note")).toBeFocused();
+  await expect(page.getByLabel("New note")).not.toBeFocused();
   await page.screenshot({
     path: testInfo.outputPath("core-home.png"),
     fullPage: true,
@@ -342,6 +342,26 @@ test("conflict recovery compares both versions and keeps later local typing acro
     page.getByText("Later local text kept on this device", { exact: true }),
   ).toBeVisible();
   expect(state.patchVersions).toEqual(['"1"', '"4"']);
+});
+
+test("All notes restores its own focus after Search has been closed", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const search = page.getByRole("button", { name: "Search", exact: true });
+  await search.click();
+  await expect(
+    page.getByRole("textbox", { name: "Search and commands" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Close search and commands" }).click();
+  await expect(search).toBeFocused();
+  const picker = page.locator(".home-picker");
+  await picker.click();
+  await expect(page.getByRole("dialog", { name: "Navigation" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeFocused();
 });
 
 test("mobile overlays contain focus and restore it without leaving the note", async ({
@@ -511,4 +531,24 @@ test("label dialogs return focus to Label actions on Cancel and Escape", async (
     await expect(dialog).toHaveCount(0);
     await expect(actions).toBeFocused();
   }
+});
+
+test("focusing compact capture keeps a task target still through the first click", async ({
+  page,
+}) => {
+  const saved = await fixture(page);
+  await page.goto("/");
+  const card = page.locator("article.entry").filter({ hasText: initial.title });
+  await expect(card).toHaveCount(1);
+  await page.evaluate(() => document.fonts.ready);
+  const before = await card.boundingBox();
+  await page.getByLabel("New note").focus();
+  expect((await card.boundingBox())?.y).toBe(before?.y);
+  const tools = await page
+    .locator(".composer-tools > .row:first-child")
+    .boundingBox();
+  const day = await page.locator(".day").first().boundingBox();
+  expect(tools!.y + tools!.height).toBeLessThanOrEqual(day!.y);
+  await card.getByRole("checkbox").click();
+  await expect.poll(() => saved.patchVersions.length).toBe(1);
 });

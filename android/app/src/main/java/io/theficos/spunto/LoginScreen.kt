@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import io.theficos.spunto.core.design.spuntoBackground
+import io.theficos.spunto.core.design.LocalSpuntoBackground
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
@@ -136,11 +139,11 @@ import io.theficos.spunto.core.design.SpuntoSpacing
 /** [actions] stay under the content and above the keyboard, so the main button is always reachable. */
 @Composable internal fun LoginPage(actions:(@Composable ColumnScope.()->Unit)?=null,content:@Composable ColumnScope.()->Unit) {
  val resources=LocalContext.current.resources
- Box(Modifier.fillMaxSize().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
-  Column(Modifier.widthIn(max=560.dp).fillMaxWidth()) {
+ Box(Modifier.fillMaxSize().spuntoBackground().safeDrawingPadding(),contentAlignment=Alignment.TopCenter) {
+  Column(Modifier.widthIn(max=560.dp).fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
    Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
     Box(Modifier.fillMaxWidth()) {
-     io.theficos.spunto.core.design.SpuntoWave(Modifier.align(Alignment.CenterEnd).width(140.dp).height(52.dp),alpha=.4f)
+     if(LocalSpuntoBackground.current!="plain") io.theficos.spunto.core.design.SpuntoWave(Modifier.align(Alignment.CenterEnd).width(140.dp).height(52.dp),alpha=.4f)
      io.theficos.spunto.core.design.SpuntoWordmark()
     }
     content()

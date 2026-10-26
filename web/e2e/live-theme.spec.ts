@@ -151,7 +151,7 @@ test("live theme controls recolor the wordmark, labels, Ask, and wave without re
     await expect
       .poll(() =>
         page
-          .locator(".rail")
+          .locator(".rail-heading")
           .evaluate(
             (element) => getComputedStyle(element, "::before").backgroundColor,
           ),
@@ -212,13 +212,29 @@ test("live theme controls recolor the wordmark, labels, Ask, and wave without re
     "color",
     rgb(palettes.carta!.dark!.accent!),
   );
+  // Mobile artwork follows the shared ambient surface, independently of the
+  // header layout (approved background/home composition, 26 October 2026).
+  const artwork = page.locator('.app[data-artwork-surface="true"]');
+  await expect(artwork).toBeVisible();
   await expect
     .poll(() =>
-      page
-        .locator(".topbar")
-        .evaluate(
-          (element) => getComputedStyle(element, "::before").backgroundColor,
-        ),
+      artwork.evaluate(
+        (element) => getComputedStyle(element, "::before").content,
+      ),
+    )
+    .not.toBe("none");
+  await expect
+    .poll(() =>
+      artwork.evaluate(
+        (element) => getComputedStyle(element, "::before").maskImage,
+      ),
+    )
+    .toContain("/spunto-woodgrain-mask.svg");
+  await expect
+    .poll(() =>
+      artwork.evaluate(
+        (element) => getComputedStyle(element, "::before").backgroundColor,
+      ),
     )
     .toBe(rgb(palettes.carta!.dark!.accent!));
   await page.screenshot({

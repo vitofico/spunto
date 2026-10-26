@@ -1,3 +1,7 @@
 <resources>
  <string name="new_note">Neue Notiz</string>
+ <string name="settings_background_style">Hintergrundstil</string>
+ <string name="settings_background_plain">Schlicht</string>
+ <string name="settings_background_artwork">Illustration</string>
+ <string name="settings_background_help">Wähle eine schlichte Seite oder Tintenwellen. Diese Wahl bleibt auf diesem Telefon und behält dein Farbthema bei.</string>
 </resources>

@@ -128,7 +128,7 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
   surfaceContainer=c("raised"),surfaceContainerLow=c("raised"),surfaceContainerLowest=c("raised"),surfaceContainerHigh=c("sunken"),surfaceContainerHighest=c("sunken"),surfaceBright=c("raised"),surfaceDim=c("sunken"),scrim=if(dark) Color.Black.copy(alpha=.5f) else c("ink").copy(alpha=.32f)
  )
 }
-@Composable fun SpuntoTheme(theme: String = "", mode: String = "", pureBlack: Boolean = false, wallpaper: Boolean = false, pack: Map<String,String>? = null, readingFace:String="", readingSize:String="", namespace:String="", content: @Composable () -> Unit) {
+@Composable fun SpuntoTheme(theme: String = "", mode: String = "", pureBlack: Boolean = false, wallpaper: Boolean = false, pack: Map<String,String>? = null, readingFace:String="", readingSize:String="", namespace:String="", backgroundStyle:String="", content: @Composable () -> Unit) {
  val context=LocalContext.current
  val preferences=remember(context,namespace) { context.getSharedPreferences(if(namespace.isEmpty()) "appearance" else "appearance-$namespace",Context.MODE_PRIVATE) }
  val cached=if(theme.isEmpty()) cachedDevicePalette(context,preferences,namespace) else null
@@ -155,7 +155,8 @@ fun paletteColorScheme(values:Map<String,String>,dark:Boolean,pureBlack:Boolean=
  val face=readingFace.ifEmpty { preferences.getString("reading-face","serif").orEmpty() };val size=readingSize.ifEmpty { preferences.getString("reading-size","M").orEmpty() }
  val type=remember(face,size) { spuntoType(face,size) }
  val roles=remember(values,selected,dark) { spuntoColorRoles(values,builtInTokens[selected]?.get(if(dark) "dark" else "light")) }
- CompositionLocalProvider(LocalSpuntoTheme provides true,LocalSpuntoType provides type,LocalSpuntoColors provides roles) {
+ val background=normalizedBackgroundStyle(backgroundStyle.ifEmpty { preferences.getString("background-style","artwork").orEmpty() })
+ CompositionLocalProvider(LocalSpuntoBackground provides background,LocalSpuntoTheme provides true,LocalSpuntoType provides type,LocalSpuntoColors provides roles) {
   MaterialTheme(colorScheme=dynamic,typography=spuntoMaterialTypography,shapes=spuntoShapes,content=content)
  }
 }

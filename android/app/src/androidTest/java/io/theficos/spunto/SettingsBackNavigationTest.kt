@@ -2,9 +2,11 @@ package io.theficos.spunto
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import androidx.test.espresso.Espresso.pressBack
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -42,9 +44,16 @@ class SettingsBackNavigationTest {
     } else compose.onNodeWithContentDescription("Back").performClick()
     settingsVisible()
    }
+   // The final Back must target navigation, not consume a restored keyboard session.
+   closeSoftKeyboard()
    if(systemBack) pressBack() else compose.onNodeWithContentDescription("Back").performClick()
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes ▾")
+   // Both approved headers identify All notes; IME/insets restoration chooses the decoration.
+   compose.onNodeWithContentDescription("Choose labels and views").assertIsDisplayed().assert(
+    hasText("All notes  ⌄") or hasText("All notes ▾")
+   )
    compose.onAllNodesWithText("Settings").assertCountEquals(0)
+   // Opening capture can materialize an empty draft row; its words must remain unchanged.
+   assertEquals(original.orEmpty(),runBlocking {appContainer.repository.draft("capture").first()?.body}.orEmpty())
   } finally {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}
  }
 

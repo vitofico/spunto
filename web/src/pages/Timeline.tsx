@@ -29,6 +29,7 @@ import { activePlugins, ReviewLine, DailySlip } from "../features/Slots";
 import { Dialog } from "../features/Dialog";
 import { Editor } from "../components/core/Editor";
 import { Icon } from "../components/core/Icon";
+import { MoreMenu } from "../components/core/Menu";
 import { NotFound } from "../components/core/NotFound";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
@@ -59,84 +60,20 @@ function LabelMenu({
   onChoose: (action: "rename" | "merge" | "remove") => void;
 }) {
   useLanguage();
-  const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  const id = useId();
-  useEffect(() => {
-    if (!open) return;
-    menu.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!menu.current?.parentElement?.contains(event.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
-  }, [open]);
-  const items: ["rename" | "merge" | "remove", string][] = [
-    ["rename", t("timeline.rename")],
-    ["merge", t("timeline.merge_into")],
-    ["remove", t("timeline.remove_label")],
-  ];
-  function choose(action: "rename" | "merge" | "remove") {
-    setOpen(false);
-    // The dialog this opens returns focus to what was focused when it opened.
-    trigger.current?.focus();
-    onChoose(action);
-  }
   return (
-    <div className="menu-anchor">
-      <button
-        ref={trigger}
-        className="button icon-button"
-        aria-label={t("timeline.label_actions")}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? id : undefined}
-        disabled={disabled}
-        onClick={() => setOpen(!open)}
-      >
-        <Icon name="more" />
-      </button>
-      {open && (
-        <div
-          ref={menu}
-          id={id}
-          role="menu"
-          aria-label={t("timeline.label_actions")}
-          className="menu"
-          onKeyDown={(event) => {
-            const entries = [
-              ...(menu.current?.querySelectorAll<HTMLElement>(
-                "[role=menuitem]",
-              ) ?? []),
-            ];
-            const at = entries.indexOf(document.activeElement as HTMLElement);
-            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-              event.preventDefault();
-              const step = event.key === "ArrowDown" ? 1 : -1;
-              entries[(at + step + entries.length) % entries.length]?.focus();
-            } else if (event.key === "Escape" || event.key === "Tab") {
-              if (event.key === "Escape") event.preventDefault();
-              setOpen(false);
-              trigger.current?.focus();
-            }
-          }}
-        >
-          {items.map(([action, text]) => (
-            <button
-              key={action}
-              role="menuitem"
-              tabIndex={-1}
-              className={action === "remove" ? "danger" : undefined}
-              onClick={() => choose(action)}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <MoreMenu
+      label={t("timeline.label_actions")}
+      disabled={disabled}
+      items={[
+        { label: t("timeline.rename"), onSelect: () => onChoose("rename") },
+        { label: t("timeline.merge_into"), onSelect: () => onChoose("merge") },
+        {
+          label: t("timeline.remove_label"),
+          onSelect: () => onChoose("remove"),
+          danger: true,
+        },
+      ]}
+    />
   );
 }
 
@@ -319,11 +256,9 @@ function Empty({
 export default function Timeline({
   view = "timeline",
   label,
-  focusComposer = true,
 }: {
   view?: string;
   label?: string;
-  focusComposer?: boolean;
 }) {
   const language = useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
@@ -523,7 +458,8 @@ export default function Timeline({
             setBody={draft.setBody}
             onSave={() => void save()}
             upload={draft.uploadAttachment}
-            autoFocus={focusComposer}
+            autoFocus={false}
+            compact
             // Offline, the banner above already says the server can't be reached.
             error={
               online || draft.error?.status !== 0
@@ -601,9 +537,11 @@ export default function Timeline({
         {groups.map((group) => (
           <section key={group.title} aria-label={group.title}>
             <h2 className="overline day">{group.title}</h2>
-            {group.notes.map((note) => (
-              <NoteCard key={note.id} note={note} />
-            ))}
+            <div className="note-pane">
+              {group.notes.map((note) => (
+                <NoteCard key={note.id} note={note} />
+              ))}
+            </div>
           </section>
         ))}
       </section>

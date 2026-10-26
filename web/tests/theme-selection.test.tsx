@@ -1,8 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsPage } from "../src/features/Settings";
+import {
+  readBackgroundStyle,
+  backgroundStyleKey,
+  followBackgroundStyle,
+} from "../src/lib/background-style";
 import { readDeviceAppearance } from "../src/features/Appearance";
 import { api } from "../src/lib/api";
 import * as auth from "../src/lib/query";
@@ -10,6 +15,8 @@ import type { Preferences } from "../src/lib/types";
 
 afterEach(() => {
   cleanup();
+  localStorage.removeItem(backgroundStyleKey);
+  delete document.documentElement.dataset.background;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.cookie = "theme=; Max-Age=0; Path=/";
@@ -53,6 +60,10 @@ it("persists vivid instance selection and an independent device override across 
   );
   const first = render(view());
   const user = userEvent.setup();
+  expect(readBackgroundStyle()).toBe("artwork");
+  await user.click(screen.getByRole("button", { name: "Plain" }));
+  expect(readBackgroundStyle()).toBe("plain");
+  expect(document.documentElement.dataset.background).toBe("plain");
   await user.click(screen.getByRole("button", { name: /Corallo/ }));
   await waitFor(() => expect(save).toHaveBeenCalledWith({ theme: "corallo" }));
   await waitFor(() =>
@@ -71,9 +82,13 @@ it("persists vivid instance selection and an independent device override across 
     mode: "dark",
   });
   expect(settings.theme).toBe("corallo");
+  expect(readBackgroundStyle()).toBe("plain");
   expect(save).toHaveBeenCalledTimes(1);
   first.unmount();
   render(view());
+  expect(
+    screen.getByRole("button", { name: "Plain" }).getAttribute("aria-pressed"),
+  ).toBe("true");
   expect(document.documentElement.dataset.theme).toBe("elettrica");
   expect(document.documentElement.dataset.mode).toBe("dark");
   await user.click(
@@ -84,5 +99,59 @@ it("persists vivid instance selection and an independent device override across 
   expect(readDeviceAppearance().theme).toBeUndefined();
   expect(document.documentElement.dataset.theme).toBe("corallo");
   expect(document.documentElement.dataset.mode).toBe("dark");
+  client.clear();
+});
+
+it("keeps background selection and the live page synchronized with another tab", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(["settings"], {
+    theme: "carta",
+    plugin_order: [],
+    hidden_views: [],
+    hidden_mcp_tools: [],
+  });
+  client.setQueryData(["manifest"], { ui: 1, plugins_rev: 0, plugins: [] });
+  localStorage.setItem(backgroundStyleKey, "plain");
+  followBackgroundStyle();
+  render(
+    <QueryClientProvider client={client}>
+      <SettingsPage section="appearance" />
+    </QueryClientProvider>,
+  );
+  const selected = (label: string) =>
+    screen.getByRole("button", { name: label }).getAttribute("aria-pressed");
+  expect(selected("Plain")).toBe("true");
+  act(() => {
+    localStorage.setItem(backgroundStyleKey, "artwork");
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: backgroundStyleKey }),
+    );
+  });
+  expect(selected("Artwork")).toBe("true");
+  expect(document.documentElement.dataset.background).toBe("artwork");
+  act(() => {
+    localStorage.setItem(backgroundStyleKey, "plain");
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: backgroundStyleKey }),
+    );
+  });
+  expect(selected("Plain")).toBe("true");
+  expect(document.documentElement.dataset.background).toBe("plain");
+  act(() => {
+    localStorage.clear();
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+  });
+  expect(selected("Artwork")).toBe("true");
+  expect(document.documentElement.dataset.background).toBe("artwork");
   client.clear();
 });

@@ -1548,17 +1548,13 @@ mark[data-match] {
   max-inline-size: 24rem;
 }
 
-/* The wave sits behind compact chrome and fades before note content. */
-.rail {
-  isolation: isolate;
-}
-.topbar,
+/* An open thread belongs to brand and quiet chrome, never to the note body. */
+.rail-heading,
 .auth {
   position: relative;
   isolation: isolate;
 }
-.rail::before,
-.topbar::before,
+.rail-heading::before,
 .auth::before,
 .empty::before {
   content: "";
@@ -1567,45 +1563,17 @@ mark[data-match] {
   mask: url("/brand-wave.svg") center / contain no-repeat;
   pointer-events: none;
 }
-.rail::before,
-.topbar::before,
+.rail-heading::before,
 .auth::before {
   position: absolute;
   z-index: -1;
   opacity: 0.26;
 }
-.rail::before,
-.topbar::before {
-  mask-image:
-    url("/brand-wave.svg"), linear-gradient(to bottom, #000, transparent);
-  mask-size: 100% 100%;
-  mask-composite: intersect;
-}
-.rail::before {
-  inline-size: 100%;
-  block-size: 160px;
+.rail-heading::before {
+  inline-size: 58%;
+  block-size: 64px;
   inset-inline-end: 0;
   inset-block-start: -24px;
-  opacity: 0.34;
-}
-.topbar::before {
-  inline-size: 100%;
-  block-size: 120px;
-  inset-inline-end: 0;
-  inset-block-start: -24px;
-  opacity: 0.3;
-}
-/* Opaque backing also keeps minimum-contrast colour packs clear of the strands. */
-.rail-heading .wordmark,
-.rail-search,
-.topbar > .button,
-.topbar .wordmark {
-  background: var(--paper);
-  box-shadow: 0 0 0 var(--s-4) var(--paper);
-}
-/* Paper and glyph colours must change together when the theme changes. */
-.topbar > .button {
-  transition: none;
 }
 .auth::before {
   inline-size: min(74vw, 36rem);
@@ -1634,4 +1602,364 @@ mark[data-match] {
   .collapsed .wordmark {
     font-size: 0.9375rem;
   }
+  .collapsed .rail-heading::before {
+    display: none;
+  }
+}
+
+/* Preserve opaque controls outside the approved home artwork composition. */
+.rail-heading .wordmark,
+.rail-search,
+.app:not([data-home="true"]) .topbar > .button,
+.app:not([data-home="true"]) .topbar .wordmark {
+  background: var(--paper);
+  box-shadow: 0 0 0 var(--s-4) var(--paper);
+}
+.topbar > .button {
+  transition: none;
+}
+
+/* Ambient ink stays in the margins; content retains an opaque paper surface. */
+.app,
+.auth {
+  position: relative;
+  isolation: isolate;
+}
+:root:not([data-background="plain"]) .app[data-artwork-surface="true"]::before,
+:root:not([data-background="plain"]) .auth::after {
+  content: "";
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(100vw, 900px);
+  height: 100dvh;
+  background: var(--accent);
+  mask: url("/spunto-woodgrain-mask.svg") right top / 100% 100% no-repeat;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: -1;
+}
+:root:not([data-background="plain"]) .entry,
+:root:not([data-background="plain"]) .auth form,
+:root:not([data-background="plain"]) .auth-state {
+  background: var(--paper);
+}
+:root[data-background="plain"] .rail-heading::before,
+:root[data-background="plain"] .auth::before,
+:root[data-background="plain"] .empty::before {
+  display: none;
+}
+.background-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+  margin-bottom: var(--s-24);
+}
+.background-choice {
+  display: grid;
+  justify-content: stretch;
+  gap: var(--s-8);
+  padding: var(--s-12);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-12);
+  background: var(--raised);
+  color: var(--ink);
+  text-align: start;
+}
+.background-choice[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.background-preview {
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  display: block;
+  height: 112px;
+  background: var(--paper);
+  overflow: hidden;
+  border-radius: var(--r-8);
+}
+.background-preview.artwork::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  mask: url("/spunto-woodgrain-mask.svg") right center / 100% 100% no-repeat;
+  opacity: 0.32;
+}
+
+:root:not([data-background="plain"]) .empty {
+  background: var(--paper);
+}
+
+/* The approved home composition: a compact capture above a shared paper notebook. */
+.home-settings {
+  display: none;
+}
+.app[data-home="true"] .topbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  border: 0;
+  max-width: var(--column-width);
+  margin: 0 auto;
+  padding: 64px 24px 18px;
+  min-height: 126px;
+  background: transparent;
+}
+.app[data-home="true"] .topbar > button:first-child {
+  display: none;
+}
+.app[data-home="true"] .topbar .wordmark {
+  margin-right: auto;
+  flex: 0 0 auto;
+  font: 600 clamp(2rem, 13.333vw, 3.25rem)/1.1 var(--f-serif);
+  letter-spacing: -2.4px;
+}
+.app[data-home="true"] .topbar .button {
+  display: inline-flex;
+  padding: 10px;
+  width: 48px;
+  height: 48px;
+  color: var(--ink-2);
+}
+.app[data-home="true"] .topbar .icon {
+  width: 21px;
+  height: 21px;
+}
+.home-picker {
+  display: block;
+  width: 100%;
+  max-width: var(--column-width);
+  margin: 0 auto;
+  padding: 0 24px 12px;
+  min-height: 60px;
+  font: 600 1.3125rem/1.3 var(--f-serif);
+  color: var(--ink);
+  text-align: left;
+}
+.home-picker::after {
+  content: "⌄";
+  font: 20px var(--f-sans);
+  margin-left: 10px;
+}
+.app[data-home="true"] > .column {
+  padding: 0 20px 48px;
+}
+.composer.compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 76px;
+  border-radius: 12px;
+  margin-bottom: 64px;
+  padding: 8px 14px;
+  gap: 0 10px;
+}
+.composer.compact .editor-wrap {
+  min-height: 48px;
+}
+.composer.compact textarea,
+.composer.compact .highlight {
+  min-height: 48px;
+  padding: 13px 0;
+  font: 400 1rem/1.375rem var(--f-serif);
+}
+.composer.compact textarea::placeholder {
+  font-style: normal;
+}
+.composer.compact .composer-tools {
+  display: contents;
+}
+.composer.compact .composer-tools > .row:first-child {
+  display: none;
+}
+.composer.compact .composer-tools > .row:last-child {
+  padding: 0;
+}
+.composer.compact .composer-hint {
+  display: none;
+}
+.composer.compact .primary {
+  border-radius: 10px;
+  min-width: 74px;
+  min-height: 44px;
+  font: 500 0.9375rem var(--f-serif);
+  padding: 10px 16px;
+}
+.composer.compact .primary:disabled {
+  opacity: 0.8;
+}
+/* Focus tools use the existing gap so blur cannot move a task between pointer down and click. */
+.composer.compact:focus-within .composer-tools > .row:first-child {
+  display: flex;
+  position: absolute;
+  top: 100%;
+  left: 14px;
+  padding: 6px 0 0;
+}
+.composer.compact > .error {
+  grid-column: 1 / -1;
+}
+.note-pane {
+  background: var(--raised);
+  border-radius: 16px;
+  overflow: visible;
+  margin-right: 24px;
+  padding: 0 16px;
+}
+.note-pane .entry {
+  background: transparent;
+  padding: 18px 0 16px;
+  border: 0;
+}
+.note-pane .entry + .entry {
+  border-top: 1px solid var(--rule);
+}
+.note-pane .entry .time {
+  position: absolute;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+}
+.note-pane .entry .time:focus-visible {
+  clip-path: none;
+  width: auto;
+  height: auto;
+  z-index: 2;
+  background: var(--paper);
+}
+.entry-title {
+  font: 600 1.4375rem/1.8125rem var(--f-serif);
+  letter-spacing: -0.5px;
+  margin: 0 32px 8px 0;
+}
+.note-pane .note-body {
+  font: 400 1.03125rem/1.4375rem var(--f-serif);
+}
+.note-pane .note-body > :first-child {
+  margin-top: 0;
+}
+.note-pane .note-body > :last-child {
+  margin-bottom: 0;
+}
+.note-pane .entry > .more {
+  position: absolute;
+  top: 10px;
+  right: -10px;
+}
+.note-pane .entry > .more > button .icon {
+  transform: rotate(90deg);
+  width: 18px;
+  height: 18px;
+}
+.note-pane .entry-meta {
+  margin-top: 10px;
+  gap: 6px;
+}
+.label-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font: 500 0.75rem/1.125rem var(--f-sans);
+}
+.overline.day {
+  color: var(--accent-strong);
+  letter-spacing: 2.4px;
+  font: 600 11px/18px var(--f-sans);
+  margin: 0 4px 16px;
+}
+.overline.day::after {
+  display: none;
+}
+.note-pane .note-body ul,
+.note-pane .note-body ol {
+  padding-left: 0;
+  list-style: none;
+}
+.note-pane .note-body li {
+  min-height: 40px;
+  line-height: 24px;
+  padding: 6px 0;
+}
+.note-pane .note-body input[type="checkbox"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--ink-3);
+  border-radius: 50%;
+  vertical-align: middle;
+  margin: 0 10px 0 0;
+  background: var(--raised);
+}
+.note-pane .note-body input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 4px var(--raised);
+}
+@media (max-width: 359px) {
+  .app[data-home="true"] .topbar {
+    padding-inline: 20px;
+  }
+  .app[data-home="true"] .topbar .wordmark {
+    font-size: clamp(1.5rem, 12vw, 2.75rem);
+  }
+  .note-pane {
+    margin-right: 12px;
+  }
+}
+@media (min-width: 1024px) {
+  .app[data-home="true"] .topbar {
+    padding-inline: 48px;
+  }
+  .home-picker {
+    padding-inline: 48px;
+  }
+  .app[data-home="true"] > .column {
+    padding-inline: 48px;
+  }
+}
+
+:root .note-pane .entry {
+  background: transparent;
+}
+
+.home-settings::before {
+  content: "";
+  display: block;
+  width: 21px;
+  height: 21px;
+  background: currentColor;
+  mask: url("/settings.svg") center/contain no-repeat;
+}
+
+.note-pane .note-body > p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.app[data-home="true"] .home-settings {
+  margin-left: auto;
+}
+
+.note-pane .entry-title .time {
+  position: static;
+  display: inline;
+  clip-path: none;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
 }

@@ -27,6 +27,7 @@ from spunto.host.vocabulary import render_output, validate_output
 from spunto.store.db import now_ms
 
 _PG_LEASE_POLL_SECONDS = 30
+_LOOP_BLOCK_BUDGET_SECONDS = 0.1
 
 
 def _log_failure(plugin_id, operation, error):
@@ -1377,7 +1378,7 @@ class Host:
         def probe():
             nonlocal due, handle
             now = time.monotonic()
-            if now - due > 0.1:
+            if now - due > _LOOP_BLOCK_BUDGET_SECONDS:
                 report()
             due = now + 0.05
             handle = loop.call_later(0.05, probe)
@@ -1386,7 +1387,7 @@ class Host:
         try:
             return await handler(ctx, **args)
         finally:
-            if time.monotonic() - due > 0.1:
+            if time.monotonic() - due > _LOOP_BLOCK_BUDGET_SECONDS:
                 report()
             handle.cancel()
 

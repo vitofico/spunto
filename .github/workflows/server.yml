@@ -12,6 +12,8 @@ on:
       - ".dockerignore"
       - "scripts/smoke-selfhost.sh"
       - "scripts/check-image-size.py"
+      - "scripts/check-ci"
+      - "scripts/check-generated.py"
       - ".github/workflows/server.yml"
       - "android/core/design/generate-tokens.py"
       - "android/core/design/src/main/java/io/theficos/spunto/core/design/Tokens.kt"
@@ -22,6 +24,8 @@ on:
       - ".dockerignore"
       - "scripts/smoke-selfhost.sh"
       - "scripts/check-image-size.py"
+      - "scripts/check-ci"
+      - "scripts/check-generated.py"
       - ".github/workflows/server.yml"
       - "android/core/design/generate-tokens.py"
       - "android/core/design/src/main/java/io/theficos/spunto/core/design/Tokens.kt"
@@ -74,18 +78,8 @@ jobs:
         with:
           version: "0.13.0"
       - run: npm install --global pnpm@12.11.2
-      - run: pnpm install --frozen-lockfile
-      - run: uv sync --project ../server --locked
-      - name: Verify generated API and design tokens
-        run: |
-          pnpm generate:api
-          pnpm generate:tokens
-          python3 ../android/core/design/generate-tokens.py
-          git diff --exit-code
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm format:check
-      - run: pnpm build
+      - name: Local and hosted web preflight
+        run: ../scripts/check-ci web
 
   test:
     name: Lint and test
@@ -108,13 +102,8 @@ jobs:
         with:
           version: "0.13.0" # the uv in server/Dockerfile
           enable-cache: true # keyed on server/uv.lock
-      - run: uv sync --locked
-      # ruff comes from uv.lock, at the version the pre-commit hook pins.
-      - name: Lint
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-      - run: uv run pytest
+      - name: Local and hosted server preflight
+        run: ../scripts/check-ci server
 
   postgres:
     name: PostgreSQL 18 isolation, hosted auth and recovery

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Shared local/hosted checks. Run from any directory.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/check-ci [all|web|server|android|native|browser]
+  all       Web, SQLite server, distribution and Android build/lint checks (default)
+  web       Locked installs, generated contracts, types, tests, format and build budgets
+  server    Locked install, Ruff and the complete SQLite pytest suite
+  android   Distribution tests, all JVM tests, lint, debug and test APKs
+  native    Instrumentation on an explicitly selected disposable emulator
+  browser   Playwright in all three engines (SPUNTO_E2E_URL selects a disposable server)
+
+Android uses Docker locally, or native Gradle in GitHub Actions. Browser binaries
+must be installed with: cd web && pnpm exec playwright install chromium firefox webkit
+Native mode requires ANDROID_SERIAL=emulator-<port> and clears only debug app data.
+The all mode does not certify PostgreSQL, packaged image, native emulator or security gates.
+EOF
+}
+
+web() (
+  cd "$ROOT/web"
+  expected_pnpm="$(node -p "require('./package.json').packageManager.split('@')[1]")"
+  if [[ "$(pnpm --version)" != "$expected_pnpm" ]]; then
+    echo "Use pnpm $expected_pnpm (web/package.json) before running web checks." >&2
+    exit 1
+  fi
+  pnpm install --frozen-lockfile
+  uv sync --project ../server --locked
+  python3 ../scripts/check-generated.py
+  pnpm typecheck
+  pnpm test
+  pnpm format:check
+  pnpm build
+)
+
+server() (
+  cd "$ROOT/server"
+  uv sync --locked
+  uv run ruff check .
+  uv run ruff format --check .
+  uv run pytest
+)
+
+android() (
+  cd "$ROOT/android"
+  python3 -m unittest discover -s ../scripts/tests -p 'test_*.py'
+  python3 ../scripts/check-translations.py
+  runner=(scripts/dgradle)
+  if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+    runner=(./gradlew --max-workers=2 --no-parallel --no-watch-fs)
+  fi
+  "${runner[@]}" --no-daemon :core:model:test testDebugUnitTest \
+    :core:design:lintDebug :core:plugins:lintDebug :data:local:lintDebug :data:sync:lintDebug \
+    :plugins:dictation:lintDebug :plugins:quick-capture:lintDebug :app:lintDebug \
+    :app:assembleDebug :app:assembleDebugAndroidTest "$@"
+  # Gradle enforces the 15 MB compressed payload gate. Debug signing/alignment
+  # adds container overhead; signed releases retain their separate 15 MB gate.
+  python3 ../scripts/check-apk-size.py app/build/outputs/apk/debug/app-debug.apk --max-bytes 25000000
+)
+
+case "${1:-all}" in
+  --help|-h) usage ;;
+  web) web ;;
+  server) server ;;
+  android) shift; android "$@" ;;
+  native) "$ROOT/scripts/check-android-native" ;;
+  browser) cd "$ROOT/web"; shift; pnpm test:e2e "$@" ;;
+  all) web; server; android ;;
+  *) usage >&2; exit 2 ;;
+esac

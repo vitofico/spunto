@@ -328,9 +328,15 @@ async def test_settings_cannot_bypass_a_failed_plugin_circuit(inbound):
 
 
 async def test_large_multipart_message_does_not_block_actual_host_watchdog(inbound, monkeypatch):
+    import time
+
+    import spunto.host.runtime
     import spunto.net.imap
 
     host, _ = inbound
+    # Keep the real wall-clock watchdog while allowing shared-runner scheduling
+    # jitter. The separate host contract test retains the production 100 ms cap.
+    monkeypatch.setattr(spunto.host.runtime, "_LOOP_BLOCK_BUDGET_SECONDS", 1.0)
     raw = (
         b"From: allowed@example.invalid\r\nSubject: Synthetic parser budget\r\n"
         b"MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n"
@@ -348,6 +354,15 @@ async def test_large_multipart_message_does_not_block_actual_host_watchdog(inbou
     assert not host.loop_violations
     assert len(await rows(host)) == 1
     assert (await ctx.storage.kv.get("checkpoint"))["uid"] == 1
+
+    async def deliberately_blocking(ctx):
+        time.sleep(1.2)  # noqa: ASYNC251 -- negative control for the relaxed test bound
+
+    try:
+        await host._call_handler(deliberately_blocking, ctx, {})
+        assert host.loop_violations == {"email-in"}
+    finally:
+        host.loop_violations.discard("email-in")  # The negative control is expected.
 
 
 async def test_bad_destination_rejected_before_write_and_legacy_restart_is_safe(

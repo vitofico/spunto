@@ -3,8 +3,18 @@
 # Usage: scripts/dgradle <gradle-args...>   e.g. scripts/dgradle :app:assembleDebug
 set -euo pipefail
 
-IMAGE="spunto-build:latest"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+hash() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$@"
+  else
+    sha256sum "$@"
+  fi
+}
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+IMAGE="spunto-build:$(hash "$ROOT/Dockerfile" | cut -c1-12)"
+# Clones keep independent Gradle state; builds within one clone share a lock.
+CACHE_NAMESPACE="$(printf '%s' "$ROOT" | hash | cut -c1-12)"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "[dgradle] building $IMAGE under linux/amd64 (Rosetta on Apple Silicon, ~5 min)…"
@@ -19,12 +29,14 @@ fi
 
 # The android volume holds the debug keystore: keep it, or every build gets a
 # new signature and `adb install -r` over an earlier build fails.
+echo "[dgradle] cache $CACHE_NAMESPACE; builds in this checkout run one at a time"
 exec docker run --rm "${TTY_FLAGS[@]}" \
   --platform linux/amd64 \
   -v "$ROOT":/workspace \
   -v "$ROOT/../spec":/spec:ro \
-  -v spunto-gradle-cache:/root/.gradle \
+  -v "spunto-gradle-cache-$CACHE_NAMESPACE":/root/.gradle \
   -v spunto-android-cache:/root/.android \
-  -v spunto-m2-cache:/root/.m2 \
+  -v "spunto-m2-cache-$CACHE_NAMESPACE":/root/.m2 \
   "$IMAGE" \
-  ./gradlew "$@"
+  flock -w 1800 -E 75 /root/.gradle/.spunto-build.lock ./gradlew \
+  --max-workers=2 --no-parallel --no-watch-fs "$@"

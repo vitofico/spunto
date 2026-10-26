@@ -77,6 +77,13 @@ class Accounts:
             return await (await conn.execute(sql, args)).fetchall()
 
     async def sign_in(self, identity):
+        blocked = await self.one(
+            "SELECT id FROM public.spunto_account_closure WHERE identity_digest=%s AND "
+            "state<>'prepared'",
+            (digest(identity.issuer + "\0" + identity.subject),),
+        )
+        if blocked:
+            raise Problem(403, "account_closed", "This account is closed.")
         # Email is contact metadata, never an identity/account linking key.
         email = identity.email if identity.email_verified else None
         name = (identity.display_name or "Spunto user").strip()[:80]
@@ -89,6 +96,8 @@ class Accounts:
                     (str(uuid.uuid4()), identity.issuer, identity.subject, email, name),
                 )
             ).fetchone()
+            if account["closed_at"] is not None:
+                raise Problem(403, "account_closed", "This account is closed.")
             workspace = await (
                 await conn.execute(
                     "SELECT * FROM public.spunto_workspace WHERE created_by=%s AND personal",
@@ -112,6 +121,13 @@ class Accounts:
             return account, workspace
 
     async def _new_session(self, conn, user_id, auth_method):
+        account = await (
+            await conn.execute(
+                "SELECT closed_at FROM public.spunto_account WHERE id=%s FOR UPDATE", (user_id,)
+            )
+        ).fetchone()
+        if account is None or account["closed_at"] is not None:
+            raise Problem(403, "account_closed", "This account is closed.")
         token = "spunto_account_" + secrets.token_urlsafe(32)
         await conn.execute(
             "INSERT INTO public.spunto_login_session(token_hash,user_id,expires_at,auth_method) "
@@ -131,7 +147,7 @@ class Accounts:
             "SELECT a.*,s.auth_method FROM public.spunto_login_session s JOIN "
             "public.spunto_account a "
             "ON a.id=s.user_id WHERE s.token_hash=%s AND s.revoked_at IS NULL "
-            "AND s.expires_at>%s",
+            "AND s.expires_at>%s AND a.closed_at IS NULL",
             (digest(token), now_ms()),
         )
 
@@ -457,7 +473,7 @@ class Accounts:
     async def credential_account(self, credential_id):
         return await self.one(
             "SELECT a.*,l.workspace_id FROM public.spunto_credential_locator l "
-            "JOIN public.spunto_account a ON a.id=l.user_id WHERE l.id=%s",
+            "JOIN public.spunto_account a ON a.id=l.user_id WHERE l.id=%s AND a.closed_at IS NULL",
             (credential_id,),
         )
 

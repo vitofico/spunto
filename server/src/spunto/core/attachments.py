@@ -72,6 +72,10 @@ async def write_attachment(
     to_thread=asyncio.to_thread,
 ):
     check()
+    if policy := getattr(getattr(store, "_root", None), "account_policy", None):
+        limits = await policy.workspace(store._context[0])
+        if limits.get("file_bytes") is not None and len(data) > limits["file_bytes"]:
+            raise Problem(413, "account_file_limit", "This file exceeds the account upload limit.")
     if not isinstance(data, bytes) or len(data) > settings.max_upload_bytes:
         raise ValueError(f"attachment must be bytes of at most {settings.max_upload_mb} MB")
     if filename is not None and (not isinstance(filename, str) or len(filename) > 255):

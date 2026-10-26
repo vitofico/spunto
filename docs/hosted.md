@@ -280,3 +280,7 @@ application session. Operators must revoke application credentials separately;
 full application-account suspension/deletion and retention policies need an
 explicit contract. Public APK/container distribution, offsite recovery and real
 IdP/physical-phone acceptance retain their separate delivery gates.
+
+See [account policy and lifecycle interfaces](account-policy-and-lifecycle.md) for
+optional allowance resolution, account export, prepared closure and restore
+quarantine.

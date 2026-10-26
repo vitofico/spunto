@@ -64,8 +64,12 @@ async def upload(request: Request, principal: PrincipalDep, services: ServicesDe
     if not principal.writable:
         raise Problem(403, "read_only_token", "This token is read-only.")
     file_maximum = services.settings.max_upload_bytes
+    if services.hosted and services.hosted.account_policy:
+        policy = await services.hosted.account_policy.workspace(services.store._context[0])
+        if policy.get("file_bytes") is not None:
+            file_maximum = min(file_maximum, policy["file_bytes"])
     maximum = file_maximum + 65536
-    detail = f"Choose a file of at most {services.settings.max_upload_mb} MB."
+    detail = f"Choose a file of at most {file_maximum / 1_000_000:g} MB."
     length = request.headers.get("content-length")
     if length:
         digits = length.lstrip("0") or "0"

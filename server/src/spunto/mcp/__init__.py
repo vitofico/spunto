@@ -227,6 +227,10 @@ class MCP:
                 raise Problem(403, "read_only", "This token is read-only.")
             self.limits.take(principal.id, write=entry.write)
             args = entry.model.model_validate(params.arguments or {})
+            if entry.write and self.services.hosted and self.services.hosted.account_policy:
+                await self.services.hosted.account_policy.take(
+                    principal.user_id, "mcp_writes_daily"
+                )
             if plugin_entry:
                 _, plugin_id, tool_name = plugin_entry
                 payload = await self.services.host.invoke_tool(

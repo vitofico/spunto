@@ -75,6 +75,10 @@ class Provider:
 
 @pytest.fixture
 async def model_server(server):
+    # Startup reconciles the original gateway asynchronously. Finish it before
+    # replacing that gateway, so a late refresh cannot overwrite test-owned routes.
+    startup_checks = [task for task in asyncio.all_tasks() if task.get_name() == "ai-startup-check"]
+    await asyncio.gather(*startup_checks)
     provider = Provider()
     profile = Profile(
         name="local",

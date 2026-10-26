@@ -31,7 +31,7 @@ from spunto.api import (
 from spunto.api.deps import Services
 from spunto.api.network import SecurityHeadersMiddleware, WrongHostMiddleware
 from spunto.auth import owner
-from spunto.config import Settings
+from spunto.config import OperatorError, Settings
 from spunto.core.attachments import Attachments
 from spunto.core.plugin_notes import PluginNotes
 from spunto.host import Host
@@ -52,6 +52,8 @@ async def startup(settings: Settings) -> AsyncIterator[Services]:
     start stops before anything listens. Steps 4 and 5 (AI profiles, plugins)
     arrive with their milestones.
     """
+    if (settings.data_dir / "RESTORE-QUARANTINE.json").exists():
+        raise OperatorError("Restored data is quarantined pending account deletion reconciliation.")
     if settings.database_url:
         from spunto.hosted import hosted_startup
 

@@ -43,6 +43,11 @@ class NativeNavigationTest {
   compose.waitUntil(5000) {compose.onAllNodesWithText("spunto.").fetchSemanticsNodes().isNotEmpty()}
   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes  ⌄")
  }
+ private fun waitForFilterSheet() {
+  val title=hasText("Filter notes") and hasAnyAncestor(isDialog())
+  // The dialog can enter semantics before its sheet is positioned on screen.
+  compose.waitUntil(10_000) {compose.onAllNodes(title).fetchSemanticsNodes(atLeastOneRootRequired=false).size==1 && compose.onNode(title).isDisplayed()}
+ }
  private fun openFilters() {
   homeTitle()
   val picker=compose.onNodeWithContentDescription("Choose labels and views").fetchSemanticsNode().boundsInRoot
@@ -53,6 +58,7 @@ class NativeNavigationTest {
   }
   compose.onNode(hasContentDescription(container.context.getString(R.string.core_more_actions)) and sameHeaderRow).assertIsDisplayed().performClick()
   compose.onNodeWithText("Filter notes").assertHasClickAction().performClick()
+  waitForFilterSheet()
  }
  private fun todayFilter()=compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_today)))
 

@@ -342,9 +342,6 @@ function savedDepth() {
     ? Number(state.spuntoDepth)
     : NaN;
 }
-/** Back returns to a list left scrolled down: nothing there takes focus, so it keeps its place. */
-const returningScrolled = (location: string) =>
-  (scrollPositions.get(savedDepth() + location) ?? 0) > 0;
 /**
  * Numbers each history entry (in history.state) so Back can tell whether the
  * previous entry is still this app, and puts each list back where it was left.
@@ -466,7 +463,6 @@ export default function App() {
     StatusPage,
   } = pages;
   const signedIn = auth.status === "authenticated";
-  const returning = returningScrolled(location);
   useEffect(() => {
     if (!signedIn) return;
     // Fetch the note screen while idle, so opening a note works offline later.
@@ -494,8 +490,10 @@ export default function App() {
     markGuideCompleted();
     setGuideCompleted(true);
     setGuideReplay(false);
-    if (startWriting) navigate("/");
-    else if (guideReplay)
+    if (startWriting) {
+      navigate("/");
+      requestAnimationFrame(() => document.getElementById("composer")?.focus());
+    } else if (guideReplay)
       requestAnimationFrame(() => guideTrigger.current?.focus());
   }
   function showGuide(trigger: HTMLElement) {
@@ -749,6 +747,10 @@ export default function App() {
   const app = (
     <div
       key={owner}
+      data-home={location === "/"}
+      data-artwork-surface={
+        !location.startsWith("/n/") && !location.startsWith("/shared/n/")
+      }
       hidden={guideReplay}
       className={"app" + (collapsed ? " collapsed" : "")}
     >
@@ -779,13 +781,32 @@ export default function App() {
           spunto<span>.</span>
         </Link>
         <button
-          className="button"
+          className="button hero-search"
           aria-label={t("app.search")}
           onClick={(event) => openSearch(event.currentTarget)}
         >
           <Icon name="search" />
         </button>
+        <Link
+          href="/settings"
+          className="button home-settings"
+          aria-label={t("app.settings")}
+        />
       </header>
+      {location === "/" && (
+        <button
+          className="home-picker"
+          inert={modalOpen}
+          aria-label={t("app.open_navigation")}
+          onClick={(event) => {
+            rememberFocus(event.currentTarget);
+            setRailOpen(true);
+          }}
+          aria-expanded={railOpen}
+        >
+          {t("app.all_notes")}
+        </button>
+      )}
       <main
         id="main"
         tabIndex={-1}
@@ -817,7 +838,7 @@ export default function App() {
           >
             <Switch>
               <Route path="/">
-                <Timeline focusComposer={!returning} />
+                <Timeline />
               </Route>
               <Route path="/n/:id">
                 {(params) => <NotePage id={params.id} />}
@@ -841,11 +862,7 @@ export default function App() {
                 {(params) => {
                   const label = decoded(params["*"] ?? "");
                   return label ? (
-                    <Timeline
-                      key={label}
-                      label={label}
-                      focusComposer={!returning}
-                    />
+                    <Timeline key={label} label={label} />
                   ) : (
                     <NotFound />
                   );

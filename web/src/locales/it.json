@@ -1043,6 +1043,11 @@
     "note.more_actions": "Altre azioni",
     "note.only_in_yours": "Solo nella tua versione",
     "note.only_in_copy": "Solo in questa copia",
-    "format.or": " o "
+    "format.or": " o ",
+    "appearance.background_style": "Stile dello sfondo",
+    "appearance.background_help": "Scegli una pagina semplice o onde d’inchiostro. La scelta resta su questo browser e mantiene il tema di colore.",
+    "appearance.background_plain": "Semplice",
+    "appearance.background_artwork": "Illustrato",
+    "appearance.colour_theme": "Tema di colore"
   }
 }

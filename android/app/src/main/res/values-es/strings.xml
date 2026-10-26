@@ -1,3 +1,7 @@
 <resources>
  <string name="new_note">Nueva nota</string>
+ <string name="settings_background_style">Estilo de fondo</string>
+ <string name="settings_background_plain">Liso</string>
+ <string name="settings_background_artwork">Ilustrado</string>
+ <string name="settings_background_help">Elige una página sencilla u ondas de tinta. La elección se guarda en este teléfono y mantiene tu tema de color.</string>
 </resources>

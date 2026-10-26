@@ -1,3 +1,9 @@
+import {
+  readBackgroundStyle,
+  backgroundStyleKey,
+  saveBackgroundStyle,
+  type BackgroundStyle,
+} from "../lib/background-style";
 import { LanguagePicker } from "../components/core/LanguagePicker";
 import { t, useLanguage } from "../lib/i18n";
 import { useEffect, useState, type CSSProperties } from "react";
@@ -22,6 +28,15 @@ export function AppearancePanel() {
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const manifest = useQuery({ queryKey: ["manifest"], queryFn: api.manifest });
   const client = useQueryClient();
+  const [background, setBackground] = useState(readBackgroundStyle);
+  useEffect(() => {
+    const changed = (event: StorageEvent) => {
+      if (event.key === backgroundStyleKey || event.key === null)
+        setBackground(readBackgroundStyle());
+    };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, []);
   const [device, setDevice] = useState(readDeviceAppearance);
   const [face, setFace] = useState(
     () =>
@@ -126,6 +141,33 @@ export function AppearancePanel() {
           )}
         </p>
       )}
+      <h2>{t("appearance.background_style")}</h2>
+      <p className="muted">{t("appearance.background_help")}</p>
+      <div
+        className="background-choices"
+        role="group"
+        aria-label={t("appearance.background_style")}
+      >
+        {(["plain", "artwork"] as const).map((style: BackgroundStyle) => (
+          <button
+            type="button"
+            key={style}
+            aria-pressed={background === style}
+            className="background-choice"
+            onClick={() => {
+              setBackground(style);
+              saveBackgroundStyle(style);
+            }}
+          >
+            <span
+              aria-hidden="true"
+              className={`background-preview ${style}`}
+            />
+            {t(`appearance.background_${style}`)}
+          </button>
+        ))}
+      </div>
+      <h2>{t("appearance.colour_theme")}</h2>
       <div className={styles.themes}>
         {cards.map((card) => {
           const palette = dark ? card.dark : card.light;

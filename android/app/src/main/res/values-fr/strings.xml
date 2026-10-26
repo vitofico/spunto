@@ -1,3 +1,7 @@
 <resources>
  <string name="new_note">Nouvelle note</string>
+ <string name="settings_background_style">Style du fond</string>
+ <string name="settings_background_plain">Uni</string>
+ <string name="settings_background_artwork">Illustré</string>
+ <string name="settings_background_help">Choisissez une page unie ou des vagues d’encre. Ce choix reste sur ce téléphone et conserve votre thème de couleurs.</string>
 </resources>

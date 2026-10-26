@@ -319,11 +319,9 @@ function Empty({
 export default function Timeline({
   view = "timeline",
   label,
-  focusComposer = true,
 }: {
   view?: string;
   label?: string;
-  focusComposer?: boolean;
 }) {
   const language = useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
@@ -523,7 +521,8 @@ export default function Timeline({
             setBody={draft.setBody}
             onSave={() => void save()}
             upload={draft.uploadAttachment}
-            autoFocus={focusComposer}
+            autoFocus={false}
+            compact
             // Offline, the banner above already says the server can't be reached.
             error={
               online || draft.error?.status !== 0
@@ -601,9 +600,11 @@ export default function Timeline({
         {groups.map((group) => (
           <section key={group.title} aria-label={group.title}>
             <h2 className="overline day">{group.title}</h2>
-            {group.notes.map((note) => (
-              <NoteCard key={note.id} note={note} />
-            ))}
+            <div className="note-pane">
+              {group.notes.map((note) => (
+                <NoteCard key={note.id} note={note} />
+              ))}
+            </div>
           </section>
         ))}
       </section>

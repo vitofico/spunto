@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -49,7 +50,7 @@ import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -334,11 +335,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   if(restart) start() else session.clearNotice()
  }}
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-  Surface(shape=MaterialTheme.shapes.large,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,border=if(boxed) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null) {
-   Column(Modifier.fillMaxWidth().padding(if(boxed) SpuntoSpacing.s16 else 0.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-    Box(Modifier.fillMaxWidth().heightIn(min=if(boxed) 96.dp else 48.dp)) {
-     if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=if(boxed) MaterialTheme.typography.bodyLarge else SpuntoType.reading.copy(fontStyle=FontStyle.Italic))
-     BasicTextField(value=value,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=SpuntoType.reading.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription=context.getString(R.string.core_note_text) },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+  Surface(shape=if(compact) androidx.compose.foundation.shape.RoundedCornerShape(12.dp) else MaterialTheme.shapes.large,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,border=if(boxed) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null) {
+   Column(Modifier.fillMaxWidth().padding(if(compact) 12.dp else if(boxed) SpuntoSpacing.s16 else 0.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+     Box(Modifier.weight(1f).heightIn(min=if(compact) 48.dp else if(boxed) 96.dp else 48.dp),contentAlignment=if(compact) Alignment.CenterStart else Alignment.TopStart) {
+      val fieldStyle=if(compact) SpuntoType.reading.copy(fontSize=16.sp,lineHeight=23.sp) else SpuntoType.reading
+      if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=if(compact) fieldStyle else if(boxed) MaterialTheme.typography.bodyLarge else fieldStyle.copy(fontStyle=FontStyle.Italic))
+      BasicTextField(value=value,maxLines=if(compact && !focused) 2 else Int.MAX_VALUE,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=fieldStyle.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription=context.getString(R.string.core_note_text) },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+     }
+     if(compact && showSaveAction && (!focused || value.text.count {it=='\n'}<3)) Button(onClick={saveNow()},enabled=canSave && !startingVoice,modifier=Modifier.heightIn(min=48.dp),shape=androidx.compose.foundation.shape.RoundedCornerShape(10.dp),contentPadding=PaddingValues(horizontal=16.dp,vertical=10.dp),colors=ButtonDefaults.buttonColors(disabledContainerColor=MaterialTheme.colorScheme.primary.copy(alpha=.8f),disabledContentColor=MaterialTheme.colorScheme.onPrimary)) {
+      Text(context.getString(if(saving) R.string.sys_saving else R.string.sys_save),style=SpuntoType.readingSmall.copy(fontSize=15.sp))
+     }
     }
     fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}
     // One message and one way forward per state, inside the card (03 A13).
@@ -366,7 +373,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  // A label already typed in full offers nothing to complete, so the tools stay.
  val suggestions=prefix?.let {labelCounts.filter {label -> label.key.startsWith(it,true) && !label.path.equals(it,true)}.sortedByDescending {it.count}.take(5)}.orEmpty()
  val newLabel=prefix?.takeIf {it.isNotEmpty() && labelCounts.none {label -> label.path.equals(it,true)}}
- if(docked) BottomBar {
+ if(docked && (!compact || focused || listening || recordingActive(recording.phase) || pendingRecording!=null)) BottomBar {
   ComposerToolbar(tools={
    if(prefix!=null && (suggestions.isNotEmpty() || newLabel!=null)) {
     suggestions.forEach {label -> SuggestionChip(onClick={val caret=value.selection.start;insertAtCaret(label.path+" ",caret-prefix.length,caret)},label={Text("#${label.path}")})}
@@ -383,7 +390,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_record))}
    }
   },save={
-   if(showSaveAction) ComposerSaveAction(enabled=canSave,saving=saving,startingVoice=startingVoice) {saveNow()} else trailing?.invoke()
+   if(showSaveAction && (!compact || focused && value.text.count {it=='\n'}>=3)) ComposerSaveAction(enabled=canSave,saving=saving,startingVoice=startingVoice) {saveNow()} else trailing?.invoke()
   })
  }
 }

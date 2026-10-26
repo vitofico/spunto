@@ -53,26 +53,48 @@ export function NoteBody({
   body,
   onCheckbox,
   clamp = false,
+  preview = false,
 }: {
   note: Note;
   body?: string;
   onCheckbox?: (offset: number) => void;
   clamp?: boolean;
+  preview?: boolean;
 }) {
   useLanguage();
   const content = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ticks = body ?? note.body;
-  const html = useMemo(
-    () =>
-      note.html
-        ? DOMPurify.sanitize(note.html, {
-            ADD_ATTR: ["data-checkbox-index", "data-checkbox-offset"],
-          })
-        : "",
-    [note.html],
-  );
+  const html = useMemo(() => {
+    const safe = note.html
+      ? DOMPurify.sanitize(note.html, {
+          ADD_ATTR: ["data-checkbox-index", "data-checkbox-offset"],
+        })
+      : "";
+    if (!preview || !safe) return safe;
+    const content = document.createElement("div");
+    content.innerHTML = safe;
+    const first = content.firstElementChild;
+    if (
+      first?.matches("h1,h2,h3,h4,h5,h6,p") &&
+      first.textContent?.trim() === note.title.trim() &&
+      !first.querySelector("a,input,button,img")
+    )
+      first.remove();
+    for (const node of [...content.querySelectorAll("p")]) {
+      if (
+        note.labels?.length &&
+        !node.querySelector("code,input,img") &&
+        /^(?:#[\p{L}\p{N}_/-]+\s*)+$/u.test(node.textContent?.trim() ?? "") &&
+        (node.textContent?.trim().split(/\s+/) ?? []).every((label) =>
+          note.labels.includes(label.slice(1)),
+        )
+      )
+        node.remove();
+    }
+    return content.innerHTML;
+  }, [note.html, note.title, note.labels, preview]);
   useLayoutEffect(() => {
     for (const box of content.current?.querySelectorAll<HTMLInputElement>(
       "input[data-checkbox-offset]",
@@ -98,7 +120,13 @@ export function NoteBody({
   const className = "note-body" + (note.machine ? " machine" : "");
   const text = !note.html ? (
     <div ref={content} className={className} style={{ whiteSpace: "pre-wrap" }}>
-      {note.body}
+      {preview && note.body.split("\n")[0]?.trim() === note.title.trim()
+        ? note.body.slice(
+            note.body.indexOf("\n") < 0
+              ? note.body.length
+              : note.body.indexOf("\n") + 1,
+          )
+        : note.body}
     </div>
   ) : (
     <div
@@ -332,23 +360,6 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
       data-note-id={queued ? undefined : note.id}
       aria-busy={queued || undefined}
     >
-      {queued ? (
-        <span className="time">
-          <time dateTime={note.created_at}>{time}</time>
-        </span>
-      ) : (
-        <Link
-          href={"/n/" + note.id}
-          className="time"
-          aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${name}`}
-        >
-          {note.pinned ? (
-            <Icon name="pin" />
-          ) : (
-            <time dateTime={note.created_at}>{time}</time>
-          )}
-        </Link>
-      )}
       <div
         className="entry-main"
         onClick={(e) => {
@@ -361,7 +372,21 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
           navigate("/n/" + note.id);
         }}
       >
+        <h3 className="entry-title">
+          {queued ? (
+            name
+          ) : (
+            <Link
+              href={"/n/" + note.id}
+              className="time"
+              aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${name}`}
+            >
+              {name}
+            </Link>
+          )}
+        </h3>
         <NoteBody
+          preview
           note={note}
           body={ticked}
           clamp
@@ -369,6 +394,15 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
         />
       </div>
       <div className="entry-meta">
+        {(note.labels ?? []).map((label) => (
+          <Link
+            key={label}
+            className="label-pill"
+            href={"/l/" + encodeURIComponent(label)}
+          >
+            {label}
+          </Link>
+        ))}
         {note.private && (
           <span className="chip">
             <Icon name="lock" /> {t("note.private")}

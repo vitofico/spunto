@@ -1,5 +1,7 @@
 /* The settings grid fills the wide column the shell gives /settings/* (--settings-width). */
 .settings {
+  /* Keep all settings copy on paper; ambient ink belongs to the outer margins. */
+  background: var(--paper);
   display: grid;
   grid-template-columns: 155px minmax(0, var(--measure));
   gap: var(--s-48);
@@ -339,8 +341,8 @@
   position: absolute;
   inset: 0;
   background: currentColor;
-  mask: url("/brand-wave.svg") center / 100% 100% no-repeat;
-  opacity: 0.65;
+  mask: url("/spunto-woodgrain-mask.svg") center / 100% 100% no-repeat;
+  opacity: 0.32;
   pointer-events: none;
 }
 .themeName {

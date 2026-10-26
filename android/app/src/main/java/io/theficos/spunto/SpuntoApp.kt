@@ -2,6 +2,8 @@
 package io.theficos.spunto
 
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 
 import android.content.*
 import android.content.pm.ShortcutInfo
@@ -20,6 +22,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.activity.compose.BackHandler
 import io.theficos.spunto.core.design.*
 import io.theficos.spunto.core.model.*
@@ -44,6 +48,7 @@ import kotlinx.serialization.json.*
  var accent by remember { mutableStateOf(model.container.preferences.getString("theme-accent",null)) }
  var mode by remember { mutableStateOf(model.container.preferences.getString("mode","system")!!) }
  var black by remember { mutableStateOf(model.container.preferences.getBoolean("black",false)) }
+ var backgroundStyle by remember { mutableStateOf(normalizedBackgroundStyle(model.container.preferences.getString("background-style","artwork"))) }
  var wallpaper by remember { mutableStateOf(model.container.preferences.getBoolean("wallpaper",false)) }
  var readingFace by remember { mutableStateOf(normalizedReadingFace(model.container.preferences.getString("reading-face","serif").orEmpty())) }
  var readingSize by remember { mutableStateOf(normalizedReadingSize(model.container.preferences.getString("reading-size","M").orEmpty())) }
@@ -107,7 +112,7 @@ import kotlinx.serialization.json.*
  val topBar=remember { TopBarSlot() };val bottomBar=remember { BottomBarSlot() }
  val snackbar=remember { SnackbarHostState() };val feedbackScope=rememberCoroutineScope();val feedback=remember { Feedback(snackbar,feedbackScope) }
  CompositionLocalProvider(LocalNavigator provides nav,LocalTopBar provides topBar,LocalBottomBar provides bottomBar,LocalFeedback provides feedback) {
- SpuntoTheme(activeSelection.id,mode,black,wallpaper,pack=activeSelection.mode(dark),readingFace=readingFace,readingSize=readingSize) {
+ SpuntoTheme(activeSelection.id,mode,black,wallpaper,pack=activeSelection.mode(dark),readingFace=readingFace,readingSize=readingSize,backgroundStyle=backgroundStyle) {
   FirstRunGuideGate(guideStore,eligible=guideEligible && initialNoteId==null && route=="timeline" && !reauth,replay=route=="guide",canConnect=auth==null,onStartWriting={nav.home()},onSkipReplay={nav.back()},onConnect={nav.open("login")},content=appContent@{
   if(reauth || route=="login") {
    LoginScreen(model,reauth || sync==SyncStatus.NeedsSignIn,onDone={model.reauthenticate.value=false;nav.home()}); return@appContent
@@ -133,8 +138,30 @@ import kotlinx.serialization.json.*
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=modifier.semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=if(compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
    else routeTitle(context,route)?.let { Text(it,modifier=modifier,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis) }
   }
-  Scaffold(topBar={
-   if(brandedHeader) TimelineHeader(selector={headerTitle(true,it)},actions=headerActions,hasAdditionalActions=topBar.actions!=null)
+  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable || route in setOf("settings","appearance","plugins","status")),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
+   if(brandedHeader) Column {
+    val largeBrand=LocalDensity.current.fontScale>1.3f
+    val narrowBrand=LocalConfiguration.current.screenWidthDp<360
+    val wordmarkSize=when {largeBrand && narrowBrand -> 26.sp;largeBrand -> 36.sp;narrowBrand -> 44.sp;else -> 52.sp}
+    Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal)).padding(start=20.dp,end=20.dp,top=44.dp,bottom=18.dp),verticalAlignment=Alignment.CenterVertically) {
+     SpuntoWordmark(Modifier.weight(1f),style=MaterialTheme.typography.displayLarge.copy(fontSize=wordmarkSize,lineHeight=wordmarkSize*1.2f,fontWeight=FontWeight.SemiBold,letterSpacing=(-2.3).sp))
+     IconButton(onClick={nav.open("search")},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
+     IconButton(onClick={nav.open("settings")},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_settings_outline),contentDescription=context.getString(R.string.core_settings),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
+    }
+    var more by remember {mutableStateOf(false)}
+    Row(Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
+     Box(Modifier.weight(1f)) {
+      TextButton(onClick={navigationOpen=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)}  ⌄",style=MaterialTheme.typography.titleLarge.copy(fontSize=21.sp,lineHeight=28.sp),color=MaterialTheme.colorScheme.onSurface,maxLines=2,overflow=TextOverflow.Ellipsis)}
+     }
+     Box {
+      IconButton(onClick={more=true},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
+      DropdownMenu(expanded=more,onDismissRequest={more=false}) {
+       DropdownMenuItem(text={Text(context.getString(R.string.core_filter_notes))},onClick={more=false;filtersOpen=true})
+       if(model.container.manifest.enabled("ask")) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
+      }
+     }
+    }
+   }
    else TopAppBar(title={headerTitle(false,Modifier)},navigationIcon={if(!isLabelsNavigationRoute(route)) IconButton(onClick=::navigateBack) {Icon(painterResource(R.drawable.ic_arrow_back),contentDescription=context.getString(R.string.core_back),modifier=Modifier.size(24.dp))}},actions=headerActions,windowInsets=WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal+WindowInsetsSides.Top))
   },bottomBar={bottomBar.content?.let { bar -> Surface(color=MaterialTheme.colorScheme.background) { Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),contentAlignment=Alignment.Center) { Box(Modifier.widthIn(max=640.dp)) { bar() } } } }},snackbarHost={SnackbarHost(snackbar)},contentWindowInsets=WindowInsets.safeDrawing) { padding ->
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
@@ -161,7 +188,7 @@ import kotlinx.serialization.json.*
      },catalog=appearanceManifest?.catalog ?: ThemeCatalog(builtInThemeCards,false),accent=if(themeOverride) accent else activeSelection.accent,onAccent={ choice ->
       val selected=resolveThemeSelection(requestedTheme,choice,appearanceManifest?.catalog)
       applyDeviceTheme(model.container.preferences,requestedTheme,choice,selected,manifestFingerprint,clearWallpaper=true);theme=requestedTheme;accent=choice;themeOverride=true;wallpaper=false
-     },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()})
+     },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()},backgroundStyle=backgroundStyle,onBackgroundStyle={backgroundStyle=it;model.container.preferences.edit().putString("background-style",it).apply()})
      route=="plugins" -> PluginsScreen(model) { nav.open("plugin:$it") }
      route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))
     }

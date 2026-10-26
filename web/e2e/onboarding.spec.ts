@@ -107,7 +107,7 @@ test("first entry gates capture; keyboard navigation and Skip persist on reload"
     page.getByRole("heading", { name: "A quiet place for loose ideas." }),
   ).toBeFocused();
   await page.getByRole("button", { name: "Skip", exact: true }).click();
-  await expect(page.getByLabel("New note")).toBeFocused();
+  await expect(page.getByLabel("New note")).not.toBeFocused();
   expect(await page.evaluate((key) => localStorage.getItem(key), marker)).toBe(
     "complete",
   );

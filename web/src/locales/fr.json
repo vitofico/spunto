@@ -1043,6 +1043,11 @@
     "note.more_actions": "Autres actions",
     "note.only_in_yours": "Uniquement dans votre version",
     "note.only_in_copy": "Uniquement dans cette copie",
-    "format.or": " ou "
+    "format.or": " ou ",
+    "appearance.background_style": "Style du fond",
+    "appearance.background_help": "Choisissez une page unie ou des vagues d’encre. Ce choix reste dans ce navigateur et conserve votre thème de couleurs.",
+    "appearance.background_plain": "Uni",
+    "appearance.background_artwork": "Illustré",
+    "appearance.colour_theme": "Thème de couleurs"
   }
 }

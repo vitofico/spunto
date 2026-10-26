@@ -163,7 +163,7 @@ it("keeps saved cards and day groups unchanged while composing, then updates on 
   const formatDay = vi.spyOn(Date.prototype, "toLocaleDateString");
   const formatTime = vi.spyOn(Date.prototype, "toLocaleTimeString");
   const sanitize = vi.spyOn(DOMPurify, "sanitize");
-  const { rerender } = render(<Timeline focusComposer={false} />, {
+  const { rerender } = render(<Timeline />, {
     wrapper: Wrapper,
   });
   const editor = await screen.findByRole("textbox", { name: "New note" });
@@ -204,6 +204,6 @@ it("keeps saved cards and day groups unchanged while composing, then updates on 
   nextDay.setDate(nextDay.getDate() + 1);
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(nextDay);
-  rerender(<Timeline focusComposer={false} />);
+  rerender(<Timeline />);
   expect(screen.getByRole("heading", { name: "Yesterday" })).toBeTruthy();
 });

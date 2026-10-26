@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -54,46 +55,59 @@ export function NoteBody({
   onCheckbox,
   clamp = false,
   preview = false,
+  renderTitle,
 }: {
   note: Note;
   body?: string;
   onCheckbox?: (offset: number) => void;
   clamp?: boolean;
   preview?: boolean;
+  renderTitle?: (title: string | null) => ReactNode;
 }) {
   useLanguage();
   const content = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ticks = body ?? note.body;
-  const html = useMemo(() => {
+  const { html, title } = useMemo(() => {
     const safe = note.html
       ? DOMPurify.sanitize(note.html, {
           ADD_ATTR: ["data-checkbox-index", "data-checkbox-offset"],
         })
       : "";
-    if (!preview || !safe) return safe;
+    if (!preview || !safe) return { html: safe, title: null };
     const content = document.createElement("div");
     content.innerHTML = safe;
     const first = content.firstElementChild;
-    if (
+    const complete =
       first?.matches("h1,h2,h3,h4,h5,h6,p") &&
-      first.textContent?.trim() === note.title.trim() &&
-      !first.querySelector("a,input,button,img")
-    )
-      first.remove();
-    for (const node of [...content.querySelectorAll("p")]) {
-      if (
-        note.labels?.length &&
-        !node.querySelector("code,input,img") &&
-        /^(?:#[\p{L}\p{N}_/-]+\s*)+$/u.test(node.textContent?.trim() ?? "") &&
-        (node.textContent?.trim().split(/\s+/) ?? []).every((label) =>
-          note.labels.includes(label.slice(1)),
+      first.textContent?.trim() === note.title.trim();
+    // Only the server's canonical label anchors move to chips; code and ordinary links stay intact.
+    if (note.labels?.length) {
+      for (const label of content.querySelectorAll('a.label[href^="/l/"]')) {
+        const paragraph = label.closest("p");
+        const wrapper = paragraph?.textContent
+          ?.split(label.textContent ?? "")
+          .map((part) => part.trim())
+          .join("|");
+        label.remove();
+        if (
+          paragraph &&
+          (!paragraph.textContent?.trim() ||
+            /^(?:\(\|\)|\[\|\]|\{\|\})$/.test(wrapper ?? "")) &&
+          !paragraph.querySelector("a,input,img,code")
         )
-      )
-        node.remove();
+          paragraph.remove();
+      }
     }
-    return content.innerHTML;
+    const title =
+      complete &&
+      first!.parentElement === content &&
+      !first!.querySelector("a,input,button,img,code,pre")
+        ? first!.textContent?.trim() || null
+        : null;
+    if (title) first!.remove();
+    return { html: content.innerHTML, title };
   }, [note.html, note.title, note.labels, preview]);
   useLayoutEffect(() => {
     for (const box of content.current?.querySelectorAll<HTMLInputElement>(
@@ -120,13 +134,7 @@ export function NoteBody({
   const className = "note-body" + (note.machine ? " machine" : "");
   const text = !note.html ? (
     <div ref={content} className={className} style={{ whiteSpace: "pre-wrap" }}>
-      {preview && note.body.split("\n")[0]?.trim() === note.title.trim()
-        ? note.body.slice(
-            note.body.indexOf("\n") < 0
-              ? note.body.length
-              : note.body.indexOf("\n") + 1,
-          )
-        : note.body}
+      {note.body}
     </div>
   ) : (
     <div
@@ -159,9 +167,16 @@ export function NoteBody({
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
-  if (!clamp) return text;
+  if (!clamp)
+    return (
+      <>
+        {renderTitle?.(title)}
+        {text}
+      </>
+    );
   return (
     <>
+      {renderTitle?.(title)}
       <div
         className="clamp"
         data-clamped={!expanded || undefined}
@@ -372,21 +387,22 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
           navigate("/n/" + note.id);
         }}
       >
-        <h3 className="entry-title">
-          {queued ? (
-            name
-          ) : (
-            <Link
-              href={"/n/" + note.id}
-              className="time"
-              aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${name}`}
-            >
-              {name}
-            </Link>
-          )}
-        </h3>
         <NoteBody
           preview
+          renderTitle={(title) => {
+            const link = queued ? (
+              title
+            ) : (
+              <Link
+                href={"/n/" + note.id}
+                className="time"
+                aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${title ?? name}`}
+              >
+                {title ?? time}
+              </Link>
+            );
+            return title ? <h3 className="entry-title">{link}</h3> : link;
+          }}
           note={note}
           body={ticked}
           clamp

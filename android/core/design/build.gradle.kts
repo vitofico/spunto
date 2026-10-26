@@ -8,6 +8,7 @@ android {
  buildFeatures { compose = true }
 }
 dependencies {
+implementation(project(":core:model"))
 implementation(libs.androidx.core.ktx)
 implementation(libs.compose.foundation)
 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

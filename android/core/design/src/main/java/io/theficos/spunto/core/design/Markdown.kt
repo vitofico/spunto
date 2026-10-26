@@ -79,8 +79,8 @@ fun hasOpenTasks(body:String):Boolean {
  walk(parser.parse(body));return found
 }
 /** Native text renderer; raw HTML is never executed. Taps outside links and labels fall through to the caller (open or edit the note); [onText] hears where in the source a finger lands on the text first (null when unmapped). */
-@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, maxLines:Int?=null, onToggle: ((Int)->Unit)? = null) {
- val document=remember(body) { parser.parse(body) }
+@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, maxLines:Int?=null, hideLabels:Boolean=false, onToggle: ((Int)->Unit)? = null) {
+ val document=remember(body,hideLabels) { parser.parse(body).let {if(hideLabels) hidePreviewLabels(it,body) else it} }
  val tasks=remember(body) { checklistLines(body).toSet() }
  val uri=LocalUriHandler.current
  val links=MarkdownLinks(MaterialTheme.colorScheme.primary,SpuntoColors.ruleStrong,{ target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } },onLabel,onText,body)

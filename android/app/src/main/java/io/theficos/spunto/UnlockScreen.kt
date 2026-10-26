@@ -26,7 +26,8 @@ import io.theficos.spunto.core.design.*
    ) {
     SpuntoWordmark(style=MaterialTheme.typography.displayLarge.copy(fontSize=44.sp,lineHeight=56.sp,letterSpacing=(-1).sp),
      modifier=Modifier.clearAndSetSemantics {heading();contentDescription=context.getString(R.string.sys_lock_title)})
-    SpuntoWave(Modifier.fillMaxWidth().height((viewport*.5f).coerceIn(120.dp,420.dp)).padding(vertical=SpuntoSpacing.s16))
+    // The authored page backdrop replaces the old standalone wave without moving the actions.
+    Spacer(Modifier.fillMaxWidth().height((viewport*.5f).coerceIn(120.dp,420.dp)).padding(vertical=SpuntoSpacing.s16))
     Spacer(Modifier.weight(1f))
     Text(context.getString(R.string.sys_welcome_back),style=MaterialTheme.typography.headlineLarge.copy(fontFamily=uiFont()),
      modifier=Modifier.padding(top=SpuntoSpacing.s16,bottom=SpuntoSpacing.s24))

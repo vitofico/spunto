@@ -74,12 +74,20 @@ test("real server capture, image, checkbox, edit history, search and label rewri
       .filter({ hasText: title })
       .getByRole("checkbox"),
   ).toBeChecked();
-  await page
+  const labelChip = page
     .locator("article.entry")
     .filter({ hasText: title })
-    .getByRole("link", { name: "#" + label, exact: true })
-    .click();
-  await expect(page).toHaveURL(new RegExp("/l/" + label));
+    .getByRole("link", { name: label, exact: true });
+  await expect(labelChip).toHaveAttribute("class", "label-pill");
+  await expect(labelChip).toHaveAttribute(
+    "href",
+    "/l/" + encodeURIComponent(label),
+  );
+  await labelChip.click();
+  await expect(page).toHaveURL(
+    new RegExp("/l/" + encodeURIComponent(label) + "$"),
+  );
+  expect(decodeURIComponent(new URL(page.url()).pathname)).toBe("/l/" + label);
   await page.getByLabel("Label actions").click();
   await page.getByRole("menuitem", { name: "Rename" }).click();
   await page.getByLabel("New name").fill(label + "renamed");

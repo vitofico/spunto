@@ -133,7 +133,9 @@ class OIDCClient:
         if len(browser_binding) < 32:
             raise OIDCError("A browser binding is required for sign-in.")
         if purpose is not None and (
-            purpose not in {"local-password", "oidc-link"} or not user_id or not session_hash
+            purpose not in {"local-password", "oidc-link", "account-delete"}
+            or not user_id
+            or not session_hash
         ):
             raise OIDCError("Reauthentication requires a bound account session.")
         metadata = await self._discovery()

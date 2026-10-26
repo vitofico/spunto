@@ -36,22 +36,30 @@ class NativeNavigationTest {
  }
  private fun sheetList()=compose.onNode(hasScrollAction() and hasAnyAncestor(isDialog()))
  private fun assertDraft(body:String) {runBlocking {assertEquals(body,container.repository.draft("capture").first()?.body)}}
+ private fun waitForFilterSheet() {
+  val title=hasText("Filter notes") and hasAnyAncestor(isDialog())
+  // The dialog can enter semantics before its sheet is positioned on screen.
+  compose.waitUntil(10_000) {compose.onAllNodes(title).fetchSemanticsNodes(atLeastOneRootRequired=false).size==1 && compose.onNode(title).isDisplayed()}
+ }
 
  @Test fun dateFiltersStayOffTheTimelineAndApplyOnlyAfterConfirmation() {
   waitForCapture()
   compose.onNodeWithText("Dates").assertDoesNotExist()
   compose.onNodeWithText("Date filter").assertDoesNotExist()
   compose.onNodeWithContentDescription("Filter notes").performClick()
+  waitForFilterSheet()
   compose.onNodeWithText("Filter notes").assertIsDisplayed()
   compose.onNodeWithText("Last 7 days").performClick()
   compose.onNodeWithText("Cancel").performScrollTo().performClick()
   compose.onNodeWithContentDescription("Filter notes").assertIsDisplayed().performClick()
+  waitForFilterSheet()
   compose.onNodeWithText("Today").performClick()
   compose.onNodeWithText("Apply filters").performScrollTo().performClick()
   compose.onNodeWithContentDescription("Filters applied").assertIsDisplayed()
   compose.onNodeWithText("Filter notes").assertDoesNotExist()
   compose.onNodeWithText("Clear dates").assertDoesNotExist()
   compose.onNodeWithContentDescription("Filters applied").performClick()
+  waitForFilterSheet()
   compose.onNodeWithText("Clear dates").performScrollTo().performClick()
   compose.onNodeWithText("Apply filters").performScrollTo().performClick()
   compose.onNodeWithContentDescription("Filter notes").assertIsDisplayed()

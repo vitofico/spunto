@@ -74,6 +74,230 @@ def headers(user, workspace=None):
     return result
 
 
+async def test_http_policy_changes_atomic_account_allowance_without_resetting_usage(hosted):
+    from spunto.ai.policy import HTTPPolicy
+    from spunto.ai.quota import ACTIONS, AccountQuota, QuotaExceeded
+
+    client, manager, users, settings = hosted
+    alice, bob, _ = users
+    now = [1_790_000_000]
+    raised = [False]
+
+    def policy_response(request):
+        account_id = request.url.path.rsplit("/", 1)[1]
+        limit = 3 if raised[0] and account_id == alice["account"]["id"] else 1
+        return httpx.Response(
+            200,
+            json={
+                "version": 1,
+                "account_id": account_id,
+                "expires_at": now[0] + 120,
+                "limits": dict.fromkeys(ACTIONS, limit),
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(policy_response)) as http:
+        policy = HTTPPolicy(
+            "http://policy.example.test/v1/accounts",
+            "synthetic",
+            dict.fromkeys(ACTIONS, 1),
+            client=http,
+            clock=lambda: now[0],
+        )
+        quota = AccountQuota(
+            manager.accounts, alice["account"]["id"], settings.ai_quota, policy=policy
+        )
+        # Two spaces owned by the same account cannot evade its authoritative counter.
+        other_space = AccountQuota(
+            manager.accounts, alice["account"]["id"], settings.ai_quota, policy=policy
+        )
+        await quota.reserve("ask")
+        with pytest.raises(QuotaExceeded):
+            await other_space.reserve("ask")
+        raised[0] = True
+        now[0] += 121
+        await other_space.reserve("ask")
+        status = await quota.status()
+        ask = next(row for row in status["actions"] if row["action"] == "ask")
+        assert (ask["used"], ask["limit"]) == (2, 3)
+        assert (await policy.limits(bob["account"]["id"]))["ask"] == 1
+        raised[0] = False
+        now[0] += 121
+        with pytest.raises(QuotaExceeded):
+            await quota.reserve("ask")
+        assert (await client.get("/api/v1/notes", headers=headers(alice))).status_code == 200
+        assert (await client.get("/api/v1/export", headers=headers(alice))).status_code == 200
+
+
+async def test_generic_account_limits_are_atomic_shared_and_keep_reads_export(hosted):
+    from spunto.account_policy import AccountPolicy
+    from spunto.ai.policy import HTTPPolicy
+    from spunto.ai.quota import ACTIONS, AccountQuota, QuotaExceeded
+
+    client, manager, users, settings = hosted
+    alice, bob, carol = users
+    resources = {
+        "storage_bytes": 2000,
+        "file_bytes": 50,
+        "owned_shared_spaces": 1,
+        "members_per_shared_space": 2,
+        "mcp_writes_daily": 2,
+        "ask_daily": 2,
+        "transcription_seconds_monthly": 60,
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200,
+                json={
+                    "version": 1,
+                    "account_id": req.url.path.rsplit("/", 1)[1],
+                    "expires_at": int(time.time()) + 120,
+                    "limits": dict.fromkeys(ACTIONS, 100),
+                    "resources": resources,
+                },
+            )
+        )
+    ) as http:
+        source = HTTPPolicy(
+            "http://policy.synthetic/accounts", "synthetic", settings.ai_quota, client=http
+        )
+        manager.ai_policy = source
+        manager.account_policy = AccountPolicy(manager.accounts, source)
+        manager.store.account_policy = manager.account_policy
+        await manager.account_policy.prepare(alice["account"]["id"])
+        made = await client.post("/api/v1/workspaces", headers=headers(alice), json={"name": "One"})
+        assert made.status_code == 201, made.text
+        workspace = made.json()["id"]
+        assert (
+            await client.post("/api/v1/workspaces", headers=headers(alice), json={"name": "Two"})
+        ).status_code == 429
+        assert (
+            await client.post(
+                f"/api/v1/workspaces/{workspace}/members",
+                headers=headers(alice),
+                json={"user_id": bob["account"]["id"], "role": "editor"},
+            )
+        ).status_code == 200
+        assert (
+            await client.post(
+                f"/api/v1/workspaces/{workspace}/members",
+                headers=headers(alice),
+                json={"user_id": carol["account"]["id"], "role": "editor"},
+            )
+        ).status_code == 429
+        first = await client.post("/api/v1/notes", headers=headers(alice), json={"body": "A" * 600})
+        assert first.status_code == 201, first.text
+        overflow = await client.post(
+            "/api/v1/notes", headers=headers(bob, workspace), json={"body": "B" * 600}
+        )
+        assert overflow.status_code == 429, overflow.text
+        # A different owner retains their own full storage allowance.
+        assert (
+            await client.post("/api/v1/notes", headers=headers(bob), json={"body": "B" * 600})
+        ).status_code == 201
+        assert (
+            await client.post(
+                "/api/v1/attachments",
+                headers=headers(alice),
+                files={"file": ("large.bin", b"x" * 51, "application/octet-stream")},
+            )
+        ).status_code == 413
+        quota = AccountQuota(
+            manager.accounts, alice["account"]["id"], settings.ai_quota, policy=source
+        )
+        await quota.reserve("ask")
+        await quota.reserve("ask")
+        with pytest.raises(QuotaExceeded):
+            await quota.reserve("ask")
+        reserved = await quota.reserve("transcribe", seconds=50)
+        with pytest.raises(QuotaExceeded):
+            await quota.reserve("transcribe", seconds=20)
+        await quota.release(*reserved)
+        await quota.reserve("transcribe", seconds=60)
+        await manager.account_policy.take(alice["account"]["id"], "mcp_writes_daily")
+        await manager.account_policy.take(alice["account"]["id"], "mcp_writes_daily")
+        from spunto.api.errors import Problem
+
+        with pytest.raises(Problem):
+            await manager.account_policy.take(alice["account"]["id"], "mcp_writes_daily")
+        assert (await client.get("/api/v1/notes", headers=headers(alice))).status_code == 200
+        assert (
+            await client.get("/api/v1/account/export", headers=headers(alice))
+        ).status_code == 200
+
+
+async def test_account_closure_requires_choice_revokes_credentials_and_purges_only_owned(hosted):
+    client, manager, users, settings = hosted
+    alice, bob, _ = users
+    settings.account_service_token = "synthetic-lifecycle-service-token-0000"
+    await client.post("/api/v1/notes", headers=headers(alice), json={"body": "Alice disposable"})
+    await client.post("/api/v1/notes", headers=headers(bob), json={"body": "Bob retained"})
+    shared = (
+        await client.post(
+            "/api/v1/workspaces", headers=headers(alice), json={"name": "Shared disposable"}
+        )
+    ).json()
+    await client.post(
+        f"/api/v1/workspaces/{shared['id']}/members",
+        headers=headers(alice),
+        json={"user_id": bob["account"]["id"], "role": "editor"},
+    )
+    body = {"confirm": "DELETE MY ACCOUNT"}
+    assert (
+        await client.post("/api/v1/auth/account/closure", headers=headers(alice), json=body)
+    ).status_code == 409
+    unverified = await client.post(
+        "/api/v1/auth/account/closure",
+        headers=headers(alice),
+        json=body | {"delete_owned_shared": True},
+    )
+    assert unverified.status_code == 403
+    await manager.accounts.grant_reauthentication(
+        alice["account"]["id"], alice["token"], "account-delete"
+    )
+    await manager.accounts.one(
+        "UPDATE public.spunto_account_reauthentication SET expires_at=0 "
+        "WHERE user_id=%s RETURNING user_id",
+        (alice["account"]["id"],),
+    )
+    assert (
+        await client.post(
+            "/api/v1/auth/account/closure",
+            headers=headers(alice),
+            json=body | {"delete_owned_shared": True},
+        )
+    ).status_code == 403
+    await manager.accounts.grant_reauthentication(
+        alice["account"]["id"], alice["token"], "account-delete"
+    )
+    prepared = await client.post(
+        "/api/v1/auth/account/closure",
+        headers=headers(alice),
+        json=body | {"delete_owned_shared": True},
+    )
+    assert prepared.status_code == 200, prepared.text
+    receipt = {"closure_id": prepared.json()["closure_id"]}
+    url = f"/internal/v1/accounts/{alice['account']['id']}"
+    assert (await client.post(url + "/close", json=receipt)).status_code == 401
+    service = {"Authorization": "Bearer " + settings.account_service_token}
+    assert (await client.post(url + "/purge", json=receipt, headers=service)).status_code == 409
+    assert (await client.post(url + "/close", json=receipt, headers=service)).status_code == 200
+    assert (await client.get("/api/v1/notes", headers=headers(alice))).status_code == 401
+    assert (await client.post(url + "/close", json=receipt, headers=service)).status_code == 200
+    purged = await client.post(url + "/purge", json=receipt, headers=service)
+    assert purged.status_code == 200, purged.text
+    assert (await client.post(url + "/purge", json=receipt, headers=service)).status_code == 200
+    remaining = await client.get("/api/v1/notes", headers=headers(bob))
+    assert remaining.status_code == 200 and remaining.json()["notes"][0]["body"] == "Bob retained"
+    assert (
+        await manager.accounts.one(
+            "SELECT id FROM public.spunto_account WHERE id=%s", (alice["account"]["id"],)
+        )
+        is None
+    )
+
+
 async def test_ai_model_choices_are_owner_managed_scoped_and_survive_restart(hosted, monkeypatch):
     from spunto.ai.gateway import Gateway
     from spunto.ai.profiles import Profile

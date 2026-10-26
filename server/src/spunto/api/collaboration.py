@@ -63,6 +63,8 @@ async def workspaces(request: Request):
 @router.post("/workspaces", status_code=201)
 async def create_workspace(body: CreateSpace, request: Request):
     manager, account, _ = context(request)
+    if manager.account_policy:
+        await manager.account_policy.prepare(account["id"])
     workspace = await manager.accounts.create_workspace(account["id"], body.name)
     await manager.services(workspace, account["id"])
     return workspace
@@ -91,6 +93,8 @@ async def add_member(workspace_id: str, body: Grant, request: Request):
     recipient = await manager.accounts.recipient(
         email=body.email, user_id=body.user_id, username=body.username
     )
+    if manager.account_policy:
+        await manager.account_policy.prepare(account["id"])
     if recipient["id"] == account["id"]:
         raise Problem(409, "owner_membership", "The owner's membership cannot be changed here.")
     async with manager.accounts.transaction() as conn:

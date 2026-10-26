@@ -139,7 +139,9 @@ class Gateway:
                 (day, plugin, capability, outcome, usage.input_tokens, usage.output_tokens),
             )
 
-    async def _call(self, capability, fn, *, plugin_id, priority, profile=None, check=None):
+    async def _call(
+        self, capability, fn, *, plugin_id, priority, profile=None, check=None, quota_seconds=0
+    ):
         generation = self.generation
         accounted = False
         usage, reserved = Usage(), None
@@ -163,7 +165,7 @@ class Gateway:
                 check()
             # Charge the space owner's monthly allowance before the call queues.
             if self.quota and (name := action(capability, plugin_id)):
-                reserved = await self.quota.reserve(name)
+                reserved = await self.quota.reserve(name, seconds=quota_seconds)
             async with queue.slot(plugin_id, priority):
                 import asyncio
 
@@ -446,6 +448,19 @@ class Gateway:
     ):
         if len(audio) > self.settings.max_upload_bytes or not 0 < duration_s <= 3600:
             raise AIError("refused", "ai_audio_refused")
+        measured = 0
+        if self.quota and self.quota.policy:
+            import io
+            import wave
+
+            try:
+                with wave.open(io.BytesIO(audio)) as recording:
+                    duration_s = recording.getnframes() / recording.getframerate()
+                    measured = math.ceil(duration_s)
+                    if not 0 < measured <= 3600:
+                        raise ValueError
+            except wave.Error, ValueError, EOFError:
+                raise AIError("refused", "ai_audio_duration_unverified") from None
 
         async def invoke(p, adapter):
             for attempt in range(2):
@@ -480,6 +495,7 @@ class Gateway:
             priority=priority,
             profile=profile,
             check=check,
+            quota_seconds=measured,
         )
 
     async def status(self):

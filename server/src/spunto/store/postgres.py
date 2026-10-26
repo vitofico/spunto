@@ -397,6 +397,10 @@ class Connection:
         try:
             cursor = await self._connection.execute(translated, args or None)
         except psycopg.Error as exc:
+            from spunto.account_policy import quota_problem
+
+            if problem := quota_problem(exc):
+                raise problem from None
             # PostgreSQL DETAIL can contain the entire failing note/credential row.
             # Keep the exception class for callers, but never propagate its values.
             raise type(exc)(f"PostgreSQL operation failed ({exc.sqlstate or 'unknown'}).") from None
@@ -581,6 +585,8 @@ class PostgresStore:
 
     @asynccontextmanager
     async def write(self) -> AsyncIterator[Connection]:
+        if policy := getattr(self._root, "account_policy", None):
+            await policy.workspace(self._context[0])
         events = []
         token = self._events.set(events)
         committed = False

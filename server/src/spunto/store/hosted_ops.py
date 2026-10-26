@@ -21,6 +21,10 @@ IDENTITY_TABLES = (
     "spunto_account_reauthentication",
     "spunto_auth_throttle",
     "spunto_ai_usage",
+    "spunto_account_policy",
+    "spunto_account_storage",
+    "spunto_account_counter",
+    "spunto_account_closure",
 )
 
 

@@ -37,11 +37,14 @@ class NativeNavigationTest {
  }
  private fun sheetList()=compose.onNode(hasScrollAction() and hasAnyAncestor(isDialog()))
  private fun assertDraft(body:String) {runBlocking {assertEquals(body,container.repository.draft("capture").first()?.body)}}
+ private fun assertNavigationTitle(title:String) {
+  compose.onNodeWithContentDescription("Choose labels and views").assertTextContains(title,substring=true)
+ }
  private fun homeTitle() {
   // The approved idle home and focused app bar have different decorative chevrons.
   closeSoftKeyboard()
   compose.waitUntil(5000) {compose.onAllNodesWithText("spunto.").fetchSemanticsNodes().isNotEmpty()}
-  compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("All notes  ⌄")
+  assertNavigationTitle("All notes")
  }
  private fun waitForFilterSheet() {
   val title=hasText("Filter notes") and hasAnyAncestor(isDialog())
@@ -74,12 +77,14 @@ class NativeNavigationTest {
   todayFilter().assertDoesNotExist()
   compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_last_week))).assertDoesNotExist()
   openFilters()
+  compose.onNodeWithText("Last 7 days").assertIsNotSelected()
   compose.onNodeWithText("Today").performClick()
   compose.onNodeWithText("Apply filters").performScrollTo().performClick()
   todayFilter().assertIsDisplayed().assertIsSelected()
   compose.onNodeWithText("Filter notes").assertDoesNotExist()
   compose.onNodeWithText("Clear dates").assertDoesNotExist()
   openFilters()
+  compose.onNodeWithText("Today").assertIsSelected()
   compose.onNodeWithText("Clear dates").performScrollTo().performClick()
   compose.onNodeWithText("Apply filters").performScrollTo().performClick()
   todayFilter().assertDoesNotExist()
@@ -141,7 +146,7 @@ class NativeNavigationTest {
    compose.waitForIdle()
    compose.onNodeWithTag("label:$key").performClick()
    compose.onNode(labelFilterMatcher()).assertDoesNotExist()
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("#$path ▾")
+   assertNavigationTitle("#$path")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
    compose.waitUntil(10_000) {compose.onAllNodesWithText(passage).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithText(passage).assertIsDisplayed()
@@ -153,7 +158,7 @@ class NativeNavigationTest {
    sheetList().performScrollToNode(hasTestTag("label:$key"))
    compose.onNodeWithTag("label:$key").assertIsSelected()
    compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
-   compose.onNodeWithContentDescription("Choose labels and views").assertTextEquals("#$path ▾")
+   assertNavigationTitle("#$path")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist();assertDraft(draftBody)
    openSheet()
    compose.onNodeWithText("All notes").performClick()

@@ -12,7 +12,7 @@ ENV ANDROID_SDK_ROOT=/opt/android-sdk \
 ENV PATH=$PATH:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl unzip git ca-certificates \
+        curl unzip git ca-certificates util-linux \
  && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools \

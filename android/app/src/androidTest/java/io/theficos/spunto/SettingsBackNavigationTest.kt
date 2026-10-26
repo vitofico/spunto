@@ -47,10 +47,8 @@ class SettingsBackNavigationTest {
    // The final Back must target navigation, not consume a restored keyboard session.
    closeSoftKeyboard()
    if(systemBack) pressBack() else compose.onNodeWithContentDescription("Back").performClick()
-   // Both approved headers identify All notes; IME/insets restoration chooses the decoration.
-   compose.onNodeWithContentDescription("Choose labels and views").assertIsDisplayed().assert(
-    hasText("All notes  ⌄") or hasText("All notes ▾")
-   )
+   // Assert the route label without coupling navigation to a decorative chevron.
+   compose.onNodeWithContentDescription("Choose labels and views").assertIsDisplayed().assertTextContains("All notes",substring=true)
    compose.onAllNodesWithText("Settings").assertCountEquals(0)
    // Opening capture can materialize an empty draft row; its words must remain unchanged.
    assertEquals(original.orEmpty(),runBlocking {appContainer.repository.draft("capture").first()?.body}.orEmpty())

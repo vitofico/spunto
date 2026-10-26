@@ -6,7 +6,7 @@ keep no allowance; the provider's own spending limit applies there.
 """
 
 import contextvars
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from spunto.ai.errors import AIError
 
@@ -96,32 +96,86 @@ class QuotaExceeded(AIError):
 class AccountQuota:
     """Atomic monthly counters in the identity database for one space owner's account."""
 
-    def __init__(self, accounts, user_id, limits, *, clock=lambda: datetime.now(UTC)):
+    def __init__(self, accounts, user_id, limits, *, clock=lambda: datetime.now(UTC), policy=None):
         self.accounts, self.user_id, self.limits, self.clock = accounts, user_id, limits, clock
+        self.policy = policy
 
-    async def reserve(self, action):
+    async def reserve(self, action, *, seconds=0):
         """Count one action before it queues, or refuse it once the month's allowance is used."""
         now = self.clock()
         period, resets_at = _month(now)
-        limit = self.limits[action]
-        row = (
-            await self.accounts.one(
-                "INSERT INTO public.spunto_ai_usage AS u(user_id,period,action,calls) "
-                "VALUES (%s,%s,%s,1) ON CONFLICT (user_id,period,action) "
-                "DO UPDATE SET calls=u.calls+1 WHERE %s::bigint IS NULL OR u.calls<%s "
-                "RETURNING calls",
-                (self.user_id, period, action, limit, limit),
+        limits = await self.policy.limits(self.user_id) if self.policy else self.limits
+        limit = limits[action]
+        resources = await self.policy.resources(self.user_id) if self.policy else {}
+        extra = []
+        if action == "ask" and resources.get("ask_daily") is not None:
+            extra.append((now.strftime("%Y-%m-%d"), "ask_daily", 1, resources["ask_daily"]))
+        if action == "transcribe" and resources.get("transcription_seconds_monthly") is not None:
+            if seconds <= 0:
+                raise AIError("refused", "ai_audio_duration_unverified")
+            extra.append(
+                (
+                    period,
+                    "transcription_seconds_monthly",
+                    seconds,
+                    resources["transcription_seconds_monthly"],
+                )
             )
-            if limit != 0
-            else None
-        )
-        if row is None:
-            raise QuotaExceeded(action, limit, resets_at, now)
-        return action, period
+        async with self.accounts.transaction() as conn:
+            account = await (
+                await conn.execute(
+                    "SELECT closed_at FROM public.spunto_account WHERE id=%s FOR UPDATE",
+                    (self.user_id,),
+                )
+            ).fetchone()
+            if account is None or account["closed_at"] is not None:
+                raise AIError("unavailable", "account_closed")
+            for bucket, name, amount, cap in extra:
+                counted = await (
+                    await conn.execute(
+                        "INSERT INTO public.spunto_account_counter(user_id,period,action,used) "
+                        "SELECT %s,%s,%s,%s WHERE %s<=%s "
+                        "ON CONFLICT(user_id,period,action) DO UPDATE SET "
+                        "used=spunto_account_counter.used+excluded.used "
+                        "WHERE spunto_account_counter.used+excluded.used<=%s RETURNING used",
+                        (self.user_id, bucket, name, amount, amount, cap, cap),
+                    )
+                ).fetchone()
+                if counted is None:
+                    renewal = (
+                        (now.astimezone(UTC) + timedelta(days=1)).replace(
+                            hour=0, minute=0, second=0, microsecond=0
+                        )
+                        if name == "ask_daily"
+                        else resets_at
+                    )
+                    raise QuotaExceeded(action, cap, renewal, now)
+            row = (
+                await (
+                    await conn.execute(
+                        "INSERT INTO public.spunto_ai_usage AS u(user_id,period,action,calls) "
+                        "VALUES (%s,%s,%s,1) ON CONFLICT (user_id,period,action) "
+                        "DO UPDATE SET calls=u.calls+1 WHERE %s::bigint IS NULL OR u.calls<%s "
+                        "RETURNING calls",
+                        (self.user_id, period, action, limit, limit),
+                    )
+                ).fetchone()
+                if limit != 0
+                else None
+            )
+            if row is None:
+                raise QuotaExceeded(action, limit, resets_at, now)
+        return (action, period, extra) if extra else (action, period)
 
-    async def release(self, action, period):
+    async def release(self, action, period, extra=()):
         """Return an action that never reached a provider."""
         async with self.accounts.transaction() as conn:
+            for bucket, name, amount, _ in extra:
+                await conn.execute(
+                    "UPDATE public.spunto_account_counter SET used=greatest(0,used-%s) "
+                    "WHERE user_id=%s AND period=%s AND action=%s",
+                    (amount, self.user_id, bucket, name),
+                )
             await conn.execute(
                 "UPDATE public.spunto_ai_usage SET calls=calls-1 "
                 "WHERE user_id=%s AND period=%s AND action=%s AND calls>0",
@@ -129,6 +183,7 @@ class AccountQuota:
             )
 
     async def status(self):
+        limits = await self.policy.limits(self.user_id) if self.policy else self.limits
         period, resets_at = _month(self.clock())
         rows = await self.accounts.all(
             "SELECT action,calls FROM public.spunto_ai_usage WHERE user_id=%s AND period=%s",
@@ -139,7 +194,7 @@ class AccountQuota:
             "period": period,
             "resets_at": resets_at.isoformat().replace("+00:00", "Z"),
             "actions": [
-                {"action": name, "used": calls.get(name, 0), "limit": self.limits[name]}
+                {"action": name, "used": calls.get(name, 0), "limit": limits[name]}
                 for name in ACTIONS
             ],
         }

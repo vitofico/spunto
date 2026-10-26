@@ -236,7 +236,10 @@ def test_only_explicit_loopback_can_use_http_and_only_pinned_algorithms():
 @pytest.mark.parametrize(
     "auth_time", [None, 1, "invalid", True, float("nan"), float("inf"), "future"]
 )
-async def test_sensitive_reauthentication_requires_fresh_signed_auth_time(provider, auth_time):
+@pytest.mark.parametrize("purpose", ["local-password", "account-delete"])
+async def test_sensitive_reauthentication_requires_fresh_signed_auth_time(
+    provider, auth_time, purpose
+):
     state, transport = provider
     if auth_time is not None:
         state["claims"]["auth_time"] = (
@@ -246,7 +249,7 @@ async def test_sensitive_reauthentication_requires_fresh_signed_auth_time(provid
         client = OIDCClient(settings(), http_client=http)
         authorization = await client.begin(
             BROWSER,
-            purpose="local-password",
+            purpose=purpose,
             user_id="fixture-user",
             session_hash="fixture-session-hash",
         )
@@ -260,7 +263,8 @@ async def test_sensitive_reauthentication_requires_fresh_signed_auth_time(provid
 
 
 @pytest.mark.anyio
-async def test_fresh_reauthentication_retains_only_server_owned_account_binding(provider):
+@pytest.mark.parametrize("purpose", ["local-password", "account-delete"])
+async def test_fresh_reauthentication_retains_only_server_owned_account_binding(provider, purpose):
     state, transport = provider
     state["claims"]["auth_time"] = int(time.time())
     # Claims with these names cannot change the transaction's account or purpose.
@@ -269,14 +273,14 @@ async def test_fresh_reauthentication_retains_only_server_owned_account_binding(
         client = OIDCClient(settings(), http_client=http)
         authorization = await client.begin(
             BROWSER,
-            purpose="local-password",
+            purpose=purpose,
             user_id="fixture-user",
             session_hash="fixture-session-hash",
         )
         state["nonce"] = parse_qs(urlsplit(authorization.url).query)["nonce"][0]
         identity = await client.complete("synthetic-code", authorization.state, BROWSER)
         assert (identity.purpose, identity.user_id, identity.session_hash) == (
-            "local-password",
+            purpose,
             "fixture-user",
             "fixture-session-hash",
         )

@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     ai_quota_limits: Annotated[dict[str, Annotated[int, Field(ge=0)] | None], NoDecode] = Field(
         default_factory=dict
     )
+    ai_policy_url: str | None = None
+    ai_policy_token: str | None = Field(None, repr=False)
+    ai_policy_token_file: Path | None = None
+    account_policy_fallback: dict[str, int | None] = Field(default_factory=dict)
+    account_service_token: str | None = Field(None, repr=False)
+    account_service_token_file: Path | None = None
     max_upload_mb: int = Field(20, ge=1, le=1000)
 
     @field_validator("max_upload_mb", mode="before")
@@ -104,6 +110,24 @@ class Settings(BaseSettings):
     def ai_quota(self):
         """Monthly per-account limits for hosted servers; None is unlimited."""
         return {**PLANS[self.ai_quota_plan or "free"], **self.ai_quota_limits}
+
+    @field_validator("ai_policy_url")
+    @classmethod
+    def _ai_policy_url(cls, value):
+        if value is None:
+            return None
+        url = urlsplit(value)
+        _ = url.port
+        if (
+            url.scheme not in {"http", "https"}
+            or not url.hostname
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+        ):
+            raise ValueError("must be a fixed trusted HTTP(S) endpoint without credentials")
+        return value.rstrip("/")
 
     @property
     def ai_bindings(self):
@@ -230,7 +254,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve(self) -> Self:
-        for name in ("database_url", "identity_database_url", "oidc_client_secret"):
+        for name in (
+            "database_url",
+            "identity_database_url",
+            "oidc_client_secret",
+            "ai_policy_token",
+            "account_service_token",
+        ):
             path = getattr(self, name + "_file")
             if path is not None:
                 if getattr(self, name) is not None:
@@ -239,6 +269,14 @@ class Settings(BaseSettings):
                     setattr(self, name, path.read_text().rstrip("\r\n"))
                 except OSError:
                     raise ValueError(f"SPUNTO_{name.upper()}_FILE cannot be read.") from None
+        if bool(self.ai_policy_url) != bool(self.ai_policy_token):
+            raise ValueError("Set both SPUNTO_AI_POLICY_URL and SPUNTO_AI_POLICY_TOKEN.")
+        if self.ai_policy_token and len(self.ai_policy_token) < 32:
+            raise ValueError("SPUNTO_AI_POLICY_TOKEN requires at least 32 characters.")
+        if self.account_service_token and len(self.account_service_token) < 32:
+            raise ValueError("SPUNTO_ACCOUNT_SERVICE_TOKEN requires at least 32 characters.")
+        if self.ai_policy_url and not self.database_url:
+            raise ValueError("SPUNTO_AI_POLICY_URL applies only to hosted servers.")
         if self.database_url:
             if not self.database_url.startswith(("postgresql://", "postgres://")):
                 raise ValueError("SPUNTO_DATABASE_URL must be a PostgreSQL connection URL.")

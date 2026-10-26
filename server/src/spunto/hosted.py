@@ -44,6 +44,21 @@ class Hosted:
         self._runtimes = {}
         self._lock = asyncio.Lock()
         self._ai_checks = set()
+        self.ai_policy = None
+        self.account_policy = None
+        if settings.ai_policy_url:
+            from spunto.ai.policy import HTTPPolicy
+
+            self.ai_policy = HTTPPolicy(
+                settings.ai_policy_url,
+                settings.ai_policy_token,
+                settings.ai_quota,
+                resources=settings.account_policy_fallback,
+            )
+            from spunto.account_policy import AccountPolicy
+
+            self.account_policy = AccountPolicy(accounts, self.ai_policy)
+            store.account_policy = self.account_policy
 
     async def start(self):
         self.dummy_password_hash = await passwords.hash_password(secrets.token_urlsafe(32))
@@ -54,6 +69,7 @@ class Hosted:
             rows = await self.accounts.all(
                 "SELECT w.*,m.user_id FROM public.spunto_workspace w "
                 "JOIN public.spunto_membership m ON m.workspace_id=w.id AND m.role='owner' "
+                "JOIN public.spunto_account a ON a.id=m.user_id AND a.closed_at IS NULL "
                 "WHERE w.id>%s ORDER BY w.id LIMIT 100",
                 (after,),
             )
@@ -83,8 +99,9 @@ class Hosted:
                 from spunto.host import Host
 
                 owner = await self.accounts.one(
-                    "SELECT user_id FROM public.spunto_membership "
-                    "WHERE workspace_id=%s AND role='owner'",
+                    "SELECT m.user_id FROM public.spunto_membership m "
+                    "JOIN public.spunto_account a ON a.id=m.user_id AND a.closed_at IS NULL "
+                    "WHERE m.workspace_id=%s AND m.role='owner'",
                     (workspace_id,),
                 )
                 if not owner:
@@ -103,7 +120,9 @@ class Hosted:
                     }
                 )
                 # Every space an account owns draws from that account's one allowance.
-                quota = AccountQuota(self.accounts, owner["user_id"], settings.ai_quota)
+                quota = AccountQuota(
+                    self.accounts, owner["user_id"], settings.ai_quota, policy=self.ai_policy
+                )
                 gateway = Gateway(store, settings, quota=quota)
                 await gateway.selection.load()
                 vectors = VectorIndex(store, gateway)
@@ -188,6 +207,8 @@ class Hosted:
             runtime.store.event_sink = None
             await runtime.host.close()
             await runtime.ai.close()
+        if self.ai_policy:
+            await self.ai_policy.close()
         await self.accounts.close()
         await self.store.close()
 
@@ -471,6 +492,21 @@ def create_hosted_app(services):
         redoc_url=None,
     )
     app.state.services = services
+    from psycopg.errors import RaiseException
+
+    from spunto.account_lifecycle import install
+    from spunto.account_policy import quota_problem
+
+    install(app, manager)
+
+    @app.exception_handler(RaiseException)
+    async def account_limit(request, exc):
+        problem = quota_problem(exc)
+        problem = problem or Problem(
+            503, "account_policy_unavailable", "The account policy operation is unavailable."
+        )
+        return problem_response(problem.status, problem.code, problem.detail)
+
     errors.install(app)
 
     @app.get("/healthz")
@@ -602,13 +638,15 @@ def create_hosted_app(services):
             raise Problem(404, "sso_unavailable", "Single sign-on is not configured.")
         kwargs = {}
         if reauth is not None:
-            if reauth not in {"local-password", "oidc-link"}:
+            if reauth not in {"local-password", "oidc-link", "account-delete"}:
                 raise Problem(422, "validation_failed", "Unknown sign-in verification request.")
             token = request.cookies.get(sessions.cookie_name(services.settings), "")
             account = await manager.accounts.resolve_session(token)
             if not account:
                 raise Problem(401, "unauthenticated", "Sign in first.")
-            if reauth == "local-password" and (account["issuer"] != services.settings.oidc_issuer):
+            if reauth in {"local-password", "account-delete"} and (
+                account["issuer"] != services.settings.oidc_issuer
+            ):
                 raise Problem(
                     403,
                     "reauthentication_unavailable",
@@ -667,18 +705,21 @@ def create_hosted_app(services):
                     "reauthentication_required",
                     "The account session changed. Start verification again.",
                 )
-            if identity.purpose == "local-password":
+            if identity.purpose in {"local-password", "account-delete"}:
                 if (account["issuer"], account["subject"]) != (identity.issuer, identity.subject):
                     raise Problem(
                         403, "identity_mismatch", "Verify the same account that is signed in."
                     )
                 await manager.accounts.grant_reauthentication(
-                    account["id"], token, "local-password"
+                    account["id"], token, identity.purpose
                 )
             else:
                 await manager.accounts.link_oidc(identity, account["id"], token)
             response = RedirectResponse(
-                "/settings/account?security=reauthenticated", status_code=303
+                "/cloud/account?security=reauthenticated"
+                if identity.purpose == "account-delete"
+                else "/settings/account?security=reauthenticated",
+                status_code=303,
             )
         else:
             account, workspace = await manager.accounts.sign_in(identity)

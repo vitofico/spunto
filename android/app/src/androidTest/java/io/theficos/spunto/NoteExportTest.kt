@@ -4,6 +4,9 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
 import android.net.Uri
+import android.os.Looper
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,7 +15,9 @@ import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.data.local.NoteEntity
 import io.theficos.spunto.data.sync.AuthConfig
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.After
@@ -22,12 +27,20 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
 
 /** Only task-created rows and synthetic outbound payloads; never a real receiving app or owner data. */
+@OptIn(ExperimentalTestApi::class,ExperimentalCoroutinesApi::class)
 class NoteExportTest {
- @get:Rule val compose=createComposeRule()
+ // Queue test continuations; the default unconfined dispatcher can resume frames on an IO worker.
+ @get:Rule val compose=createComposeRule(effectContext=StandardTestDispatcher())
  @get:Rule val timeout=org.junit.rules.Timeout(5,java.util.concurrent.TimeUnit.MINUTES)
  private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
  private val app get()=instrumentation.targetContext.applicationContext as SpuntoApplication
  private var signedIn:AuthConfig?=null
+ @Composable private fun ExportContent(model:SpuntoViewModel,note:Note,enabled:Boolean) {
+  SpuntoTheme {
+   SideEffect {assertSame("Export composition must apply on the Android main thread.",Looper.getMainLooper(),Looper.myLooper())}
+   NoteExportActions(model,note,enabled)
+  }
+ }
  /** The fixtures need a signed-out app: each test signs this emulator out, then signs the same device back in. */
  @Before fun signOut() {
   check(instrumentation.targetContext.packageName=="io.theficos.spunto.debug")
@@ -59,7 +72,7 @@ class NoteExportTest {
   instrumentation.addMonitor(monitor)
   val enabled=mutableStateOf(false)
   try {
-   compose.setContent {SpuntoTheme {NoteExportActions(model,note,enabled.value)}}
+   compose.setContent {ExportContent(model,note,enabled.value)}
    compose.onNodeWithText("Share").assertIsNotEnabled()
    compose.runOnIdle {enabled.value=true}
    compose.onNodeWithText("Share").performClick()
@@ -90,7 +103,7 @@ class NoteExportTest {
   }
   instrumentation.addMonitor(monitor)
   try {
-   compose.setContent {SpuntoTheme {NoteExportActions(model,note,true)}}
+   compose.setContent {ExportContent(model,note,true)}
    compose.onNodeWithText("Save Markdown").performClick()
    compose.waitUntil(10000) {compose.onAllNodesWithText("Continue").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithText("Continue").performClick()
@@ -133,7 +146,7 @@ class NoteExportTest {
   }
   instrumentation.addMonitor(monitor)
   try {
-   compose.setContent {SpuntoTheme {NoteExportActions(model,note,true)}}
+   compose.setContent {ExportContent(model,note,true)}
    compose.onNodeWithText("Save Markdown").performClick()
    compose.waitUntil(10000) {compose.onAllNodesWithText("Continue").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithText("Continue").performClick()

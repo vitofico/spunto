@@ -124,11 +124,17 @@ class NativeNavigationTest {
   val original=runBlocking {repository.draft("capture").first()?.body}
   val unique=java.lang.Long.toUnsignedString(System.nanoTime(),36)
   val path="Navigation_$unique/Child";val key=labelKey(path)
-  val noteBody="Synthetic nested root navigation $unique #$path"
+  val passage="Synthetic nested root navigation $unique"
+  val noteBody="$passage #$path"
   val draftBody="Synthetic capture retained across nested navigation $unique"
   try {
    waitForCapture()
-   runBlocking {authority.requireCurrent();repository.create(noteBody);withTimeout(10_000) {repository.labels().first {rows ->rows.any {it.key==key}}}}
+   val noteId=runBlocking {
+    authority.requireCurrent()
+    val created=repository.create(noteBody)
+    withTimeout(10_000) {repository.labels().first {rows ->rows.any {it.key==key}}}
+    created
+   }
    runBlocking {authority.requireCurrent()}
    compose.onNodeWithContentDescription("Note text").performTextReplacement(draftBody)
    compose.mainClock.advanceTimeBy(400);compose.waitForIdle()
@@ -142,7 +148,10 @@ class NativeNavigationTest {
    compose.onNode(labelFilterMatcher()).assertDoesNotExist()
    assertNavigationTitle("#$path")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist()
-   compose.waitUntil(10_000) {compose.onAllNodesWithText(noteBody,substring=true).fetchSemanticsNodes().isNotEmpty()}
+   compose.waitUntil(10_000) {compose.onAllNodesWithText(passage).fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithText(passage).assertIsDisplayed()
+   compose.onNodeWithText(path).assertIsDisplayed()
+   runBlocking {assertEquals(noteBody,repository.dao.get(noteId)?.body)}
    assertDraft(draftBody)
    openSheet()
    filterLabels(unique)

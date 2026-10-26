@@ -1549,13 +1549,11 @@ mark[data-match] {
 }
 
 /* An open thread belongs to brand and quiet chrome, never to the note body. */
-.rail-heading,
-.auth {
+.rail-heading {
   position: relative;
   isolation: isolate;
 }
 .rail-heading::before,
-.auth::before,
 .empty::before {
   content: "";
   display: block;
@@ -1563,8 +1561,7 @@ mark[data-match] {
   mask: url("/brand-wave.svg") center / contain no-repeat;
   pointer-events: none;
 }
-.rail-heading::before,
-.auth::before {
+.rail-heading::before {
   position: absolute;
   z-index: -1;
   opacity: 0.26;
@@ -1574,12 +1571,6 @@ mark[data-match] {
   block-size: 64px;
   inset-inline-end: 0;
   inset-block-start: -24px;
-}
-.auth::before {
-  inline-size: min(74vw, 36rem);
-  block-size: clamp(6rem, 24vw, 13rem);
-  inset-inline-end: 0;
-  inset-block-start: 0;
 }
 .empty::before {
   inline-size: min(60%, 14rem);
@@ -1644,7 +1635,6 @@ mark[data-match] {
   background: var(--paper);
 }
 :root[data-background="plain"] .rail-heading::before,
-:root[data-background="plain"] .auth::before,
 :root[data-background="plain"] .empty::before {
   display: none;
 }
@@ -1826,6 +1816,7 @@ mark[data-match] {
   padding: 0;
 }
 .note-pane .entry .time:focus-visible {
+  left: 0;
   clip-path: none;
   width: auto;
   height: auto;

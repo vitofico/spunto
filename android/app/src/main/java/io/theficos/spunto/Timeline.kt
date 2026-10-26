@@ -185,22 +185,34 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
    )
   }.padding(horizontal=16.dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
    val preview=remember(note.body,note.title) {notePreview(note.body,note.title)}
-   Row(verticalAlignment=Alignment.CenterVertically) {
-    Text(preview.title.ifBlank {context.getString(R.string.core_untitled)},Modifier.weight(1f),style=MaterialTheme.typography.titleLarge.copy(fontSize=22.sp,lineHeight=29.sp,fontWeight=FontWeight.SemiBold,letterSpacing=(-.5).sp))
+   val previewActions=@Composable {
     if(note.pinned) Icon(painterResource(R.drawable.ic_pin),contentDescription=null,modifier=Modifier.size(14.dp),tint=SpuntoColors.ink3)
     if(note.pending) Text("◯",style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
     if(onActions!=null) IconButton(onClick=onActions,modifier=Modifier.size(40.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
    }
    val previewType=SpuntoType.copy(reading=SpuntoType.reading.copy(fontFamily=readingFont(),fontSize=16.sp,lineHeight=23.sp),readingSmall=SpuntoType.readingSmall.copy(fontSize=15.sp,lineHeight=22.sp))
    val hasPreviewTasks=remember(preview.body) {preview.body.lines().any {taskLine.containsMatchIn(it)}}
-   if(preview.body.isNotBlank()) CompositionLocalProvider(LocalSpuntoType provides previewType,LocalCompactMarkdown provides true) {
-    val openPreviewLink:(String)->Unit={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(it.startsWith("/a/")) onNote(note.id)}
-    if(hasPreviewTasks) FoldedBody(preview.body) {text -> Markdown(text,note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")}) {model.toggleTask(note,it+preview.bodyStartLine)}}
-    else Markdown(preview.body.take(1200),note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")},maxLines=2)
+   val previewBody=@Composable {
+    if(preview.body.isNotBlank()) CompositionLocalProvider(LocalSpuntoType provides previewType,LocalCompactMarkdown provides true) {
+     val openPreviewLink:(String)->Unit={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(it.startsWith("/a/")) onNote(note.id)}
+     if(hasPreviewTasks) FoldedBody(preview.body) {text -> Markdown(text,note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")},hideLabels=true) {model.toggleTask(note,it+preview.bodyStartLine)}}
+     else Markdown(preview.body.take(1200),note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")},maxLines=2,hideLabels=true)
+    }
    }
-   val previewLabels=labels(note.body).map {it.path}.distinct()
-   if(previewLabels.isNotEmpty()) FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-    previewLabels.forEach {path -> Surface(color=MaterialTheme.colorScheme.primaryContainer,contentColor=MaterialTheme.colorScheme.onPrimaryContainer,shape=RoundedCornerShape(50)) {
+   if(preview.title!=null) {
+    Row(verticalAlignment=Alignment.CenterVertically) {
+     Text(preview.title,Modifier.weight(1f),style=MaterialTheme.typography.titleLarge.copy(fontSize=22.sp,lineHeight=29.sp,fontWeight=FontWeight.SemiBold,letterSpacing=(-.5).sp))
+     previewActions()
+    }
+    previewBody()
+   } else Row(verticalAlignment=Alignment.Top) {
+    Box(Modifier.weight(1f)) {
+     if(preview.body.isBlank() && preview.labels.isEmpty()) Text(context.getString(R.string.core_untitled)) else previewBody()
+    }
+    previewActions()
+   }
+   if(preview.labels.isNotEmpty()) FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+    preview.labels.forEach {path -> Surface(color=MaterialTheme.colorScheme.primaryContainer,contentColor=MaterialTheme.colorScheme.onPrimaryContainer,shape=RoundedCornerShape(50)) {
      Text(path,Modifier.clickable(role=Role.Button) {nav.filter("label:$path")}.padding(horizontal=12.dp,vertical=7.dp),style=MaterialTheme.typography.labelMedium)
     } }
    }

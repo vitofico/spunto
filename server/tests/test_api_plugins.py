@@ -301,3 +301,31 @@ async def test_enabled_dispatch_placeholder_and_token_access(plugin_server):
     assert (
         await server.client.get("/api/v1/plugins/tasks/for/abc", headers=headers)
     ).status_code == 404
+
+
+async def test_unconfigured_plugins_stay_off_and_catalog_explains_requirements(plugin_server):
+    server = plugin_server
+    await setup(server)
+    catalog = (await server.client.get("/api/v1/plugins")).json()["plugins"]
+    rows = {row["id"]: row for row in catalog}
+    for plugin_id, reason in (
+        ("email-in", "Needs a list of allowed senders"),
+        ("image-text", "Needs a vision model. Choose one in Settings → AI."),
+    ):
+        row = rows[plugin_id]
+        assert row["switch"] == "off"
+        assert row["can_enable"] is False
+        assert row["availability_reason"] == reason
+        before = server.services.host.plugins_rev
+        response = await server.client.post(
+            f"/api/v1/plugins/{plugin_id}/enable",
+            json={"permissions": row["permissions"]},
+            headers=ORIGIN,
+        )
+        assert response.status_code == 409, response.text
+        assert response.json()["code"] == "plugin_requirements_missing"
+        assert response.json()["detail"] == reason
+        assert server.services.host.states[plugin_id]["switch"] == "off"
+        assert server.services.host.plugins_rev == before
+    assert rows["tasks"]["can_enable"] is True
+    assert rows["tasks"]["availability_reason"] is None

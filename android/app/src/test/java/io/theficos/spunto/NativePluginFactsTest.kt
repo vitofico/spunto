@@ -40,6 +40,12 @@ class NativePluginFactsTest {
   assertFalse(NativePluginFacts(JsonObject(pluginFixture(on=false)-"can_enable")).canEnable)
   assertFalse(NativePluginFacts(JsonObject(pluginFixture()+ ("pinned_by_env" to JsonPrimitive(1)))).canDisable)
  }
+ @Test fun missingRequirementsBlockActivationButKeepDisableAvailable() {
+  val off=NativePluginFacts(JsonObject(pluginFixture(on=false,state="available")+mapOf("can_enable" to JsonPrimitive(false),"availability_reason" to JsonPrimitive("Needs a vision model"))))
+  assertFalse(off.canEnable);assertFalse(off.canDisable);assertEquals("Needs a vision model",off.availabilityReason)
+  val waiting=NativePluginFacts(JsonObject(off.raw+mapOf("switch" to JsonPrimitive("on"),"state" to JsonPrimitive("waiting"))))
+  assertFalse(waiting.canEnable);assertTrue(waiting.canDisable)
+ }
  @Test fun malformedContractsAndRemovedNeverActivate() {
   val duplicate=JsonObject(pluginFixture()+ ("permissions" to JsonArray(listOf(JsonPrimitive("notes.read"),JsonPrimitive("notes.read")))))
   assertFalse(NativePluginFacts(duplicate,true).valid)

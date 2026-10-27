@@ -786,3 +786,43 @@ describe("live instance appearance", () => {
     document.cookie = "theme=; Max-Age=0; Path=/";
   });
 });
+
+describe("unavailable plugin prerequisites", () => {
+  it("disables activation while leaving configuration accessible", async () => {
+    const blocked = [
+      {
+        ...plugin,
+        id: "email-in",
+        name: "Email",
+        category: "capture",
+        can_enable: false,
+        availability_reason: "Needs a mailbox username",
+      },
+      {
+        ...imagePlugin,
+        can_enable: false,
+        availability_reason: "Needs a vision model. AI is off.",
+      },
+    ];
+    vi.mocked(api.catalog).mockResolvedValue({
+      plugins: blocked,
+      plugins_rev: 1,
+    });
+    const enable = vi.spyOn(api, "enablePlugin");
+    wrap(<SettingsPage section="plugins" />);
+    for (const item of blocked) {
+      const toggle = await screen.findByRole("switch", {
+        name: `Enable ${item.name}`,
+      });
+      expect((toggle as HTMLInputElement).disabled).toBe(true);
+      expect((toggle as HTMLInputElement).checked).toBe(false);
+      expect(
+        screen.getByRole("link", { name: item.name }).getAttribute("href"),
+      ).toBe(`/settings/plugins/${item.id}`);
+      expect(
+        screen.getByText(item.availability_reason, { exact: false }),
+      ).toBeTruthy();
+    }
+    expect(enable).not.toHaveBeenCalled();
+  });
+});

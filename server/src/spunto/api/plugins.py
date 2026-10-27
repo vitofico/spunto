@@ -256,6 +256,8 @@ async def enable(plugin_id: str, body: EnableBody, principal: PrincipalDep, serv
         from fastapi.responses import JSONResponse
 
         return JSONResponse(payload, 409, media_type="application/problem+json")
+    if host.states[plugin_id]["switch"] != "on" and (reason := host.availability_reason(plugin_id)):
+        raise Problem(409, "plugin_requirements_missing", reason)
     await _call(host.enable(plugin_id, body.permissions))
     return _toggle_receipt(host, plugin_id)
 

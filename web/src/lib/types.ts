@@ -171,6 +171,7 @@ export interface Plugin {
   origin?: "bundled" | "operator" | "unknown";
   source_kind?: "bundled" | "folder" | "entrypoint" | "unknown";
   can_enable?: boolean;
+  availability_reason?: string | null;
   can_delete_data?: boolean;
   granted?: string[];
   plugins_rev?: number;

@@ -35,7 +35,8 @@ internal data class NativePluginFacts(val raw:JsonObject,private val manifestAct
  val pin=environmentPin(raw["pinned_by_env"])
  val valid=pluginIdPattern.matches(id) && raw.pluginText("api") in setOf("0.4","0.9","1.0") && category in pluginGroups && raw.pluginText("kind") in setOf("server","device") && raw.pluginText("switch") in setOf("on","off") && state in setOf("available","enabled","waiting","failed","removed","disabled") && permissions!=null && permissions.distinct().size==permissions.size && granted!=null && granted.distinct().size==granted.size
  val activeContribution get()=valid && wantedOn && state=="enabled" && manifestActive
- val canEnable=valid && !removed && pin==EnvironmentPin.Unmanaged && raw.pluginFlag("can_enable")==true
+ val availabilityReason=raw.pluginText("availability_reason")?.takeIf {it.isNotBlank()}
+ val canEnable=valid && !removed && pin==EnvironmentPin.Unmanaged && raw.pluginFlag("can_enable")==true && availabilityReason==null
  val canDisable=valid && !removed && wantedOn && pin==EnvironmentPin.Unmanaged
  val canDeleteData=valid && raw.pluginFlag("can_delete_data")==true
  val permissionReviewRequired=wantedOn && permissions!=null && granted!=null && !granted.toSet().containsAll(permissions)

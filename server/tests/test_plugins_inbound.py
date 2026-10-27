@@ -508,3 +508,30 @@ async def test_replay_paused_in_sql_cannot_return_to_retired_context(inbound, mo
     await disabling
     assert host.states["email-in"]["state"] == "disabled"
     assert [note["id"] for note in await rows(host)] == [created["id"]]
+
+
+async def test_off_inbound_catalog_unlocks_only_after_all_configuration_exists(
+    tmp_path, settings, monkeypatch
+):
+    async with harness(tmp_path, settings, catalog=[Path(email_in.__file__).parent]) as host:
+
+        def email():
+            return host.catalog()[0]
+
+        assert email()["can_enable"] is False
+        assert email()["availability_reason"] == "Needs a list of allowed senders"
+        await host.set_settings(
+            "email-in",
+            {
+                "url": "imaps://mail.example.invalid:993",
+                "username": "synthetic-owner",
+                "allow_senders": ["allowed@example.invalid"],
+            },
+        )
+        assert email()["can_enable"] is False
+        assert email()["availability_reason"] == "Set the mailbox password in the environment"
+        monkeypatch.setenv("SPUNTO_PLUGIN_EMAIL_IN_PASSWORD", "synthetic mailbox password")
+        assert email()["can_enable"] is True
+        assert email()["availability_reason"] is None
+        assert email()["switch"] == "off"
+        assert "synthetic mailbox password" not in json.dumps(email())

@@ -53,6 +53,7 @@ function pluginOrigin(plugin: Plugin) {
 export function pluginCanEnable(plugin: Plugin) {
   return (
     plugin.state !== "removed" &&
+    !plugin.availability_reason &&
     (plugin.can_enable === undefined || plugin.can_enable === true)
   );
 }
@@ -118,6 +119,7 @@ function aiIsOff(plugins: Plugin[]) {
 function pluginFacts(plugin: Plugin) {
   if (plugin.state === "removed")
     return t("settingsplugins.plugin_code_is_no_longer_installed");
+  if (plugin.availability_reason) return plugin.availability_reason;
   const ai = aiCapabilities(plugin);
   if (ai.length) {
     const missing = ai.filter((c) => !plugin.ai_destinations?.[c]);
@@ -423,10 +425,12 @@ export function PluginManager() {
               </h2>
               <ul className={styles.list}>
                 {items.map((p) => {
-                  const linked = p.switch === "on" || p.state === "removed";
+                  const unavailable = p.switch !== "on" && !pluginCanEnable(p);
+                  const linked =
+                    p.switch === "on" || p.state === "removed" || unavailable;
                   return (
                     <li
-                      className={`${styles.plugin} ${linked ? styles.rowLink : ""}`}
+                      className={`${styles.plugin} ${linked ? styles.rowLink : ""} ${unavailable ? styles.pluginUnavailable : ""}`}
                       key={p.id}
                     >
                       <div className={styles.between}>
@@ -836,6 +840,9 @@ export function PluginPage({ id }: { id: string }) {
         <p className="notice">
           {t("settingsplugins.removed_plugin_code_is_no_longer_installed_its")}
         </p>
+      )}
+      {plugin.switch !== "on" && plugin.availability_reason && (
+        <p className="notice">{pluginFacts(plugin)}</p>
       )}
       {plugin.state === "waiting" &&
         (aiCapabilities(plugin).length ? (

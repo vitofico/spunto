@@ -372,7 +372,10 @@ class Host:
             row = self.states[plugin_id]
             item = {**copy.deepcopy(manifest), **copy.deepcopy(row)}
             item.update(self.catalog_metadata[plugin_id])
-            item["can_enable"] = plugin_id not in self.invalid_manifests
+            item["availability_reason"] = self.availability_reason(plugin_id)
+            item["can_enable"] = (
+                plugin_id not in self.invalid_manifests and item["availability_reason"] is None
+            )
             item["can_delete_data"] = True
             item["settings"] = self.get_settings(plugin_id)
             configured = self.context_settings(plugin_id)
@@ -750,6 +753,10 @@ class Host:
         ):
             await self.enqueue_core("ai-routes", priority=5)
         return self.catalog()
+
+    def availability_reason(self, plugin_id):
+        """Current unmet prerequisite, including for plugins that are switched off."""
+        return self._requirements_reason(self.manifests[plugin_id])
 
     def _requirements_met(self, manifest):
         return self._requirements_reason(manifest) is None

@@ -37,7 +37,7 @@ import java.time.format.DateTimeFormatter
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
     val tags=listOfNotNull("Android".takeIf {plugin.raw.pluginText("kind")=="device"},resources.getString(R.string.settings_default_with_ai).takeIf {plugin.raw.pluginText("default")=="on-with-ai"})
-    Text(localizedPluginName(resources,plugin.raw)+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall)
+    Text(localizedPluginName(resources,plugin.raw)+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall,color=if(!plugin.wantedOn && !plugin.canEnable) quiet else MaterialTheme.colorScheme.onSurface)
     if(localizedPluginDescription(resources,plugin.raw).isNotBlank()) Text(localizedPluginDescription(resources,plugin.raw),style=MaterialTheme.typography.bodyMedium,color=quiet,maxLines=2,overflow=TextOverflow.Ellipsis)
     if(plugin.facts(resources).isNotEmpty()) Text(plugin.facts(resources).joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3,maxLines=2,overflow=TextOverflow.Ellipsis)
    }
@@ -46,13 +46,14 @@ import java.time.format.DateTimeFormatter
     plugin.pin==EnvironmentPin.Managed -> Text(resources.getString(R.string.settings_set_in_the_environment ,if(plugin.wantedOn) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off)),Modifier.widthIn(max=128.dp),style=MaterialTheme.typography.bodySmall,color=quiet)
     plugin.pin==EnvironmentPin.Unknown || !plugin.valid -> Text(resources.getString(R.string.settings_switch_unavailable),style=MaterialTheme.typography.bodySmall,color=quiet)
     else -> {
-     if(plugin.wantedOn) TextButton(onClick=onSettings,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_settings))}
+     if(plugin.wantedOn || !plugin.canEnable) TextButton(onClick=onSettings,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_settings))}
      PluginSwitch(plugin,online,busy,onToggle)
     }
    }
   }
   val state=when {
    plugin.removed -> listOfNotNull(resources.getString(R.string.settings_removed),plugin.raw.pluginLong("data_count")?.let {"${resources.getQuantityString(R.plurals.settings_records_kept,it.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),it)}"}).joinToString(" · ")
+   plugin.availabilityReason!=null -> plugin.availabilityReason
    plugin.state=="waiting" -> pluginWaitingLine(resources,plugin)
    plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs)
    else -> null
@@ -136,7 +137,7 @@ import java.time.format.DateTimeFormatter
  Text(if(time==null) resources.getString(R.string.settings_no_runs_yet) else resources.getString(R.string.settings_last_run,java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM,java.text.DateFormat.SHORT,locale).format(java.util.Date(time))))
  plugin.raw.pluginText("last_error")?.takeIf {it.isNotBlank()}?.let {Text(it)}
  // On and off show in the switch above; only the states it can't show get a line.
- when {plugin.removed -> resources.getString(R.string.settings_removed);plugin.state=="waiting" -> pluginWaitingLine(resources,plugin);plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs);else -> null}?.let {Text(it)}
+ when {plugin.removed -> resources.getString(R.string.settings_removed);plugin.availabilityReason!=null -> plugin.availabilityReason;plugin.state=="waiting" -> pluginWaitingLine(resources,plugin);plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs);else -> null}?.let {Text(it)}
  PluginHeading(if(plugin.removed) resources.getString(R.string.settings_access_history) else resources.getString(R.string.settings_access))
  plugin.permissionLines(resources).forEach {Text(it)}
  if(!plugin.removed) {

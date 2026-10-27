@@ -818,3 +818,9 @@
   width: 1px;
   height: 1px;
 }
+
+.pluginUnavailable,
+.pluginUnavailable a,
+.pluginUnavailable p {
+  color: var(--ink-3);
+}

@@ -121,6 +121,8 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
     switch: "on" | "off";
     state: string;
     pinned_by_env: boolean | 0 | 1;
+    can_enable: boolean;
+    availability_reason: string | null;
   };
   const origin = new URL(process.env.SPUNTO_E2E_URL!).origin;
   async function catalog(): Promise<CatalogPlugin[]> {
@@ -160,6 +162,22 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
     });
     expect(prepared.status(), "Prepare fresh Tasks fixture grants").toBe(200);
     await setSwitch(freshTasks, false);
+  }
+  // Default-on AI plugins may be Waiting in this model-free fixture. They
+  // cannot be re-enabled until configured, so normalize them before the baseline.
+  for (const plugin of fixture.filter(
+    (item) => item.switch === "on" && item.availability_reason,
+  )) {
+    expect(
+      ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"],
+      "Requirement preparation must use a disposable local server",
+    ).toContain(new URL(origin).hostname);
+    expect(
+      [false, 0],
+      `${plugin.id} fixture must not be operator-pinned`,
+    ).toContain(plugin.pinned_by_env);
+    expect(plugin.can_enable, `${plugin.id} must be unavailable`).toBe(false);
+    await setSwitch(plugin, false);
   }
   const original = await catalog();
   const tasks = original.find((plugin) => plugin.id === "tasks");

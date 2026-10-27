@@ -125,7 +125,7 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
  val resources=LocalContext.current.resources
  fun renderInline(node:Node)=inline(node,links) {alt -> resources.getString(R.string.design_image,alt)}
  when(current) {
-  is Heading -> TappableText(renderInline(current),if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
+  is Heading -> TappableText(renderInline(current),if(LocalCompactMarkdown.current) markdownBodyStyle(machine,SpuntoType.reading) else if(current.level<=2) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,links.tap(current))
   is FencedCodeBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.small) { TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current,line=1),Modifier.padding(SpuntoSpacing.s12)) }
   is IndentedCodeBlock -> TappableText(AnnotatedString(current.literal.trimEnd()),SpuntoType.mono,links.tap(current))
   is ThematicBreak -> HorizontalDivider()

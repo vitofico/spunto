@@ -1824,8 +1824,8 @@ mark[data-match] {
   background: var(--paper);
 }
 .entry-title {
-  font: 600 1.4375rem/1.8125rem var(--f-serif);
-  letter-spacing: -0.5px;
+  font: 400 1.03125rem/1.4375rem var(--f-serif);
+  letter-spacing: normal;
   margin: 0 32px 8px 0;
 }
 .note-pane .note-body {
@@ -1953,4 +1953,8 @@ mark[data-match] {
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
+}
+
+.entry .note-body :is(h1, h2, h3, h4, h5, h6) {
+  font: inherit;
 }

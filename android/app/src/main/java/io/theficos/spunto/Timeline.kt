@@ -190,7 +190,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
     if(note.pending) Text("◯",style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
     if(onActions!=null) IconButton(onClick=onActions,modifier=Modifier.size(40.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
    }
-   val previewType=SpuntoType.copy(reading=SpuntoType.reading.copy(fontFamily=readingFont(),fontSize=16.sp,lineHeight=23.sp),readingSmall=SpuntoType.readingSmall.copy(fontSize=15.sp,lineHeight=22.sp))
+   val previewType=SpuntoType.copy(reading=SpuntoType.reading.copy(fontFamily=readingFont(),fontSize=17.sp,lineHeight=26.sp),readingSmall=SpuntoType.readingSmall.copy(fontSize=15.sp,lineHeight=22.sp))
    val hasPreviewTasks=remember(preview.body) {preview.body.lines().any {taskLine.containsMatchIn(it)}}
    val previewBody=@Composable {
     if(preview.body.isNotBlank()) CompositionLocalProvider(LocalSpuntoType provides previewType,LocalCompactMarkdown provides true) {
@@ -201,7 +201,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
    }
    if(preview.title!=null) {
     Row(verticalAlignment=Alignment.CenterVertically) {
-     Text(preview.title,Modifier.weight(1f),style=MaterialTheme.typography.titleLarge.copy(fontSize=22.sp,lineHeight=29.sp,fontWeight=FontWeight.SemiBold,letterSpacing=(-.5).sp))
+     Text(preview.title,Modifier.weight(1f),style=previewType.reading.copy(fontFamily=if(note.machine) uiFont() else readingFont()))
      previewActions()
     }
     previewBody()

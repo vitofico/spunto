@@ -131,6 +131,18 @@ for (const width of [320, 390, 1280]) {
     await expect(cards.nth(3).locator(".note-body")).toHaveText(
       "Second passage.",
     );
+    const type = await cards.nth(3).evaluate((card) => {
+      const title = getComputedStyle(card.querySelector(".entry-title")!);
+      const body = getComputedStyle(card.querySelector(".note-body")!);
+      return {
+        titleSize: title.fontSize,
+        bodySize: body.fontSize,
+        titleLine: title.lineHeight,
+        bodyLine: body.lineHeight,
+      };
+    });
+    expect(type.titleSize).toBe(type.bodySize);
+    expect(type.titleLine).toBe(type.bodyLine);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBe(width);

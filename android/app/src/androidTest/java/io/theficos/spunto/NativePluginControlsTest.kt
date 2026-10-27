@@ -21,6 +21,15 @@ class NativePluginControlsTest {
  private fun catalog(row:JsonObject,revision:Int)=buildJsonObject {put("plugins_rev",revision);put("plugins",JsonArray(listOf(row)))}
  private fun manifest(revision:Int)=buildJsonObject {put("plugins_rev",revision);put("plugins",JsonArray(emptyList()))}
 
+ @Test fun missingRequirementsDisableActivationAndKeepSettingsAccessible() {
+  val plugin=NativePluginFacts(JsonObject(row()+mapOf("switch" to JsonPrimitive("off"),"state" to JsonPrimitive("available"),"can_enable" to JsonPrimitive(false),"availability_reason" to JsonPrimitive("Needs a transcription model"))))
+  var toggles=0;var settings=0
+  compose.setContent {SpuntoTheme {NativePluginRow(plugin,true,false,{toggles++},{settings++},{},{})}}
+  compose.onNode(hasContentDescription("voice-memos") and isToggleable()).assertIsOff().assertIsNotEnabled()
+  compose.onNodeWithText("Needs a transcription model").assertExists()
+  compose.onNodeWithText("Settings").performClick()
+  compose.runOnIdle {assertEquals(0,toggles);assertEquals(1,settings)}
+ }
  @Test fun wantedWaitingAndFailedRemainCheckedWhilePinnedAndRemovedHaveNoToggle() {
   var toggles=0
   compose.setContent {SpuntoTheme {Column {

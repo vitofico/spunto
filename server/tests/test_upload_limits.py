@@ -251,3 +251,84 @@ async def test_markdown_smaller_instance_limit_preflights_before_any_note_write(
             assert not await conn.execute_fetchall("SELECT 1 FROM note")
             assert not await conn.execute_fetchall("SELECT 1 FROM attachment")
     assert markdown_import.MAX_ATTACHMENT_BYTES == 5_000_000
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("existing_blob", [False, True])
+async def test_rejected_attachment_insert_removes_only_its_stage(owner, existing_blob):
+    import hashlib
+    import sqlite3
+
+    settings, store = owner.services.settings, owner.services.store
+    data = b"synthetic rejected attachment"
+    target = path_for(settings.attachments_dir, hashlib.sha256(data).hexdigest())
+    if existing_blob:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    async with store.write() as conn:
+        await conn.execute(
+            "CREATE TRIGGER reject_attachment BEFORE INSERT ON attachment "
+            "BEGIN SELECT RAISE(ABORT, 'synthetic quota rejection'); END"
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="synthetic quota rejection"):
+        await write_attachment(store, settings, data)
+    assert target.exists() == existing_blob
+    if existing_blob:
+        assert target.read_bytes() == data
+    assert not list(settings.attachments_dir.rglob(".upload-*"))
+    async with store.read() as conn:
+        assert not await conn.execute_fetchall("SELECT 1 FROM attachment")
+
+
+@pytest.mark.anyio
+async def test_attachment_deduplication_and_missing_blob_repair_preserve_metadata(owner):
+    import asyncio
+
+    settings, store = owner.services.settings, owner.services.store
+    data = b"synthetic concurrent attachment"
+    results = await asyncio.gather(*(write_attachment(store, settings, data) for _ in range(4)))
+    first = results[0]
+    assert {result["id"] for result in results} == {first["id"]}
+    target = path_for(settings.attachments_dir, first["sha256"])
+    assert target.read_bytes() == data
+    assert target.stat().st_mode & 0o777 == 0o600
+    target.unlink()
+    repaired = await write_attachment(store, settings, data)
+    assert repaired["id"] == first["id"]
+    assert target.read_bytes() == data
+    assert not list(settings.attachments_dir.rglob(".upload-*"))
+    async with store.read() as conn:
+        assert (await conn.execute_fetchall("SELECT count(*) FROM attachment"))[0][0] == 1
+    target.write_bytes(b"synthetic corruption")
+    with pytest.raises(OSError, match="attachment_digest_mismatch"):
+        await write_attachment(store, settings, data)
+    assert target.read_bytes() == b"synthetic corruption"
+
+
+@pytest.mark.anyio
+async def test_cancelled_staging_is_joined_before_own_temp_file_is_removed(owner):
+    import asyncio
+
+    settings, store = owner.services.settings, owner.services.store
+    staged, release = asyncio.Event(), asyncio.Event()
+
+    async def blocked_io(function, *args):
+        result = await asyncio.to_thread(function, *args)
+        staged.set()
+        await release.wait()
+        return result
+
+    upload = asyncio.create_task(
+        write_attachment(store, settings, b"synthetic cancelled upload", to_thread=blocked_io)
+    )
+    await staged.wait()
+    assert list(settings.attachments_dir.rglob(".upload-*"))
+    upload.cancel()
+    await asyncio.sleep(0)
+    assert not upload.done()
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await upload
+    assert not list(settings.attachments_dir.glob("*/*/*"))
+    async with store.read() as conn:
+        assert not await conn.execute_fetchall("SELECT 1 FROM attachment")

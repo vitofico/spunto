@@ -1187,3 +1187,32 @@ async def test_ai_account_allowance_is_visible_only_to_its_owner(hosted):
     own_account = await client.get("/api/v1/ai", headers=headers(bob))
     assert own_account.status_code == 200
     assert all(row["used"] == 0 for row in own_account.json()["quota"]["actions"])
+
+
+async def test_storage_quota_rejected_uploads_leave_no_final_or_staged_bytes(hosted):
+    from pathlib import Path
+
+    client, manager, users, settings = hosted
+    alice, _, _ = users
+    await manager.accounts.one(
+        "INSERT INTO public.spunto_account_policy VALUES (%s,%s::jsonb,%s) RETURNING user_id",
+        (alice["account"]["id"], json.dumps({"storage_bytes": 0, "file_bytes": 100}), 0),
+    )
+    for data in (b"first synthetic rejected blob", b"second synthetic rejected blob"):
+        response = await client.post(
+            "/api/v1/attachments",
+            headers=headers(alice),
+            files={"file": ("synthetic.bin", data, "application/octet-stream")},
+        )
+        assert response.status_code == 429, response.text
+        assert response.json()["code"] == "account_quota_exhausted"
+    directory = Path(settings.attachments_dir) / alice["workspace"]["id"]
+    assert not [path for path in directory.rglob("*") if path.is_file()]
+    store = manager._runtimes[alice["workspace"]["id"]].store
+    async with store.read() as conn:
+        assert not await conn.execute_fetchall("SELECT 1 FROM attachment")
+    usage = await manager.accounts.one(
+        "SELECT bytes FROM public.spunto_account_storage WHERE user_id=%s",
+        (alice["account"]["id"],),
+    )
+    assert usage is None or usage["bytes"] == 0

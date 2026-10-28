@@ -104,6 +104,50 @@ async def test_domain_coalescing_keeps_baseline_and_other_credentials_break_sess
     assert (await domain.revisions(note["id"]))[0]["change_kind"] == "restore"
 
 
+@pytest.mark.parametrize("transactional", [False, True])
+@pytest.mark.parametrize("submitted", ["A", "C"])
+async def test_missing_coalesced_ancestor_preserves_revert_or_identical_body(
+    domain, transactional, submitted
+):
+    note = await domain.create("A")
+    await domain.edit(note["id"], "B", 1)
+    await domain.edit(note["id"], "C", 2)
+    assert [revision["version"] for revision in await domain.revisions(note["id"])] == [3, 1]
+    stale = Notes(
+        domain.store, Principal("other-device", "device", "Phone", "full", private_ok=True)
+    )
+    if transactional:
+        async with domain.store.write() as conn:
+            result = await stale.edit_in_transaction(conn, note["id"], submitted, 2)
+    else:
+        result = await stale.edit(note["id"], submitted, 2)
+    assert (await domain.get(note["id"]))["body"] == "C"
+    if submitted == "A":
+        assert result["conflict"] is True
+        copy = await domain.get(result["conflict_id"])
+        assert copy["body"] == submitted and copy["conflict_of"] == note["id"]
+        assert result["version"] == 3
+    else:
+        assert result["merged"] is True and not result.get("conflict")
+    async with domain.store.read() as conn:
+        assert (await conn.execute_fetchall("SELECT count(*) FROM note"))[0][0] == (
+            2 if submitted == "A" else 1
+        )
+
+
+@pytest.mark.parametrize("transactional", [False, True])
+async def test_identical_body_with_future_base_still_requires_reconciliation(domain, transactional):
+    note = await domain.create("Unchanged body")
+    with pytest.raises(Problem) as failure:
+        if transactional:
+            async with domain.store.write() as conn:
+                await domain.edit_in_transaction(conn, note["id"], note["body"], 2)
+        else:
+            await domain.edit(note["id"], note["body"], 2)
+    assert failure.value.code == "resync_required"
+    assert (await domain.get(note["id"]))["version"] == 1
+
+
 async def test_domain_stale_edit_merges_adjacent_lines_and_conflict_preserves_bodies(domain):
     note = await domain.create(
         "a\nb\n", source={"kind": "share", "ref": "browser", "url": "https://example.org"}
@@ -249,7 +293,10 @@ async def test_domain_relevance_paging_keeps_original_matches_when_bm25_corpus_c
     assert set(seen) == {n["id"] for n in original}
 
 
-async def test_domain_retention_purges_trash_and_keeps_latest_twenty_revisions(domain, server):
+@pytest.mark.parametrize("transactional", [False, True])
+async def test_domain_retention_purges_trash_and_keeps_latest_twenty_revisions(
+    domain, server, transactional
+):
     from spunto.jobs.maintenance import prune
 
     discarded = await domain.create("Discarded searchterm")
@@ -276,7 +323,13 @@ async def test_domain_retention_purges_trash_and_keeps_latest_twenty_revisions(d
         )
     assert len(rows) == 1
     assert not (await domain.search("Discarded", include_archived=True))["hits"]
-    conflict = await domain.edit(retained["id"], "Old device's complete text", 1)
+    if transactional:
+        async with domain.store.write() as conn:
+            conflict = await domain.edit_in_transaction(
+                conn, retained["id"], "Old device's complete text", 1
+            )
+    else:
+        conflict = await domain.edit(retained["id"], "Old device's complete text", 1)
     assert conflict["conflict"] is True
     assert (await domain.get(retained["id"]))["body"] == "Retained text 24"
     assert (await domain.get(conflict["conflict_id"]))["body"] == "Old device's complete text"

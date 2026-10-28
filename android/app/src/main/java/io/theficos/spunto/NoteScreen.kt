@@ -286,11 +286,10 @@ internal fun LazyListScope.revisionHistoryItems(context:Context,revisions:List<R
  val linked=links.associate {it.second.substringAfterLast('/') to it.first}
  val localRecordings=attachments.filter {it.kind=="recording" && (it.marker.isNotEmpty() && it.marker in body || it.remoteId in linked)}
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-  Regex("!\\[[^]]*]\\((/a/[^)]+)\\)").findAll(body).forEach { match -> if(auth!=null) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(model.container.context).data(auth!!.serverUrl+match.groupValues[1]).memoryCacheKey(model.container.replicaId+":"+auth!!.serverUrl+match.groupValues[1]).diskCacheKey(model.container.replicaId+":"+auth!!.serverUrl+match.groupValues[1]).addHeader("Authorization","Bearer ${auth!!.token}").build(),contentDescription=context.getString(R.string.core_note_image),modifier=Modifier.fillMaxWidth().heightIn(max=360.dp)) }
-  attachments.forEach { item ->
-   val local=java.io.File(item.localPath)
-   val url=if(local.exists()) local else item.remoteId?.let { remote -> auth?.let { it.serverUrl+"/a/$remote" } }
-   if(url!=null && item.mime.startsWith("image/")) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(model.container.context).data(url).memoryCacheKey(model.container.replicaId+":"+url.toString()).diskCacheKey(model.container.replicaId+":"+url.toString()).apply { if(url is String) auth?.let { addHeader("Authorization","Bearer ${it.token}") } }.build(),contentDescription=context.getString(R.string.core_note_image),modifier=Modifier.fillMaxWidth().heightIn(max=360.dp))
+  remember(body,attachments) {noteImages(body,attachments)}.forEach { image ->
+   val local=image.local?.let {java.io.File(it.localPath)}?.takeIf {it.isFile}
+   val url=local ?: image.target?.let {target ->auth?.let {it.serverUrl+target}}
+   if(url!=null) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(model.container.context).data(url).memoryCacheKey(model.container.replicaId+":"+url.toString()).diskCacheKey(model.container.replicaId+":"+url.toString()).apply {if(url is String) auth?.let {addHeader("Authorization","Bearer ${it.token}")}}.build(),contentDescription=context.getString(R.string.core_note_image),modifier=Modifier.fillMaxWidth().heightIn(max=360.dp))
   }
   localRecordings.forEach {item ->AttachmentPlayer(model,item.remoteId?:item.id,linked[item.remoteId]?:context.getString(R.string.core_recording_time,recordingTime(item.durationMs)),item)}
   links.filter {(_,target) ->localRecordings.none {it.remoteId==target.substringAfterLast('/')}}.forEach {(label,target) ->AttachmentPlayer(model,target.substringAfterLast('/'),label)}

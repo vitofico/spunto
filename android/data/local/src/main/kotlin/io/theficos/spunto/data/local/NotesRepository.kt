@@ -170,6 +170,15 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  fun outputs() = dao.outputs()
  suspend fun saveDraft(id: String = "capture", body: String) = editorMutex.withLock { dao.putDraft(DraftEntity(id,body,System.currentTimeMillis())) }
  suspend fun clearDraft(id: String, body: String) = editorMutex.withLock {dao.clearDraft(id,body)}
+ /** A capture closes only after its words, image markers and exact draft acknowledgement commit together. */
+ suspend fun capture(body:String,draftId:String,images:List<Pair<String,String>> = emptyList(),sourceRef:String?=null):String = editorMutex.withLock {
+  db.withTransaction {
+   val id=create(body,sourceRef=sourceRef)
+   images.forEach { (path,mime) -> queueImage(id,path,mime) }
+   dao.clearDraft(draftId,body)
+   id
+  }
+ }
  suspend fun create(body: String, sourceUrl: String? = null, sourceKind: String = "android", sourceRef: String? = null): String = save(body,sourceUrl=sourceUrl,sourceKind=sourceKind,sourceRef=sourceRef)
  suspend fun update(id: String,body: String) { save(body,id) }
  suspend fun restoreHistory(id:String,revision:RevisionEntity) {

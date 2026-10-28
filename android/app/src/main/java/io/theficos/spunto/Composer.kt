@@ -50,7 +50,7 @@ import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSave:(suspend (String,String?)->String?)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -313,14 +313,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
       if(body.isNotBlank() || canSaveEmpty || images.isNotEmpty()) {
        if(id!="capture") check(model.repository.finishEditor(model.repository.editorWrite(lease,body))) { context.getString(R.string.core_editor_inactive) }
        val dictated=dictatedText || listening && body.isNotBlank() && body!=dictationInitial
-       if(id=="capture" && onPlainCaptureSave!=null) {
-        val noteId=onPlainCaptureSave(body,if(dictated) "dictation" else null)
-        if(noteId!=null) images.forEach { (file,mime) -> model.repository.queueImage(noteId,file.absolutePath,mime) }
-        images=emptyList()
-       } else onSave(body)
-       if(id=="capture") model.container.scope.launch { runCatching { model.repository.clearDraft(draftId,body) } }
+       val captured=if(id=="capture" && onPlainCaptureSaved!=null) {
+        model.repository.capture(body,draftId,images.map { (file,mime) -> file.absolutePath to mime },if(dictated) "dictation" else null).also {images=emptyList()}
+       } else {onSave(body);null}
+       if(id=="capture" && captured==null) model.container.scope.launch { runCatching { model.repository.clearDraft(draftId,body) } }
        if(value.text==body) { saved=true;value=TextFieldValue("");dictatedText=false }
        if(autoFocus) focus.requestFocus()
+       captured?.let {onPlainCaptureSaved?.invoke(it)}
       }
      }
     } catch(cancelled:CancellationException) {throw cancelled}
@@ -385,7 +384,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
    } else if(tools) {
     IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_add_label)})}
     IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription=context.getString(R.string.core_add_task),modifier=Modifier.size(24.dp))}
-    if(id!="capture" || onPlainCaptureSave!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=ready && !closing && !saving) {Icon(painterResource(R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
+    if(id!="capture" || onPlainCaptureSaved!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=ready && !closing && !saving) {Icon(painterResource(R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
     if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,false,startingVoice) {micTap()}
     if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_record))}
    }

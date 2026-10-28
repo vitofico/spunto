@@ -22,15 +22,28 @@
 </p>
 
 <p align="center">
+  <a href="docs/assets/web-timeline-carta.png"><img src="docs/assets/web-timeline-carta.png" width="100%" alt="Spunto web in Carta: Darth Vader’s saved checklists, nested labels and quick capture, with the ink-wave background"></a>
+</p>
+
+<p align="center"><em>A checklist for the Death Star, a calmer follow-up with Luke, and everything connected by labels. Fictional notes, saved in the running app.</em></p>
+
+<p align="center">
+  <a href="docs/assets/web-search-ardesia-dark.png"><img src="docs/assets/web-search-ardesia-dark.png" width="49%" alt="Search for #imperial returns the Death Star and Luke notes in Ardesia dark mode, including their saved checklist states"></a>
+  <a href="docs/assets/web-note-elettrica.png"><img src="docs/assets/web-note-elettrica.png" width="49%" alt="The Death Star note in Elettrica, with checked tasks, a saved follow-up and expanded revision history showing its earlier version"></a>
+</p>
+
+<p align="center"><em>Find a thread with #imperial, then revisit the note and its revision history. Open any screenshot to see it at full size.</em></p>
+
+<details>
+<summary>Android: capture, search and revisit the same fictional notes</summary>
+
+<p align="center">
   <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="30%" alt="Capture and timeline: a Death Star inspection checklist and a follow-up about Luke"></a>
   <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="30%" alt="Offline label search: #imperial finds the Death Star and Luke notes"></a>
   <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="30%" alt="Note detail: checklists, nested labels, revision history and the private-note control"></a>
 </p>
 
 <p align="center"><em>Capture → find → revisit. Fictional sample notes — even Darth Vader needs a second brain.</em></p>
-
-<details>
-<summary>See nested labels and saved views</summary>
 
 <p align="center">
   <a href="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png"><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="300" alt="Labels and views: nested habits, imperial and life labels with note counts"></a>
@@ -40,7 +53,7 @@
 
 ## More than a place to put notes
 
-Write a line, make a checklist or add a `#nested/label`. A short first-run guide introduces capture, labels, search and sync; replay it from Settings whenever you want. The core works on its own; plugins add capabilities in a few fixed places, so your notes remain the centre of the app. Five built-in themes include light and dark modes.
+Write a line, make a checklist or add a `#nested/label`. A short first-run guide introduces capture, labels, search and sync; replay it from Settings whenever you want. The core works on its own; plugins add capabilities in a few fixed places, so your notes remain the centre of the app. [Five built-in themes](#make-it-your-own) include light and dark modes.
 
 | When you want to… | Spunto helps you… |
 |---|---|
@@ -53,6 +66,19 @@ Write a line, make a checklist or add a `#nested/label`. A short first-run guide
 | **Keep a recoverable record** | Use revision history, private notes, export, scheduled snapshots and explicit restore tools. |
 
 Context-pack and decision-journal changes require a connection; synced decision notes remain readable offline. [Plugin guides](docs/plugins.md#context-packs) explain the workflows and tag curation.
+
+## Make it your own
+
+Open **Settings → Appearance** to choose **Carta**, **Ardesia**, **Salvia**, **Corallo** or **Elettrica**. In the web app, select **System**, **Light** or **Dark** independently of the palette. Use **Use a different theme on this device** for a browser-specific palette; otherwise the palette follows your instance setting.
+
+<p align="center">
+  <a href="docs/assets/web-timeline-salvia.png"><img src="docs/assets/web-timeline-salvia.png" width="49%" alt="The same saved Darth Vader notes in Salvia, with the Plain background selected"></a>
+  <a href="docs/assets/web-timeline-corallo.png"><img src="docs/assets/web-timeline-corallo.png" width="49%" alt="The same saved Darth Vader notes in Corallo, with the Artwork ink waves selected"></a>
+</p>
+
+<p align="center"><em>Salvia on plain paper; Corallo with ink waves. The same notes, with a different atmosphere.</em></p>
+
+The browser also offers **Background style → Plain / Artwork**, **Reading face → Serif / Sans**, and three text sizes. These choices stay in this browser. [See the Appearance controls](docs/assets/web-appearance.png), or compare [Carta](docs/assets/web-timeline-carta.png), [Ardesia dark](docs/assets/web-search-ardesia-dark.png) and [Elettrica](docs/assets/web-note-elettrica.png).
 
 ## One library, three ways in
 

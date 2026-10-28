@@ -609,8 +609,7 @@ class Notes:
                     )
                 ancestors = (
                     await conn.execute_fetchall(
-                        "SELECT body FROM note_revision WHERE note_id=? AND version<=? "
-                        "ORDER BY version DESC LIMIT 1",
+                        "SELECT body FROM note_revision WHERE note_id=? AND version=?",
                         (id, base_version),
                     )
                     if base_version < snapshot["version"]
@@ -618,7 +617,7 @@ class Notes:
                 )
             merged = (
                 body
-                if base_version == snapshot["version"]
+                if base_version == snapshot["version"] or body == snapshot["body"]
                 else await asyncio.to_thread(merge, ancestors[0][0], snapshot["body"], body)
                 if ancestors
                 else None
@@ -670,8 +669,7 @@ class Notes:
             raise Problem(409, "resync_required", "Reconcile after the server restore.")
         ancestors = (
             await conn.execute_fetchall(
-                "SELECT body FROM note_revision WHERE note_id=? AND version<=? "
-                "ORDER BY version DESC LIMIT 1",
+                "SELECT body FROM note_revision WHERE note_id=? AND version=?",
                 (id, base_version),
             )
             if base_version < current
@@ -679,7 +677,7 @@ class Notes:
         )
         merged = (
             body
-            if base_version == current
+            if base_version == current or body == row["body"]
             else (
                 await asyncio.to_thread(merge, ancestors[0][0], row["body"], body)
                 if ancestors

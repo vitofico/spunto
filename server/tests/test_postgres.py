@@ -541,3 +541,22 @@ async def test_postgres_batch_serialization_keeps_scoped_plugin_metadata(pg):
     _, bounds, users, _, _ = pg
     await notes(bounds[1], users[1]).create("Synthetic batch other workspace #Hidden")
     await assert_batch_serialization(notes(bounds[0], users[0]))
+
+
+@pytest.mark.parametrize("transactional", [False, True])
+async def test_postgres_missing_coalesced_ancestor_preserves_reverted_text(pg, transactional):
+    _, bounds, users, _, _ = pg
+    domain = notes(bounds[0], users[0])
+    note = await domain.create("A")
+    await domain.edit(note["id"], "B", 1)
+    await domain.edit(note["id"], "C", 2)
+    assert [revision["version"] for revision in await domain.revisions(note["id"])] == [3, 1]
+    if transactional:
+        async with bounds[0].write() as conn:
+            result = await domain.edit_in_transaction(conn, note["id"], "A", 2)
+    else:
+        result = await domain.edit(note["id"], "A", 2)
+    assert result["conflict"] is True and result["version"] == 3
+    assert (await domain.get(note["id"]))["body"] == "C"
+    copy = await domain.get(result["conflict_id"])
+    assert copy["body"] == "A" and copy["conflict_of"] == note["id"]

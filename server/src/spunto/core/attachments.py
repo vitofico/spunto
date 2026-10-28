@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import os
 import re
-import tempfile
 import uuid
 from pathlib import Path
 
@@ -36,28 +35,38 @@ def path_for(directory: Path, digest: str) -> Path:
     return directory / digest[:2] / digest[2:4] / digest
 
 
-def _save(directory, digest, data):
-    target = path_for(directory, digest)
+def _stage(target, pending, digest, data):
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-            raise OSError("attachment_digest_mismatch")
-        return
-    fd, name = tempfile.mkstemp(prefix=".upload-", dir=target.parent)
+        with target.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
+                raise OSError("attachment_digest_mismatch")
+        return False
+    descriptor = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+    return True
+
+
+def _publish(target, pending):
+    os.replace(pending, target)
+    directory_fd = os.open(target.parent, os.O_RDONLY)
     try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(name, target)
-        directory_fd = os.open(target.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        os.fsync(directory_fd)
     finally:
-        if os.path.exists(name):
-            os.unlink(name)
+        os.close(directory_fd)
+
+
+async def _file_io(to_thread, function, *args):
+    # Join an uncancellable filesystem worker before rolling back or removing its stage.
+    task = asyncio.create_task(to_thread(function, *args))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await task
+        raise
 
 
 async def write_attachment(
@@ -84,31 +93,42 @@ async def write_attachment(
     filename = re.sub(r"[\x00-\x1f\x7f]", "", filename)
     digest = hashlib.sha256(data).hexdigest()
     media = sniff(data, mime)
-    await to_thread(_save, settings.attachments_dir, digest, data)
-    check()
-    async with store.write() as conn:
+    target = path_for(settings.attachments_dir, digest)
+    pending = target.with_name(".upload-" + uuid.uuid4().hex)
+    try:
+        staged = await _file_io(to_thread, _stage, target, pending, digest, data)
         check()
-        rows = await conn.execute_fetchall(
-            "SELECT * FROM attachment WHERE sha256=? LIMIT 1", (digest,)
-        )
-        if rows:
-            result = dict(rows[0])
-        else:
-            result = {
-                "id": str(uuid.uuid7()),
-                "sha256": digest,
-                "mime": media,
-                "size": len(data),
-                "filename": filename,
-                "width": None,
-                "height": None,
-                "created_at": clock(),
-            }
-            await conn.execute(
-                "INSERT INTO attachment VALUES (?,?,?,?,?,?,?,?)", tuple(result.values())
+        async with store.write() as conn:
+            check()
+            rows = await conn.execute_fetchall(
+                "SELECT * FROM attachment WHERE sha256=? LIMIT 1", (digest,)
             )
-            store.emit("attachment.added")
-        check()
+            if rows:
+                result = dict(rows[0])
+            else:
+                result = {
+                    "id": str(uuid.uuid7()),
+                    "sha256": digest,
+                    "mime": media,
+                    "size": len(data),
+                    "filename": filename,
+                    "width": None,
+                    "height": None,
+                    "created_at": clock(),
+                }
+                await conn.execute(
+                    "INSERT INTO attachment VALUES (?,?,?,?,?,?,?,?)", tuple(result.values())
+                )
+                store.emit("attachment.added")
+            check()
+            # Quota rejection happens before publication. Only rename/directory fsync
+            # hold the writer; writing and verifying the full blob happen above.
+            if staged:
+                await _file_io(to_thread, _publish, target, pending)
+            check()
+    finally:
+        # Never remove a final hash: a concurrent upload may already have committed it.
+        await asyncio.to_thread(pending.unlink, missing_ok=True)
     check()
     url = "/a/" + result["id"]
     label = re.sub(r"[\[\]\\()<>]", "", filename)

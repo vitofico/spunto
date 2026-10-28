@@ -181,6 +181,25 @@ async def test_two_offline_devices_shared_scenarios(server, scenario):
         ) == sorted(scenario["bodies"])
 
 
+async def test_coalesced_base_revert_is_preserved_and_conflict_retry_is_idempotent(server):
+    first, second = await signed(server), await signed(server, "Offline phone")
+    note_id = str(uuid.uuid7())
+    await push(server, first, [op("note.create", note_id, body="A")])
+    await push(server, first, [op("note.update", note_id, base_version=1, body="B")])
+    await push(server, first, [op("note.update", note_id, base_version=2, body="C")])
+    update = op("note.update", note_id, base_version=2, body="A")
+    result = (await push(server, second, [update]))[0]
+    assert result["status"] == "conflict" and result["note"]["body"] == "A"
+    repeated = (await push(server, second, [update]))[0]
+    assert repeated["status"] == "duplicate"
+    assert repeated["original"]["conflict_id"] == result["conflict_id"]
+    async with server.services.store.read() as conn:
+        assert sorted(row[0] for row in await conn.execute_fetchall("SELECT body FROM note")) == [
+            "A",
+            "C",
+        ]
+
+
 async def test_flags_use_action_time_and_clamp_future_clock(server):
     headers = await signed(server)
     note_id, now = str(uuid.uuid7()), now_ms()

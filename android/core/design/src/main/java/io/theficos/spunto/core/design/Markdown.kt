@@ -46,6 +46,26 @@ fun recordingAttachmentLinks(body:String):List<Pair<String,String>> {
  }
  walk(parser.parse(body));return result
 }
+/** Remote image targets and queued image markers with source positions; code/HTML never create views. */
+fun imageAttachmentReferences(body:String):List<Pair<String,Int>> {
+ val result=mutableListOf<Pair<String,Int>>()
+ val starts=listOf(0)+Regex("\\r\\n|\\n|\\r").findAll(body).map {it.range.last+1}.toList()
+ fun walk(node:Node) {
+  if(node is Code || node is FencedCodeBlock || node is IndentedCodeBlock || node is HtmlBlock || node is HtmlInline) return
+  if(node is Image && attachmentTarget.matches(node.destination)) {
+   val span=node.sourceSpans.firstOrNull()
+   result.add(node.destination to (span?.let {starts[it.lineIndex]+it.columnIndex} ?: 0))
+   return
+  }
+  if(node is org.commonmark.node.Text) node.sourceSpans.forEach {span ->
+   val start=starts[span.lineIndex]+span.columnIndex
+   val text=body.substring(start,start+span.length)
+   Regex("\\[image:[0-9a-f-]{36}]").findAll(text).forEach {result.add(it.value to start+it.range.first)}
+  }
+  var child=node.firstChild;while(child!=null) {walk(child);child=child.next}
+ }
+ walk(parser.parse(body));return result
+}
 internal fun internalMarkdownTarget(target:String):Boolean = target.startsWith("/n/") || attachmentTarget.matches(target)
 /** Only real list items may become checkboxes; code blocks retain their literal text. */
 internal fun checklistLines(body:String):List<Int> {

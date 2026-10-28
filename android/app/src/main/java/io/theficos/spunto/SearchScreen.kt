@@ -28,6 +28,10 @@ import io.theficos.spunto.core.model.*
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.*
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import java.time.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,6 +42,7 @@ import java.time.*
  var shown by rememberSaveable { mutableStateOf(listOf<String>()) }
  var results by remember { mutableStateOf(shown.mapNotNull { id -> model.notes.value.firstOrNull { it.id==id } }) }
  var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }
+ var hasMore by remember {mutableStateOf(false)};var loadingPage by remember {mutableStateOf(false)};var moreRequests by remember {mutableIntStateOf(0)}
  // L1: labels used most in the last 30 days first, then by overall use; S2: the last searches on this phone.
  val labels by remember { model.repository.dao.labelsByUse(System.currentTimeMillis()-30*86_400_000L,8) }.collectAsState(emptyList()); val auth by model.auth.collectAsState()
  val preferences=model.container.preferences
@@ -52,10 +57,19 @@ import java.time.*
  LaunchedEffect(online,manifest) { if(!online || !model.container.manifest.enabled("ask")) answer=null }
  LaunchedEffect(query,from,to,auth,online,localNotes) {
   results=model.repository.search(query).filter { note -> (from.isEmpty() || runCatching { note.createdAt>=LocalDate.parse(from).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrDefault(true)) && (to.isEmpty() || runCatching { note.createdAt<LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrDefault(true)) }
-  meaning=emptySet()
-  if(online && query.isNotBlank()) {
+  val localMatches=results
+  meaning=emptySet();hasMore=false;loadingPage=false
+  val config=auth
+  if(online && config!=null && query.isNotBlank()) {
+   var requested=moreRequests
    kotlinx.coroutines.delay(150)
-   runCatching { ApiClient(auth!!).request("/api/v1/search",query=buildMap { put("q",query); if(from.isNotBlank()) put("from",from); if(to.isNotBlank()) put("to",to) }).jsonObject }.onSuccess { page -> results=mergeSearchResults(results,page.objects("hits").map(::noteFromWire),localNotes);meaning=page.objects("hits").filter { it.string("match")=="meaning" }.map { it.string("id") }.toSet() }
+   searchServerPages(request={cursor ->
+    loadingPage=true
+    try {ApiClient(config).request("/api/v1/search",query=buildMap {put("q",query);put("include_archived","true");if(from.isNotBlank()) put("from",from);if(to.isNotBlank()) put("to",to);cursor?.let {put("cursor",it)}}).jsonObject}
+    finally {loadingPage=false}
+   },awaitMore={snapshotFlow {moreRequests}.first {it!=requested};requested=moreRequests},show={pages ->
+    results=mergeSearchResults(localMatches,pages.hits,localNotes);meaning=pages.meaning;hasMore=pages.cursor!=null
+   },failed={error ->model.message.value=if(error is ApiException) apiErrorMessage(context.resources,error) else context.getString(R.string.sys_server_unreachable)})
   }
  }
  val terms=remember(query) { searchTerms(query) }
@@ -83,6 +97,7 @@ import java.time.*
     }
    }
    items(results,key={ it.id }) { note -> SearchResult(note,terms,note.id in meaning) { saveSearch(query);onNote(note.id) } }
+   if(hasMore || loadingPage) item(key="more") {TextButton(onClick={moreRequests++},enabled=!loadingPage,modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(if(loadingPage) R.string.core_loading else R.string.core_show_more))}}
    if(query.isNotBlank() && results.isEmpty()) item(key="none") {
     Column(Modifier.padding(vertical=SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
      Text(context.getString(R.string.core_search_empty,query.trim()),style=MaterialTheme.typography.bodyLarge)
@@ -139,4 +154,27 @@ internal fun searchSnippet(body:String,terms:List<String>,width:Int=160):String?
 internal fun mergeSearchResults(localMatches:List<Note>,remote:List<Note>,replica:List<Note>):List<Note> {
  val pending=replica.filter { it.pending }.associateBy { it.id }
  return (remote.mapNotNull { hit -> pending[hit.id]?.takeUnless { it.trashed } ?: hit.takeUnless { pending[hit.id]?.trashed==true } } + localMatches.filter { it.pending && !it.trashed }).distinctBy { it.id }
+}
+
+/** Accumulated server relevance order and cursor for this query; local pending bodies are merged at presentation. */
+internal data class SearchPages(val hits:List<Note> = emptyList(),val meaning:Set<String> = emptySet(),val cursor:String?=null) {
+ fun append(page:JsonObject):SearchPages {
+  val added=page.objects("hits")
+  return SearchPages((hits+added.map(::noteFromWire)).distinctBy {it.id},meaning+added.filter {it.string("match")=="meaning"}.map {it.string("id")},page["next_cursor"]?.jsonPrimitive?.contentOrNull?.takeIf {it.isNotEmpty()})
+ }
+}
+
+/** One cancelled query owns no later page publication, even if a transport completes after cancellation. */
+internal suspend fun searchServerPages(request:suspend (String?)->JsonObject,awaitMore:suspend ()->Unit,show:(SearchPages)->Unit,failed:(Exception)->Unit) {
+ var pages=SearchPages()
+ while(true) {
+  try {
+   val response=request(pages.cursor)
+   currentCoroutineContext().ensureActive()
+   pages=pages.append(response);show(pages)
+  } catch(cancelled:CancellationException) {throw cancelled}
+  catch(error:Exception) {failed(error)}
+  if(pages.cursor==null) return
+  awaitMore()
+ }
 }

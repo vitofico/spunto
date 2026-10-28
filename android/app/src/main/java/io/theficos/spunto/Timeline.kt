@@ -114,7 +114,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
   if(from.isNotBlank() || to.isNotBlank()) Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
   else { Text(context.getString(R.string.core_quiet_place),style=MaterialTheme.typography.titleLarge); Text(context.getString(R.string.core_share_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
  }) {
-  item(key="composer") { Box(Modifier.padding(bottom=28.dp)) { Composer(model,compact=true,autoFocus=false,onPlainCaptureSave={body,ref ->model.repository.create(body,sourceRef=ref).also { savedId=it }},onSave={model.saveLocal(it)}) } }
+  item(key="composer") { Box(Modifier.padding(bottom=28.dp)) { Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},onSave={model.saveLocal(it)}) } }
   if(proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }
   slip?.let { (output,note) -> item(key="slip") { DailySlip(model,output,note,onNote) { slipHidden.value="${LocalDate.now()}/${output.id}";model.container.preferences.edit().putString("slip-hidden",slipHidden.value).apply() } } }
  }

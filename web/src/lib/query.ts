@@ -15,13 +15,7 @@ import {
 import { api, onRequestSettled, onUnauthorized } from "./api";
 import { ApiError } from "./errors";
 import { carryRotatedDrafts, eraseOwnerDrafts, keptDrafts } from "./drafts";
-import type {
-  Flags,
-  NoteFilters,
-  SearchFilters,
-  Session,
-  Workspace,
-} from "./types";
+import type { NoteFilters, SearchFilters, Session, Workspace } from "./types";
 import {
   invalidateRequests,
   sessionIdentity,
@@ -588,29 +582,12 @@ export function useApiMutation<T, R>(
       ),
   });
 }
-export const useCreateNote = () =>
-  useApiMutation(({ body, key }: { body: string; key: string }) =>
-    api.createNote(body, key),
-  );
-export const useUpdateNote = () =>
-  useApiMutation(
-    ({ id, body, version }: { id: string; body: string; version: number }) =>
-      api.updateNote(id, body, version),
-  );
-export const useFlags = () =>
-  useApiMutation(({ id, flags }: { id: string; flags: Flags }) =>
-    api.flags(id, flags),
-  );
 export const useRenameLabel = () =>
   useApiMutation(({ from, to }: { from: string; to: string }) =>
     api.renameLabel(from, to),
   );
 export const useDeleteLabel = () =>
   useApiMutation((path: string) => api.deleteLabel(path));
-export const useRestoreRevision = () =>
-  useApiMutation(({ id, version }: { id: string; version: number }) =>
-    api.restoreRevision(id, version),
-  );
 let feedFailing = false;
 const syncListeners = new Set<() => void>();
 function setFeedFailing(value: boolean) {

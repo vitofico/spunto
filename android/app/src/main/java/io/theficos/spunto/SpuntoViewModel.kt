@@ -123,7 +123,6 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  fun refreshPluginManager()=pluginManager.refresh()
  internal val pluginReplicaEpoch get()=pluginEpoch.value
  internal val pluginReplicaEpochState:StateFlow<String> get()=pluginEpoch
- internal fun pluginPage(id:String)=pluginManager.select(id)
  internal fun pluginWeb(path:String) {
   val config=auth.value ?: return
   val url=pluginWebUrl(config.serverUrl,config.httpConsent,path) ?: return
@@ -166,6 +165,5 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  }
  fun fetch(path:String)=request(path) { remote.value=if(it is JsonObject) it else buildJsonObject { put("items",it) } }
  internal fun pluginToggle(plugin:NativePluginFacts,on:Boolean,accepted:List<String>?=null,onComplete:(PluginToggleResult)->Unit={})=pluginManager.toggle(plugin.id,on,accepted,onComplete=onComplete)
- fun pluginCommand(plugin:String,id:String,args:JsonObject=JsonObject(emptyMap()))=request("/api/v1/plugins/$plugin/commands/$id","POST",args) { remote.value=it as? JsonObject ?: JsonObject(emptyMap()) }
  fun draft(id:String,text:String)=task { repository.saveDraft(id,text) }
 }

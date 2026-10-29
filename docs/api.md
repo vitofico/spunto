@@ -144,6 +144,8 @@ The command flags were checked against the installed CLIs. Environment-backed be
 
 A read token exposes exactly three core tools: `search_notes`, `get_notes`, `list_labels`. A write token exposes those plus `create_note`, `append_to_note`, `set_labels`, `archive_note` (seven total). A status token cannot read notes through MCP. Private notes are excluded unless explicitly granted; external-origin notes can also be excluded. External-origin note contents are fenced as untrusted data, and answers have bounded size. `create_note` accepts a `request_id` for retry deduplication; writes are rate-limited. Appends do not accept that key, so retrying an append after an uncertain response requires checking the note first.
 
+`search_notes` accepts `mode: "keyword"` to restrict results to text matches, or `mode: "hybrid"` (the default) to include enabled semantic search sources. Results preserve each hit's `match` (`keyword`, `meaning`, or `both`) and report semantic search availability as `off`, `on`, or `unavailable`.
+
 Resources use `note://<id>` and the template `note://{id}`. Resource listing combines accessible pinned and recent notes; reading a resource applies the same visibility checks as a tool. Token revocation or changed access must be honored on subsequent requests.
 
 The web client, AI gateway, semantic search and native Android sync are implemented. Attachments use authenticated `/a/{id}` downloads; SVG and other active formats download as files. The native Android app keeps a local replica and encrypted device credential; physical-phone dictation checks remain pending.

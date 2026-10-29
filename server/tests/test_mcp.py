@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from test_plugins_ai import ai_host as ai_host
 
 from spunto.auth import tokens
 from spunto.auth.tokens import Principal
@@ -116,6 +117,94 @@ async def test_protocols_discover_scoped_tools_and_read_notes(server, endpoint, 
     _, full = await call(endpoint, read, "get_notes", {"ids": [created["id"]]}, protocol)
     assert full["notes"][0]["body"] == "An MCP idea #work"
     assert full["notes"][0]["source"] == {"kind": "agent", "ref": "Test agent"}
+
+
+@pytest.fixture
+async def search_host(ai_host, monkeypatch):
+    host, _ = ai_host
+    monkeypatch.setattr(host.store, "plugin_host", host)
+    return host
+
+
+@pytest.mark.parametrize("protocol", ["2025-06-18", "2026-07-28"])
+async def test_keyword_search_excludes_semantic_only_candidates(
+    server, endpoint, search_host, monkeypatch, protocol
+):
+    note = await Notes(server.services.store, OWNER).create(
+        "Replace the damaged inner tube to repair a flat tire."
+    )
+    queries = []
+
+    async def rank(ctx, query):
+        queries.append(query)
+        return [{"id": note["id"], "score": 0.9}]
+
+    monkeypatch.setitem(
+        search_host.plugins["semantic-search"].handlers["search_source"], "search", rank
+    )
+    _, token = await pat(server, "read")
+    _, found = await call(
+        endpoint,
+        token,
+        "search_notes",
+        {"query": "bicycle puncture maintenance", "mode": "keyword"},
+        protocol,
+    )
+    assert found["hits"] == []
+    assert found["semantic"] == "off"
+    assert queries == []
+
+
+@pytest.mark.parametrize("protocol", ["2025-06-18", "2026-07-28"])
+@pytest.mark.parametrize("mode", ["hybrid", None])
+async def test_hybrid_search_preserves_keyword_meaning_and_both_matches(
+    server, endpoint, search_host, monkeypatch, protocol, mode
+):
+    notes = Notes(server.services.store, OWNER)
+    both = await notes.create("Bicycle repair guide")
+    keyword = await notes.create("Bicycle maintenance checklist")
+    meaning = await notes.create("Replacing a damaged inner tube")
+
+    async def rank(ctx, query):
+        return [{"id": note["id"], "score": 0.9} for note in (both, meaning)]
+
+    monkeypatch.setitem(
+        search_host.plugins["semantic-search"].handlers["search_source"], "search", rank
+    )
+    _, token = await pat(server, "read")
+    _, found = await call(
+        endpoint,
+        token,
+        "search_notes",
+        {"query": "bicycle", **({"mode": mode} if mode else {})},
+        protocol,
+    )
+    assert {hit["id"]: hit["match"] for hit in found["hits"]} == {
+        both["id"]: "both",
+        keyword["id"]: "keyword",
+        meaning["id"]: "meaning",
+    }
+    assert found["semantic"] == "on"
+
+
+@pytest.mark.parametrize("protocol", ["2025-06-18", "2026-07-28"])
+async def test_hybrid_search_reports_unavailable_source_without_losing_keyword_hits(
+    server, endpoint, search_host, monkeypatch, protocol
+):
+    note = await Notes(server.services.store, OWNER).create("Bicycle repair checklist")
+
+    async def unavailable(ctx, query):
+        raise RuntimeError("Synthetic search source outage")
+
+    monkeypatch.setitem(
+        search_host.plugins["semantic-search"].handlers["search_source"], "search", unavailable
+    )
+    _, token = await pat(server, "read")
+    _, found = await call(
+        endpoint, token, "search_notes", {"query": "bicycle", "mode": "hybrid"}, protocol
+    )
+    assert [(hit["id"], hit["match"]) for hit in found["hits"]] == [(note["id"], "keyword")]
+    assert found["semantic"] == "unavailable"
 
 
 async def test_transport_auth_origin_host_and_body_limit(server, endpoint):

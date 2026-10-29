@@ -287,6 +287,7 @@ class MCP:
                     sort=args.sort,
                     limit=args.limit,
                     cursor=args.cursor,
+                    mode=args.mode,
                 )
                 hits = []
                 keyword_query, _ = search_query(args.query)
@@ -305,7 +306,7 @@ class MCP:
                         "labels": note["labels"],
                         "created": note["created_at"][:10],
                         "updated": note["updated_at"][:10],
-                        "match": "keyword",
+                        "match": note["match"],
                     }
                     if note.get("archived"):
                         hit["archived"] = True
@@ -322,7 +323,11 @@ class MCP:
                     }:
                         hit["via"] = source.get("ref") or source["kind"]
                     hits.append(hit)
-                return {"hits": hits, "next_cursor": found.get("next_cursor"), "semantic": "off"}
+                return {
+                    "hits": hits,
+                    "next_cursor": found.get("next_cursor"),
+                    "semantic": found["semantic"],
+                }
             case "get_notes":
                 result, missing, remaining = [], [], args.max_chars
                 for note_id in args.ids:

@@ -611,6 +611,94 @@ async def test_named_human_target_takes_precedence_after_machine_creation(ai_hos
     assert (await domain.get(created_id))["body"] == "Created draft Monday"
 
 
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Edit the Meeting note to change Monday to Tuesday and keep it concise",
+        "Please edit the Meeting note to change Monday to Tuesday, then make it shorter",
+        "Change it in the Meeting note from Monday to Tuesday",
+    ],
+)
+async def test_incidental_or_qualified_it_cannot_override_named_human_target(ai_host, question):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    human = await domain.create("# Meeting\n\nMonday at 18:00.")
+    provider.action_plan = plan("create", body="Camping Monday")
+    first = await request(host, "Create note: Camping Monday", note_actions=True)
+    created = await confirm(host, action(first))
+    created_id = next(i["ids"][0] for i in created["items"] if i["type"] == "notes")
+    provider.requests.clear()
+    provider.action_plan = plan(
+        "edit", target=human["id"], selector="Meeting note", before="Monday", after="Tuesday"
+    )
+    preview = await request(host, question, **continuation(first))
+    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    assert "<authoring-data" not in content
+    await confirm(host, action(preview))
+    assert (await domain.get(human["id"]))["body"] == "# Meeting\n\nTuesday at 18:00."
+    assert (await domain.get(created_id))["body"] == "Camping Monday"
+
+
+@pytest.mark.parametrize(
+    "question", ["Make it shorter", "Could you please rewrite it more concisely"]
+)
+async def test_leading_direct_object_it_keeps_receipt_bound_authoring_target(ai_host, question):
+    host, provider = ai_host
+    draft = "# Camping\n\nRemember to pack a tent and bring enough water."
+    provider.action_plan = plan("create", body=draft)
+    first = await request(host, "Draft a camping note", note_actions=True)
+    created = await confirm(host, action(first))
+    note_id = next(i["ids"][0] for i in created["items"] if i["type"] == "notes")
+    provider.action_plan = plan("edit", before=draft, after="# Camping\n\nPack a tent and water.")
+    preview = await request(host, question, **continuation(first))
+    await confirm(host, action(preview))
+    note = await Notes(host.store, OWNER).get(note_id)
+    assert note["body"] == "# Camping\n\nPack a tent and water." and note["machine"]
+
+
+@pytest.mark.parametrize("phrase", ["this note", "that note"])
+async def test_incidental_deictic_words_with_explicit_named_target_clarify_safely(ai_host, phrase):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    await domain.create("# Meeting\n\nMonday at 18:00.")
+    provider.action_plan = plan("create", body="Camping Monday")
+    first = await request(host, "Create note: Camping Monday", note_actions=True)
+    await confirm(host, action(first))
+    before = await snapshot(host.store)
+    provider.requests.clear()
+    output = await request(
+        host, f"Edit the Meeting note to add the words {phrase} is concise", **continuation(first)
+    )
+    assert not any("action_id" in i.get("args", {}) for i in output["items"])
+    assert await snapshot(host.store) == before
+    assert not [r for r in provider.requests if "messages" in r]
+
+
+async def test_content_deictic_after_bare_named_human_target_does_not_admit_machine_draft(ai_host):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    human = await domain.create("# Meeting\n\nMonday at 18:00.")
+    provider.action_plan = plan("create", body="Camping Monday")
+    first = await request(host, "Create note: Camping Monday", note_actions=True)
+    created = await confirm(host, action(first))
+    created_id = next(i["ids"][0] for i in created["items"] if i["type"] == "notes")
+    provider.requests.clear()
+    provider.action_plan = plan(
+        "edit",
+        target=human["id"],
+        selector="Meeting",
+        before="Monday at 18:00.",
+        after="Monday at 18:00. This note is concise.",
+    )
+    before = await snapshot(host.store)
+    output = await request(
+        host, "Edit Meeting to add the words this note is concise", **continuation(first)
+    )
+    assert not any("action_id" in i.get("args", {}) for i in output["items"])
+    assert await snapshot(host.store) == before
+    assert (await domain.get(created_id))["body"] == "Camping Monday"
+
+
 @pytest.mark.parametrize("duplicate_title", [False, True])
 async def test_natural_note_qualifier_uses_only_globally_unique_authoritative_title(
     ai_host, duplicate_title
@@ -642,6 +730,77 @@ async def test_natural_note_qualifier_uses_only_globally_unique_authoritative_ti
         ] == "# Expedition briefing\n\n- [ ] Prepare equipment"
         await confirm(host, action(applied))
         assert (await domain.get(note["id"]))["body"] == body
+
+
+@pytest.mark.parametrize("separator", [" ", "\n"])
+async def test_quoted_location_in_new_content_cannot_override_named_first_edit_object(
+    ai_host, separator
+):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    await domain.create("# Meeting\n\nMonday at 18:00.")
+    provider.action_plan = plan("create", body="Camping Monday")
+    first = await request(host, "Create note: Camping Monday", note_actions=True)
+    await confirm(host, action(first))
+    before = await snapshot(host.store)
+    provider.requests.clear()
+    output = await request(
+        host,
+        f'Edit Meeting{separator}to add the sentence "Keep this detail in this note".',
+        **continuation(first),
+    )
+    assert not any("action_id" in i.get("args", {}) for i in output["items"])
+    assert await snapshot(host.store) == before
+    assert not [r for r in provider.requests if "messages" in r]
+
+
+async def test_latest_confirmed_human_target_takes_precedence_over_older_machine_context(ai_host):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    human = await domain.create("# Meeting\n\nMonday at 18:00.")
+    provider.action_plan = plan("create", body="Camping Monday")
+    first = await request(host, "Create note: Camping Monday", note_actions=True)
+    created = await confirm(host, action(first))
+    created_id = next(i["ids"][0] for i in created["items"] if i["type"] == "notes")
+    provider.action_plan = plan(
+        "edit", target=human["id"], selector="Meeting", before="Monday", after="Tuesday"
+    )
+    human_preview = await request(
+        host, "Change Monday to Tuesday in Meeting", **continuation(first)
+    )
+    await confirm(host, action(human_preview))
+    provider.requests.clear()
+    provider.action_plan = plan(
+        "edit", target=human["id"], before="Tuesday at 18:00.", after="Tuesday, 18:00."
+    )
+    shorter = await request(host, "Make it shorter", **continuation(human_preview))
+    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    assert "<authoring-data" not in content
+    await confirm(host, action(shorter))
+    assert (await domain.get(human["id"]))["body"] == "# Meeting\n\nTuesday, 18:00."
+    assert (await domain.get(created_id))["body"] == "Camping Monday"
+
+
+async def test_edit_preview_labels_actual_authoritative_target_once_with_mixed_facts(ai_host):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    source = await domain.create("# Deployment\n\nTesting happens before release.")
+    target = await domain.create("# Meeting\n\nMonday planning.")
+    provider.action_plan = plan(
+        "edit", target=target["id"], selector="Meeting", before="Monday", after="Tuesday"
+    )
+    preview = await request(
+        host, "Change Monday to Tuesday in Meeting using Deployment", note_actions=True
+    )
+    items = preview["items"]
+    labels = [
+        index for index, item in enumerate(items) if item.get("text") == "Target note: Meeting"
+    ]
+    assert len(labels) == 1
+    assert labels[0] < next(index for index, item in enumerate(items) if item["type"] == "markdown")
+    references = next(item["ids"] for item in items if item["type"] == "notes")
+    assert target["id"] in references and source["id"] in references
+    assert len(items) <= 10
 
 
 @pytest.mark.parametrize("matching_notes", [1, 2])

@@ -65,6 +65,30 @@ _GERMAN_REQUEST = re.compile(
     r"bearbeiten|erg[aä]nzen)[?.!]?\s*$",
     re.IGNORECASE,
 )
+_LEADING_IT = re.compile(
+    rf"^(?:(?:{_POLITE})\s+)?(?:(?:{_REQUEST})\s+)?(?:(?:{_POLITE})\s+)?"
+    r"(?:edit|rewrite|revise|update|make|format|change|replace)\s+(?-i:it)\b",
+    re.IGNORECASE,
+)
+_LEADING_AUTHORING = re.compile(
+    rf"^(?:(?:{_POLITE})\s+)?(?:(?:{_REQUEST})\s+)?(?:(?:{_POLITE})\s+)?(?:{_VERBS})\s*$",
+    re.IGNORECASE,
+)
+_FIRST_EDIT_OBJECT = re.compile(
+    rf"^(?:(?:{_POLITE})\s+)?(?:(?:{_REQUEST})\s+)?(?:(?:{_POLITE})\s+)?"
+    r"(?:edit|rewrite|revise|format|update)\s+(.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_SPAN_OBJECT = re.compile(
+    r"^(?:(?:the|a|an)\s+)?(?:(?:first|second|third|fourth|last|next|\d+)\s+)?"
+    r"(?:bullet|paragraph|sentence|line|section|heading|title|word)\b",
+    re.IGNORECASE,
+)
+_EXPLICIT_NOTE = re.compile(
+    r"\b(?:the|my|our|your)\s+(?:(?!that\b|this\b)[\w’'-]+\s+){0,5}(?:note|draft)\b|"
+    r"\b(?:in|on|of|from)\s+(?:(?!that\b|this\b)[\w’'-]+\s+){1,5}(?:note|draft)\b",
+    re.IGNORECASE,
+)
 
 
 class NoteActionPlan(Output):
@@ -326,8 +350,8 @@ async def propose(ctx, question, current, conversation_id, *, check):
         ]
     ctx.check("notes.review")
     current["request_text"] = question
-    authoring = bool(current.get("authoring_state")) and bool(
-        re.search(
+    references = list(
+        re.finditer(
             r"\b(?:that|this) (?:whole |entire |new )?(?:note|draft)\b|"
             r"\b(?:quella|questa) (?:intera |nuova )?nota\b|"
             r"\b(?:esta|esa) (?:nueva |entera )?nota\b|\bcette (?:nouvelle )?note\b|"
@@ -335,14 +359,38 @@ async def propose(ctx, question, current, conversation_id, *, check):
             question,
             re.I,
         )
-        or re.search(r"\bit\b", question)
     )
-    if re.search(
+    deictic = any(
+        _LEADING_AUTHORING.fullmatch(question[: match.start()])
+        or re.search(
+            r"\b(in|on|of|from|for|to|a|di|en|dans|de|sur|von|aus|für|zu)\s+$",
+            question[: match.start()],
+            re.I,
+        )
+        for match in references
+    )
+    named_selector = re.search(
         r"\b(called|named|titled|chiamata|intitolata|llamada|appel[eé]e|intitul[eé]e|namens)\b",
         question,
         re.I,
-    ):
-        authoring = False
+    )
+    explicit_note = _EXPLICIT_NOTE.search(question)
+    first_object = _FIRST_EDIT_OBJECT.match(question)
+    object_text = first_object[1].lstrip("\"'“‘") if first_object else ""
+    named_object = bool(object_text) and not (
+        re.match(r"^(?:that|this)\b|^(?-i:it)\b", object_text, re.I)
+        or _SPAN_OBJECT.match(object_text)
+    )
+    authoring_active = bool(current.get("authoring_state")) and (
+        current["authoring_state"]["note_id"] == current.get("action_target")
+    )
+    if authoring_active and references and (explicit_note or named_object) and not named_selector:
+        return clarify()
+    authoring = (
+        authoring_active
+        and bool(deictic or (_LEADING_IT.search(question) and not explicit_note))
+        and not named_selector
+    )
     if current.get("draft_receipt") and re.search(r"\bdraft\b", question, re.I):
         authoring = False
     if authoring:
@@ -491,6 +539,7 @@ async def propose(ctx, question, current, conversation_id, *, check):
             if row["version"] != note["version"] or row["body"] != note["body"]:
                 return [{"type": "text", "text": ask.SOURCE_CHANGED}]
             meta = metadata(row)
+            target_title = row["title"] or "Untitled"
         action.update(
             note_id=note["id"],
             version=note["version"],
@@ -519,8 +568,10 @@ async def propose(ctx, question, current, conversation_id, *, check):
         current["draft_receipt"] = key
     result = [
         {"type": "text", "text": "Preview only. Nothing changes until you confirm."},
-        *[{"type": "markdown", "text": preview} for preview in previews],
     ]
+    if action.get("note_id"):
+        result.append({"type": "text", "text": "Target note: " + target_title})
+    result.extend({"type": "markdown", "text": preview} for preview in previews)
     references = list(
         dict.fromkeys([*([action["note_id"]] if action.get("note_id") else []), *factual])
     )

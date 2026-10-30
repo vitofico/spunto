@@ -1048,6 +1048,16 @@
     "appearance.background_help": "Scegli una pagina semplice o onde d’inchiostro. La scelta resta su questo browser e mantiene il tema di colore.",
     "appearance.background_plain": "Semplice",
     "appearance.background_artwork": "Illustrato",
-    "appearance.colour_theme": "Tema di colore"
+    "appearance.colour_theme": "Tema di colore",
+    "ask.conversation": "Conversazione",
+    "ask.temporary": "Conversazione temporanea. I messaggi scompaiono quando esci o ricominci. Solo le risposte che salvi esplicitamente diventano note.",
+    "ask.new_conversation": "Nuova conversazione",
+    "ask.sources": "Fonti",
+    "ask.followup": "Fai una domanda di approfondimento",
+    "ask.send": "Invia domanda",
+    "ask.retry": "Riprova",
+    "ask.retry_hint": "Riprova oppure avvia una nuova conversazione se questa è scaduta.",
+    "ask.question_limit": "Usa al massimo 500 caratteri.",
+    "ask.failed": "Impossibile rispondere a questa domanda."
   }
 }

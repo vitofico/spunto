@@ -1,6 +1,14 @@
 import { useManifest } from "../lib/query";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
@@ -17,6 +25,9 @@ import { suggestionTitle } from "./suggestionTitle";
 import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
+import { requestGeneration } from "../lib/identity";
+import { askContinuation } from "./askConversationData";
+const AskConversation = lazy(() => import("./AskConversation"));
 export function usePlugins() {
   return useManifest();
 }
@@ -638,6 +649,23 @@ export function CommandResult({
     (p) => p.id === currentOrigin?.plugin,
   );
   const providedSave = saveCommand(display, saveCommandIds(plugin));
+  const askPendingHandle = useRef<Args | undefined>(undefined);
+  const askLifetime = useRef({ active: true, generation: requestGeneration() });
+  useEffect(() => {
+    askLifetime.current.active = true;
+    return () => {
+      askLifetime.current.active = false;
+      if (
+        askPendingHandle.current &&
+        askLifetime.current.generation === requestGeneration()
+      )
+        void api
+          .command("ask", "clear-conversation", {
+            conversation_id: askPendingHandle.current.conversation_id,
+          })
+          .catch(() => {});
+    };
+  }, []);
   const saveKey = useMemo(createIdempotencyKey, [display]);
   // Plugins that create notes save their own results; an unknown origin gets no save.
   const genericSave = !!plugin && !plugin.creates;
@@ -654,14 +682,48 @@ export function CommandResult({
     setSaved(null);
   }, [value, origin, session]);
   const followup = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       plugin,
       id,
       args,
-    }: Pick<CommandChoice, "plugin" | "id" | "args"> & { session: object }) =>
-      api.command(plugin, id, args ?? {}),
+      session: requestedSession,
+    }: Pick<CommandChoice, "plugin" | "id" | "args"> & { session: object }) => {
+      if (
+        plugin === "ask" &&
+        id === "ask" &&
+        typeof args?.question === "string" &&
+        !args.conversation_id
+      ) {
+        const started = askPendingHandle.current
+          ? undefined
+          : await api.command("ask", "ask", { start: true });
+        const handle = askPendingHandle.current ?? askContinuation(started);
+        if (!handle) throw new Error(outputText(started) || t("ask.failed"));
+        askPendingHandle.current = handle;
+        if (
+          !askLifetime.current.active ||
+          requestedSession !== activeSession.current ||
+          askLifetime.current.generation !== requestGeneration()
+        ) {
+          if (askLifetime.current.generation === requestGeneration())
+            void api
+              .command("ask", "clear-conversation", {
+                conversation_id: handle.conversation_id,
+              })
+              .catch(() => {});
+          throw new DOMException("Conversation closed", "AbortError");
+        }
+        return api.command(plugin, id, { ...handle, ...args });
+      }
+      return api.command(plugin, id, args ?? {});
+    },
     onSuccess: (next, choice) => {
-      if (choice.session !== activeSession.current) return;
+      if (
+        choice.session !== activeSession.current ||
+        !askLifetime.current.active
+      )
+        return;
+      if (choice.plugin === "ask") askPendingHandle.current = undefined;
       setDisplay(next);
       setCurrentOrigin({
         plugin: choice.plugin,
@@ -686,6 +748,7 @@ export function CommandResult({
       if (e.key === "Escape") onDismiss?.();
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
+        if (currentOrigin?.plugin === "ask" && askContinuation(display)) return;
         if (currentOrigin && providedSave && !followup.isPending)
           followup.mutate({
             ...providedSave,
@@ -708,9 +771,29 @@ export function CommandResult({
     followup,
     genericSave,
     session,
+    display,
   ]);
+  if (currentOrigin?.plugin === "ask" && askContinuation(display))
+    return (
+      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
+        <AskConversation
+          key={responseId}
+          value={display}
+          question={
+            typeof currentOrigin.args?.question === "string"
+              ? currentOrigin.args.question
+              : ""
+          }
+          onDismiss={onDismiss}
+        />
+      </Suspense>
+    );
   return (
     <div className={styles.result}>
+      {currentOrigin?.plugin === "ask" &&
+        typeof currentOrigin.args?.question === "string" && (
+          <p>{currentOrigin.args.question}</p>
+        )}
       <VocabularyOutput
         key={responseId}
         value={display}
@@ -738,6 +821,9 @@ export function CommandResult({
             : undefined
         }
       />
+      {followup.isPending && currentOrigin?.plugin === "ask" && (
+        <p role="status">{t("timeline.loading_notes")}</p>
+      )}
       <footer>
         <button
           disabled={!text}
@@ -840,10 +926,116 @@ export function PluginCommands({
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [origin, setOrigin] = useState<CommandOrigin>();
+  const currentQuery = useRef(query);
+  currentQuery.current = query;
+  const commandLifetime = useRef({
+    active: true,
+    generation: requestGeneration(),
+  });
+  const pendingAskHandle = useRef<Args | undefined>(undefined);
+  const currentPlugins = useRef(manifest.data?.plugins);
+  currentPlugins.current = manifest.data?.plugins;
+  useEffect(() => {
+    commandLifetime.current.active = true;
+    return () => {
+      commandLifetime.current.active = false;
+      if (
+        pendingAskHandle.current &&
+        commandLifetime.current.generation === requestGeneration()
+      )
+        void api
+          .command("ask", "clear-conversation", {
+            conversation_id: pendingAskHandle.current.conversation_id,
+          })
+          .catch(() => {});
+    };
+  }, []);
+  useEffect(
+    () => () => {
+      if (
+        pendingAskHandle.current &&
+        commandLifetime.current.generation === requestGeneration()
+      )
+        void api
+          .command("ask", "clear-conversation", {
+            conversation_id: pendingAskHandle.current.conversation_id,
+          })
+          .catch(() => {});
+      pendingAskHandle.current = undefined;
+    },
+    [query],
+  );
+  useEffect(() => {
+    if (
+      pendingAskHandle.current &&
+      !activePlugins(manifest.data?.plugins).some(
+        (plugin) => plugin.id === "ask",
+      )
+    ) {
+      if (commandLifetime.current.generation === requestGeneration())
+        void api
+          .command("ask", "clear-conversation", {
+            conversation_id: pendingAskHandle.current.conversation_id,
+          })
+          .catch(() => {});
+      pendingAskHandle.current = undefined;
+    }
+  }, [manifest.data]);
   const command = useMutation({
-    mutationFn: ({ plugin, id, args }: CommandChoice) =>
-      api.command(plugin, id, args ?? {}),
+    mutationFn: async ({ plugin, id, args }: CommandChoice) => {
+      if (
+        plugin === "ask" &&
+        id === "ask" &&
+        typeof args?.question === "string"
+      ) {
+        const started = pendingAskHandle.current
+          ? undefined
+          : await api.command("ask", "ask", { start: true });
+        const handle = pendingAskHandle.current ?? askContinuation(started);
+        if (!handle) throw new Error(outputText(started) || t("ask.failed"));
+        pendingAskHandle.current = handle;
+        if (
+          !commandLifetime.current.active ||
+          commandLifetime.current.generation !== requestGeneration() ||
+          args.question !== currentQuery.current.trim() ||
+          !activePlugins(currentPlugins.current).some((p) => p.id === "ask")
+        ) {
+          if (commandLifetime.current.generation === requestGeneration())
+            void api
+              .command("ask", "clear-conversation", {
+                conversation_id: handle.conversation_id,
+              })
+              .catch(() => {});
+          throw new DOMException("Conversation closed", "AbortError");
+        }
+        return api.command(plugin, id, { ...handle, ...args });
+      }
+      return api.command(plugin, id, args ?? {});
+    },
     onSuccess: (value, choice) => {
+      if (
+        choice.plugin === "ask" &&
+        (!commandLifetime.current.active ||
+          commandLifetime.current.generation !== requestGeneration() ||
+          !activePlugins(currentPlugins.current).some(
+            (plugin) => plugin.id === "ask",
+          ) ||
+          (typeof choice.args?.question === "string" &&
+            choice.args.question !== currentQuery.current.trim()))
+      ) {
+        const continuation = askContinuation(value);
+        if (
+          continuation &&
+          commandLifetime.current.generation === requestGeneration()
+        )
+          void api
+            .command("ask", "clear-conversation", {
+              conversation_id: continuation.conversation_id,
+            })
+            .catch(() => {});
+        return;
+      }
+      if (choice.plugin === "ask") pendingAskHandle.current = undefined;
       const nextOrigin = {
         plugin: choice.plugin,
         command: choice.id,
@@ -856,6 +1048,11 @@ export function PluginCommands({
       }
     },
   });
+  const question = query.trim();
+  const askQuestion =
+    places.includes("palette") &&
+    question.split(/\s+/).length >= 3 &&
+    [...question].length <= 500;
   const commands = (
     navigator.onLine
       ? activePlugins(manifest.data?.plugins).filter(
@@ -877,19 +1074,26 @@ export function PluginCommands({
               !(command as unknown as { online?: boolean }).online ||
               navigator.onLine),
         )
-        .map(({ command, at }) => ({
+        .map(({ command, at }): CommandChoice & { name: string } => ({
           plugin: p.id,
           id: command.id,
           title: [...command.title].slice(0, 24).join(""),
           name: p.name,
           args:
-            noteId && at.includes("note-actions")
-              ? { note_id: noteId }
-              : undefined,
+            p.id === "ask" &&
+            command.id === "ask" &&
+            askQuestion &&
+            question.toLowerCase() !== command.title.toLowerCase()
+              ? { question }
+              : noteId && at.includes("note-actions")
+                ? { note_id: noteId }
+                : undefined,
         })),
     )
-    .filter((c) =>
-      c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
+    .filter(
+      (c) =>
+        (c.plugin === "ask" && c.id === "ask" && askQuestion) ||
+        c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
   const highlighted = Math.min(active, commands.length - 1);
   const choose = (c: CommandChoice) =>
@@ -940,6 +1144,12 @@ export function PluginCommands({
         <button
           className={inPalette ? "palette-row" : styles.command}
           key={`${c.plugin}/${c.id}`}
+          data-ask-question={
+            (c.plugin === "ask" &&
+              c.id === "ask" &&
+              typeof c.args?.question === "string") ||
+            undefined
+          }
           role={slash ? "option" : undefined}
           aria-selected={slash ? index === highlighted : undefined}
           disabled={command.isPending}
@@ -950,6 +1160,9 @@ export function PluginCommands({
           <small className="muted">{c.name}</small>
         </button>
       ))}
+      {command.isPending && command.variables?.plugin === "ask" && (
+        <p role="status">{t("timeline.loading_notes")}</p>
+      )}
       {command.isError && (
         <p role="alert" className="error">
           {command.error.message}

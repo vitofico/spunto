@@ -299,7 +299,7 @@ async def test_ask_abstains_without_citations_and_never_offers_save(ai_host):
     before = await state(host)
     result = await ask.ask(ctx, "Spunto SQLite")
     assert result["items"][0] == {"type": "text", "text": ask.ABSTENTION}
-    assert not any(item["type"] == "command" for item in result["items"])
+    assert not any(item.get("id") == "save-answer" for item in result["items"])
     assert await state(host) == before
 
 

@@ -12,6 +12,7 @@ Completed milestones and remaining delivery/physical-phone gates are recorded in
 | `hosted.md` | Multi-account/password/optional SSO behavior, spaces and note grants, PostgreSQL operation and current limits |
 | `decisions/2026-10-18-multi-user.md` | Approved revision to the original single-owner/SQLite-only design |
 | `decisions/2026-10-28-exact-merge-ancestor.md` | Approved conflict preservation when a stale edit's exact base revision is unavailable |
+| `decisions/2026-10-30-temporary-ask-conversations.md` | Temporary cited Ask conversations, fresh passage retrieval, explicit saving and index rebuild behavior |
 | `decisions/2026-10-25-header-wave.md` | Existing wave in the compact Android header and web upper chrome, with theme and accessibility constraints |
 | `development/multiuser-migration.md` | Lossless SQLite import, identity mapping, sequence reconciliation and cutover gates |
 | `development/multiuser-delivery.md` | Hosted delivery evidence, production recovery and remaining acceptance checks |

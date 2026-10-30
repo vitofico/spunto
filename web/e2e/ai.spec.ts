@@ -217,6 +217,18 @@ async function fixture(page: Page, withModels = false) {
       commands.push({ id: command, args });
       if (command === "save-answer")
         return json({ type: "notes", ids: ["saved-answer"] });
+      const continuation = {
+        type: "command",
+        id: "ask",
+        title: "Ask a follow-up",
+        args: {
+          conversation_id: "fixture-conversation",
+          after_turn: (args.after_turn ?? 0) + (args.start === true ? 0 : 1),
+        },
+      };
+      if (command === "clear-conversation")
+        return json({ type: "text", text: "Conversation cleared." });
+      if (args.start === true) return json({ ui: 1, items: [continuation] });
       if (!args.question)
         return json({
           type: "form",
@@ -238,10 +250,17 @@ async function fixture(page: Page, withModels = false) {
         items: [
           {
             type: "markdown",
-            text: "You had coffee in Rome.",
-            html: "<p>You had coffee in Rome.</p>",
+            text:
+              args.after_turn > 0
+                ? "You also noted the cafe address."
+                : "You had coffee in Rome.",
+            html:
+              args.after_turn > 0
+                ? "<p>You also noted the cafe address.</p>"
+                : "<p>You had coffee in Rome.</p>",
           },
           { type: "notes", ids: [id] },
+          continuation,
           {
             type: "command",
             id: "save-answer",
@@ -441,8 +460,87 @@ test("live related panel and Ask form preserve the save-answer action", async ({
     .poll(() => state.commands.at(-1))
     .toEqual({ id: "save-answer", args: { answer_id: "fixture-receipt" } });
   await expect(page.locator('a[href="/n/saved-answer"]')).toHaveText(
-    note.title,
+    "Open note",
   );
+});
+
+test("a typed question asks directly and keeps citations and explicit save", async ({
+  page,
+}, info) => {
+  const state = await fixture(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Search and commands" }).click();
+  const input = page.getByRole("textbox", { name: "Search and commands" });
+  await input.fill("Where did I have coffee?");
+  await expect(
+    page.getByRole("option", { name: /Ask your notes/ }),
+  ).toHaveAttribute("aria-selected", "true");
+  await input.press("Enter");
+  await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
+  await expect
+    .poll(() => state.commands)
+    .toEqual([
+      { id: "ask", args: { start: true } },
+      {
+        id: "ask",
+        args: {
+          question: "Where did I have coffee?",
+          conversation_id: "fixture-conversation",
+          after_turn: 0,
+        },
+      },
+    ]);
+  await expect(
+    page.getByRole("button", { name: "Save as note", exact: true }),
+  ).toHaveCount(1);
+  await expect(page.locator(`a[href="/n/${id}"]`).last()).toBeVisible();
+  if (info.project.name === "chromium") {
+    await page.screenshot({
+      path: "/tmp/spunto-ask-review-20261030/typed-question-desktop.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.getByRole("button", { name: "Save as note", exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: "/tmp/spunto-ask-review-20261030/typed-question-mobile.png",
+      fullPage: true,
+    });
+  }
+  await page.getByLabel("Ask a follow-up").fill("What else did I note?");
+  await page
+    .getByRole("button", { name: "Send question", exact: true })
+    .click();
+  await expect(
+    page.getByText("You also noted the cafe address."),
+  ).toBeVisible();
+  await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save as note", exact: true }),
+  ).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "Save as note", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Saved as note", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Ask a follow-up" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "New conversation", exact: true })
+    .click();
+  await expect(page.getByText("You had coffee in Rome.")).toHaveCount(0);
+  await expect(page.getByText("You also noted the cafe address.")).toHaveCount(
+    0,
+  );
+  await expect
+    .poll(() =>
+      state.commands.some((command) => command.id === "clear-conversation"),
+    )
+    .toBe(true);
 });
 
 test("private and machine notes do not request AI live panels", async ({

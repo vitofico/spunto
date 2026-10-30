@@ -1048,6 +1048,16 @@
     "appearance.background_help": "Wähle eine schlichte Seite oder Tintenwellen. Diese Wahl bleibt in diesem Browser und behält dein Farbthema bei.",
     "appearance.background_plain": "Schlicht",
     "appearance.background_artwork": "Illustration",
-    "appearance.colour_theme": "Farbthema"
+    "appearance.colour_theme": "Farbthema",
+    "ask.conversation": "Unterhaltung",
+    "ask.temporary": "Vorübergehende Unterhaltung. Nachrichten verschwinden beim Verlassen oder Neustart. Nur ausdrücklich gespeicherte Antworten werden zu Notizen.",
+    "ask.new_conversation": "Neue Unterhaltung",
+    "ask.sources": "Quellen",
+    "ask.followup": "Eine Folgefrage stellen",
+    "ask.send": "Frage senden",
+    "ask.retry": "Erneut versuchen",
+    "ask.retry_hint": "Versuche es erneut oder beginne eine neue Unterhaltung, falls diese abgelaufen ist.",
+    "ask.question_limit": "Verwende höchstens 500 Zeichen.",
+    "ask.failed": "Diese Frage konnte nicht beantwortet werden."
   }
 }

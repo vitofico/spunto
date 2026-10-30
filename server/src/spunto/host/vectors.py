@@ -8,7 +8,7 @@ class ScopedVectors:
     def __init__(self, ctx):
         self.ctx = ctx
 
-    async def nearest(self, *, note_id=None, text=None, k=50):
+    async def nearest(self, *, note_id=None, text=None, k=50, include_chunks=False):
         ctx, host = self.ctx, self.ctx._host
         ctx.check("ai.embed")
         if text is not None and any(body and body in text for body in ctx._borrowed_notes.values()):
@@ -24,6 +24,7 @@ class ScopedVectors:
             plugin_id=ctx.plugin_id,
             external_ok=ctx.principal is None or ctx.principal.external_ok,
             guard=lambda: ctx.check("ai.embed"),
+            include_chunks=include_chunks,
         )
         ctx.check("ai.embed")
         return result

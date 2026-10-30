@@ -160,8 +160,17 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   if(config!=null && reachable && !ApiClient(config).signOut()) message.value=container.context.getString(R.string.sys_signed_out_listed)
  }
  fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(ApiClient(config).request(path,method,body)) }
- fun ask(question:String,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
-  completeAskRequest(request={ auth.value?.let { config -> ApiClient(config).request("/api/v1/plugins/ask/commands/ask","POST",buildJsonObject { put("question",question) }) } },onComplete=onComplete,onResult=onResult)
+ fun ask(question:String,continuation:JsonObject?=null,current:()->Boolean={true},onHandle:(JsonObject)->Unit={},onError:((String)->Unit)?=null,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
+  val config=auth.value
+  val epoch=pluginReplicaEpoch
+  fun valid()=config!=null && auth.value==config && pluginReplicaEpoch==epoch && container.manifest.enabled("ask") && current()
+  try {
+   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> ApiClient(it).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value))}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
+  } catch(cancelled:CancellationException) {throw cancelled}
+  catch(error:Exception) {
+   if(valid() && onError!=null) onError(if(error is ApiException) apiErrorMessage(container.context.resources,error) else container.context.getString(R.string.core_ask_failed))
+   else if(valid()) throw error
+  }
  }
  fun fetch(path:String)=request(path) { remote.value=if(it is JsonObject) it else buildJsonObject { put("items",it) } }
  internal fun pluginToggle(plugin:NativePluginFacts,on:Boolean,accepted:List<String>?=null,onComplete:(PluginToggleResult)->Unit={})=pluginManager.toggle(plugin.id,on,accepted,onComplete=onComplete)

@@ -1,6 +1,7 @@
 """Real PostgreSQL contract tests; run against an operator-owned disposable database."""
 
 import asyncio
+import hashlib
 import json
 import os
 import uuid
@@ -152,6 +153,10 @@ async def test_notes_create_edit_list_search_revisions_flags_and_delete(pg):
     assert (await domain.list())["notes"][0]["id"] == created["id"]
     assert (await domain.search("caffe plan #project"))["hits"][0]["id"] == created["id"]
     assert (await domain.search('"Call Marco"'))["hits"][0]["id"] == created["id"]
+    question = "What did Marco plan? #project"
+    assert not (await domain.search(question, mode="keyword"))["hits"]
+    recalled = await domain.search(question, mode="keyword", match_any=True)
+    assert recalled["hits"][0]["id"] == created["id"]
     edited = await domain.edit(created["id"], "Replacement #new", created["version"])
     assert edited["version"] == 2 and edited["labels"] == ["new"]
     assert not (await domain.search("Marco"))["hits"]
@@ -230,6 +235,87 @@ async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, settin
         assert "0 tag proposals added to Review" in result["text"]
         assert purposes == ["labels", "gardener"]
         assert (await domain.get(target["id"]))["labels"] == []
+    finally:
+        await host.close()
+        await gateway.close()
+
+
+async def test_postgres_ask_transcript_follow_up_and_atomic_evidence_save(
+    pg, settings, monkeypatch
+):
+    from test_plugins_ai import FakeProvider
+
+    from spunto.plugins import ask
+
+    _, bounds, users, _, _ = pg
+    domain = notes(bounds[0], users[0])
+    target = await domain.create("# Rehearsal recording\n" + "routine context " * 1500)
+    outside = await notes(bounds[1], users[1]).create("PRIVATE-OTHER-SPACE contralto rehearsal")
+    principal = Principal(users[0], "session", "Synthetic owner", "full", private_ok=True)
+    provider = FakeProvider()
+    profile = Profile(
+        name="fixture",
+        base_url="http://provider.synthetic/v1",
+        chat_model="fixture-chat",
+        embed_model="fixture-embed",
+        rate_per_min=100000,
+    )
+    configured = settings.model_copy(
+        update={
+            "ai_profiles": {"fixture": profile},
+            "ai_chat_profile": "fixture",
+            "ai_embed_profile": "fixture",
+        }
+    )
+    gateway = Gateway(bounds[0], configured, transport=httpx.ASGITransport(provider.app))
+    vectors = VectorIndex(bounds[0], gateway)
+    host = Host(bounds[0], configured, notes_factory=PluginNotes, gateway=gateway, vectors=vectors)
+    await host.discover()
+    try:
+        await host.enable("ask", permissions=host.manifests["ask"]["permissions"])
+        async with bounds[0].write() as conn:
+            await conn.execute(
+                "UPDATE plugin SET state='enabled',switch='on' WHERE id='voice-memos'"
+            )
+            await conn.execute(
+                "INSERT INTO note_text VALUES ('voice-memos',?,?,1)",
+                (target["id"], "The contralto rehearsal starts at 18:45."),
+            )
+            await domain._index(conn, await domain._row(conn, target["id"]))
+        await vectors.sync_routes({"ask": "fixture"})
+        await vectors.backfill()
+        provider.ask_answer = {
+            "found": True,
+            "answer": "The contralto rehearsal starts at 18:45. [1]",
+            "citations": [target["id"]],
+        }
+        ctx = Ctx(host, "ask", principal=principal)
+        allocated = await ask.ask(ctx, start=True)
+        continuation = next(item["args"] for item in allocated["items"] if item.get("id") == "ask")
+        first = await ask.ask(ctx, "When is the contralto rehearsal?", **continuation)
+        content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+        assert "18:45" in content and outside["id"] not in content
+        assert "PRIVATE-OTHER-SPACE" not in content
+        save = next(item["args"] for item in first["items"] if item.get("id") == "save-answer")
+        assert (await ask.save_answer(ctx, **save))["type"] == "notes"
+        continuation = next(item["args"] for item in first["items"] if item.get("id") == "ask")
+        second = await ask.ask(ctx, "What time again?", **continuation)
+        save = next(item["args"] for item in second["items"] if item.get("id") == "save-answer")
+        create = PluginNotes.create
+
+        async def edit_transcript_before_create(self, *args, **kwargs):
+            async with bounds[0].write() as conn:
+                await conn.execute(
+                    "UPDATE note_text SET text='The rehearsal moved to 20:00.' WHERE note_id=?",
+                    (target["id"],),
+                )
+            return await create(self, *args, **kwargs)
+
+        monkeypatch.setattr(PluginNotes, "create", edit_transcript_before_create)
+        with pytest.raises(Problem) as error:
+            await ask.save_answer(ctx, **save)
+        assert error.value.code == "version_conflict"
+        assert len([note for note in (await domain.list())["notes"] if note["machine"]]) == 1
     finally:
         await host.close()
         await gateway.close()
@@ -369,6 +455,14 @@ async def test_pgvector_privacy_retrieval_model_switch_and_workspace_isolation(p
     assert hits[0]["id"] == coffee["id"]
     assert {hit["id"] for hit in hits} == {coffee["id"], tea["id"]}
     assert other["id"] not in {hit["id"] for hit in hits}
+    chunk_hits = await index.nearest(text="caffè", k=5, include_chunks=True)
+    assert chunk_hits[0]["id"] == coffee["id"]
+    assert chunk_hits[0]["chunks"] == [
+        {
+            "ordinal": 0,
+            "text_hash": hashlib.sha256(b"Coffee in Rome").hexdigest(),
+        }
+    ]
     assert [hit["id"] for hit in await index.nearest(note_id=coffee["id"])] == [tea["id"]]
     old = (await index.status())["routes"][0]["active_key"]
     gateway.profile = gateway.profile.model_copy(update={"embed_model": "two"})

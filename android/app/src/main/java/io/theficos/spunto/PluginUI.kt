@@ -36,6 +36,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.platform.LocalUriHandler
@@ -57,6 +61,8 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
  val resources=model.container.context.resources
  val auth=model.auth.value
  val epoch=model.pluginReplicaEpoch
+ val requestContext=currentCoroutineContext()
+ var pendingAskHandle:JsonObject?=null
  fun current()=auth!=null && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(plugin)
  try {
   require(Regex("[a-z][a-z0-9-]{1,23}").matches(plugin) && Regex("[a-z][a-z0-9-]{0,127}").matches(id)) { resources.getString(R.string.settings_this_command_is_unavailable) }
@@ -72,17 +78,22 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
     require(synced!=null && !synced.trashed && !synced.pending && synced.serverRev>0) {resources.getString(R.string.settings_this_note_has_changes_waiting_to_sync)}
    }
   }
-  val result=ApiClient(auth!!).guarded {current()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
+  val result=if(plugin=="ask" && id=="ask" && args.string("question").isNotBlank()) {
+   conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value)) ?: return@task
+  } else ApiClient(auth!!).guarded {current()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
   if(!current()) return@task
   model.synchronize().join()
-  if(current()) onResult(commandEnvelope(plugin,id,args,result))
+  if(current()) {onResult(commandEnvelope(plugin,id,args,result));pendingAskHandle=null}
  } catch(error:CancellationException) {throw error}
  catch(error:Exception) {
   if(current()) {
    if(error is ApiException && error.status==401) model.reauthenticate.value=true
    onError(when(error) {is ApiException -> apiErrorMessage(resources,error);is IllegalArgumentException -> error.message ?: resources.getString(R.string.settings_check_the_tool_inputs);is java.net.SocketTimeoutException -> resources.getString(R.string.settings_the_tool_took_too_long_try_again);else -> resources.getString(R.string.settings_couldn_t_reach_the_server_check_your)})
   }
- } finally { onComplete() }
+ } finally {
+  pendingAskHandle?.let {handle -> withContext(NonCancellable) {runCatching {ApiClient(auth!!).request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",handle.string("conversation_id"))})}}}
+  onComplete()
+ }
 }
 
 @Composable fun PluginPanels(model:SpuntoViewModel,note:Note,onNote:(String)->Unit) {
@@ -267,12 +278,16 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
 @Composable fun CommandResultSheet(model:SpuntoViewModel,result:JsonObject,onNote:(String)->Unit,onResult:(JsonObject)->Unit,onClose:()->Unit) {
  val resources=LocalContext.current.resources
  val clipboard=LocalClipboardManager.current
+ val manifest=model.manifest.collectAsState().value
  val catalog by model.catalog.collectAsState()
  val plugin=catalog.objects("plugins").firstOrNull { it.string("id")==result.string("plugin_id") }
  val sheetScope=rememberCoroutineScope()
  var active by remember { mutableStateOf(true) }
  val close={active=false;sheetScope.cancel();onClose()}
  ModalBottomSheet(onDismissRequest=close,scrimColor=MaterialTheme.colorScheme.scrim) {
+  if(result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null) {
+   Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {TextButton(onClick=close) {Text(resources.getString(R.string.settings_close))};Box(Modifier.weight(1f)) {AskConversation(model,{id -> close();onNote(id)},result,(result["command_args"] as? JsonObject)?.string("question").orEmpty())}}
+  } else
   Column(Modifier.padding(SpuntoSpacing.s20).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
    Text(if(plugin!=null && command!=null) localizedPluginCommand(resources,plugin,command,catalog) else plugin?.let {localizedPluginName(resources,it,catalog)} ?: resources.getString(R.string.settings_tool_result),style=MaterialTheme.typography.titleLarge)

@@ -1,6 +1,7 @@
 package io.theficos.spunto
 
 import android.net.Uri
+import android.os.Looper
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -14,6 +15,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -22,9 +25,11 @@ import org.junit.Test
 import java.io.File
 
 /** Exercises the real picker/composer path; completion disposes it like quick-capture Activity.finish(). */
+@OptIn(ExperimentalTestApi::class,ExperimentalCoroutinesApi::class)
 class CaptureImageSaveTest {
  @get:Rule val timeout=org.junit.rules.Timeout(3,java.util.concurrent.TimeUnit.MINUTES)
- @get:Rule val compose=createComposeRule()
+ // Queue test continuations so Room resumes cannot run a test frame on an IO worker.
+ @get:Rule val compose=createComposeRule(effectContext=StandardTestDispatcher())
  @Test fun imageOnlyCaptureClosesAfterItsImageAndNoteAreDurable()=capture("",1)
  @Test fun textAndImagesCloseOnlyAfterTheWholeCaptureCommits()=capture("Synthetic quick capture",2)
  private fun capture(body:String,count:Int) {
@@ -48,9 +53,12 @@ class CaptureImageSaveTest {
   val owner=object:ActivityResultRegistryOwner {override val activityResultRegistry=registry}
   try {
    compose.setContent {SpuntoTheme {CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {Column {
+    SideEffect {assertSame("Capture composition must apply on the Android main thread.",Looper.getMainLooper(),Looper.myLooper())}
     if(mounted.value) Composer(model,initial=body,draftId=key,autoFocus=false,onPlainCaptureSaved={id ->
      // Capture completion has the same teardown effect as the quick-capture activity finishing.
-     try {runBlocking {
+     try {
+      assertSame("Capture completion must run on the Android main thread.",Looper.getMainLooper(),Looper.myLooper())
+      runBlocking {
       authority.requireCurrent()
       val note=model.repository.dao.get(id)!!
       val images=model.repository.dao.attachments(id).first()
@@ -69,7 +77,12 @@ class CaptureImageSaveTest {
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription(add) and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription(text).assertTextEquals(body)
    // Exercise the matched accessible actions without depending on keyboard animation coordinates.
-   repeat(count) {compose.onNodeWithContentDescription(add).performSemanticsAction(SemanticsActions.OnClick);compose.waitForIdle()}
+   repeat(count) {index ->
+    compose.onNodeWithContentDescription(add).performSemanticsAction(SemanticsActions.OnClick)
+    val attached=context.resources.getQuantityString(R.plurals.core_images_to_attach,index+1,index+1)
+    // Compose can be idle while the picker copy is still running on Dispatchers.IO.
+    compose.waitUntil(10_000) {compose.onAllNodesWithText(attached).fetchSemanticsNodes().size==1}
+   }
    compose.onNodeWithText(context.resources.getQuantityString(R.plurals.core_images_to_attach,count,count)).assertExists()
    runBlocking {authority.requireCurrent()}
    compose.onNodeWithText(save).assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)

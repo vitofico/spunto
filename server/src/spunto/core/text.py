@@ -250,7 +250,7 @@ def fold(text: str) -> str:
     return "".join(char for char in decomposed if not unicodedata.combining(char)).casefold()
 
 
-def search_query(q: str) -> tuple[str, list[str]]:
+def search_query(q: str, *, match_any: bool = False) -> tuple[str, list[str]]:
     """Quote FTS terms and phrases; pull inline labels out into separate filters."""
     filters = labels(q)
     for token in reversed(filters):
@@ -264,7 +264,7 @@ def search_query(q: str) -> tuple[str, list[str]]:
             terms.append((" ".join(words), True))
         else:
             terms.extend((word, False) for word in words)
-    query = " ".join(
+    query = (" OR " if match_any else " ").join(
         '"' + word + '"' + ("*" if index == len(terms) - 1 and not phrase else "")
         for index, (word, phrase) in enumerate(terms)
     )

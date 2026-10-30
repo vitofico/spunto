@@ -1048,6 +1048,16 @@
     "appearance.background_help": "Choisissez une page unie ou des vagues d’encre. Ce choix reste dans ce navigateur et conserve votre thème de couleurs.",
     "appearance.background_plain": "Uni",
     "appearance.background_artwork": "Illustré",
-    "appearance.colour_theme": "Thème de couleurs"
+    "appearance.colour_theme": "Thème de couleurs",
+    "ask.conversation": "Conversation",
+    "ask.temporary": "Conversation temporaire. Les messages disparaissent quand vous quittez ou recommencez. Seules les réponses enregistrées explicitement deviennent des notes.",
+    "ask.new_conversation": "Nouvelle conversation",
+    "ask.sources": "Sources",
+    "ask.followup": "Poser une question complémentaire",
+    "ask.send": "Envoyer la question",
+    "ask.retry": "Réessayer",
+    "ask.retry_hint": "Réessayez ou commencez une nouvelle conversation si celle-ci a expiré.",
+    "ask.question_limit": "Utilisez 500 caractères maximum.",
+    "ask.failed": "Impossible de répondre à cette question."
   }
 }

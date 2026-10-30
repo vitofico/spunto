@@ -51,14 +51,22 @@ def chunks(body, extra=""):
     text = "\n\n".join(filter(None, (plain(body), plain(extra))))
     if not text:
         return []
-    if len(text) <= 1500:
+    if len(text) <= 1000:
         return [text]
-    paragraphs = text.split("\n\n")
+    paragraphs = [
+        paragraph[start : start + 1000]
+        for paragraph in text.split("\n\n")
+        for start in ([0] if len(paragraph) <= 1000 else range(0, len(paragraph), 800))
+    ]
     result, group = [], []
     for paragraph in paragraphs:
         if group and len("\n\n".join([*group, paragraph])) > 1000:
             result.append("\n\n".join(group))
-            group = [group[-1]] if len(group) > 1 else []
+            group = (
+                [group[-1]]
+                if len(group) > 1 and len(group[-1]) + len(paragraph) + 2 <= 1000
+                else []
+            )
         group.append(paragraph)
     if group:
         result.append("\n\n".join(group))
@@ -83,6 +91,7 @@ def fingerprint(profile, dimension):
         "embed_query_prefix": profile.embed_query_prefix,
         "embed_document_prefix": profile.embed_document_prefix,
         "dimension": dimension,
+        "chunk_version": 2,
     }
     encoded = json.dumps(descriptor, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode()).hexdigest(), encoded
@@ -163,6 +172,7 @@ class VectorIndex:
         if current.base_url != descriptor["base_url"]:
             raise VectorUnavailable()
         dimension = descriptor.pop("dimension")
+        descriptor.pop("chunk_version", None)
         profile = current.model_copy(update=descriptor)
         self.models[key] = profile, dimension
         return profile, dimension
@@ -516,6 +526,7 @@ class VectorIndex:
         external_ok=True,
         guard=None,
         plugin_id="core",
+        include_chunks=False,
     ):
         generation = self.generation
         self._check(generation, guard)
@@ -532,6 +543,7 @@ class VectorIndex:
                 external_ok=external_ok,
                 guard=guard,
                 plugin_id=plugin_id,
+                include_chunks=include_chunks,
             )
 
     async def _nearest(
@@ -544,8 +556,14 @@ class VectorIndex:
         external_ok=True,
         guard=None,
         plugin_id="core",
+        include_chunks=False,
     ):
-        if (note_id is None) == (text is None) or type(k) is not int or not 1 <= k <= 100:
+        if (
+            (note_id is None) == (text is None)
+            or type(k) is not int
+            or not 1 <= k <= 100
+            or type(include_chunks) is not bool
+        ):
             raise ValueError("invalid_vector_query")
         generation = self.generation
         self._check(generation, guard)
@@ -622,8 +640,10 @@ class VectorIndex:
                 external_ok=external_ok,
                 guard=guard,
                 plugin_id=plugin_id,
+                include_chunks=include_chunks,
             )
         found = {}
+        source_chunks = {}
         async with self.store.read() as conn:
             self._check(generation, guard)
             if note_id is not None:
@@ -637,7 +657,7 @@ class VectorIndex:
                 family = eligible[0][0] or note_id
             for vector in vectors:
                 rows = await conn.execute_fetchall(
-                    f"SELECT n.id,v.distance FROM {table_name(key)} v "  # noqa: S608
+                    f"SELECT n.id,v.distance,c.ordinal,c.text_hash FROM {table_name(key)} v "  # noqa: S608
                     "JOIN chunk c ON c.id=v.rowid JOIN note n ON n.id=c.note_id "
                     "WHERE v.embedding MATCH ? AND k=? AND c.model_key=? "
                     "AND n.private=0 AND n.machine=0 AND n.trashed_at IS NULL "
@@ -656,10 +676,30 @@ class VectorIndex:
                     ),
                 )
                 for row in rows:
-                    found[row["id"]] = max(found.get(row["id"], -1), 1.0 - row["distance"])
+                    score = 1.0 - row["distance"]
+                    found[row["id"]] = max(found.get(row["id"], -1), score)
+                    if include_chunks:
+                        chunks_for_note = source_chunks.setdefault(row["id"], {})
+                        chunk_key = row["ordinal"], row["text_hash"]
+                        chunks_for_note[chunk_key] = max(chunks_for_note.get(chunk_key, -1), score)
         self._check(generation, guard)
         return [
-            {"id": id, "score": score}
+            {
+                "id": id,
+                "score": score,
+                **(
+                    {
+                        "chunks": [
+                            {"ordinal": ordinal, "text_hash": text_hash}
+                            for (ordinal, text_hash), _ in sorted(
+                                source_chunks[id].items(), key=lambda item: (-item[1], item[0])
+                            )[:3]
+                        ]
+                    }
+                    if include_chunks
+                    else {}
+                ),
+            }
             for id, score in sorted(found.items(), key=lambda item: (-item[1], item[0]))[:k]
         ]
 

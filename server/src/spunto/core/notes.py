@@ -1010,14 +1010,16 @@ class Notes:
         render: bool = False,
         mode: str = "hybrid",
         machine: bool | None = None,
+        match_any: bool = False,
     ) -> dict:
         if len(query) > 500:
             raise Problem(422, "validation_failed", "query must have at most 500 characters.")
-        match, inline = search_query(query)
+        match, inline = search_query(query, match_any=match_any)
         if not match and not inline and query.strip():
             # Punctuation alone has no words to match; listing every note would read as hits.
             return {"hits": [], "next_cursor": None, "semantic": "off"}
-        match = fold(match)
+        # Fold data inside quoted terms, keeping FTS operators such as OR intact.
+        match = re.sub(r'"[^"]*"', lambda term: fold(term[0]), match)
         conditions, args = self._filters([*(labels or []), *inline], from_date, to_date)
         conditions.append("n.trashed_at IS NULL")
         if not include_archived:
@@ -1063,6 +1065,7 @@ class Notes:
                         render=False,
                         mode="keyword",
                         machine=machine,
+                        match_any=match_any,
                     ),
                     host.search_sources(query, principal=self.principal),
                 )

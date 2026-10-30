@@ -5,7 +5,7 @@ api = "0.4"
 kind = "server"
 runtime = "in-process"
 category = "recall"
-description = "Answer a question with citations to your notes."
+description = "Discuss your notes in a temporary conversation with citations and explicit saving."
 entry = "spunto.plugins.ask:plugin"
 requires = ["ai.chat", "ai.embed"]
 default = "on-with-ai"
@@ -22,5 +22,11 @@ online = true
 [[contributes.commands]]
 id = "save-answer"
 title = "Save as note"
+where = []
+online = true
+
+[[contributes.commands]]
+id = "clear-conversation"
+title = "New conversation"
 where = []
 online = true

@@ -1048,6 +1048,16 @@
     "appearance.background_help": "Elige una página sencilla u ondas de tinta. La elección se guarda en este navegador y mantiene tu tema de color.",
     "appearance.background_plain": "Liso",
     "appearance.background_artwork": "Ilustrado",
-    "appearance.colour_theme": "Tema de color"
+    "appearance.colour_theme": "Tema de color",
+    "ask.conversation": "Conversación",
+    "ask.temporary": "Conversación temporal. Los mensajes desaparecen al salir o empezar de nuevo. Solo las respuestas que guardes explícitamente se convierten en notas.",
+    "ask.new_conversation": "Nueva conversación",
+    "ask.sources": "Fuentes",
+    "ask.followup": "Haz una pregunta de seguimiento",
+    "ask.send": "Enviar pregunta",
+    "ask.retry": "Reintentar",
+    "ask.retry_hint": "Inténtalo de nuevo o inicia una conversación nueva si esta ha caducado.",
+    "ask.question_limit": "Usa un máximo de 500 caracteres.",
+    "ask.failed": "No se pudo responder a esta pregunta."
   }
 }

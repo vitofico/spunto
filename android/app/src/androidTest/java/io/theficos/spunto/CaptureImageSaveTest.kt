@@ -77,7 +77,12 @@ class CaptureImageSaveTest {
    compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription(add) and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription(text).assertTextEquals(body)
    // Exercise the matched accessible actions without depending on keyboard animation coordinates.
-   repeat(count) {compose.onNodeWithContentDescription(add).performSemanticsAction(SemanticsActions.OnClick);compose.waitForIdle()}
+   repeat(count) {index ->
+    compose.onNodeWithContentDescription(add).performSemanticsAction(SemanticsActions.OnClick)
+    val attached=context.resources.getQuantityString(R.plurals.core_images_to_attach,index+1,index+1)
+    // Compose can be idle while the picker copy is still running on Dispatchers.IO.
+    compose.waitUntil(10_000) {compose.onAllNodesWithText(attached).fetchSemanticsNodes().size==1}
+   }
    compose.onNodeWithText(context.resources.getQuantityString(R.plurals.core_images_to_attach,count,count)).assertExists()
    runBlocking {authority.requireCurrent()}
    compose.onNodeWithText(save).assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)

@@ -145,4 +145,20 @@ class AskRequestTest {
   } catch(expected:IllegalStateException) { }
   assertEquals(listOf("ask" to buildJsonObject {put("start",true)}),requests)
  }
+
+ @Test fun reviewedWriteOptInAppearsOnlyOnInitialAllocation()=runBlocking {
+  val requests=mutableListOf<Pair<String,JsonObject>>()
+  conversationAskRequest("Create a note",null,{command,args ->requests+=command to args;if(args["start"]==JsonPrimitive(true)) startedConversation() else JsonObject(emptyMap())},{true},{},noteActionsSupported=true)
+  assertEquals(buildJsonObject {put("start",true);put("note_actions",true)},requests[0].second)
+  assertEquals(buildJsonObject {put("conversation_id","allocated");put("after_turn",0);put("question","Create a note")},requests[1].second)
+ }
+ @Test fun previousChatServerNeverReceivesUnknownWriteArguments()=runBlocking {
+  val requests=mutableListOf<Pair<String,JsonObject>>()
+  conversationAskRequest("Create a note",null,{command,args ->
+   require("note_actions" !in args) {"Previous chat server rejects unknown arguments"}
+   requests+=command to args;if(args["start"]==JsonPrimitive(true)) startedConversation() else JsonObject(emptyMap())
+  },{true},{},noteActionsSupported=false)
+  assertEquals(buildJsonObject {put("start",true)},requests[0].second)
+  assertEquals(2,requests.size)
+ }
 }

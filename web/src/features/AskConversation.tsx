@@ -8,7 +8,14 @@ import { t, useLanguage } from "../lib/i18n";
 import type { Args } from "../lib/types";
 import { VocabularyOutput, NoteReference } from "./Vocabulary";
 import { outputText } from "./vocabularyData";
-import { askCommand, askContinuation, askSources } from "./askConversationData";
+import {
+  askAnswerSave,
+  askContinuation,
+  askSources,
+  askWriteAction,
+  askNoteActionOptions,
+} from "./askConversationData";
+import { AskWriteActions } from "./AskWriteActions";
 import { copyText } from "./copy";
 import styles from "./Feature.module.css";
 import chatStyles from "./AskConversation.module.css";
@@ -98,7 +105,10 @@ export default function AskConversation({
     setDraft("");
     try {
       if (!continuation.current) {
-        const started = await api.command("ask", "ask", { start: true });
+        const started = await api.command("ask", "ask", {
+          start: true,
+          ...askNoteActionOptions(manifest.data?.plugins),
+        });
         const handle = askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));
         if (
@@ -252,7 +262,8 @@ function TurnActions({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<unknown>();
   const [error, setError] = useState("");
-  const save = askCommand(value, "save-answer");
+  const save = askAnswerSave(value);
+  const action = askWriteAction(value);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -261,58 +272,66 @@ function TurnActions({
     };
   }, []);
   return (
-    <footer>
-      <button
-        onClick={() =>
-          void copyText(outputText(value)).then((ok) => {
-            if (alive.current && current()) setCopied(ok);
-          })
-        }
-      >
-        {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
-      </button>
-      {save && (
+    <>
+      <footer>
         <button
-          disabled={saving || !!saved}
-          onClick={async () => {
-            if (!current()) return;
-            setSaving(true);
-            setError("");
-            try {
-              const result = await api.command("ask", "save-answer", save);
-              if (alive.current && current()) {
-                if (askSources(result).length) {
-                  setSaved(result);
-                  void client.invalidateQueries({ queryKey: ["notes"] });
-                } else setError(outputText(result) || t("ask.failed"));
-              }
-            } catch (error) {
-              if (alive.current && current())
-                setError(
-                  error instanceof Error ? error.message : t("ask.failed"),
-                );
-            } finally {
-              if (alive.current && current()) setSaving(false);
-            }
-          }}
+          onClick={() =>
+            void copyText(outputText(value)).then((ok) => {
+              if (alive.current && current()) setCopied(ok);
+            })
+          }
         >
-          {saved
-            ? t("slots.saved_as_note")
-            : saving
-              ? t("app.saving")
-              : t("slots.save_as_note")}
+          {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
         </button>
+        {save && (
+          <button
+            disabled={saving || !!saved}
+            onClick={async () => {
+              if (!current()) return;
+              setSaving(true);
+              setError("");
+              try {
+                const result = await api.command("ask", "save-answer", save);
+                if (alive.current && current()) {
+                  if (askSources(result).length) {
+                    setSaved(result);
+                    void client.invalidateQueries({ queryKey: ["notes"] });
+                  } else setError(outputText(result) || t("ask.failed"));
+                }
+              } catch (error) {
+                if (alive.current && current())
+                  setError(
+                    error instanceof Error ? error.message : t("ask.failed"),
+                  );
+              } finally {
+                if (alive.current && current()) setSaving(false);
+              }
+            }}
+          >
+            {saved
+              ? t("slots.saved_as_note")
+              : saving
+                ? t("app.saving")
+                : t("slots.save_as_note")}
+          </button>
+        )}
+        {askSources(saved).map((source) => (
+          <Link key={source.id} href={`/n/${encodeURIComponent(source.id)}`}>
+            {t("slots.open_note")}
+          </Link>
+        ))}
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+      </footer>
+      {action && (
+        <AskWriteActions
+          initial={action}
+          current={() => alive.current && current()}
+        />
       )}
-      {askSources(saved).map((source) => (
-        <Link key={source.id} href={`/n/${encodeURIComponent(source.id)}`}>
-          {t("slots.open_note")}
-        </Link>
-      ))}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-    </footer>
+    </>
   );
 }

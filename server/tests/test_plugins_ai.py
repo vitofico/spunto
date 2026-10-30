@@ -33,6 +33,7 @@ class FakeProvider:
         self.label_answer = {"labels": [{"path": "project/Spunto", "confidence": 0.95}]}
         self.requests = []
         self.ask_answer = None
+        self.action_plan = None
         self.on_chat = None
         self.app = FastAPI()
         self.app.post("/v1/chat/completions")(self.chat)
@@ -55,7 +56,16 @@ class FakeProvider:
         if self.on_chat:
             await self.on_chat()
         prompt = body["messages"][1]["content"]
-        if "Suggest up to three" in prompt:
+        if "Plan a note action" in prompt:
+            answer = self.action_plan or {
+                "kind": "question",
+                "target_ids": [],
+                "selector": "",
+                "body": "",
+                "before": "",
+                "after": "",
+            }
+        elif "Suggest up to three" in prompt:
             answer = self.label_answer
         elif "Question:" in prompt:
             ids = re.findall(r'<note id="([^"]+)"', prompt)

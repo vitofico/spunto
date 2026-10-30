@@ -29,9 +29,9 @@ class AskConversationTest {
   assertEquals(listOf("first","second"),askSources(response))
  }
 
- private fun manifest(plugin:String="ask",conversation:Boolean=false,version:String="1.0.0")=buildJsonObject {
+ private fun manifest(plugin:String="ask",conversation:Boolean=false,version:String="1.0.0",state:String="enabled")=buildJsonObject {
   put("ui",1);put("plugins",JsonArray(listOf(buildJsonObject {
-   put("id",plugin);put("version",version);put("contributes",buildJsonObject {put("commands",JsonArray((listOf("ask","save-answer")+if(conversation) listOf("clear-conversation") else emptyList()).map {id ->buildJsonObject {put("id",id)}}))})
+   put("id",plugin);put("version",version);put("state",state);put("contributes",buildJsonObject {put("commands",JsonArray((listOf("ask","save-answer")+if(conversation) listOf("clear-conversation") else emptyList()).map {id ->buildJsonObject {put("id",id)}}))})
   })))
  }
  @Test fun commandAdvertisementDistinguishesOldAndNewServersWithTheSameVersion() {
@@ -42,5 +42,53 @@ class AskConversationTest {
  @Test fun anotherPluginsClearCommandAndAMissingManifestDoNotAdvertiseAskHistory() {
   assertFalse(supportsAskConversation(manifest(plugin="another-plugin",conversation=true)))
   assertFalse(supportsAskConversation(JsonObject(emptyMap())))
+ }
+
+ private fun writeCommand(stage:String,id:String="action")=buildJsonObject {put("type","command");put("id","save-answer");put("title",if(stage=="preview") "Apply change" else if(stage=="undo") "Undo" else "Undo complete");put("args",buildJsonObject {put("action_id",id);put("stage",stage)})}
+ private fun preview()=output(buildJsonObject {put("type","markdown");put("text","Target: Plan\nBefore: Old\nAfter: New")},writeCommand("preview"))
+ @Test fun reviewedActionsNeedAVisiblePreviewAndNeverUseTheLegacySavePath() {
+  assertEquals("preview",askWriteAction(preview())!!.stage)
+  assertNull(askWriteAction(output(writeCommand("preview"))))
+  assertNull(askAnswerSave(preview()))
+  assertEquals("legacy",askAnswerSave(output(buildJsonObject {put("type","command");put("id","save-answer");put("title","Save as note");put("args",buildJsonObject {put("answer_id","legacy")})}))!!.get("answer_id")!!.jsonPrimitive.content)
+ }
+ @Test fun notesAloneAndUnchangedOrForeignStagesAreNotWriteAcknowledgements() {
+  val requested=askWriteAction(preview())!!
+  assertNull(askWriteAcknowledgement(requested,output(buildJsonObject {put("type","notes");put("ids",JsonArray(listOf(JsonPrimitive("target"))))})))
+  assertNull(askWriteAcknowledgement(requested,preview()))
+  assertNull(askWriteAcknowledgement(requested,output(writeCommand("undo","foreign"))))
+  val applied=askWriteAcknowledgement(requested,output(writeCommand("undo")))!!
+  assertEquals("undo",applied.stage)
+  assertNull(askWriteAcknowledgement(applied,output(writeCommand("undo"))))
+  assertEquals("done",askWriteAcknowledgement(applied,output(writeCommand("done")))!!.stage)
+  assertEquals("done",askWriteAcknowledgement(requested,output(writeCommand("done")))!!.stage)
+ }
+ @Test fun actionArgumentsCannotSmuggleBodiesOrMixedLegacyReceipts() {
+  val markdown=buildJsonObject {put("type","markdown");put("text","Preview")}
+  for(extra in listOf("body","answer_id","target_id","version")) {
+   val command=writeCommand("preview")
+   val args=command["args"]!!.jsonObject
+   assertNull(askWriteAction(output(markdown,JsonObject(command+("args" to JsonObject(args+(extra to JsonPrimitive("untrusted"))))))))
+  }
+  assertNull(askWriteAction(output(markdown,writeCommand("unknown"))))
+ }
+ @Test fun reviewedActionsOptInOnlyForEnabledReleasedCapableManifests() {
+  assertFalse(supportsAskNoteActions(manifest(conversation=true)))
+  assertTrue(supportsAskNoteActions(manifest(conversation=true,version="1.1.0")))
+  assertFalse(supportsAskNoteActions(manifest(conversation=true,version="1.1.0",state="waiting")))
+  assertFalse(supportsAskNoteActions(manifest(conversation=true,version="1.1.0-alpha")))
+  assertFalse(supportsAskNoteActions(manifest(conversation=false,version="1.1.0")))
+ }
+
+ @Test fun retainedReceiptStateDoesNotResetOrDowngradeAfterCompositionLeaves() {
+  val state=AskWriteState(askWriteAction(preview())!!)
+  assertTrue(state.accept(state.action,output(writeCommand("undo"))))
+  assertEquals("undo",state.action.stage)
+  assertFalse(state.accept(state.action,preview()))
+  assertEquals("undo",state.action.stage)
+  assertTrue(state.accept(state.action,output(writeCommand("done"))))
+  assertEquals("done",state.action.stage)
+  assertFalse(state.accept(state.action,output(writeCommand("undo"))))
+  assertEquals("done",state.action.stage)
  }
 }

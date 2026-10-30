@@ -68,4 +68,15 @@ class SettingsLocalizationTest {
    assertEquals("Synthetic server diagnostic.",apiErrorMessage(resources,io.theficos.spunto.data.sync.ApiException(503,"synthetic","Synthetic server diagnostic.")))
   }
  }
+
+ @Test fun reviewedNoteChangesHaveExplicitConfirmationGuidanceInEveryLocale() {
+  val expected=mapOf(
+   "en" to "Creates, edits and undoes note changes only after your explicit confirmation",
+   "it" to "Crea, modifica e annulla modifiche alle note solo dopo una tua conferma esplicita",
+   "es" to "Crea, edita y deshace cambios en notas solo después de tu confirmación explícita",
+   "fr" to "Crée, modifie et annule les modifications des notes uniquement après votre confirmation explicite",
+   "de" to "Erfordert deine ausdrückliche Bestätigung zum Erstellen, Bearbeiten und Rückgängigmachen von Notizänderungen",
+  )
+  expected.forEach {(locale,label) ->assertEquals(locale,label,pluginPermissionSentence(settingsTestResources(locale),"notes.review"))}
+ }
 }

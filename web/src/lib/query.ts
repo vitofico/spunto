@@ -542,7 +542,11 @@ export function useApiQuery<T>(
 ) {
   return useQuery({ queryKey: key, queryFn: loader });
 }
-export async function invalidateContent() {
+export function invalidateContent() {
+  return invalidateContentFor(queryClient);
+}
+/** Use the same content prefixes with the QueryClient that owns the current UI. */
+export async function invalidateContentFor(client: QueryClient) {
   await Promise.all(
     [
       "notes",
@@ -557,7 +561,7 @@ export async function invalidateContent() {
       "label-impact",
       "shared-notes",
       "shared-note",
-    ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+    ].map((key) => client.invalidateQueries({ queryKey: [key] })),
   );
 }
 export function useApiMutation<T, R>(

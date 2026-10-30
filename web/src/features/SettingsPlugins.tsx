@@ -20,13 +20,14 @@ import {
 } from "./format";
 import { ErrorLine, PageTitle } from "./SettingsParts";
 function permissions(plugin: Plugin) {
-  return (
+  const sentences =
     plugin.permission_sentences ??
     plugin.permissions.map(
       (p) =>
         ({
           "notes.read": t("settingsplugins.reads_your_notes"),
           "notes.create": t("settingsplugins.creates_notes"),
+          "notes.review": t("settingsplugins.reviews_note_changes"),
           "notes.update_own": t(
             "settingsplugins.updates_its_own_unedited_notes",
           ),
@@ -40,8 +41,15 @@ function permissions(plugin: Plugin) {
           "attachments.read": t("settingsplugins.reads_attachments"),
           "attachments.write": t("settingsplugins.adds_attachments"),
         })[p] ?? p,
-    )
-  );
+    );
+  // Bundled catalog sentences correspond to permissions, followed by any privacy note.
+  return plugin.origin === "bundled"
+    ? sentences.map((sentence, index) =>
+        plugin.permissions[index] === "notes.review"
+          ? t("settingsplugins.reviews_note_changes")
+          : sentence,
+      )
+    : sentences;
 }
 function pluginOrigin(plugin: Plugin) {
   return plugin.origin === "bundled"

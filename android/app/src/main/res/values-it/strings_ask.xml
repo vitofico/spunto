@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="core_ask_conversation">Conversazione</string>
-    <string name="core_ask_temporary">Conversazione temporanea. I messaggi scompaiono quando esci o ricominci. Solo le risposte che salvi esplicitamente diventano note.</string>
+    <string name="core_ask_temporary">Conversazione temporanea. I messaggi scompaiono quando esci o ricominci. Le risposte salvate e le modifiche che confermi esplicitamente vengono conservate.</string>
     <string name="core_new_conversation">Nuova conversazione</string>
     <string name="core_ask_sources">Fonti</string>
     <string name="core_ask_followup">Fai una domanda di approfondimento</string>
@@ -14,4 +14,13 @@
     <string name="core_ask_copied">Copiato</string>
     <string name="core_ask_save">Salva come nota</string>
     <string name="core_ask_saved">Salvata come nota</string>
+    <string name="core_ask_preview_hint">Solo anteprima. Nulla cambia finché non confermi.</string>
+    <string name="core_ask_create_note">Crea nota</string>
+    <string name="core_ask_apply_change">Applica modifica</string>
+    <string name="core_ask_action_pending">Operazione in corso…</string>
+    <string name="core_ask_action_cancelled">Proposta annullata.</string>
+    <string name="core_ask_action_failed">Impossibile completare la modifica. Riprova o chiedi una nuova anteprima.</string>
+    <string name="core_ask_undo_complete">Annullamento completato</string>
+    <string name="core_ask_undo">Annulla modifica</string>
+    <string name="settings_reviews_note_changes">Crea, modifica e annulla modifiche alle note solo dopo una tua conferma esplicita</string>
 </resources>

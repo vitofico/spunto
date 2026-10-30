@@ -26,7 +26,7 @@ import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
 import { requestGeneration } from "../lib/identity";
-import { askContinuation } from "./askConversationData";
+import { askContinuation, askNoteActionOptions } from "./askConversationData";
 const AskConversation = lazy(() => import("./AskConversation"));
 export function usePlugins() {
   return useManifest();
@@ -696,7 +696,10 @@ export function CommandResult({
       ) {
         const started = askPendingHandle.current
           ? undefined
-          : await api.command("ask", "ask", { start: true });
+          : await api.command("ask", "ask", {
+              start: true,
+              ...askNoteActionOptions(manifest.data?.plugins),
+            });
         const handle = askPendingHandle.current ?? askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));
         askPendingHandle.current = handle;
@@ -990,7 +993,10 @@ export function PluginCommands({
       ) {
         const started = pendingAskHandle.current
           ? undefined
-          : await api.command("ask", "ask", { start: true });
+          : await api.command("ask", "ask", {
+              start: true,
+              ...askNoteActionOptions(currentPlugins.current),
+            });
         const handle = pendingAskHandle.current ?? askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));
         pendingAskHandle.current = handle;

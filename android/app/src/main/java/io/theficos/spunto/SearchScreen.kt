@@ -43,7 +43,7 @@ import java.time.*
  var shown by rememberSaveable { mutableStateOf(listOf<String>()) }
  var results by remember { mutableStateOf(shown.mapNotNull { id -> model.notes.value.firstOrNull { it.id==id } }) }
  var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }
- var asked by remember {mutableStateOf("")};var failed by remember {mutableStateOf(false)}
+ var failed by remember {mutableStateOf(false)}
  var request by remember {mutableStateOf<Job?>(null)};var attempt by remember {mutableStateOf<Any?>(null)}
  var askHandle by remember {mutableStateOf<JsonObject?>(null)}
  var askHandleAuth by remember {mutableStateOf<AuthConfig?>(null)}
@@ -62,7 +62,7 @@ import java.time.*
  val focus=remember { FocusRequester() }; var focusSpent by rememberSaveable { mutableStateOf(false) }; val focusManager=LocalFocusManager.current
  LaunchedEffect(Unit) { if(!focusSpent) { focusSpent=true;runCatching { focus.requestFocus() } } }
  LaunchedEffect(results) { shown=results.map { it.id } }
- LaunchedEffect(auth,epoch,query,online,enabled) {clearAskHandle();attempt=null;request?.cancel();request=null;answer=null;asked="";asking=false;failed=false}
+ LaunchedEffect(auth,epoch,query,online,enabled) {clearAskHandle();attempt=null;request?.cancel();request=null;answer=null;asking=false;failed=false}
  DisposableEffect(auth,epoch) {onDispose {clearAskHandle();attempt=null;request?.cancel()}}
  LaunchedEffect(query,from,to,auth,online,localNotes) {
   results=model.repository.search(query).filter { note -> (from.isEmpty() || runCatching { note.createdAt>=LocalDate.parse(from).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrDefault(true)) && (to.isEmpty() || runCatching { note.createdAt<LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrDefault(true)) }
@@ -92,9 +92,9 @@ import java.time.*
     TextButton(enabled=!asking,onClick={
      val config=model.auth.value
      if(config!=null && model.online.value && model.container.manifest.enabled("ask")) {
-      val submitted=query.trim();val requestedEpoch=epoch;val currentAttempt=Any();attempt=currentAttempt;asked=submitted;answer=null;failed=false;asking=true
+      val submitted=query.trim();val requestedEpoch=epoch;val currentAttempt=Any();attempt=currentAttempt;answer=null;failed=false;asking=true
       fun current()=attempt===currentAttempt && model.auth.value==config && model.pluginReplicaEpoch==requestedEpoch && query.trim()==submitted && model.online.value && model.container.manifest.enabled("ask")
-      request=model.ask(submitted,continuation=askHandle,current=::current,onHandle={askHandle=it;askHandleAuth=config},onComplete={if(current()) {asking=false;failed=answer==null}}) {if(current()) {answer=it as? JsonObject;askHandle=null}}
+      request=model.ask(submitted,continuation=askHandle,current=::current,onHandle={askHandle=it;askHandleAuth=config},onComplete={if(current()) {asking=false;failed=answer==null}}) {if(current()) {answer=commandEnvelope("ask","ask",buildJsonObject {put("question",submitted)},it);askHandle=null}}
      }
     },modifier=Modifier.heightIn(min=48.dp)) {Text(if(asking) context.getString(R.string.core_reading_notes) else context.getString(R.string.core_ask_notes))}
    }
@@ -125,7 +125,7 @@ import java.time.*
    }
   }
  }
- answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {TextButton(onClick={answer=null}) {Text(context.getString(R.string.core_close))};Box(Modifier.weight(1f)) {AskConversation(model,onNote,output,asked)}} } }
+ answer?.let {output -> CommandResultSheet(model,output,onNote,onResult={answer=it},onClose={answer=null})}
 }
 
 /** One result (03 A7): the first line in the reading face, a snippet with the matches marked, then date and labels. */

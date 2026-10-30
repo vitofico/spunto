@@ -79,7 +79,7 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
    }
   }
   val result=if(plugin=="ask" && id=="ask" && args.string("question").isNotBlank()) {
-   conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it}) ?: return@task
+   conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value)) ?: return@task
   } else ApiClient(auth!!).guarded {current()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
   if(!current()) return@task
   model.synchronize().join()
@@ -278,13 +278,14 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
 @Composable fun CommandResultSheet(model:SpuntoViewModel,result:JsonObject,onNote:(String)->Unit,onResult:(JsonObject)->Unit,onClose:()->Unit) {
  val resources=LocalContext.current.resources
  val clipboard=LocalClipboardManager.current
+ val manifest=model.manifest.collectAsState().value
  val catalog by model.catalog.collectAsState()
  val plugin=catalog.objects("plugins").firstOrNull { it.string("id")==result.string("plugin_id") }
  val sheetScope=rememberCoroutineScope()
  var active by remember { mutableStateOf(true) }
  val close={active=false;sheetScope.cancel();onClose()}
  ModalBottomSheet(onDismissRequest=close,scrimColor=MaterialTheme.colorScheme.scrim) {
-  if(result.string("plugin_id")=="ask" && askContinuation(result)!=null) {
+  if(result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null) {
    Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {TextButton(onClick=close) {Text(resources.getString(R.string.settings_close))};Box(Modifier.weight(1f)) {AskConversation(model,{id -> close();onNote(id)},result,(result["command_args"] as? JsonObject)?.string("question").orEmpty())}}
   } else
   Column(Modifier.padding(SpuntoSpacing.s20).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {

@@ -58,7 +58,13 @@ component type or plugin permission. The three declared commands are `ask`,
   saved note survives. An explicit Save already accepted before Clear may finish;
   Clear does not undo an accepted note-creation request.
 
-New clients allocate a handle before the first inference. If allocation completes
+Android selects the conversation protocol only when the current Ask manifest
+advertises `clear-conversation`. Against older servers it sends a one-shot
+`ask({question: ...})` request and shows the normal result sheet, without follow-up
+controls. A failed request to a server that advertises conversations does not
+silently fall back to a different protocol.
+
+Conversation clients allocate a handle before the first inference. If allocation completes
 after the view was cleared or disposed, they clear the returned handle and never
 start inference. Clearing or switching identities fences late callbacks; aborting
 an HTTP request alone is insufficient. The server also checks the live

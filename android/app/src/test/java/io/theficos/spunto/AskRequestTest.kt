@@ -113,4 +113,36 @@ class AskRequestTest {
   assertEquals(listOf("ask"),commands.map {it.first})
   assertEquals(4,commands.single().second["after_turn"]!!.jsonPrimitive.int)
  }
+
+ @Test fun oldServerReceivesExactlyOneLegacyQuestionWithoutConversationArguments()=runBlocking {
+  val requests=mutableListOf<Pair<String,JsonObject>>()
+  val answer=buildJsonObject {put("type","markdown");put("text","Legacy answer with sources")}
+  val result=conversationAskRequest("Where is coffee?",null,{command,args ->
+   requests+=command to args
+   require(command=="ask" && args.keys==setOf("question")) {"Old server rejects conversation arguments"}
+   answer
+  },{true},{fail("Old server has no conversation handle")},conversationSupported=false)
+  assertEquals(listOf("ask" to buildJsonObject {put("question","Where is coffee?")}),requests)
+  assertEquals(answer,result)
+ }
+ @Test fun cancelledLegacyQuestionDoesNotSendOrAllocate()=runBlocking {
+  val result=conversationAskRequest("Discarded",null,{_,_ -> fail("No request after departure");JsonNull},{false},{fail("No legacy handle")},conversationSupported=false)
+  assertNull(result)
+ }
+ @Test fun advertisedConversationFailureDoesNotRetryAsALegacyQuestion()=runBlocking {
+  val requests=mutableListOf<Pair<String,JsonObject>>()
+  try {
+   conversationAskRequest("First question?",null,{command,args ->requests+=command to args;throw IOException("Synthetic start failure")},{true},{fail("Failed allocation has no handle")},conversationSupported=true)
+   fail("The original start failure must be reported")
+  } catch(expected:IOException) { }
+  assertEquals(listOf("ask" to buildJsonObject {put("start",true)}),requests)
+ }
+ @Test fun malformedAdvertisedStartDoesNotSilentlyDowngrade()=runBlocking {
+  val requests=mutableListOf<Pair<String,JsonObject>>()
+  try {
+   conversationAskRequest("First question?",null,{command,args ->requests+=command to args;buildJsonObject {put("type","text");put("text","Malformed start")}}, {true},{fail("Malformed allocation has no handle")},conversationSupported=true)
+   fail("Malformed start must remain a failure")
+  } catch(expected:IllegalStateException) { }
+  assertEquals(listOf("ask" to buildJsonObject {put("start",true)}),requests)
+ }
 }

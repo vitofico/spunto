@@ -28,4 +28,19 @@ class AskConversationTest {
   val response=output(buildJsonObject {put("type","notes");put("ids",JsonArray(listOf(JsonPrimitive("first"),buildJsonObject {put("id","second");put("reason","Supporting evidence")})))})
   assertEquals(listOf("first","second"),askSources(response))
  }
+
+ private fun manifest(plugin:String="ask",conversation:Boolean=false,version:String="1.0.0")=buildJsonObject {
+  put("ui",1);put("plugins",JsonArray(listOf(buildJsonObject {
+   put("id",plugin);put("version",version);put("contributes",buildJsonObject {put("commands",JsonArray((listOf("ask","save-answer")+if(conversation) listOf("clear-conversation") else emptyList()).map {id ->buildJsonObject {put("id",id)}}))})
+  })))
+ }
+ @Test fun commandAdvertisementDistinguishesOldAndNewServersWithTheSameVersion() {
+  assertFalse(supportsAskConversation(manifest()))
+  assertTrue(supportsAskConversation(manifest(conversation=true)))
+  assertFalse("A version string does not advertise a protocol",supportsAskConversation(manifest(version="99.0.0")))
+ }
+ @Test fun anotherPluginsClearCommandAndAMissingManifestDoNotAdvertiseAskHistory() {
+  assertFalse(supportsAskConversation(manifest(plugin="another-plugin",conversation=true)))
+  assertFalse(supportsAskConversation(JsonObject(emptyMap())))
+ }
 }

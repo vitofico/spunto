@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="core_ask_conversation">Conversation</string>
-    <string name="core_ask_temporary">Conversation temporaire. Les messages disparaissent quand vous quittez ou recommencez. Seules les réponses enregistrées explicitement deviennent des notes.</string>
+    <string name="core_ask_temporary">Conversation temporaire. Les messages disparaissent quand vous quittez ou recommencez. Les réponses enregistrées et les modifications confirmées explicitement sont conservées.</string>
     <string name="core_new_conversation">Nouvelle conversation</string>
     <string name="core_ask_sources">Sources</string>
     <string name="core_ask_followup">Poser une question complémentaire</string>
@@ -14,4 +14,13 @@
     <string name="core_ask_copied">Copié</string>
     <string name="core_ask_save">Enregistrer comme note</string>
     <string name="core_ask_saved">Enregistrée comme note</string>
+    <string name="core_ask_preview_hint">Aperçu uniquement. Rien ne change avant votre confirmation.</string>
+    <string name="core_ask_create_note">Créer la note</string>
+    <string name="core_ask_apply_change">Appliquer la modification</string>
+    <string name="core_ask_action_pending">Opération en cours…</string>
+    <string name="core_ask_action_cancelled">Proposition annulée.</string>
+    <string name="core_ask_action_failed">Impossible de terminer cette modification. Réessayez ou demandez un nouvel aperçu.</string>
+    <string name="core_ask_undo_complete">Annulation terminée</string>
+    <string name="core_ask_undo">Annuler la modification</string>
+    <string name="settings_reviews_note_changes">Crée, modifie et annule les modifications des notes uniquement après votre confirmation explicite</string>
 </resources>

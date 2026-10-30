@@ -127,6 +127,7 @@ def _permission_sentences(manifest):
         "notes.read": "Reads your notes",
         "notes.create": "Creates new notes",
         "notes.update_own": "Updates its own notes while they remain unedited",
+        "notes.review": "Creates or edits notes only after your confirmation; offers guarded Undo",
         "suggest": "Proposes edits for your review",
         "annotate": "Adds note information",
         "search.text": "Attaches searchable text",

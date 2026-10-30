@@ -61,6 +61,7 @@ internal fun nativePluginCatalog(catalog:JsonObject,manifest:JsonObject):NativeP
 }
 internal fun pluginPermissionSentence(resources:Resources,permission:String):String=when(permission) {
  "notes.update_own" -> resources.getString(R.string.settings_updates_own_unedited_notes)
+ "notes.review" -> resources.getString(R.string.settings_reviews_note_changes)
  "search.text" -> resources.getString(R.string.settings_attaches_searchable_text)
  "routes" -> resources.getString(R.string.settings_adds_plugin_routes)
  "mic" -> resources.getString(R.string.settings_uses_device_microphone)

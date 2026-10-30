@@ -29,3 +29,17 @@
   justify-self: start;
   min-height: 44px;
 }
+
+.write {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}

@@ -1050,7 +1050,7 @@
     "appearance.background_artwork": "Illustré",
     "appearance.colour_theme": "Thème de couleurs",
     "ask.conversation": "Conversation",
-    "ask.temporary": "Conversation temporaire. Les messages disparaissent quand vous quittez ou recommencez. Seules les réponses enregistrées explicitement deviennent des notes.",
+    "ask.temporary": "Conversation temporaire. Les messages disparaissent quand vous quittez ou recommencez. Les réponses enregistrées et les modifications confirmées explicitement sont conservées.",
     "ask.new_conversation": "Nouvelle conversation",
     "ask.sources": "Sources",
     "ask.followup": "Poser une question complémentaire",
@@ -1058,6 +1058,15 @@
     "ask.retry": "Réessayer",
     "ask.retry_hint": "Réessayez ou commencez une nouvelle conversation si celle-ci a expiré.",
     "ask.question_limit": "Utilisez 500 caractères maximum.",
-    "ask.failed": "Impossible de répondre à cette question."
+    "ask.failed": "Impossible de répondre à cette question.",
+    "ask.preview_hint": "Aperçu uniquement. Rien ne change avant votre confirmation.",
+    "ask.create_note": "Créer la note",
+    "ask.apply_change": "Appliquer la modification",
+    "ask.action_pending": "Opération en cours…",
+    "ask.action_cancelled": "Proposition annulée.",
+    "ask.action_failed": "Impossible de terminer cette modification. Réessayez ou demandez un nouvel aperçu.",
+    "ask.undo_complete": "Annulation terminée",
+    "ask.undo": "Annuler la modification",
+    "settingsplugins.reviews_note_changes": "Crée, modifie et annule les modifications des notes uniquement après votre confirmation explicite"
   }
 }

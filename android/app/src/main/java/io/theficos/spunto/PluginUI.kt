@@ -79,7 +79,7 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
    }
   }
   val result=if(plugin=="ask" && id=="ask" && args.string("question").isNotBlank()) {
-   conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value)) ?: return@task
+   conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value),noteActionsSupported=supportsAskNoteActions(model.container.manifest.value)) ?: return@task
   } else ApiClient(auth!!).guarded {current()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
   if(!current()) return@task
   model.synchronize().join()

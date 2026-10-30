@@ -112,7 +112,7 @@ def receipts(ctx):
     return memory(ctx)[1]
 
 
-def new_conversation(ctx):
+def new_conversation(ctx, *, note_actions=False):
     ctx.check()
     conversations, pending = memory(ctx)
     key = secrets.token_urlsafe(24)
@@ -124,6 +124,7 @@ def new_conversation(ctx):
         "history": [],
         "active": None,
         "labels": [],
+        "note_actions": note_actions,
     }
     conversations[key] = value
     while len(conversations) > MAX_CONVERSATIONS:
@@ -157,8 +158,8 @@ def controls(key, value):
     ]
 
 
-def start_conversation(ctx):
-    key, value = new_conversation(ctx)
+def start_conversation(ctx, *, note_actions=False):
+    key, value = new_conversation(ctx, note_actions=note_actions)
     return {"ui": 1, "items": controls(key, value)}
 
 
@@ -233,13 +234,16 @@ async def ask(
     conversation_id: str | None = None,
     after_turn: int | None = None,
     start: bool = False,
+    note_actions: bool = False,
 ) -> dict:
-    if type(start) is not bool:
-        raise ValueError("start must be a boolean")
+    if type(start) is not bool or type(note_actions) is not bool:
+        raise ValueError("start and note_actions must be booleans")
+    if note_actions and conversation_id is not None:
+        raise ValueError("note_actions can only be enabled on a new conversation")
     if start:
         if question is not None or conversation_id is not None or after_turn is not None:
             raise ValueError("start cannot include a question or continuation")
-        return start_conversation(ctx)
+        return start_conversation(ctx, note_actions=note_actions)
     if conversation_id is None and after_turn is not None:
         raise ValueError("after_turn requires a conversation")
     current = conversation(ctx, conversation_id) if conversation_id is not None else None
@@ -252,7 +256,7 @@ async def ask(
     question = question.strip()
     created = current is None
     if created:
-        conversation_id, current = new_conversation(ctx)
+        conversation_id, current = new_conversation(ctx, note_actions=note_actions)
         after_turn = 0
     if current["turn"] != after_turn:
         raise Problem(409, "ask_conversation_changed", "The conversation changed. Start a new one.")
@@ -261,7 +265,27 @@ async def ask(
     request = object()
     current["active"] = request
     try:
-        result, answer, sources, labels = await answer_question(ctx, question, current)
+        from spunto.plugins.ask import writes
+
+        def check_request():
+            ctx.check()
+            if (
+                conversation(ctx, conversation_id) is not current
+                or current["active"] is not request
+            ):
+                raise Problem(
+                    409, "ask_conversation_changed", "The conversation changed. Start a new one."
+                )
+
+        proposed = (
+            await writes.propose(ctx, question, current, conversation_id, check=check_request)
+            if current["note_actions"] and writes.wants_action(question)
+            else None
+        )
+        if proposed is None:
+            result, answer, sources, labels = await answer_question(ctx, question, current)
+        else:
+            result, answer, sources, labels = proposed, None, [], current["labels"]
         ctx.check()
         if conversation(ctx, conversation_id) is not current or current["active"] is not request:
             raise Problem(
@@ -414,9 +438,24 @@ async def answer_question(ctx, question, current):
 
 
 @plugin.command("save-answer")
-async def save_answer(ctx: Ctx, answer_id: str) -> dict:
+async def save_answer(
+    ctx: Ctx, answer_id: str | None = None, action_id: str | None = None, stage: str | None = None
+) -> dict:
+    if action_id is not None:
+        if answer_id is not None:
+            raise ValueError("reviewed actions and saved answers cannot be combined")
+        from spunto.plugins.ask.writes import confirm
+
+        return await confirm(ctx, action_id, stage)
+    if answer_id is None or stage is not None:
+        raise ValueError("provide a saved answer or reviewed action receipt")
     answer = receipts(ctx).get(answer_id)
-    if answer is None or answer["generation"] != ctx.generation or answer["owner"] != binding(ctx):
+    if (
+        answer is None
+        or answer.get("kind") == "review"
+        or answer["generation"] != ctx.generation
+        or answer["owner"] != binding(ctx)
+    ):
         return {"type": "text", "text": "That answer expired. Ask again."}
     if answer["saved"]:
         return {"type": "notes", "ids": [answer["saved"]]}

@@ -1050,7 +1050,7 @@
     "appearance.background_artwork": "Ilustrado",
     "appearance.colour_theme": "Tema de color",
     "ask.conversation": "Conversación",
-    "ask.temporary": "Conversación temporal. Los mensajes desaparecen al salir o empezar de nuevo. Solo las respuestas que guardes explícitamente se convierten en notas.",
+    "ask.temporary": "Conversación temporal. Los mensajes desaparecen al salir o empezar de nuevo. Se conservan las respuestas guardadas y los cambios que confirmes explícitamente.",
     "ask.new_conversation": "Nueva conversación",
     "ask.sources": "Fuentes",
     "ask.followup": "Haz una pregunta de seguimiento",
@@ -1058,6 +1058,15 @@
     "ask.retry": "Reintentar",
     "ask.retry_hint": "Inténtalo de nuevo o inicia una conversación nueva si esta ha caducado.",
     "ask.question_limit": "Usa un máximo de 500 caracteres.",
-    "ask.failed": "No se pudo responder a esta pregunta."
+    "ask.failed": "No se pudo responder a esta pregunta.",
+    "ask.preview_hint": "Solo una vista previa. Nada cambia hasta que confirmes.",
+    "ask.create_note": "Crear nota",
+    "ask.apply_change": "Aplicar cambio",
+    "ask.action_pending": "Procesando…",
+    "ask.action_cancelled": "Propuesta cancelada.",
+    "ask.action_failed": "No se pudo completar el cambio. Reintenta o pide una nueva vista previa.",
+    "ask.undo_complete": "Cambio deshecho",
+    "ask.undo": "Deshacer",
+    "settingsplugins.reviews_note_changes": "Crea, edita y deshace cambios en notas solo después de tu confirmación explícita"
   }
 }

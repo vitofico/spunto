@@ -1050,7 +1050,7 @@
     "appearance.background_artwork": "Illustrato",
     "appearance.colour_theme": "Tema di colore",
     "ask.conversation": "Conversazione",
-    "ask.temporary": "Conversazione temporanea. I messaggi scompaiono quando esci o ricominci. Solo le risposte che salvi esplicitamente diventano note.",
+    "ask.temporary": "Conversazione temporanea. I messaggi scompaiono quando esci o ricominci. Le risposte salvate e le modifiche che confermi esplicitamente vengono conservate.",
     "ask.new_conversation": "Nuova conversazione",
     "ask.sources": "Fonti",
     "ask.followup": "Fai una domanda di approfondimento",
@@ -1058,6 +1058,15 @@
     "ask.retry": "Riprova",
     "ask.retry_hint": "Riprova oppure avvia una nuova conversazione se questa è scaduta.",
     "ask.question_limit": "Usa al massimo 500 caratteri.",
-    "ask.failed": "Impossibile rispondere a questa domanda."
+    "ask.failed": "Impossibile rispondere a questa domanda.",
+    "ask.preview_hint": "Solo anteprima. Nulla cambia finché non confermi.",
+    "ask.create_note": "Crea nota",
+    "ask.apply_change": "Applica modifica",
+    "ask.action_pending": "Operazione in corso…",
+    "ask.action_cancelled": "Proposta annullata.",
+    "ask.action_failed": "Impossibile completare la modifica. Riprova o chiedi una nuova anteprima.",
+    "ask.undo_complete": "Annullamento completato",
+    "ask.undo": "Annulla modifica",
+    "settingsplugins.reviews_note_changes": "Crea, modifica e annulla modifiche alle note solo dopo una tua conferma esplicita"
   }
 }

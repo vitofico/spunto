@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="core_ask_conversation">Conversation</string>
-    <string name="core_ask_temporary">Temporary conversation. Messages disappear when you leave or start over. Only answers you explicitly save become notes.</string>
+    <string name="core_ask_temporary">Temporary conversation. Messages disappear when you leave or start over. Saved answers and changes you explicitly confirm are kept.</string>
     <string name="core_new_conversation">New conversation</string>
     <string name="core_ask_sources">Sources</string>
     <string name="core_ask_followup">Ask a follow-up</string>
@@ -14,4 +14,13 @@
     <string name="core_ask_copied">Copied</string>
     <string name="core_ask_save">Save as note</string>
     <string name="core_ask_saved">Saved as note</string>
+    <string name="core_ask_preview_hint">Preview only. Nothing changes until you confirm.</string>
+    <string name="core_ask_create_note">Create note</string>
+    <string name="core_ask_apply_change">Apply change</string>
+    <string name="core_ask_action_pending">Working…</string>
+    <string name="core_ask_action_cancelled">Proposal cancelled.</string>
+    <string name="core_ask_action_failed">Could not complete this change. Try again or ask for a new preview.</string>
+    <string name="core_ask_undo_complete">Undo complete</string>
+    <string name="core_ask_undo">Undo</string>
+    <string name="settings_reviews_note_changes">Creates, edits and undoes note changes only after your explicit confirmation</string>
 </resources>

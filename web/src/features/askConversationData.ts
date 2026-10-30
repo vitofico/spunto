@@ -46,3 +46,77 @@ export function askSources(value: unknown): { id: string; reason?: string }[] {
     )
     .filter((source) => source.id.trim().length > 0);
 }
+
+export type AskWriteStage = "preview" | "undo" | "done";
+export type AskWriteAction = {
+  title: string;
+  args: { action_id: string; stage: AskWriteStage };
+};
+/** Receipts carry the action; clients only echo the closed, server-issued arguments. */
+export function askWriteAction(value: unknown): AskWriteAction | undefined {
+  for (const item of askItems(value)) {
+    if (
+      item.type !== "command" ||
+      item.id !== "save-answer" ||
+      !record(item.args)
+    )
+      continue;
+    const args = item.args;
+    if (
+      Object.keys(args).length !== 2 ||
+      typeof args.action_id !== "string" ||
+      !args.action_id.trim() ||
+      !["preview", "undo", "done"].includes(String(args.stage))
+    )
+      continue;
+    if (
+      args.stage === "preview" &&
+      !askItems(value).some(
+        (part) =>
+          part.type === "markdown" &&
+          String(part.text ?? part.markdown ?? "").trim(),
+      )
+    )
+      continue;
+    return {
+      title: String(item.title),
+      args: { action_id: args.action_id, stage: args.stage as AskWriteStage },
+    };
+  }
+}
+export function askWriteAcknowledgement(
+  requested: AskWriteAction,
+  value: unknown,
+): AskWriteAction | undefined {
+  const next = askWriteAction(value);
+  if (!next || next.args.action_id !== requested.args.action_id) return;
+  if (
+    next.args.stage === "done" ||
+    (requested.args.stage === "preview" && next.args.stage === "undo")
+  )
+    return next;
+}
+export function askAnswerSave(value: unknown): Args | undefined {
+  const args = askCommand(value, "save-answer");
+  return args &&
+    Object.keys(args).length === 1 &&
+    typeof args.answer_id === "string" &&
+    args.answer_id.trim()
+    ? args
+    : undefined;
+}
+export function askNoteActionOptions(
+  plugins: { id: string; version?: string; state?: string }[] | undefined,
+): Args {
+  const plugin = plugins?.find(
+    (item) =>
+      item.id === "ask" &&
+      (item.state === undefined || item.state === "enabled"),
+  );
+  const version = plugin?.version?.match(/^(\d+)\.(\d+)\.(\d+)(?:\+[\w.-]+)?$/);
+  return version &&
+    (Number(version[1]) > 1 ||
+      (Number(version[1]) === 1 && Number(version[2]) >= 1))
+    ? { note_actions: true }
+    : {};
+}

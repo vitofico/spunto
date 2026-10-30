@@ -1050,7 +1050,7 @@
     "appearance.background_artwork": "Artwork",
     "appearance.colour_theme": "Colour theme",
     "ask.conversation": "Conversation",
-    "ask.temporary": "Temporary conversation. Messages disappear when you leave or start over. Only answers you explicitly save become notes.",
+    "ask.temporary": "Temporary conversation. Messages disappear when you leave or start over. Saved answers and changes you explicitly confirm are kept.",
     "ask.new_conversation": "New conversation",
     "ask.sources": "Sources",
     "ask.followup": "Ask a follow-up",
@@ -1058,6 +1058,15 @@
     "ask.retry": "Try again",
     "ask.retry_hint": "Try again, or start a new conversation if this one has expired.",
     "ask.question_limit": "Use 500 characters or fewer.",
-    "ask.failed": "Could not answer this question."
+    "ask.failed": "Could not answer this question.",
+    "ask.preview_hint": "Preview only. Nothing changes until you confirm.",
+    "ask.create_note": "Create note",
+    "ask.apply_change": "Apply change",
+    "ask.action_pending": "Working…",
+    "ask.action_cancelled": "Proposal cancelled.",
+    "ask.action_failed": "Could not complete this change. Try again or ask for a new preview.",
+    "ask.undo_complete": "Undo complete",
+    "ask.undo": "Undo",
+    "settingsplugins.reviews_note_changes": "Creates, edits and undoes note changes only after your explicit confirmation"
   }
 }

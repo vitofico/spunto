@@ -1050,7 +1050,7 @@
     "appearance.background_artwork": "Illustration",
     "appearance.colour_theme": "Farbthema",
     "ask.conversation": "Unterhaltung",
-    "ask.temporary": "Vorübergehende Unterhaltung. Nachrichten verschwinden beim Verlassen oder Neustart. Nur ausdrücklich gespeicherte Antworten werden zu Notizen.",
+    "ask.temporary": "Vorübergehende Unterhaltung. Nachrichten verschwinden beim Verlassen oder Neustart. Gespeicherte Antworten und ausdrücklich bestätigte Änderungen bleiben erhalten.",
     "ask.new_conversation": "Neue Unterhaltung",
     "ask.sources": "Quellen",
     "ask.followup": "Eine Folgefrage stellen",
@@ -1058,6 +1058,15 @@
     "ask.retry": "Erneut versuchen",
     "ask.retry_hint": "Versuche es erneut oder beginne eine neue Unterhaltung, falls diese abgelaufen ist.",
     "ask.question_limit": "Verwende höchstens 500 Zeichen.",
-    "ask.failed": "Diese Frage konnte nicht beantwortet werden."
+    "ask.failed": "Diese Frage konnte nicht beantwortet werden.",
+    "ask.preview_hint": "Nur Vorschau. Bis zur Bestätigung wird nichts geändert.",
+    "ask.create_note": "Notiz erstellen",
+    "ask.apply_change": "Änderung anwenden",
+    "ask.action_pending": "Wird ausgeführt…",
+    "ask.action_cancelled": "Vorschlag verworfen.",
+    "ask.action_failed": "Diese Änderung konnte nicht abgeschlossen werden. Versuche es erneut oder fordere eine neue Vorschau an.",
+    "ask.undo_complete": "Rückgängig gemacht",
+    "ask.undo": "Rückgängig",
+    "settingsplugins.reviews_note_changes": "Erfordert deine ausdrückliche Bestätigung zum Erstellen, Bearbeiten und Rückgängigmachen von Notizänderungen"
   }
 }

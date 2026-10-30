@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="core_ask_conversation">Unterhaltung</string>
-    <string name="core_ask_temporary">Vorübergehende Unterhaltung. Nachrichten verschwinden beim Verlassen oder Neustart. Nur ausdrücklich gespeicherte Antworten werden zu Notizen.</string>
+    <string name="core_ask_temporary">Vorübergehende Unterhaltung. Nachrichten verschwinden beim Verlassen oder Neustart. Gespeicherte Antworten und ausdrücklich bestätigte Änderungen bleiben erhalten.</string>
     <string name="core_new_conversation">Neue Unterhaltung</string>
     <string name="core_ask_sources">Quellen</string>
     <string name="core_ask_followup">Eine Folgefrage stellen</string>
@@ -14,4 +14,13 @@
     <string name="core_ask_copied">Kopiert</string>
     <string name="core_ask_save">Als Notiz speichern</string>
     <string name="core_ask_saved">Als Notiz gespeichert</string>
+    <string name="core_ask_preview_hint">Nur Vorschau. Bis zur Bestätigung wird nichts geändert.</string>
+    <string name="core_ask_create_note">Notiz erstellen</string>
+    <string name="core_ask_apply_change">Änderung anwenden</string>
+    <string name="core_ask_action_pending">Wird ausgeführt…</string>
+    <string name="core_ask_action_cancelled">Vorschlag verworfen.</string>
+    <string name="core_ask_action_failed">Diese Änderung konnte nicht abgeschlossen werden. Versuche es erneut oder fordere eine neue Vorschau an.</string>
+    <string name="core_ask_undo_complete">Rückgängig gemacht</string>
+    <string name="core_ask_undo">Rückgängig</string>
+    <string name="settings_reviews_note_changes">Erfordert deine ausdrückliche Bestätigung zum Erstellen, Bearbeiten und Rückgängigmachen von Notizänderungen</string>
 </resources>

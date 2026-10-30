@@ -10,6 +10,7 @@ PERMISSIONS = {
     "notes.read",
     "notes.create",
     "notes.update_own",
+    "notes.review",
     "suggest",
     "annotate",
     "search.text",
@@ -206,6 +207,10 @@ def validate_manifest(value: dict) -> dict:
         raise ManifestError("unknown permission")
     if "mic" in value["permissions"] and value["kind"] != "device":
         raise ManifestError("mic requires a device plugin")
+    if "notes.review" in value["permissions"] and (
+        value["id"] != "ask" or value.get("entry") != "spunto.plugins.ask:plugin"
+    ):
+        raise ManifestError("reviewed note actions are reserved for Ask")
     if "notes.create" in value["permissions"] and value.get("creates") not in {
         "machine",
         "import",

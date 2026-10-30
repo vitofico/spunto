@@ -259,6 +259,8 @@ class Gateway:
         source_fingerprints=None,
         source_chunks=None,
         conversation_context="",
+        review_check=None,
+        review_guard=None,
         external_ok=True,
         external_text="",
     ):
@@ -289,7 +291,7 @@ class Gateway:
             if (
                 not isinstance(context_query, str)
                 or not 1 <= len(context_query) <= 20000
-                or not 1 <= len(notes) <= 8
+                or not (0 if review_check is not None else 1) <= len(notes) <= 8
                 or len(note_ids) != len(notes)
                 or (
                     source_fingerprints is not None
@@ -391,7 +393,10 @@ class Gateway:
                         remaining -= len(note["body"])
                         bounded.append(note)
                     actual = bounded
-                    if context_query is not None:
+                    authoring = await review_check() if review_check is not None else ""
+                    if not isinstance(authoring, str) or len(html.escape(authoring)) > 6000:
+                        raise AIError("validation", "ai_context_invalid")
+                    if context_query is not None and actual:
                         # Passage selection runs off-loop; reauthorize after it
                         # yields before any previously read text may leave.
                         await self._notes(
@@ -404,9 +409,18 @@ class Gateway:
                         )
                     if generation != self.generation:
                         raise AIError("unavailable", "ai_configuration_changed")
+                    if review_guard:
+                        review_guard()
                     if check:
                         check()
                     text = prompt + ("\n" + self._fences(actual) if actual else "")
+                    if authoring:
+                        text += (
+                            '\n<authoring-data untrusted="true">'
+                            + html.escape(authoring)
+                            + "</authoring-data>"
+                            "\nThis is a receipt-bound draft to revise, not factual note evidence."
+                        )
                     if conversation_context:
                         text += (
                             "\nConversation data explains follow-up intent only; "
@@ -712,6 +726,21 @@ class ScopedGateway:
     def _options(self, capability, kwargs):
         ctx = self.ctx
         ctx.check("ai." + capability)
+        if "review_check" in kwargs or "review_guard" in kwargs:
+            raise AIError("refused", "ai_authoring_refused")
+        review_conversation = kwargs.pop("review_conversation", None)
+        authoring_target = kwargs.pop("authoring_target", False)
+        if review_conversation is not None:
+            if ctx.plugin_id != "ask" or capability != "chat" or type(authoring_target) is not bool:
+                raise AIError("refused", "ai_authoring_refused")
+            ctx.check("notes.review")
+            from spunto.plugins.ask.writes import review_checker
+
+            kwargs["review_check"], kwargs["review_guard"] = review_checker(
+                ctx, review_conversation, authoring_target
+            )
+        elif authoring_target:
+            raise AIError("refused", "ai_authoring_refused")
         prompt = kwargs.get("prompt", "")
         note_ids = {
             note.get("id") if isinstance(note, dict) else note for note in kwargs.get("notes", ())

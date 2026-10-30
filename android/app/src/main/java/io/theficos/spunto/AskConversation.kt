@@ -12,12 +12,13 @@ import androidx.compose.ui.text.AnnotatedString
 import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.plugins.*
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.*
 
 internal fun askCommand(data:JsonElement?,id:String):JsonObject?=outputComponents(data).firstOrNull {it.string("type")=="command" && it.string("id")==id}?.get("args") as? JsonObject
 internal fun askContinuation(data:JsonElement?):JsonObject?=askCommand(data,"ask")?.takeIf {it.string("conversation_id").isNotBlank() && ((it["after_turn"] as? JsonPrimitive)?.intOrNull ?: -1)>=0}
 internal fun askSources(data:JsonElement?):List<String> = outputComponents(data).filter {it.string("type")=="notes"}.flatMap {component -> ((component["ids"] ?: component["items"]) as? JsonArray).orEmpty().mapNotNull {source -> if(source is JsonPrimitive) source.contentOrNull else (source as? JsonObject)?.string("id")} }.filter {it.isNotBlank()}
-private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
+private data class AskTurn(val id:Int,val question:String,val result:JsonObject,val write:AskWriteState?)
 
 /** Ephemeral state stays in the composition: leaving, switching accounts, or clearing discards it. */
 @Composable internal fun AskConversation(model:SpuntoViewModel,onNote:(String)->Unit,initial:JsonObject?=null,initialQuestion:String="") {
@@ -30,7 +31,16 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
  val initialIdentity=remember {auth to epoch}
  key(auth,epoch) {
   val adopted=initial.takeIf {initialIdentity==(auth to epoch)}
-  var turns by remember {mutableStateOf(adopted?.let {listOf(AskTurn(0,initialQuestion,it))}.orEmpty())}
+  val writeStates=remember {mutableMapOf<String,AskWriteState>()}
+  val actionScope=rememberCoroutineScope()
+  fun turn(id:Int,question:String,result:JsonObject):AskTurn {
+   val action=askWriteAction(result)
+   val state=action?.let {writeStates.getOrPut(it.id) {AskWriteState(it)}}
+   if(state!=null && action!=null && action.stage!=state.action.stage) state.accept(state.action,result)
+   return AskTurn(id,question,result,state)
+  }
+  var turns by remember {mutableStateOf(adopted?.let {listOf(turn(0,initialQuestion,it))}.orEmpty())}
+  var conversationGeneration by remember {mutableIntStateOf(0)}
   var continuation by remember {mutableStateOf(askContinuation(adopted))}
   var question by remember {mutableStateOf("")}
   var pending by remember {mutableStateOf<String?>(null)}
@@ -41,7 +51,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
   var request by remember {mutableStateOf<Job?>(null)}
   val config=auth
   fun clearHandle(args:JsonObject?) {if(args!=null && model.auth.value==config && model.pluginReplicaEpoch==epoch) model.request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",args.string("conversation_id"))})}
-  fun discard() {revision++;request?.cancel();clearHandle(continuation);continuation=null;turns=emptyList();question="";pending=null;failure=null;retry=""}
+  fun discard() {revision++;conversationGeneration++;request?.cancel();clearHandle(continuation);continuation=null;turns=emptyList();writeStates.clear();question="";pending=null;failure=null;retry=""}
   DisposableEffect(Unit) {onDispose {active=false;revision++;request?.cancel();clearHandle(continuation)}}
   LaunchedEffect(enabled) {if(!enabled) discard()}
   fun submit(submitted:String) {
@@ -51,7 +61,11 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
    fun current()=active && revision==attempt && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")
    request=model.ask(submitted,continuation,current=::current,onHandle={continuation=it},onError={if(current()) {failure=it;question=submitted;pending=null}},onComplete={if(current()) pending=null}) {raw ->
     val result=raw as? JsonObject
-    if(current() && result!=null) {turns=(turns+AskTurn(attempt,submitted,result)).takeLast(20);continuation=askContinuation(result);pending=null;retry=""}
+    if(current() && result!=null) {
+     turns=(turns+turn(attempt,submitted,result)).takeLast(20)
+     writeStates.keys.retainAll(turns.mapNotNull {it.write?.action?.id}.toSet())
+     continuation=askContinuation(result);pending=null;retry=""
+    }
     else clearHandle(askContinuation(raw))
    }
   }
@@ -66,7 +80,8 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
       Text(resources.getString(R.string.core_ask_sources),style=MaterialTheme.typography.titleSmall)
       sources.forEachIndexed {index,id -> AskSource(model,id,index+1,onNote)}
      }
-     AskTurnActions(model,turn.result,onNote,current={active && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")})
+     val actionGeneration=conversationGeneration
+     AskTurnActions(model,turn.result,turn.write,actionScope,onNote,current={active && conversationGeneration==actionGeneration && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")})
      HorizontalDivider()
     }
    }
@@ -83,7 +98,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
  TextButton(onClick={onNote(id)}) {Text((number?.let {"[$it] "} ?: "")+(note?.title?.takeIf {it.isNotBlank()} ?: resources.getString(R.string.settings_open_note)))}
 }
 
-@Composable private fun AskTurnActions(model:SpuntoViewModel,result:JsonObject,onNote:(String)->Unit,current:()->Boolean) {
+@Composable private fun AskTurnActions(model:SpuntoViewModel,result:JsonObject,write:AskWriteState?,actionScope:CoroutineScope,onNote:(String)->Unit,current:()->Boolean) {
  val resources=LocalContext.current.resources
  val clipboard=LocalClipboardManager.current
  val scope=rememberCoroutineScope()
@@ -92,7 +107,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
  var failure by remember {mutableStateOf("")}
  var copied by remember {mutableStateOf(false)}
  val online by model.online.collectAsState()
- val command=askCommand(result,"save-answer")
+ val command=askAnswerSave(result)
  Column {
   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    TextButton(onClick={if(current()) {clipboard.setText(AnnotatedString(resultCopyText(resources,result)));copied=true}}) {Text(resources.getString(if(copied) R.string.core_ask_copied else R.string.settings_copy))}
@@ -103,5 +118,6 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject)
   }
   askSources(saved).forEach {AskSource(model,it,null,onNote)}
   if(failure.isNotBlank()) Text(failure,color=MaterialTheme.colorScheme.error)
+  write?.let {AskWriteActions(model,it,actionScope,onNote,current)}
  }
 }

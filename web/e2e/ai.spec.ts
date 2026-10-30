@@ -73,12 +73,20 @@ const ask = {
     ],
   },
 };
-async function fixture(page: Page, withModels = false) {
+async function fixture(page: Page, withModels = false, withWrites = false) {
   await page.addInitScript(() => {
     // These are online feature fixtures; the Linux test container has no
     // external network interface, which otherwise marks Chromium offline.
     Object.defineProperty(navigator, "onLine", { get: () => true });
   });
+  const askPlugin = withWrites
+    ? {
+        ...ask,
+        version: "1.1.0",
+        permissions: [...ask.permissions, "notes.review"],
+      }
+    : ask;
+  let reviewedStage: "preview" | "undo" | "done" = "preview";
   const routes: unknown[] = [],
     reindex: unknown[] = [],
     commands: { id: string; args: unknown }[] = [];
@@ -136,7 +144,7 @@ async function fixture(page: Page, withModels = false) {
         ui: 1,
         plugins_rev: 1,
         plugins: [
-          ask,
+          askPlugin,
           {
             ...ask,
             id: "related",
@@ -149,7 +157,7 @@ async function fixture(page: Page, withModels = false) {
         ],
       });
     if (path.endsWith("/plugins"))
-      return json({ plugins: [ask], plugins_rev: 1 });
+      return json({ plugins: [askPlugin], plugins_rev: 1 });
     if (path.endsWith("/ask/settings"))
       return json({
         schema: { type: "object", properties: {} },
@@ -215,6 +223,31 @@ async function fixture(page: Page, withModels = false) {
       const command = path.split("/").at(-1)!;
       const args = request.postDataJSON();
       commands.push({ id: command, args });
+      if (command === "save-answer" && args.action_id && withWrites) {
+        if (args.stage === "preview" && reviewedStage === "preview")
+          reviewedStage = "undo";
+        else if (args.stage === "undo" && reviewedStage === "undo")
+          reviewedStage = "done";
+        return json({
+          ui: 1,
+          items: [
+            {
+              type: "text",
+              text:
+                reviewedStage === "done"
+                  ? "The note action was undone."
+                  : "The note was updated.",
+            },
+            { type: "notes", ids: [id] },
+            {
+              type: "command",
+              id: "save-answer",
+              title: reviewedStage === "done" ? "Undo complete" : "Undo",
+              args: { action_id: args.action_id, stage: reviewedStage },
+            },
+          ],
+        });
+      }
       if (command === "save-answer")
         return json({ type: "notes", ids: ["saved-answer"] });
       const continuation = {
@@ -245,6 +278,29 @@ async function fixture(page: Page, withModels = false) {
             },
           },
         });
+      if (withWrites) {
+        const creating = String(args.question).startsWith("Create");
+        return json({
+          ui: 1,
+          items: [
+            { type: "text", text: "Confirm the proposed note action." },
+            {
+              type: "markdown",
+              text: creating
+                ? "Target: New note\n\n# Weekend plan\n\nTake a walk."
+                : "Target: Coffee\n\nBefore: Coffee in Rome\n\nAfter: Coffee in Rome, then Milan.",
+            },
+            { type: "notes", ids: creating ? [] : [id] },
+            {
+              type: "command",
+              id: "save-answer",
+              title: creating ? "Create note" : "Apply change",
+              args: { action_id: "reviewed-receipt", stage: "preview" },
+            },
+            continuation,
+          ],
+        });
+      }
       return json({
         ui: 1,
         items: [
@@ -572,4 +628,60 @@ test("private and machine notes do not request AI live panels", async ({
     expect(requests).toBe(0);
     await page.unroute(`**/api/v1/notes/${id}?**`);
   }
+});
+
+test("reviewed Ask note writes show a preview and require explicit confirmation and Undo", async ({
+  page,
+}) => {
+  const state = await fixture(page, false, true);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Search and commands" }).click();
+  await page
+    .getByRole("textbox", { name: "Search and commands" })
+    .fill("Create a note for the weekend?");
+  await page
+    .getByRole("textbox", { name: "Search and commands" })
+    .press("Enter");
+  const chat = page.getByRole("region", { name: "Conversation" });
+  await expect(chat.getByText(/Target: New note/)).toBeVisible();
+  await expect(chat.getByText(/Take a walk/)).toBeVisible();
+  expect(
+    state.commands.filter((command) => command.id === "save-answer"),
+  ).toEqual([]);
+  expect(state.commands[0]).toEqual({
+    id: "ask",
+    args: { start: true, note_actions: true },
+  });
+  await expect(
+    chat.getByRole("button", { name: "Save as note", exact: true }),
+  ).toHaveCount(0);
+  await chat.getByRole("button", { name: "Create note", exact: true }).click();
+  await expect(
+    chat.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeVisible();
+  expect(
+    state.commands.filter((command) => command.id === "save-answer"),
+  ).toEqual([
+    {
+      id: "save-answer",
+      args: { action_id: "reviewed-receipt", stage: "preview" },
+    },
+  ]);
+  await chat.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(chat.getByRole("status")).toHaveText("Undo complete");
+  await expect(
+    chat.getByRole("button", { name: "Undo", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    state.commands.filter((command) => command.id === "save-answer"),
+  ).toEqual([
+    {
+      id: "save-answer",
+      args: { action_id: "reviewed-receipt", stage: "preview" },
+    },
+    {
+      id: "save-answer",
+      args: { action_id: "reviewed-receipt", stage: "undo" },
+    },
+  ]);
 });

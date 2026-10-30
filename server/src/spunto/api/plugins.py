@@ -80,6 +80,8 @@ async def _call(awaitable):
         wait = {"Retry-After": str(math.ceil(error.retry_after))}
         raise Problem(429, error.code, error.detail, wait) from None
     except AIError as error:
+        if error.code == "ai_source_changed":
+            raise Problem(409, error.code, error.detail) from None
         status = {"validation": 422, "refused": 403}.get(error.category, 503)
         raise Problem(status, error.code, error.detail) from None
     except VectorUnavailable:

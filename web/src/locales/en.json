@@ -1048,6 +1048,16 @@
     "appearance.background_help": "Plain paper or ink waves. Saved in this browser.",
     "appearance.background_plain": "Plain",
     "appearance.background_artwork": "Artwork",
-    "appearance.colour_theme": "Colour theme"
+    "appearance.colour_theme": "Colour theme",
+    "ask.conversation": "Conversation",
+    "ask.temporary": "Temporary conversation. Messages disappear when you leave or start over. Only answers you explicitly save become notes.",
+    "ask.new_conversation": "New conversation",
+    "ask.sources": "Sources",
+    "ask.followup": "Ask a follow-up",
+    "ask.send": "Send question",
+    "ask.retry": "Try again",
+    "ask.retry_hint": "Try again, or start a new conversation if this one has expired.",
+    "ask.question_limit": "Use 500 characters or fewer.",
+    "ask.failed": "Could not answer this question."
   }
 }

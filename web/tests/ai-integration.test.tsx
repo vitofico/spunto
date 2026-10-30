@@ -92,6 +92,17 @@ const ask: Plugin = {
     ],
   },
 };
+const allocatedAsk = {
+  ui: 1,
+  items: [
+    {
+      type: "command",
+      id: "ask",
+      title: "Ask a follow-up",
+      args: { conversation_id: "ai-conversation", after_turn: 0 },
+    },
+  ],
+};
 function wrap(child: React.ReactNode) {
   return render(
     <QueryClientProvider client={client}>{child}</QueryClientProvider>,
@@ -259,6 +270,9 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
     .spyOn(api, "command")
     .mockImplementation(async (_plugin, id, args) => {
       if (id === "save-answer") return { type: "notes", ids: ["saved-answer"] };
+      if (id === "clear-conversation")
+        return { type: "text", text: "Conversation cleared" };
+      if (args?.start === true) return allocatedAsk;
       if (!args?.question)
         return {
           type: "form",
@@ -286,6 +300,12 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
           { type: "notes", ids: [note.id] },
           {
             type: "command",
+            id: "ask",
+            title: "Ask a follow-up",
+            args: { conversation_id: "ai-conversation", after_turn: 1 },
+          },
+          {
+            type: "command",
             id: "save-answer",
             title: "Save as note",
             args: { answer_id: "receipt" },
@@ -305,9 +325,19 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
   // The form submits with the command's own title, not a generic "Run".
   fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
   expect(await screen.findByText("Coffee answer")).toBeTruthy();
-  expect(command).toHaveBeenCalledWith("ask", "ask", {
-    question: "Where is coffee?",
-  });
+  expect(command.mock.calls.slice(0, 3)).toEqual([
+    ["ask", "ask", {}],
+    ["ask", "ask", { start: true }],
+    [
+      "ask",
+      "ask",
+      {
+        conversation_id: "ai-conversation",
+        after_turn: 0,
+        question: "Where is coffee?",
+      },
+    ],
+  ]);
   expect(screen.getAllByRole("button", { name: "Save as note" })).toHaveLength(
     1,
   );
@@ -317,6 +347,13 @@ it("runs Ask forms and saves via the plugin action, preserving server provenance
       answer_id: "receipt",
     }),
   );
+  expect(
+    await screen.findByRole("button", { name: "Saved as note" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "Open note" }).getAttribute("href"),
+  ).toBe("/n/saved-answer");
+  expect(screen.getByText("Coffee answer")).toBeTruthy();
   expect(create).not.toHaveBeenCalled();
 });
 
@@ -428,18 +465,22 @@ it("shows the server's pause reason when Ask has used its allowance", async () =
   });
   const detail =
     "Ask has used this month's allowance (20) and resumes on 1 November. Notes and search keep working.";
-  vi.spyOn(api, "command").mockImplementation(async (_plugin, _id, args) => {
-    if (!args?.question)
-      return {
-        type: "form",
-        schema: {
-          type: "object",
-          required: ["question"],
-          properties: { question: { type: "string", title: "Question" } },
-        },
-      };
-    throw new ApiError(429, "ai_quota_exhausted", undefined, detail, 3600);
-  });
+  const create = vi.spyOn(api, "createNote");
+  const command = vi
+    .spyOn(api, "command")
+    .mockImplementation(async (_plugin, _id, args) => {
+      if (args?.start === true) return allocatedAsk;
+      if (!args?.question)
+        return {
+          type: "form",
+          schema: {
+            type: "object",
+            required: ["question"],
+            properties: { question: { type: "string", title: "Question" } },
+          },
+        };
+      throw new ApiError(429, "ai_quota_exhausted", undefined, detail, 3600);
+    });
   wrap(<Palette onClose={() => {}} />);
   fireEvent.click(
     await screen.findByRole("option", {
@@ -451,4 +492,18 @@ it("shows the server's pause reason when Ask has used its allowance", async () =
   });
   fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
   expect(await screen.findByText(detail)).toBeTruthy();
+  expect(command.mock.calls).toEqual([
+    ["ask", "ask", {}],
+    ["ask", "ask", { start: true }],
+    [
+      "ask",
+      "ask",
+      {
+        conversation_id: "ai-conversation",
+        after_turn: 0,
+        question: "Where is coffee?",
+      },
+    ],
+  ]);
+  expect(create).not.toHaveBeenCalled();
 });

@@ -30,4 +30,17 @@ class AskEntryTest {
   compose.onNodeWithText("Ask is switched off. Turn on Ask in Settings → Plugins.").assertIsDisplayed()
   compose.onNodeWithContentDescription("Question for your notes").assertIsNotEnabled()
  }
+ @Test fun followupInputLabelsItsActionAndKeepsThePendingQuestion() {
+  var question by mutableStateOf("What about tomorrow?")
+  var asking by mutableStateOf(false)
+  var submitted:String?=null
+  compose.setContent {SpuntoTheme("carta","light") {AskQuestionInput(question,true,true,asking,{question=it},{submitted=question;asking=true},followup=true)}}
+  compose.onNodeWithText("Ask a follow-up").assertIsDisplayed()
+  compose.onNodeWithText("Send question").assertIsEnabled().performClick()
+  compose.runOnIdle {assertEquals("What about tomorrow?",submitted)}
+  compose.onNodeWithText("Reading your notes…").assertIsNotEnabled()
+  compose.runOnIdle {asking=false}
+  compose.onNodeWithContentDescription("Question for your notes").assertTextContains("What about tomorrow?")
+  compose.onNodeWithText("Send question").assertIsEnabled()
+ }
 }

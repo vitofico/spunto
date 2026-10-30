@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="core_ask_conversation">Unterhaltung</string>
+    <string name="core_ask_temporary">Vorübergehende Unterhaltung. Nachrichten verschwinden beim Verlassen oder Neustart. Nur ausdrücklich gespeicherte Antworten werden zu Notizen.</string>
+    <string name="core_new_conversation">Neue Unterhaltung</string>
+    <string name="core_ask_sources">Quellen</string>
+    <string name="core_ask_followup">Eine Folgefrage stellen</string>
+    <string name="core_ask_send">Frage senden</string>
+    <string name="core_ask_retry">Erneut versuchen</string>
+    <string name="core_ask_retry_hint">Versuche es erneut oder beginne eine neue Unterhaltung, falls diese abgelaufen ist.</string>
+    <string name="core_ask_question_limit">Verwende höchstens 500 Zeichen.</string>
+    <string name="core_ask_failure">Diese Frage konnte nicht beantwortet werden.</string>
+    <string name="core_ask_copy">Kopieren</string>
+    <string name="core_ask_copied">Kopiert</string>
+    <string name="core_ask_save">Als Notiz speichern</string>
+    <string name="core_ask_saved">Als Notiz gespeichert</string>
+</resources>

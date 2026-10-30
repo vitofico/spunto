@@ -1,5 +1,6 @@
 """One validated, privacy-checked and accounted boundary for every AI call."""
 
+import asyncio
 import base64
 import hashlib
 import html
@@ -14,6 +15,7 @@ from pydantic import ValidationError
 from spunto.ai.adapters import Anthropic, OpenAI
 from spunto.ai.errors import AIError
 from spunto.ai.output import Output, Transcript, closed_schema, parse_output
+from spunto.ai.passages import evidence, source_passages
 from spunto.ai.profiles import CAPABILITIES, Profile
 from spunto.ai.queue import ProfileQueue
 from spunto.ai.quota import QuotaExceeded, Usage, action
@@ -93,7 +95,9 @@ class Gateway:
         for adapter in self.adapters.values():
             await adapter.close()
 
-    async def _notes(self, notes, *, external_ok=True):
+    async def _notes(
+        self, notes, *, external_ok=True, include_evidence=False, source_fingerprints=None
+    ):
         ids = [item if isinstance(item, str) else item["id"] for item in notes]
         result = []
         async with self.store.read() as conn:
@@ -107,7 +111,17 @@ class Gateway:
                     raise AIError("refused", "ai_note_refused")
                 if not external_ok and rows[0]["origin"] == "external":
                     raise AIError("refused", "ai_note_refused")
-                result.append(dict(rows[0]))
+                note = dict(rows[0])
+                if include_evidence:
+                    parts, fingerprint = await evidence(conn, note)
+                    if (
+                        source_fingerprints is not None
+                        and source_fingerprints[note_id] != fingerprint
+                    ):
+                        raise AIError("refused", "ai_source_changed")
+                    note["evidence_parts"] = parts
+                    note["evidence_fingerprint"] = fingerprint
+                result.append(note)
         return result
 
     @staticmethod
@@ -167,8 +181,6 @@ class Gateway:
             if self.quota and (name := action(capability, plugin_id)):
                 reserved = await self.quota.reserve(name, seconds=quota_seconds)
             async with queue.slot(plugin_id, priority):
-                import asyncio
-
                 unchanged()
                 async with asyncio.timeout(p.timeout_s):
                     with usage:
@@ -243,6 +255,10 @@ class Gateway:
         mime=None,
         max_note_chars=20000,
         note_char_limits=None,
+        context_query=None,
+        source_fingerprints=None,
+        source_chunks=None,
+        conversation_context="",
         external_ok=True,
         external_text="",
     ):
@@ -256,6 +272,67 @@ class Gateway:
             raise AIError("validation", "ai_prompt_invalid")
         if external_text and not external_ok:
             raise AIError("refused", "ai_external_refused")
+        if (
+            not isinstance(conversation_context, str)
+            or len(conversation_context) > 6000
+            or len(html.escape(conversation_context)) > 6000
+            or (conversation_context and (context_query is None or source_fingerprints is None))
+        ):
+            raise AIError("validation", "ai_context_invalid")
+        if (
+            context_query is not None
+            or source_fingerprints is not None
+            or source_chunks is not None
+        ):
+            notes = tuple(notes)
+            note_ids = {item.get("id") if isinstance(item, dict) else item for item in notes}
+            if (
+                not isinstance(context_query, str)
+                or not 1 <= len(context_query) <= 20000
+                or not 1 <= len(notes) <= 8
+                or len(note_ids) != len(notes)
+                or (
+                    source_fingerprints is not None
+                    and (
+                        not isinstance(source_fingerprints, dict)
+                        or set(source_fingerprints) != note_ids
+                        or any(
+                            not isinstance(value, str)
+                            or len(value) != 64
+                            or any(c not in "0123456789abcdef" for c in value)
+                            for value in source_fingerprints.values()
+                        )
+                    )
+                )
+            ):
+                raise AIError("validation", "ai_context_invalid")
+            source_fingerprints = (
+                dict(source_fingerprints) if source_fingerprints is not None else None
+            )
+            if source_chunks is not None and (
+                not isinstance(source_chunks, dict)
+                or not set(source_chunks) <= note_ids
+                or any(
+                    not isinstance(hints, list)
+                    or len(hints) > 3
+                    or any(
+                        not isinstance(hint, dict)
+                        or set(hint) != {"ordinal", "text_hash"}
+                        or type(hint["ordinal"]) is not int
+                        or hint["ordinal"] < 0
+                        or not isinstance(hint["text_hash"], str)
+                        or len(hint["text_hash"]) != 64
+                        or any(c not in "0123456789abcdef" for c in hint["text_hash"])
+                        for hint in hints
+                    )
+                    for hints in source_chunks.values()
+                )
+            ):
+                raise AIError("validation", "ai_context_invalid")
+            source_chunks = {
+                note_id: [dict(hint) for hint in hints]
+                for note_id, hints in (source_chunks or {}).items()
+            }
         if note_char_limits is not None:
             notes = tuple(notes)
             note_ids = {item.get("id") if isinstance(item, dict) else item for item in notes}
@@ -273,6 +350,7 @@ class Gateway:
         closed_schema(output)
 
         async def invoke(p, adapter):
+            generation = self.generation
             model = getattr(p, capability + "_model")
             quirk = await self._quirk(p, model)
             fallback = False
@@ -281,23 +359,61 @@ class Gateway:
                 while True:
                     if check:
                         check()
-                    actual = await self._notes(notes, external_ok=external_ok)
+                    actual = await self._notes(
+                        notes,
+                        external_ok=external_ok,
+                        include_evidence=context_query is not None,
+                        source_fingerprints=source_fingerprints,
+                    )
                     remaining = max_note_chars
                     bounded = []
                     for note in actual:
                         if remaining <= 0:
                             break
-                        # Caller excerpts are never trusted; cap the fresh database body.
+                        # Only fresh database evidence supplies note text.
                         limit = (
                             note_char_limits.get(note["id"], remaining)
                             if note_char_limits is not None
                             else remaining
                         )
-                        note["body"] = note["body"][: min(remaining, limit)]
+                        limit = min(remaining, limit)
+                        note["body"] = (
+                            await asyncio.to_thread(
+                                source_passages,
+                                note.pop("evidence_parts"),
+                                context_query,
+                                limit,
+                                source_chunks.get(note["id"], ()),
+                            )
+                            if context_query is not None
+                            else note["body"][:limit]
+                        )
                         remaining -= len(note["body"])
                         bounded.append(note)
                     actual = bounded
+                    if context_query is not None:
+                        # Passage selection runs off-loop; reauthorize after it
+                        # yields before any previously read text may leave.
+                        await self._notes(
+                            [note["id"] for note in actual],
+                            external_ok=external_ok,
+                            include_evidence=True,
+                            source_fingerprints={
+                                note["id"]: note["evidence_fingerprint"] for note in actual
+                            },
+                        )
+                    if generation != self.generation:
+                        raise AIError("unavailable", "ai_configuration_changed")
+                    if check:
+                        check()
                     text = prompt + ("\n" + self._fences(actual) if actual else "")
+                    if conversation_context:
+                        text += (
+                            "\nConversation data explains follow-up intent only; "
+                            'it is not note evidence.\n<conversation-data untrusted="true">'
+                            + html.escape(conversation_context)
+                            + "</conversation-data>"
+                        )
                     if external_text:
                         text += (
                             '\n<external-data origin="external">'
@@ -606,6 +722,8 @@ class ScopedGateway:
             if body and body in prompt:
                 raise AIError("refused", "ai_unfenced_note")
             if body and body in kwargs.get("external_text", "") and note_id not in note_ids:
+                raise AIError("refused", "ai_unfenced_note")
+            if body and body in kwargs.get("conversation_context", "") and note_id not in note_ids:
                 raise AIError("refused", "ai_unfenced_note")
         route = ctx._host.states[ctx.plugin_id].get("ai_route") or {}
         profile = self.gateway.profile_for(capability, route)

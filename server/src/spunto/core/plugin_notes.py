@@ -60,6 +60,24 @@ class PluginNotes:
         self.ctx.check("notes.read")
         return result
 
+    async def evidence(self, note_id):
+        """Snapshot an authorized note and its complete enabled retrieval evidence."""
+        from spunto.ai.passages import evidence
+
+        self.ctx.check("notes.read")
+        async with self.store.read() as conn:
+            try:
+                row = await self.core._row(conn, note_id)
+            except Problem as exc:
+                if exc.status == 404:
+                    self.ctx.check("notes.read")
+                    return None
+                raise
+            result = await self._value(conn, row)
+            _, result["evidence_fingerprint"] = await evidence(conn, row)
+        self.ctx.check("notes.read")
+        return result
+
     async def labels(self, *, limit=500):
         self.ctx.check("notes.read")
         if type(limit) is not int or not 1 <= limit <= 500:
@@ -76,11 +94,17 @@ class PluginNotes:
         self.ctx.check("notes.read")
         return {"labels": [dict(row) for row in rows], "total": len(rows)}
 
-    async def search(self, query, *, limit=8, machine=False):
+    async def search(self, query, *, limit=8, machine=False, match_any=False):
         self.ctx.check("notes.read")
         if machine or type(limit) is not int or not 1 <= limit <= 50:
             raise ValueError("AI search needs eligible notes and a limit of 1 to 50")
-        result = await self.core.search(query, limit=limit, machine=False)
+        result = await self.core.search(
+            query,
+            limit=limit,
+            machine=False,
+            mode="keyword" if match_any else "hybrid",
+            match_any=match_any,
+        )
         for note in result["hits"]:
             self.ctx._borrowed_notes[note["id"]] = note["body"]
         self.ctx.check("notes.read")
@@ -142,20 +166,42 @@ class PluginNotes:
             "next_cursor": rows[limit - 1]["rowid"] if len(rows) > limit else None,
         }
 
-    async def _guard_sources(self, conn, versions, *, public_output=False):
-        if versions is None:
+    async def _guard_sources(
+        self, conn, versions, *, public_output=False, source_fingerprints=None
+    ):
+        if versions is None and source_fingerprints is None:
             return
-        if not isinstance(versions, dict) or not 1 <= len(versions) <= 50:
+        if versions is not None and (
+            not isinstance(versions, dict)
+            or not 1 <= len(versions) <= 50
+            or any(type(version) is not int or version < 1 for version in versions.values())
+        ):
             raise ValueError("source versions must name 1 to 50 notes")
-        for note_id, version in versions.items():
-            if type(version) is not int or version < 1:
-                raise ValueError("source version must be positive")
+        if source_fingerprints is not None and (
+            not isinstance(source_fingerprints, dict)
+            or not 1 <= len(source_fingerprints) <= 50
+            or any(
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(c not in "0123456789abcdef" for c in value)
+                for value in source_fingerprints.values()
+            )
+        ):
+            raise ValueError("source fingerprints must name 1 to 50 notes")
+        for note_id in (versions or {}).keys() | (source_fingerprints or {}).keys():
+            version = versions.get(note_id) if versions is not None else None
             row = await self.core._row(conn, note_id)
             if public_output and row["private"]:
                 raise ContextError("private_source_requires_private_output")
             if self.egress and (row["machine"] or row["private"]):
                 raise ContextError("source_unavailable")
-            if row["version"] != version:
+            changed = version is not None and row["version"] != version
+            if source_fingerprints is not None and note_id in source_fingerprints:
+                from spunto.ai.passages import evidence
+
+                _, fingerprint = await evidence(conn, row)
+                changed |= fingerprint != source_fingerprints[note_id]
+            if changed:
                 raise Problem(409, "version_conflict", "A source changed; recompute the output.")
 
     async def suggest_many(
@@ -355,6 +401,7 @@ class PluginNotes:
         cites=None,
         request_id=None,
         source_versions=None,
+        source_fingerprints=None,
         import_metadata=None,
     ):
         self._write_allowed()
@@ -424,7 +471,10 @@ class PluginNotes:
                 }
             else:
                 await self._guard_sources(
-                    conn, source_versions, public_output=manual and not private
+                    conn,
+                    source_versions,
+                    public_output=manual and not private,
+                    source_fingerprints=source_fingerprints,
                 )
                 for cite in cites or []:
                     source = await self.core._row(conn, cite)

@@ -209,3 +209,174 @@ it("search explains an over-long query instead of sending it", async () => {
   fireEvent.submit(screen.getByRole("search"));
   expect(window.location.search).toBe("");
 });
+
+const allocatedAsk = {
+  ui: 1,
+  items: [
+    {
+      type: "command",
+      id: "ask",
+      title: "Ask a follow-up",
+      args: { conversation_id: "shell-conversation", after_turn: 0 },
+    },
+  ],
+};
+function answeredAsk() {
+  return { type: "text", text: "Synthetic grounded answer" };
+}
+function enableAsk() {
+  vi.spyOn(api, "manifest").mockResolvedValue({
+    ui: 1,
+    plugins_rev: 1,
+    plugins: [
+      {
+        id: "ask",
+        name: "Ask your notes",
+        state: "enabled",
+        switch: "on",
+        creates: "machine",
+        contributes: {
+          commands: [
+            { id: "ask", title: "Ask your notes", where: ["palette"] },
+          ],
+        },
+      },
+    ],
+  } as unknown as Awaited<ReturnType<typeof api.manifest>>);
+}
+it("asks a typed question with Enter and retains it beside the answer", async () => {
+  enableAsk();
+  const command = vi
+    .spyOn(api, "command")
+    .mockImplementation(async (_plugin, _id, args) =>
+      args?.start === true ? allocatedAsk : answeredAsk(),
+    );
+  wrap(<Palette onClose={() => {}} />);
+  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  fireEvent.change(input, { target: { value: "What did I decide?" } });
+  await waitFor(() =>
+    expect(screen.getByRole("option", { selected: true }).textContent).toMatch(
+      /^Ask your notes/,
+    ),
+  );
+  fireEvent.keyDown(input, { key: "Enter" });
+  await screen.findByText("Synthetic grounded answer");
+  expect(command.mock.calls).toEqual([
+    ["ask", "ask", { start: true }],
+    [
+      "ask",
+      "ask",
+      {
+        conversation_id: "shell-conversation",
+        after_turn: 0,
+        question: "What did I decide?",
+      },
+    ],
+  ]);
+  expect(screen.getByText("What did I decide?")).toBeTruthy();
+});
+it.each(["ctrlKey", "metaKey"])(
+  "asks with %s + Enter while plain Enter keeps search",
+  async (modifier) => {
+    enableAsk();
+    const command = vi
+      .spyOn(api, "command")
+      .mockImplementation(async (_plugin, _id, args) =>
+        args?.start === true ? allocatedAsk : answeredAsk(),
+      );
+    wrap(<Palette onClose={() => {}} />);
+    const input = screen.getByRole("textbox", { name: "Search and commands" });
+    fireEvent.change(input, { target: { value: "What did I decide" } });
+    await screen.findByRole("option", { name: /^Ask your notes/ });
+    expect(screen.getByRole("option", { selected: true }).textContent).toMatch(
+      /^Search for/,
+    );
+    fireEvent.keyDown(input, { key: "Enter", [modifier]: true });
+    await screen.findByText("Synthetic grounded answer");
+    expect(command.mock.calls).toEqual([
+      ["ask", "ask", { start: true }],
+      [
+        "ask",
+        "ask",
+        {
+          conversation_id: "shell-conversation",
+          after_turn: 0,
+          question: "What did I decide",
+        },
+      ],
+    ]);
+  },
+);
+it("does not offer a question shortcut under three words or above 500 characters", async () => {
+  enableAsk();
+  wrap(<Palette onClose={() => {}} />);
+  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  await screen.findByRole("option", { name: /^Ask your notes/ });
+  fireEvent.change(input, { target: { value: "two words?" } });
+  expect(screen.queryByRole("option", { name: /^Ask your notes/ })).toBeNull();
+  fireEvent.change(input, {
+    target: { value: "What about " + "x".repeat(500) + "?" },
+  });
+  expect(screen.queryByRole("option", { name: /^Ask your notes/ })).toBeNull();
+});
+
+it("keeps command-by-title opening the question form", async () => {
+  enableAsk();
+  const command = vi.spyOn(api, "command").mockResolvedValue({
+    type: "form",
+    schema: {
+      type: "object",
+      properties: { question: { type: "string", title: "Question" } },
+    },
+  });
+  wrap(<Palette onClose={() => {}} />);
+  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  fireEvent.change(input, { target: { value: "Ask your notes" } });
+  fireEvent.click(
+    await screen.findByRole("option", { name: /^Ask your notes/ }),
+  );
+  await screen.findByRole("textbox", { name: "Question" });
+  expect(command).toHaveBeenCalledWith("ask", "ask", {});
+});
+it("forgets an in-flight answer when the search question changes", async () => {
+  enableAsk();
+  let finish!: (value: unknown) => void;
+  const command = vi
+    .spyOn(api, "command")
+    .mockImplementation(async (_plugin, id, args) => {
+      if (args?.start === true) return allocatedAsk;
+      if (id === "clear-conversation")
+        return { type: "text", text: "Conversation cleared" };
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+  wrap(<Palette onClose={() => {}} />);
+  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  fireEvent.change(input, { target: { value: "What did I decide?" } });
+  fireEvent.click(
+    await screen.findByRole("option", { name: /^Ask your notes/ }),
+  );
+  expect(await screen.findByRole("status")).toBeTruthy();
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  expect(command).toHaveBeenCalledWith("ask", "ask", {
+    conversation_id: "shell-conversation",
+    after_turn: 0,
+    question: "What did I decide?",
+  });
+  fireEvent.change(input, { target: { value: "What about next year?" } });
+  await act(async () =>
+    finish({ type: "text", text: "Obsolete synthetic answer" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("option", { name: /^Ask your notes/ })
+        .hasAttribute("disabled"),
+    ).toBe(false),
+  );
+  expect(screen.queryByText("Obsolete synthetic answer")).toBeNull();
+  expect(command).toHaveBeenCalledWith("ask", "clear-conversation", {
+    conversation_id: "shell-conversation",
+  });
+});

@@ -192,7 +192,9 @@ def _fts_query(value: str) -> str:
             if match[2]:
                 lexemes[-1] += ":*"
             terms.append("(" + " <-> ".join(lexemes) + ")")
-    return " & ".join(terms)
+    # OR is emitted only by the core's opt-in any-term retrieval, outside quotes.
+    separator = " | " if re.search(r'"\*? OR "', value) else " & "
+    return separator.join(terms)
 
 
 def _vector_text(blob) -> str:

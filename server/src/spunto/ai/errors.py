@@ -12,6 +12,8 @@ class AIError(Exception):
     @property
     def detail(self):
         """Useful owner guidance without provider response bodies or note content."""
+        if self.code == "ai_source_changed":
+            return "A source changed while the answer was being prepared. Ask again."
         if self.code == "ai_note_refused":
             return "AI cannot use a private, trashed or machine-written note."
         if self.code == "ai_configuration_changed":

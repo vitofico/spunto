@@ -28,6 +28,7 @@ import io.theficos.spunto.core.model.*
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.*
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -42,6 +43,11 @@ import java.time.*
  var shown by rememberSaveable { mutableStateOf(listOf<String>()) }
  var results by remember { mutableStateOf(shown.mapNotNull { id -> model.notes.value.firstOrNull { it.id==id } }) }
  var answer by remember { mutableStateOf<JsonObject?>(null) }; var asking by remember { mutableStateOf(false) }
+ var asked by remember {mutableStateOf("")};var failed by remember {mutableStateOf(false)}
+ var request by remember {mutableStateOf<Job?>(null)};var attempt by remember {mutableStateOf<Any?>(null)}
+ var askHandle by remember {mutableStateOf<JsonObject?>(null)}
+ var askHandleAuth by remember {mutableStateOf<AuthConfig?>(null)}
+ fun clearAskHandle() {askHandle?.takeIf {model.auth.value==askHandleAuth}?.let {model.request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",it.string("conversation_id"))})};askHandle=null}
  var hasMore by remember {mutableStateOf(false)};var loadingPage by remember {mutableStateOf(false)};var moreRequests by remember {mutableIntStateOf(0)}
  // L1: labels used most in the last 30 days first, then by overall use; S2: the last searches on this phone.
  val labels by remember { model.repository.dao.labelsByUse(System.currentTimeMillis()-30*86_400_000L,8) }.collectAsState(emptyList()); val auth by model.auth.collectAsState()
@@ -50,11 +56,14 @@ import java.time.*
  fun saveSearch(text:String) { recent=rememberSearch(recent,text);preferences.edit().putString("recent-searches",JsonArray(recent.map(::JsonPrimitive)).toString()).apply() }
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
+ val epoch by model.pluginReplicaEpochState.collectAsState()
+ val enabled=model.container.manifest.enabled("ask")
  val localNotes by model.notes.collectAsState()
  val focus=remember { FocusRequester() }; var focusSpent by rememberSaveable { mutableStateOf(false) }; val focusManager=LocalFocusManager.current
  LaunchedEffect(Unit) { if(!focusSpent) { focusSpent=true;runCatching { focus.requestFocus() } } }
  LaunchedEffect(results) { shown=results.map { it.id } }
- LaunchedEffect(online,manifest) { if(!online || !model.container.manifest.enabled("ask")) answer=null }
+ LaunchedEffect(auth,epoch,query,online,enabled) {clearAskHandle();attempt=null;request?.cancel();request=null;answer=null;asked="";asking=false;failed=false}
+ DisposableEffect(auth,epoch) {onDispose {clearAskHandle();attempt=null;request?.cancel()}}
  LaunchedEffect(query,from,to,auth,online,localNotes) {
   results=model.repository.search(query).filter { note -> (from.isEmpty() || runCatching { note.createdAt>=LocalDate.parse(from).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrDefault(true)) && (to.isEmpty() || runCatching { note.createdAt<LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrDefault(true)) }
   val localMatches=results
@@ -79,7 +88,17 @@ import java.time.*
    keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={ saveSearch(query);focusManager.clearFocus() }))
   LazyColumn(Modifier.fillMaxSize(),state=rememberLazyListState(),contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s8,bottom=SpuntoSpacing.s20)) {
    if(!online) item(key="offline") { Text(context.getString(R.string.core_offline_search),Modifier.padding(vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
-   if(online && query.trim().split(Regex("\\s+")).size>=3 && model.container.manifest.enabled("ask")) item(key="ask") { TextButton(enabled=!asking,onClick={asking=true; model.ask(query,onComplete={asking=false}) { if(model.online.value && model.container.manifest.enabled("ask")) answer=it.jsonObject }},modifier=Modifier.heightIn(min=48.dp)) { Text(if(asking) context.getString(R.string.core_reading_notes) else context.getString(R.string.core_ask_notes)) } }
+   if(online && enabled && canAskSearch(query)) item(key="ask") {
+    TextButton(enabled=!asking,onClick={
+     val config=model.auth.value
+     if(config!=null && model.online.value && model.container.manifest.enabled("ask")) {
+      val submitted=query.trim();val requestedEpoch=epoch;val currentAttempt=Any();attempt=currentAttempt;asked=submitted;answer=null;failed=false;asking=true
+      fun current()=attempt===currentAttempt && model.auth.value==config && model.pluginReplicaEpoch==requestedEpoch && query.trim()==submitted && model.online.value && model.container.manifest.enabled("ask")
+      request=model.ask(submitted,continuation=askHandle,current=::current,onHandle={askHandle=it;askHandleAuth=config},onComplete={if(current()) {asking=false;failed=answer==null}}) {if(current()) {answer=it as? JsonObject;askHandle=null}}
+     }
+    },modifier=Modifier.heightIn(min=48.dp)) {Text(if(asking) context.getString(R.string.core_reading_notes) else context.getString(R.string.core_ask_notes))}
+   }
+   if(failed && !asking) item(key="ask-failed") {Text(context.getString(R.string.core_ask_failed),color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})}
    if(query.isEmpty() && recent.isNotEmpty()) {
     item(key="recent") {
      Row(Modifier.fillMaxWidth().padding(top=SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
@@ -106,7 +125,7 @@ import java.time.*
    }
   }
  }
- answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.padding(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) { RenderOutput(model,JsonObject(output+mapOf("plugin_id" to JsonPrimitive("ask"))),onNote);TextButton(onClick={answer=null}) { Text(context.getString(R.string.core_close)) } } } }
+ answer?.let { output -> ModalBottomSheet(onDismissRequest={answer=null},scrimColor=MaterialTheme.colorScheme.scrim) { Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {TextButton(onClick={answer=null}) {Text(context.getString(R.string.core_close))};Box(Modifier.weight(1f)) {AskConversation(model,onNote,output,asked)}} } }
 }
 
 /** One result (03 A7): the first line in the reading face, a snippet with the matches marked, then date and labels. */

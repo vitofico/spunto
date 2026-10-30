@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="core_ask_conversation">Conversación</string>
+    <string name="core_ask_temporary">Conversación temporal. Los mensajes desaparecen al salir o empezar de nuevo. Solo las respuestas que guardes explícitamente se convierten en notas.</string>
+    <string name="core_new_conversation">Nueva conversación</string>
+    <string name="core_ask_sources">Fuentes</string>
+    <string name="core_ask_followup">Haz una pregunta de seguimiento</string>
+    <string name="core_ask_send">Enviar pregunta</string>
+    <string name="core_ask_retry">Reintentar</string>
+    <string name="core_ask_retry_hint">Inténtalo de nuevo o inicia una conversación nueva si esta ha caducado.</string>
+    <string name="core_ask_question_limit">Usa un máximo de 500 caracteres.</string>
+    <string name="core_ask_failure">No se pudo responder a esta pregunta.</string>
+    <string name="core_ask_copy">Copiar</string>
+    <string name="core_ask_copied">Copiado</string>
+    <string name="core_ask_save">Guardar como nota</string>
+    <string name="core_ask_saved">Guardada como nota</string>
+</resources>

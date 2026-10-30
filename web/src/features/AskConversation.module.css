@@ -1,0 +1,31 @@
+.composer {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+
+.composer label {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.composer textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--field, currentColor);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.composer button {
+  justify-self: start;
+  min-height: 44px;
+}

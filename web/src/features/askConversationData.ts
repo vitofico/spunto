@@ -107,7 +107,10 @@ export function askAnswerSave(value: unknown): Args | undefined {
 }
 export function askNoteActionOptions(
   plugins: { id: string; version?: string; state?: string }[] | undefined,
+  workspaceRole?: string | null,
 ): Args {
+  if (workspaceRole != null && !["owner", "editor"].includes(workspaceRole))
+    return {};
   const plugin = plugins?.find(
     (item) =>
       item.id === "ask" &&

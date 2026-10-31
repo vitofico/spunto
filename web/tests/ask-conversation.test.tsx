@@ -85,10 +85,10 @@ const wrap = (node: React.ReactNode) => (
 const open = () =>
   render(wrap(<AskConversation value={answer()} question="First question?" />));
 const send = (question = "What happens next?") => {
-  fireEvent.change(screen.getByLabelText("Ask a follow-up"), {
+  fireEvent.change(screen.getByLabelText("Your message"), {
     target: { value: question },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
 };
 it("adopts a first response, appends follow-ups and keeps explicit saving on its turn", async () => {
   const request = vi
@@ -110,7 +110,7 @@ it("adopts a first response, appends follow-ups and keeps explicit saving on its
       />,
     ),
   );
-  await screen.findByLabelText("Ask a follow-up");
+  await screen.findByLabelText("Your message");
   fireEvent.click(screen.getByRole("button", { name: "Save as note" }));
   expect(
     await screen.findByRole("button", { name: "Saved as note" }),
@@ -149,7 +149,7 @@ it("keeps the previous answer and submitted question after failure and retries t
   await screen.findByRole("alert");
   expect(screen.getByText("First answer")).toBeTruthy();
   expect(
-    (screen.getByLabelText("Ask a follow-up") as HTMLTextAreaElement).value,
+    (screen.getByLabelText("Your message") as HTMLTextAreaElement).value,
   ).toBe("What happens next?");
   expect(
     screen.getByText(/start a new conversation if this one has expired/),
@@ -221,7 +221,7 @@ it("discards messages when Ask is disabled", async () => {
   });
   await waitFor(() => expect(screen.queryByText("First answer")).toBeNull());
   expect(
-    (screen.getByLabelText("Ask a follow-up") as HTMLTextAreaElement).disabled,
+    (screen.getByLabelText("Your message") as HTMLTextAreaElement).disabled,
   ).toBe(true);
 });
 it("does not reopen a dismissed palette with a late first answer", async () => {

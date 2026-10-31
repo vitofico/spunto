@@ -91,4 +91,31 @@ class AskConversationTest {
   assertFalse(state.accept(state.action,output(writeCommand("undo"))))
   assertEquals("done",state.action.stage)
  }
+ @Test fun reviewedPreviewKeepsAuthoritativeTargetAndAllSplitMarkdownInOrder() {
+  fun item(type:String,text:String)=buildJsonObject {put("type",type);put("text",text)}
+  val target=item("text","Target note: Meeting")
+  val before=item("markdown","Before:\n\n```\nOriginal text\n```")
+  val after=item("markdown","After:\n\n```\n"+"First section ".repeat(250)+"\n```")
+  val tail=item("markdown","After:\n\n```\nFinal section must stay visible\n```")
+  val additional=item("text","Review the exact change below.")
+  val data=output(item("text","Preview only. Nothing changes until you confirm."),target,before,after,tail,additional,writeCommand("preview"))
+  assertEquals(listOf(target,before,after,tail,additional),askWritePreview(data)["items"]!!.jsonArray.toList())
+ }
+ @Test fun createdOperationSurvivesUndoReceiptTitles() {
+  val initial=AskWriteAction("Create note",buildJsonObject {put("action_id","action");put("stage","preview")})
+  val state=AskWriteState(initial)
+  assertTrue(state.created)
+  assertTrue(state.accept(initial,output(writeCommand("undo"))))
+  assertTrue(state.created)
+  assertTrue(state.accept(state.action,output(writeCommand("done"))))
+  assertTrue(state.created)
+ }
+
+ @Test fun reviewedWritesAreAdvertisedOnlyForWritableWorkspaceRolesOrLegacyLocalMode() {
+  val capable=manifest(conversation=true,version="1.1.0")
+  for(role in listOf(null,"owner","editor")) assertTrue("Writable role $role",supportsAskNoteActions(capable,role))
+  for(role in listOf("viewer","unknown")) assertFalse("Read-only or unknown role $role",supportsAskNoteActions(capable,role))
+  for(role in listOf(null,"owner","editor","viewer")) assertFalse("Old server never supports reviewed writes",supportsAskNoteActions(manifest(conversation=true),role))
+ }
+
 }

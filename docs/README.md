@@ -14,6 +14,7 @@ Completed milestones and remaining delivery/physical-phone gates are recorded in
 | `decisions/2026-10-28-exact-merge-ancestor.md` | Approved conflict preservation when a stale edit's exact base revision is unavailable |
 | `decisions/2026-10-30-temporary-ask-conversations.md` | Temporary cited Ask conversations, fresh passage retrieval, explicit saving and index rebuild behavior |
 | `decisions/2026-10-30-reviewed-chat-note-actions.md` | Chat note creation and editing with previews, explicit confirmation, guarded undo and permission consent |
+| `decisions/2026-10-31-ask-note-action-ux.md` | Discoverable Ask examples, grouped note previews, confirmation and contextual undo feedback |
 | `decisions/2026-10-25-header-wave.md` | Existing wave in the compact Android header and web upper chrome, with theme and accessibility constraints |
 | `development/multiuser-migration.md` | Lossless SQLite import, identity mapping, sequence reconciliation and cutover gates |
 | `development/multiuser-delivery.md` | Hosted delivery evidence, production recovery and remaining acceptance checks |

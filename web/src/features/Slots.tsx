@@ -26,7 +26,11 @@ import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
 import { requestGeneration } from "../lib/identity";
-import { askContinuation, askNoteActionOptions } from "./askConversationData";
+import {
+  askContinuation,
+  askItems,
+  askNoteActionOptions,
+} from "./askConversationData";
 const AskConversation = lazy(() => import("./AskConversation"));
 export function usePlugins() {
   return useManifest();
@@ -739,6 +743,14 @@ export function CommandResult({
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
+  const conversationView =
+    currentOrigin?.plugin === "ask" &&
+    !!(
+      askContinuation(display) ||
+      (currentOrigin.command === "ask" &&
+        askNoteActionOptions(manifest.data?.plugins).note_actions === true &&
+        askItems(display).some((item) => item.type === "form"))
+    );
   const save = useMutation({
     mutationFn: () => api.createNote(text, saveKey),
     onSuccess: (note) => {
@@ -751,7 +763,7 @@ export function CommandResult({
       if (e.key === "Escape") onDismiss?.();
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
-        if (currentOrigin?.plugin === "ask" && askContinuation(display)) return;
+        if (conversationView) return;
         if (currentOrigin && providedSave && !followup.isPending)
           followup.mutate({
             ...providedSave,
@@ -774,16 +786,16 @@ export function CommandResult({
     followup,
     genericSave,
     session,
-    display,
+    conversationView,
   ]);
-  if (currentOrigin?.plugin === "ask" && askContinuation(display))
+  if (conversationView)
     return (
       <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
         <AskConversation
           key={responseId}
-          value={display}
+          value={askContinuation(display) ? display : undefined}
           question={
-            typeof currentOrigin.args?.question === "string"
+            typeof currentOrigin?.args?.question === "string"
               ? currentOrigin.args.question
               : ""
           }
@@ -794,7 +806,7 @@ export function CommandResult({
   return (
     <div className={styles.result}>
       {currentOrigin?.plugin === "ask" &&
-        typeof currentOrigin.args?.question === "string" && (
+        typeof currentOrigin?.args?.question === "string" && (
           <p>{currentOrigin.args.question}</p>
         )}
       <VocabularyOutput

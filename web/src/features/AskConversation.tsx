@@ -33,7 +33,13 @@ export default function AskConversation({
   useLanguage();
   const manifest = useManifest();
   const client = useQueryClient();
-  const [turns, setTurns] = useState<Turn[]>([{ id: 0, question, value }]);
+  const [turns, setTurns] = useState<Turn[]>(
+    value === undefined ? [] : [{ id: 0, question, value }],
+  );
+  const input = useRef<HTMLTextAreaElement>(null);
+  const latest = useRef<HTMLElement>(null);
+  const canWrite =
+    askNoteActionOptions(manifest.data?.plugins).note_actions === true;
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
@@ -158,27 +164,49 @@ export default function AskConversation({
   }
   return (
     <section className={styles.result} aria-label={t("ask.conversation")}>
-      <p className="muted">{t("ask.temporary")}</p>
-      <button onClick={discard}>{t("ask.new_conversation")}</button>
+      <header className={chatStyles.header}>
+        <div>
+          <h2>{t("plugin.ask.name")}</h2>
+          <p className="muted">
+            {t(canWrite ? "ask.intro" : "ask.intro_readonly")}
+          </p>
+        </div>
+        <button onClick={discard}>{t("ask.new_conversation")}</button>
+      </header>
+      <p className={chatStyles.temporary}>{t("ask.temporary")}</p>
       <div aria-live="polite" aria-busy={pending !== null}>
         {turns.map((turn) => (
-          <article key={turn.id}>
+          <article
+            key={turn.id}
+            tabIndex={-1}
+            ref={turn.id === turns.at(-1)?.id ? latest : undefined}
+          >
             {turn.question && <h3>{turn.question}</h3>}
-            <VocabularyOutput value={turn.value} allow={["text", "markdown"]} />
-            {askSources(turn.value).length > 0 && (
-              <>
-                <h4>{t("ask.sources")}</h4>
-                <ol>
-                  {askSources(turn.value).map((source, i) => (
-                    <li key={`${source.id}-${i}`}>
-                      <NoteReference {...source} />
-                    </li>
-                  ))}
-                </ol>
-              </>
+            {!askWriteAction(turn.value) && (
+              <VocabularyOutput
+                value={turn.value}
+                allow={["text", "markdown"]}
+              />
             )}
+            {!askWriteAction(turn.value) &&
+              askSources(turn.value).length > 0 && (
+                <>
+                  <h4>{t("ask.sources")}</h4>
+                  <ol>
+                    {askSources(turn.value).map((source, i) => (
+                      <li key={`${source.id}-${i}`}>
+                        <NoteReference {...source} />
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
             <TurnActions
               value={turn.value}
+              onRevise={() => {
+                if (!draft.trim()) setDraft(turn.question);
+                input.current?.focus();
+              }}
               current={() =>
                 alive.current &&
                 enabled &&
@@ -203,6 +231,18 @@ export default function AskConversation({
           </button>
         </div>
       )}
+      {turns.length > 0 && !pending && (
+        <button
+          type="button"
+          className={chatStyles.latest}
+          onClick={() => {
+            latest.current?.scrollIntoView({ block: "start" });
+            latest.current?.focus({ preventScroll: true });
+          }}
+        >
+          {t("ask.view_latest")}
+        </button>
+      )}
       <form
         className={chatStyles.composer}
         onSubmit={(event) => {
@@ -212,8 +252,12 @@ export default function AskConversation({
         }}
       >
         <label>
-          {t("ask.followup")}
+          {t("ask.message")}
           <textarea
+            ref={input}
+            placeholder={t(
+              canWrite ? "ask.message_placeholder" : "ask.question_placeholder",
+            )}
             autoFocus
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -221,6 +265,32 @@ export default function AskConversation({
             rows={3}
           />
         </label>
+        {turns.length === 0 && !pending && (
+          <div
+            className={chatStyles.starters}
+            aria-label={t("ask.try_message")}
+          >
+            <p className="muted">{t("ask.try_message")}</p>
+            {(["ask", ...(canWrite ? ["create", "edit"] : [])] as const).map(
+              (kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-label={`${t(`ask.starter_${kind}`)}: ${t(`ask.example_${kind}`)}`}
+                  disabled={!enabled || !!draft.trim()}
+                  onClick={() => {
+                    if (draft.trim()) return;
+                    setDraft(t(`ask.example_${kind}`));
+                    input.current?.focus();
+                  }}
+                >
+                  <strong>{t(`ask.starter_${kind}`)}</strong>
+                  <span>{t(`ask.example_${kind}`)}</span>
+                </button>
+              ),
+            )}
+          </div>
+        )}
         {[...draft.trim()].length > 500 && (
           <p role="alert">{t("ask.question_limit")}</p>
         )}
@@ -252,9 +322,11 @@ export default function AskConversation({
 }
 function TurnActions({
   value,
+  onRevise,
   current,
 }: {
   value: unknown;
+  onRevise: () => void;
   current: () => boolean;
 }) {
   const client = useQueryClient();
@@ -273,62 +345,66 @@ function TurnActions({
   }, []);
   return (
     <>
-      <footer>
-        <button
-          onClick={() =>
-            void copyText(outputText(value)).then((ok) => {
-              if (alive.current && current()) setCopied(ok);
-            })
-          }
-        >
-          {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
-        </button>
-        {save && (
+      {!action && (
+        <footer>
           <button
-            disabled={saving || !!saved}
-            onClick={async () => {
-              if (!current()) return;
-              setSaving(true);
-              setError("");
-              try {
-                const result = await api.command("ask", "save-answer", save);
-                if (alive.current && current()) {
-                  if (askSources(result).length) {
-                    setSaved(result);
-                    void client.invalidateQueries({ queryKey: ["notes"] });
-                  } else setError(outputText(result) || t("ask.failed"));
-                }
-              } catch (error) {
-                if (alive.current && current())
-                  setError(
-                    error instanceof Error ? error.message : t("ask.failed"),
-                  );
-              } finally {
-                if (alive.current && current()) setSaving(false);
-              }
-            }}
+            onClick={() =>
+              void copyText(outputText(value)).then((ok) => {
+                if (alive.current && current()) setCopied(ok);
+              })
+            }
           >
-            {saved
-              ? t("slots.saved_as_note")
-              : saving
-                ? t("app.saving")
-                : t("slots.save_as_note")}
+            {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
           </button>
-        )}
-        {askSources(saved).map((source) => (
-          <Link key={source.id} href={`/n/${encodeURIComponent(source.id)}`}>
-            {t("slots.open_note")}
-          </Link>
-        ))}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-      </footer>
+          {save && (
+            <button
+              disabled={saving || !!saved}
+              onClick={async () => {
+                if (!current()) return;
+                setSaving(true);
+                setError("");
+                try {
+                  const result = await api.command("ask", "save-answer", save);
+                  if (alive.current && current()) {
+                    if (askSources(result).length) {
+                      setSaved(result);
+                      void client.invalidateQueries({ queryKey: ["notes"] });
+                    } else setError(outputText(result) || t("ask.failed"));
+                  }
+                } catch (error) {
+                  if (alive.current && current())
+                    setError(
+                      error instanceof Error ? error.message : t("ask.failed"),
+                    );
+                } finally {
+                  if (alive.current && current()) setSaving(false);
+                }
+              }}
+            >
+              {saved
+                ? t("slots.saved_as_note")
+                : saving
+                  ? t("app.saving")
+                  : t("slots.save_as_note")}
+            </button>
+          )}
+          {askSources(saved).map((source) => (
+            <Link key={source.id} href={`/n/${encodeURIComponent(source.id)}`}>
+              {t("slots.open_note")}
+            </Link>
+          ))}
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+        </footer>
+      )}
       {action && (
         <AskWriteActions
           initial={action}
+          preview={value}
+          onRevise={onRevise}
           current={() => alive.current && current()}
         />
       )}

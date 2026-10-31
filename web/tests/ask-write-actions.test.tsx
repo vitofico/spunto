@@ -148,9 +148,13 @@ it.each(["Create note", "Apply change"])(
     });
     expect(screen.getByText(/After: New deadline/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-    expect(await screen.findByRole("status")).toHaveProperty(
-      "textContent",
-      "Undo complete",
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveProperty(
+        "textContent",
+        title === "Create note"
+          ? "Created note moved to Trash."
+          : "Previous text restored.",
+      ),
     );
     expect(api.command).toHaveBeenNthCalledWith(2, "ask", "save-answer", {
       action_id: "receipt",
@@ -350,20 +354,20 @@ it("negotiates generic Ask forms and fresh chat allocation while continuations c
       />,
     ),
   );
-  fireEvent.change(await screen.findByLabelText("Question"), {
+  fireEvent.change(await screen.findByLabelText("Your message"), {
     target: { value: "Change the deadline" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
   await screen.findByRole("button", { name: "Apply change" });
   expect(api.command).toHaveBeenCalledWith("ask", "ask", {
     start: true,
     note_actions: true,
   });
   fireEvent.click(screen.getByRole("button", { name: "New conversation" }));
-  fireEvent.change(screen.getByLabelText("Ask a follow-up"), {
+  fireEvent.change(screen.getByLabelText("Your message"), {
     target: { value: "Create a new note" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
   await screen.findByRole("button", { name: "Apply change" });
   expect(
     vi
@@ -470,10 +474,110 @@ it("refreshes cached search, labels, note details and history after both Apply a
       false,
     );
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-  await screen.findByRole("status");
+  await screen.findByText("Previous text restored.");
   for (const key of cached)
     expect(
       client.getQueryState([key, "cached-result"])?.isInvalidated,
       key + " after Undo",
     ).toBe(true);
+});
+
+it("offers safe starters on the first Ask screen and preserves a message already being written", async () => {
+  const request = vi.spyOn(api, "request");
+  render(
+    wrap(
+      <CommandResult
+        value={{
+          type: "form",
+          schema: {
+            type: "object",
+            properties: { question: { type: "string" } },
+          },
+        }}
+        origin={{ plugin: "ask", command: "ask" }}
+      />,
+    ),
+  );
+  const input = await screen.findByRole("textbox", { name: "Your message" });
+  const create = screen.getByRole("button", {
+    name: /Create a note: Create a note: Weekend shopping/,
+  });
+  fireEvent.click(create);
+  expect(input).toHaveProperty(
+    "value",
+    "Create a note: Weekend shopping — buy pasta and tomatoes.",
+  );
+  expect(document.activeElement).toBe(input);
+  expect(api.command).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
+  expect(api.createNote).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: "My own request in progress" } });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Edit a note: In my note/ }),
+  );
+  expect(input).toHaveProperty("value", "My own request in progress");
+});
+
+it("does not advertise note actions on a legacy server", () => {
+  manifest("1.0.0");
+  render(wrap(<AskConversation value={undefined} />));
+  expect(
+    screen.getByRole("button", {
+      name: /Ask about your notes: What are my plans/,
+    }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Create a note/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Edit a note/ })).toBeNull();
+});
+
+it("groups every authoritative preview part with its controls and offers revision without sending", async () => {
+  const value = proposal();
+  value.items.splice(
+    0,
+    1,
+    { type: "text", text: "Preview only. Nothing changes until you confirm." },
+    { type: "text", text: "Target note: Project plan" },
+    {
+      type: "markdown",
+      text: "After:\n\nAdditional unchanged lines\nLast line remains visible",
+    },
+  );
+  render(
+    wrap(<AskConversation value={value} question="Change the deadline" />),
+  );
+  const card = screen.getByRole("region", { name: "Review note changes" });
+  expect(card.textContent).toContain("Target note: Project plan");
+  expect(card.textContent).toContain("Last line remains visible");
+  expect(card.textContent).toContain("Before: Old deadline");
+  expect(
+    screen.getAllByText("Preview only. Nothing changes until you confirm."),
+  ).toHaveLength(1);
+  expect(screen.getByRole("heading", { name: "Related notes" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Sources" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Copy text" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Revise request" }));
+  const input = screen.getByRole("textbox", { name: "Your message" });
+  expect(input).toHaveProperty("value", "Change the deadline");
+  expect(document.activeElement).toBe(input);
+  fireEvent.change(input, { target: { value: "Keep this newer request" } });
+  fireEvent.click(screen.getByRole("button", { name: "Revise request" }));
+  expect(input).toHaveProperty("value", "Keep this newer request");
+  expect(api.command).not.toHaveBeenCalled();
+  expect(api.createNote).not.toHaveBeenCalled();
+});
+
+it("explains the creation undo and chat lifetime beside its confirmed note link", async () => {
+  vi.mocked(api.command).mockResolvedValueOnce(acknowledgement("undo"));
+  open("Create note");
+  fireEvent.click(screen.getByRole("button", { name: "Create note" }));
+  await screen.findByText("Note created.");
+  expect(
+    screen.getByText(/Undo moves this note to Trash if it is unchanged/),
+  ).toBeTruthy();
+  expect(screen.getByText(/opening a note leaves the chat/)).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "Open note" }).getAttribute("href"),
+  ).toBe("/n/target");
+  expect(screen.queryByText("Not saved")).toBeNull();
+  expect(screen.getByText("View original proposal")).toBeTruthy();
 });

@@ -3,6 +3,7 @@ package io.theficos.spunto
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,6 +13,7 @@ import androidx.compose.ui.text.AnnotatedString
 import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.plugins.*
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.*
 
@@ -33,6 +35,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
   val adopted=initial.takeIf {initialIdentity==(auth to epoch)}
   val writeStates=remember {mutableMapOf<String,AskWriteState>()}
   val actionScope=rememberCoroutineScope()
+  val listState=rememberLazyListState()
   fun turn(id:Int,question:String,result:JsonObject):AskTurn {
    val action=askWriteAction(result)
    val state=action?.let {writeStates.getOrPut(it.id) {AskWriteState(it)}}
@@ -69,14 +72,14 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
     else clearHandle(askContinuation(raw))
    }
   }
-  LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
+  LazyColumn(Modifier.fillMaxSize().imePadding(),state=listState,contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
    item {Text(resources.getString(R.string.core_ask_temporary),style=MaterialTheme.typography.bodySmall);TextButton(onClick={discard()}) {Text(resources.getString(R.string.core_new_conversation))}}
    items(turns,key={it.id}) {turn ->
     Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
      if(turn.question.isNotBlank()) Text(turn.question,style=MaterialTheme.typography.titleMedium)
-     RenderOutput(model,buildJsonObject {put("items",JsonArray(outputComponents(turn.result).filter {it.string("type") in setOf("text","markdown")}))},onNote)
+     if(turn.write==null) RenderOutput(model,buildJsonObject {put("items",JsonArray(outputComponents(turn.result).filter {it.string("type") in setOf("text","markdown")}))},onNote)
      val sources=askSources(turn.result)
-     if(sources.isNotEmpty()) {
+     if(turn.write==null && sources.isNotEmpty()) {
       Text(resources.getString(R.string.core_ask_sources),style=MaterialTheme.typography.titleSmall)
       sources.forEachIndexed {index,id -> AskSource(model,id,index+1,onNote)}
      }
@@ -85,9 +88,12 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
      HorizontalDivider()
     }
    }
-   pending?.let {submitted -> item {Text(submitted,style=MaterialTheme.typography.titleMedium);LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(R.string.core_reading_notes))}}
+   pending?.let {submitted -> item {Text(submitted,style=MaterialTheme.typography.titleMedium);LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(if(supportsAskNoteActions(manifest)) R.string.core_ask_action_pending else R.string.core_reading_notes))}}
    failure?.let {error -> item {Text(error,color=MaterialTheme.colorScheme.error);Text(resources.getString(R.string.core_ask_retry_hint));TextButton(onClick={submit(retry)}) {Text(resources.getString(R.string.core_ask_retry))}}}
-   item {AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty())}
+   item {
+    if(turns.isNotEmpty()) TextButton(enabled=pending==null,onClick={actionScope.launch {listState.animateScrollToItem(turns.size)}}) {Text(resources.getString(R.string.core_ask_latest_reply))}
+    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=supportsAskNoteActions(manifest))
+   }
   }
  }
 }
@@ -109,7 +115,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
  val online by model.online.collectAsState()
  val command=askAnswerSave(result)
  Column {
-  Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+  if(write==null) Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    TextButton(onClick={if(current()) {clipboard.setText(AnnotatedString(resultCopyText(resources,result)));copied=true}}) {Text(resources.getString(if(copied) R.string.core_ask_copied else R.string.settings_copy))}
    if(command!=null) TextButton(enabled=online && !saving && saved==null,onClick={
     if(current()) {saving=true;failure=""
@@ -118,6 +124,6 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
   }
   askSources(saved).forEach {AskSource(model,it,null,onNote)}
   if(failure.isNotBlank()) Text(failure,color=MaterialTheme.colorScheme.error)
-  write?.let {AskWriteActions(model,it,actionScope,onNote,current)}
+  write?.let {AskWriteActions(model,it,result,actionScope,onNote,current)}
  }
 }

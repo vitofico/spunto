@@ -86,7 +86,8 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
         permissions: [...ask.permissions, "notes.review"],
       }
     : ask;
-  let reviewedStage: "preview" | "undo" | "done" = "preview";
+  const reviewedStages = new Map<string, "preview" | "undo" | "done">();
+  let reviewedNumber = 0;
   const routes: unknown[] = [],
     reindex: unknown[] = [],
     commands: { id: string; args: unknown }[] = [];
@@ -224,10 +225,12 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
       const args = request.postDataJSON();
       commands.push({ id: command, args });
       if (command === "save-answer" && args.action_id && withWrites) {
+        let reviewedStage = reviewedStages.get(args.action_id);
         if (args.stage === "preview" && reviewedStage === "preview")
           reviewedStage = "undo";
         else if (args.stage === "undo" && reviewedStage === "undo")
           reviewedStage = "done";
+        reviewedStages.set(args.action_id, reviewedStage!);
         return json({
           ui: 1,
           items: [
@@ -279,6 +282,12 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
           },
         });
       if (withWrites) {
+        reviewedNumber++;
+        const receipt =
+          reviewedNumber === 1
+            ? "reviewed-receipt"
+            : `reviewed-receipt-${reviewedNumber}`;
+        reviewedStages.set(receipt, "preview");
         const creating = String(args.question).startsWith("Create");
         return json({
           ui: 1,
@@ -287,15 +296,15 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
             {
               type: "markdown",
               text: creating
-                ? "Target: New note\n\n# Weekend plan\n\nTake a walk."
-                : "Target: Coffee\n\nBefore: Coffee in Rome\n\nAfter: Coffee in Rome, then Milan.",
+                ? "Target: New note\n\n# Weekend shopping\n\nBuy pasta and tomatoes."
+                : "Target note: Weekend shopping\n\nBefore: Buy pasta and tomatoes.\n\nAfter: Buy pasta, tomatoes and olive oil.",
             },
             { type: "notes", ids: creating ? [] : [id] },
             {
               type: "command",
               id: "save-answer",
               title: creating ? "Create note" : "Apply change",
-              args: { action_id: "reviewed-receipt", stage: "preview" },
+              args: { action_id: receipt, stage: "preview" },
             },
             continuation,
           ],
@@ -360,7 +369,14 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
               title: "Coffee neighbor",
               html: "<p>Coffee neighbor</p>",
             }
-          : note,
+          : withWrites && reviewedNumber > 0
+            ? {
+                ...note,
+                title: "Weekend shopping",
+                body: "Buy pasta and tomatoes.",
+                html: "<p>Buy pasta and tomatoes.</p>",
+              }
+            : note,
       );
     return json({ code: "not_found" }, 404);
   });
@@ -564,10 +580,8 @@ test("a typed question asks directly and keeps citations and explicit save", asy
       fullPage: true,
     });
   }
-  await page.getByLabel("Ask a follow-up").fill("What else did I note?");
-  await page
-    .getByRole("button", { name: "Send question", exact: true })
-    .click();
+  await page.getByLabel("Your message").fill("What else did I note?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(
     page.getByText("You also noted the cafe address."),
   ).toBeVisible();
@@ -583,7 +597,7 @@ test("a typed question asks directly and keeps citations and explicit save", asy
     page.getByRole("button", { name: "Saved as note", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("textbox", { name: "Ask a follow-up" }),
+    page.getByRole("textbox", { name: "Your message" }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "New conversation", exact: true })
@@ -644,7 +658,7 @@ test("reviewed Ask note writes show a preview and require explicit confirmation 
     .press("Enter");
   const chat = page.getByRole("region", { name: "Conversation" });
   await expect(chat.getByText(/Target: New note/)).toBeVisible();
-  await expect(chat.getByText(/Take a walk/)).toBeVisible();
+  await expect(chat.getByText(/Buy pasta and tomatoes/)).toBeVisible();
   expect(
     state.commands.filter((command) => command.id === "save-answer"),
   ).toEqual([]);
@@ -668,7 +682,9 @@ test("reviewed Ask note writes show a preview and require explicit confirmation 
     },
   ]);
   await chat.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(chat.getByRole("status")).toHaveText("Undo complete");
+  await expect(chat.getByRole("status")).toHaveText(
+    "Created note moved to Trash.",
+  );
   await expect(
     chat.getByRole("button", { name: "Undo", exact: true }),
   ).toHaveCount(0);
@@ -685,3 +701,115 @@ test("reviewed Ask note writes show a preview and require explicit confirmation 
     },
   ]);
 });
+
+for (const width of [1024, 360, 320]) {
+  test(`Ask note actions teach creation, follow-up editing and Undo at ${width}px`, async ({
+    page,
+  }, info) => {
+    const state = await fixture(page, false, true);
+    await page.setViewportSize({ width, height: 900 });
+    const capture = async (stage: string) => {
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      if (info.project.name === "chromium") {
+        const path = info.outputPath(`${width}-${stage}.png`);
+        await page.screenshot({ path, fullPage: true });
+        await info.attach(`${width}-${stage}`, {
+          path,
+          contentType: "image/png",
+        });
+      }
+    };
+    await page.goto("/");
+    await page
+      .getByRole("button", {
+        name: width < 600 ? "Search" : "Search and commands",
+        exact: true,
+      })
+      .click();
+    await page.getByRole("option", { name: /Ask your notes/ }).click();
+    const chat = page.getByRole("region", {
+      name: "Conversation",
+      exact: true,
+    });
+    const input = chat.getByRole("textbox", { name: "Your message" });
+    await expect(input).toBeVisible();
+    await expect(
+      chat.getByRole("button", { name: /Create a note: Create a note:/ }),
+    ).toBeVisible();
+    expect(
+      state.commands.filter((command) => command.id === "save-answer"),
+    ).toEqual([]);
+    await capture("starters");
+    await chat
+      .getByRole("button", { name: /Create a note: Create a note:/ })
+      .click();
+    await expect(input).toHaveValue(
+      "Create a note: Weekend shopping — buy pasta and tomatoes.",
+    );
+    expect(
+      state.commands.filter((command) => command.id === "save-answer"),
+    ).toEqual([]);
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    const creation = chat.getByRole("region", { name: "Review new note" });
+    await expect(
+      creation.getByText("Not saved", { exact: true }),
+    ).toBeVisible();
+    await expect(creation.getByText(/Buy pasta and tomatoes/)).toBeVisible();
+    await creation.scrollIntoViewIfNeeded();
+    await capture("create-preview");
+    await creation
+      .getByRole("button", { name: "Create note", exact: true })
+      .click();
+    await expect(
+      creation.getByText("Note created.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      creation.getByRole("button", { name: "Undo", exact: true }),
+    ).toBeVisible();
+    await expect(
+      creation.getByText(/opening a note leaves the chat/),
+    ).toBeVisible();
+    await capture("created-undo");
+    await input.fill("Add olive oil to that note.");
+    await chat.getByRole("button", { name: "Send", exact: true }).click();
+    const editing = chat.getByRole("region", { name: "Review note changes" });
+    await expect(
+      editing.getByText(/Before: Buy pasta and tomatoes/),
+    ).toBeVisible();
+    await chat.getByRole("button", { name: "View latest reply" }).click();
+    await capture("edit-preview");
+    await editing
+      .getByRole("button", { name: "Apply change", exact: true })
+      .click();
+    await expect(
+      editing.getByText("Changes saved.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      editing.getByText(
+        /Undo restores the previous text if the note is unchanged/,
+      ),
+    ).toBeVisible();
+    await capture("edited-undo");
+    await editing.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(editing.getByRole("status")).toHaveText(
+      "Previous text restored.",
+    );
+    await expect(
+      editing.getByRole("button", { name: "Undo", exact: true }),
+    ).toHaveCount(0);
+    await capture("undone");
+    expect(
+      state.commands
+        .filter((command) => command.id === "save-answer")
+        .map((command) => command.args),
+    ).toEqual([
+      { action_id: "reviewed-receipt", stage: "preview" },
+      { action_id: "reviewed-receipt-2", stage: "preview" },
+      { action_id: "reviewed-receipt-2", stage: "undo" },
+    ]);
+  });
+}

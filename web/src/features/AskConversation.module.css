@@ -1,12 +1,42 @@
+.header,
+.writeHeader,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+}
+
+.header h2,
+.writeHeader h3 {
+  margin: 0;
+}
+
+.header p {
+  margin-block: var(--s-8) 0;
+}
+
+.header > div {
+  flex: 1 1 15rem;
+}
+
+.temporary,
+.help {
+  color: var(--ink-2);
+  font-size: var(--t-ui-size);
+  line-height: 1.5;
+}
+
 .composer {
   display: grid;
-  gap: 0.75rem;
-  margin-block: 1rem;
+  gap: var(--s-12);
+  margin-block: var(--s-20);
 }
 
 .composer label {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--s-8);
   min-width: 0;
 }
 
@@ -15,31 +45,115 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 6rem;
-  padding: 0.75rem;
-  border: 1px solid var(--field, currentColor);
-  border-radius: 8px;
-  background: transparent;
+  padding: var(--s-12);
+  border: 1px solid var(--field);
+  border-radius: var(--r-8);
+  background: var(--raised);
   color: inherit;
   font: inherit;
   line-height: 1.5;
   resize: vertical;
 }
 
-.composer button {
+.composer > button {
   justify-self: start;
+}
+
+.composer button,
+.actions button,
+.header button {
   min-height: 44px;
 }
 
+.starters {
+  display: grid;
+  gap: var(--s-8);
+}
+
+.starters p {
+  margin: 0;
+}
+
+.starters button {
+  display: grid;
+  gap: var(--s-4);
+  text-align: start;
+  padding: var(--s-12);
+  border: 1px solid var(--field);
+  border-radius: var(--r-8);
+  background: var(--raised);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.starters span {
+  color: var(--ink-2);
+  font-size: var(--t-ui-size);
+  font-weight: 400;
+}
+
 .write {
-  margin-block: 1rem;
-  padding: 1rem;
+  min-width: 0;
+  margin-block: var(--s-16);
+  padding: var(--s-16);
+  border: 1px solid var(--field);
+  border-radius: var(--r-12);
+  background: var(--raised);
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  padding: var(--s-4) var(--s-8);
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--r-full);
+  color: var(--ink-2);
+  font-size: var(--t-ui-size);
+}
+
+.preview {
+  padding: var(--s-12);
+  background: var(--sunken);
+  border-radius: var(--r-8);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.preview pre,
+.preview code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.related {
+  display: grid;
+  gap: var(--s-4);
+  margin-block: var(--s-12);
+}
+
+.related h4 {
+  margin-block: var(--s-4);
+}
+
+.previous {
+  margin-block: var(--s-12);
+}
+
+.previous summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  color: var(--ink-2);
+}
+
+.saved p:first-child {
+  font-weight: 500;
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
+  justify-content: flex-start;
+}
+
+.latest {
+  min-height: 44px;
+  margin-block-start: var(--s-12);
 }

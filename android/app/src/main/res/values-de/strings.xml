@@ -4,4 +4,12 @@
  <string name="settings_background_plain">Schlicht</string>
  <string name="settings_background_artwork">Illustration</string>
  <string name="settings_background_help">Wähle eine schlichte Seite oder Tintenwellen. Diese Wahl bleibt auf diesem Telefon und behält dein Farbthema bei.</string>
+  <string name="settings_plugin_thinking_desk_name">Ideenwerkstatt</string>
+  <string name="settings_plugin_thinking_desk_description">Verfolge deine Gedanken über die Zeit und verbinde ausgewählte Notizen zu neuen Ideen.</string>
+  <string name="settings_thinking_desk_command">Ideenwerkstatt</string>
+  <string name="settings_thinking_desk_edit">Ideenwerkstatt bearbeiten</string>
+  <string name="settings_thinking_desk_sources">Ideenquellen auswählen</string>
+  <string name="core_search_terms_match">Suchbegriffe stimmen überein</string>
+  <string name="core_share_text_preview">Notiztext teilen?</string>
+  <string name="core_share_text_scope">Wähle im nächsten Schritt einen Empfänger. Eine Kopie des unten angezeigten gespeicherten Textes mit enthaltenen Links wird gesendet. Anhänge werden nicht gesendet und es wird kein Zugriff auf Spunto oder verlinkte Notizen erteilt. Kopien können nicht zurückgerufen werden.</string>
 </resources>

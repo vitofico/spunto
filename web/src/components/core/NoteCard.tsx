@@ -314,7 +314,13 @@ export function queueTick(
     void invalidateContent();
   });
 }
-export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
+export const NoteCard = memo(function NoteCard({
+  note,
+  excerpt,
+}: {
+  note: Note;
+  excerpt?: string;
+}) {
   useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
   const [, navigate] = useLocation();
@@ -387,27 +393,56 @@ export const NoteCard = memo(function NoteCard({ note }: { note: Note }) {
           navigate("/n/" + note.id);
         }}
       >
-        <NoteBody
-          preview
-          renderTitle={(title) => {
-            const link = queued ? (
-              title
-            ) : (
-              <Link
-                href={"/n/" + note.id}
-                className="time"
-                aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${title ?? name}`}
-              >
-                {title ?? time}
-              </Link>
-            );
-            return title ? <h3 className="entry-title">{link}</h3> : link;
-          }}
-          note={note}
-          body={ticked}
-          clamp
-          onCheckbox={canEdit && !queued && !note.trashed ? tick : undefined}
-        />
+        {excerpt !== undefined ? (
+          <div>
+            <h3 className="entry-title">
+              <Link href={"/n/" + note.id}>{name}</Link>
+            </h3>
+            <p
+              className="note-body"
+              dangerouslySetInnerHTML={{
+                // Search marks text nodes after render; React must not own those descendants.
+                __html: excerpt
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;"),
+              }}
+            />
+            {note.html?.includes("data-checkbox-offset") && (
+              <NoteBody
+                note={note}
+                body={ticked}
+                preview
+                clamp
+                onCheckbox={
+                  canEdit && !queued && !note.trashed ? tick : undefined
+                }
+              />
+            )}
+          </div>
+        ) : (
+          <NoteBody
+            preview
+            renderTitle={(title) => {
+              const link = queued ? (
+                title
+              ) : (
+                <Link
+                  href={"/n/" + note.id}
+                  className="time"
+                  aria-label={`${note.pinned ? t("notecard.pinned") : time}, ${title ?? name}`}
+                >
+                  {title ?? time}
+                </Link>
+              );
+              return title ? <h3 className="entry-title">{link}</h3> : link;
+            }}
+            note={note}
+            body={ticked}
+            clamp
+            onCheckbox={canEdit && !queued && !note.trashed ? tick : undefined}
+          />
+        )}
       </div>
       <div className="entry-meta">
         {(note.labels ?? []).map((label) => (

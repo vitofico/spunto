@@ -20,6 +20,13 @@ class SearchPresentationTest {
   val snippet=searchSnippet(long,listOf("needle"),width=60)!!
   assertTrue(snippet.startsWith("…") && snippet.endsWith("…") && "needle" in snippet)
  }
+ @Test fun deepMatchInASingleLineNoteHasAVisibleBoundedExcerpt() {
+  val body="opening ".repeat(80)+"Perché needle "+"closing ".repeat(80)
+  val snippet=searchSnippet(body,listOf("perche"),width=80)!!
+  assertTrue(snippet.contains("Perché needle"))
+  assertTrue(snippet.startsWith("…") && snippet.endsWith("…"))
+  assertTrue(snippet.length<=82)
+ }
  @Test fun recentSearchesKeepTheLastFiveNewestFirstWithoutRepeats() {
   var recent=listOf<String>()
   listOf("garden","  ","#idea ","bread","Garden","one","two","three").forEach { recent=rememberSearch(recent,it) }

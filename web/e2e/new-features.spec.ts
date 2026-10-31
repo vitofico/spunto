@@ -104,6 +104,8 @@ const formTitles: Record<string, string> = {
   "review-decision": "Review decision",
   edit: "Edit context pack",
   sources: "Pack sources",
+  "thinking-desk:edit": "Edit thinking desk",
+  "thinking-desk:sources": "Choose thinking sources",
 };
 
 async function run(
@@ -114,7 +116,10 @@ async function run(
 ) {
   return uiCommand(page, plugin, command, () =>
     dialog
-      .getByRole("button", { name: formTitles[command], exact: true })
+      .getByRole("button", {
+        name: formTitles[`${plugin}:${command}`] ?? formTitles[command],
+        exact: true,
+      })
       .last()
       .click(),
   );
@@ -406,4 +411,223 @@ test("context packs curate sources, expose staleness and keep a private note cop
     fullPage: true,
   });
   expect(errors).toEqual([]);
+});
+
+test("thinking desk collision combines selected subjects and saves an authored private snapshot", async ({
+  page,
+}, info) => {
+  await login(page, "thinking-desk");
+  const suffix = `${Date.now().toString(36)}-${info.project.name}`;
+  const sources: Note[] = [];
+  for (const subject of ["Gardens", "Networks"]) {
+    const response = await page.request.post("/api/v1/notes", {
+      headers: { Origin: origin(), "Idempotency-Key": crypto.randomUUID() },
+      data: {
+        body: `${subject} ${suffix}`,
+        private: true,
+        source: { kind: "web" },
+      },
+    });
+    expect(response.status()).toBe(201);
+    sources.push(await response.json());
+  }
+  const dialog = await palette(page, "Thinking desk");
+  await uiCommand(page, "thinking-desk", "desk", () =>
+    dialog.getByRole("option", { name: /^Thinking desk/ }).click(),
+  );
+  await uiCommand(page, "thinking-desk", "edit", () =>
+    dialog
+      .getByRole("button", { name: "New thinking desk", exact: true })
+      .click(),
+  );
+  await dialog
+    .getByLabel("Topic or desk title", { exact: true })
+    .fill(`Collision ${suffix}`);
+  await dialog
+    .getByRole("group", { name: "Desk type", exact: true })
+    .getByRole("button", { name: "Collision", exact: true })
+    .click();
+  await run(page, dialog, "thinking-desk", "edit");
+  for (const source of sources) {
+    await uiCommand(page, "thinking-desk", "sources", () =>
+      dialog
+        .getByRole("button", { name: "Review sources", exact: true })
+        .click(),
+    );
+    await dialog
+      .getByLabel("Search notes (blank browses recent)", { exact: true })
+      .fill(source.body);
+    await run(page, dialog, "thinking-desk", "sources");
+    const group = dialog.getByRole("group", {
+      name: "Add source",
+      exact: true,
+    });
+    if (await group.count()) {
+      await group.getByRole("button", { name: new RegExp(suffix) }).click();
+    } else {
+      const select = dialog.getByLabel("Add source", { exact: true });
+      const label = (await select.getByRole("option").allTextContents()).find(
+        (value) => value.includes(suffix),
+      );
+      expect(label).toBeDefined();
+      await select.selectOption({ label: label! });
+    }
+    await run(page, dialog, "thinking-desk", "sources");
+  }
+  await expect(dialog.getByText(/surprising analogy/)).toBeVisible();
+  await uiCommand(page, "thinking-desk", "edit", () =>
+    dialog
+      .getByRole("button", { name: "Write reflection", exact: true })
+      .click(),
+  );
+  const idea = "Prune weak network connections like a garden.";
+  await dialog
+    .getByLabel("Your reflection or new idea", { exact: true })
+    .fill(idea);
+  await run(page, dialog, "thinking-desk", "edit");
+  await expect(dialog.getByText(idea, { exact: true })).toBeVisible();
+  const saved = await uiCommand(page, "thinking-desk", "edit", () =>
+    dialog
+      .getByRole("button", { name: "Keep private note copy", exact: true })
+      .click(),
+  );
+  const snapshot = await note(page, noteIds(saved)[0]);
+  expect(snapshot.private).toBe(true);
+  expect(snapshot.machine).toBe(false);
+  expect(snapshot.body).toContain(idea);
+  expect((await note(page, sources[0].id)).body).toBe(sources[0].body);
+});
+
+test("thinking history exposes both desk modes and connects and removes selected sources", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, "thinking-desk");
+  const suffix = `${Date.now().toString(36)}-${info.project.name}`;
+  const sources: Note[] = [];
+  for (const order of ["Earlier", "Later"]) {
+    const response = await page.request.post("/api/v1/notes", {
+      headers: { Origin: origin(), "Idempotency-Key": crypto.randomUUID() },
+      data: {
+        body: `${order} history source ${suffix}`,
+        private: true,
+        source: { kind: "web" },
+      },
+    });
+    expect(response.status()).toBe(201);
+    sources.push(await response.json());
+  }
+  // Open the normal command palette on the narrow viewport without relying on a desktop sidebar.
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog", {
+    name: "Search and commands",
+    exact: true,
+  });
+  await dialog
+    .getByRole("textbox", { name: "Search and commands" })
+    .fill("Thinking desk");
+  await uiCommand(page, "thinking-desk", "desk", () =>
+    dialog.getByRole("option", { name: /^Thinking desk/ }).click(),
+  );
+  await uiCommand(page, "thinking-desk", "edit", () =>
+    dialog
+      .getByRole("button", { name: "New thinking desk", exact: true })
+      .click(),
+  );
+  const types = dialog.getByRole("group", { name: "Desk type", exact: true });
+  await expect(
+    types.getByRole("button", { name: "History", exact: true }),
+  ).toBeVisible();
+  await expect(
+    types.getByRole("button", { name: "Collision", exact: true }),
+  ).toBeVisible();
+  await types.getByRole("button", { name: "History", exact: true }).click();
+  await dialog
+    .getByLabel("Topic or desk title", { exact: true })
+    .fill(`History ${suffix}`);
+  await run(page, dialog, "thinking-desk", "edit");
+  for (const source of sources) {
+    await uiCommand(page, "thinking-desk", "sources", () =>
+      dialog
+        .getByRole("button", { name: "Review sources", exact: true })
+        .click(),
+    );
+    await dialog
+      .getByLabel("Search notes (blank browses recent)", { exact: true })
+      .fill(source.body);
+    await run(page, dialog, "thinking-desk", "sources");
+    const group = dialog.getByRole("group", {
+      name: "Add source",
+      exact: true,
+    });
+    if (await group.count()) {
+      await group.getByRole("button", { name: new RegExp(suffix) }).click();
+    } else {
+      const select = dialog.getByLabel("Add source", { exact: true });
+      const label = (await select.getByRole("option").allTextContents()).find(
+        (value) => value.includes(suffix),
+      );
+      expect(label).toBeDefined();
+      await select.selectOption({ label: label! });
+    }
+    const output = await run(page, dialog, "thinking-desk", "sources");
+    expect(noteIds(output)).toContain(source.id);
+  }
+  await expect(
+    dialog.getByRole("heading", {
+      name: "Notes in creation order",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText(/\d{4}-\d{2}-\d{2}:.*revision 1/).first(),
+  ).toBeVisible();
+  for (const remove of [false, true]) {
+    await uiCommand(page, "thinking-desk", "sources", () =>
+      dialog
+        .getByRole("button", { name: "Connect notes", exact: true })
+        .click(),
+    );
+    for (const [label, source] of [
+      ["First note", sources[1]],
+      ["Second note", sources[0]],
+    ] as const) {
+      const group = dialog.getByRole("group", { name: label, exact: true });
+      if (await group.count()) {
+        await group
+          .getByRole("button", { name: new RegExp(source.body) })
+          .click();
+      } else {
+        const select = dialog.getByLabel(label, { exact: true });
+        const caption = (
+          await select.getByRole("option").allTextContents()
+        ).find((value) => value.includes(source.body));
+        expect(caption).toBeDefined();
+        await select.selectOption({ label: caption! });
+      }
+    }
+    await dialog
+      .getByRole("group", { name: "Connection", exact: true })
+      .getByRole("button", { name: "Challenges", exact: true })
+      .click();
+    if (remove)
+      await dialog
+        .getByLabel("Remove this connection", { exact: true })
+        .check();
+    await run(page, dialog, "thinking-desk", "sources");
+    if (remove)
+      await expect(
+        dialog.getByText("Note 2 challenges note 1", { exact: true }),
+      ).toHaveCount(0);
+    else
+      await expect(
+        dialog.getByText("Note 2 challenges note 1", { exact: true }),
+      ).toBeVisible();
+  }
+  for (const source of sources)
+    expect((await note(page, source.id)).body).toBe(source.body);
+  await page.screenshot({
+    path: info.outputPath("thinking-history-narrow.png"),
+    fullPage: true,
+  });
 });

@@ -1093,6 +1093,16 @@
     "ask.undo_edit_hint": "Rückgängig stellt den vorherigen Text wieder her, sofern die Notiz unverändert ist. Rückgängig ist vorübergehend und nur hier verfügbar; das Öffnen einer Notiz verlässt den Chat.",
     "ask.creation_undone": "Erstellte Notiz in den Papierkorb verschoben.",
     "ask.edit_undone": "Vorheriger Text wiederhergestellt.",
-    "ask.view_latest": "Neueste Antwort anzeigen"
+    "ask.view_latest": "Neueste Antwort anzeigen",
+    "plugin.thinking-desk.name": "Ideenwerkstatt",
+    "plugin.thinking-desk.description": "Verfolge deine Gedanken über die Zeit und verbinde ausgewählte Notizen zu neuen Ideen.",
+    "plugin.thinking-desk.commands.desk.title": "Ideenwerkstatt",
+    "plugin.thinking-desk.commands.edit.title": "Ideenwerkstatt bearbeiten",
+    "plugin.thinking-desk.commands.sources.title": "Ideenquellen auswählen",
+    "search.terms_match": "Suchbegriffe stimmen überein",
+    "collaboration.preview_viewer": "{recipient} kann diese Notiz und ihre verknüpften Anhänge lesen.",
+    "collaboration.preview_editor": "{recipient} kann den Text dieser Notiz lesen und bearbeiten und ihre verknüpften Anhänge lesen.",
+    "collaboration.preview_scope": "Dies umfasst künftige Änderungen der Notiz, aber keinen Versionsverlauf, verlinkte Notizen oder den Rest dieses Bereichs. Andere Freigaben oder eine Mitgliedschaft können ebenfalls Zugriff geben. Ein Entzug löscht keine bereits erstellten Kopien.",
+    "slots.stale_form_recovery": "Deine Eingaben stehen noch in diesem Formular. Kopiere den gewünschten Text, bevor du das Werkzeug erneut öffnest. Prüfe dann die geänderten Quellen und versuche es erneut."
   }
 }

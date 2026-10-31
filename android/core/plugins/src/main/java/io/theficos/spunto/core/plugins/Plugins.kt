@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.Markdown
 import kotlinx.serialization.json.*
@@ -118,7 +121,10 @@ fun validSchema(value:JsonElement?):Boolean {
    val choices=field["enum"] as? JsonArray
    when {
     choices!=null -> {FormChoiceField(label,choices,value,!readOnly,language=key=="language") {values[key]=it};field.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}}
-    field.string("type")=="boolean" -> Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Text(label); Switch(checked=value.jsonPrimitive.booleanOrNull ?: false,onCheckedChange={values[key]=JsonPrimitive(it)},enabled=!readOnly) }
+    field.string("type")=="boolean" -> Row(Modifier.fillMaxWidth().heightIn(min=48.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+     Text(label,modifier=Modifier.weight(1f))
+     Switch(checked=value.jsonPrimitive.booleanOrNull ?: false,onCheckedChange={values[key]=JsonPrimitive(it)},enabled=!readOnly,modifier=Modifier.sizeIn(minWidth=48.dp,minHeight=48.dp).semantics {contentDescription=label})
+    }
     else -> OutlinedTextField(value=if(value is JsonArray) value.joinToString(", ") { it.jsonPrimitive.content } else value.jsonPrimitive.content,onValueChange={text -> values[key]=JsonPrimitive(text)},label={Text(label)},enabled=!readOnly,minLines=if(field.string("type")=="string" && ((field["maxLength"] as? JsonPrimitive)?.intOrNull ?: 0)>280) 3 else 1,modifier=Modifier.fillMaxWidth(),supportingText={Text(field.string("description"))})
    }
   }

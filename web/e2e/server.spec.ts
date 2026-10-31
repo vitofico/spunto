@@ -74,6 +74,23 @@ test("real server capture, image, checkbox, edit history, search and label rewri
       .filter({ hasText: title })
       .getByRole("checkbox"),
   ).toBeChecked();
+  // Search keeps the original checklist action, not only a textual state summary.
+  const searchCard = page.locator("article.entry").filter({ hasText: title });
+  const searchNoteId = await searchCard.getAttribute("data-note-id");
+  for (const checked of [false, true]) {
+    const [saved] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname ===
+            `/api/v1/notes/${searchNoteId}` &&
+          response.request().method() === "PATCH",
+      ),
+      searchCard.getByRole("checkbox").click(),
+    ]);
+    expect(saved.status()).toBe(200);
+    if (checked) await expect(searchCard.getByRole("checkbox")).toBeChecked();
+    else await expect(searchCard.getByRole("checkbox")).not.toBeChecked();
+  }
   const labelChip = page
     .locator("article.entry")
     .filter({ hasText: title })

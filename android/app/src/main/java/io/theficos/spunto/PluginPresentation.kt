@@ -35,6 +35,7 @@ private fun bundledMetadata(plugin:JsonObject,catalog:JsonObject):Boolean = plug
  catalog.objects("plugins").any {it.pluginText("id")==plugin.pluginText("id") && it.pluginText("origin")=="bundled"}
 internal fun localizedPluginName(resources:Resources,plugin:JsonObject,catalog:JsonObject=JsonObject(emptyMap())):String {
  val title=if(bundledMetadata(plugin,catalog)) when(plugin.pluginText("id")) {
+  "thinking-desk" -> R.string.settings_plugin_thinking_desk_name
   "context-packs" -> R.string.settings_plugin_context_packs_name
   "tasks" -> R.string.settings_plugin_tasks_name
   "develop" -> R.string.settings_plugin_develop_name
@@ -67,6 +68,7 @@ internal fun localizedPluginName(resources:Resources,plugin:JsonObject,catalog:J
 }
 internal fun localizedPluginDescription(resources:Resources,plugin:JsonObject,catalog:JsonObject=JsonObject(emptyMap())):String {
  val text=if(bundledMetadata(plugin,catalog)) when(plugin.pluginText("id")) {
+  "thinking-desk" -> R.string.settings_plugin_thinking_desk_description
   "context-packs" -> R.string.settings_plugin_context_packs_description
   "tasks" -> R.string.settings_plugin_tasks_description
   "develop" -> R.string.settings_plugin_develop_description
@@ -99,6 +101,9 @@ internal fun localizedPluginDescription(resources:Resources,plugin:JsonObject,ca
 }
 internal fun localizedPluginCommand(resources:Resources,plugin:JsonObject,item:JsonObject,catalog:JsonObject=JsonObject(emptyMap())):String {
  val title=if(bundledMetadata(plugin,catalog)) when(plugin.string("id") to item.string("id")) {
+  "thinking-desk" to "desk" -> R.string.settings_thinking_desk_command
+  "thinking-desk" to "edit" -> R.string.settings_thinking_desk_edit
+  "thinking-desk" to "sources" -> R.string.settings_thinking_desk_sources
   "context-packs" to "packs" -> R.string.settings_bundled_title_0
   "context-packs" to "edit" -> R.string.settings_bundled_title_1
   "context-packs" to "sources" -> R.string.settings_bundled_title_2

@@ -18,6 +18,7 @@ Completed milestones and remaining delivery/physical-phone gates are recorded in
 | `decisions/2026-10-25-header-wave.md` | Existing wave in the compact Android header and web upper chrome, with theme and accessibility constraints |
 | `development/multiuser-migration.md` | Lossless SQLite import, identity mapping, sequence reconciliation and cutover gates |
 | `development/multiuser-delivery.md` | Hosted delivery evidence, production recovery and remaining acceptance checks |
+| `decisions/2026-10-31-thinking-desk.md` | Manual chronological thinking histories, directed note relations and deliberate idea collisions |
 | `plugins.md` | Trusted operator plugins/API1.0, colour packs and inbound capture configuration |
 | `operations.md` | Build, snapshots, restore, public HTTPS deployment and Android signing |
 | `android-distribution.md` | Separate debug app, CalVer, signing identity, Obtainium, F-Droid preparation, reproduction and release recovery |

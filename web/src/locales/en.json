@@ -1093,6 +1093,16 @@
     "ask.undo_edit_hint": "Undo restores the previous text if the note is unchanged. Undo is temporary and only available here; opening a note leaves the chat.",
     "ask.creation_undone": "Created note moved to Trash.",
     "ask.edit_undone": "Previous text restored.",
-    "ask.view_latest": "View latest reply"
+    "ask.view_latest": "View latest reply",
+    "plugin.thinking-desk.name": "Thinking desk",
+    "plugin.thinking-desk.description": "Follow your thinking over time and combine selected notes into new ideas.",
+    "plugin.thinking-desk.commands.desk.title": "Thinking desk",
+    "plugin.thinking-desk.commands.edit.title": "Edit thinking desk",
+    "plugin.thinking-desk.commands.sources.title": "Choose thinking sources",
+    "search.terms_match": "Search terms match",
+    "collaboration.preview_viewer": "{recipient} can read this note and its linked attachments.",
+    "collaboration.preview_editor": "{recipient} can read and edit this note’s text and read its linked attachments.",
+    "collaboration.preview_scope": "This includes future note edits, but not revision history, linked notes or the rest of this space. Other grants or space membership may also provide access. Removing access cannot erase copies already made.",
+    "slots.stale_form_recovery": "Your entries are still in this form. Copy any text you want to keep before reopening the tool, then review changed sources and retry."
   }
 }

@@ -3,12 +3,17 @@ package io.theficos.spunto
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -83,7 +88,7 @@ class NewFeatureWorkflowTest {
 
     private data class Frame(val command: String, val args: JsonObject, val output: JsonObject, val generation: Int)
 
-    private inner class Workflow(private val plugin: String, initialCommand: String, initialArgs: JsonObject = empty) {
+    private inner class Workflow(private val plugin: String, initialCommand: String, initialArgs: JsonObject = empty, compactLargeText: Boolean = false) {
         private val frame = mutableStateOf(Frame(initialCommand, initialArgs, serverCommand(plugin, initialCommand, initialArgs), 0))
         private val replies = AtomicInteger(0)
         private val failure = AtomicReference<String?>(null)
@@ -104,16 +109,20 @@ class NewFeatureWorkflowTest {
                         }
                     }
                 }
-                SpuntoTheme("carta", "light") {
-                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                        key(current.generation) {
-                            outputComponents(current.output).forEach { component ->
-                                Vocabulary(
-                                    component,
-                                    onCommand = send,
-                                    onForm = { values -> send(current.command, JsonObject(current.args + values)) },
-                                    formInitial = current.args,
-                                )
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, if(compactLargeText) 1.6f else density.fontScale)) {
+                    SpuntoTheme("carta", "light") {
+                        val viewport = if(compactLargeText) Modifier.width(320.dp).height(480.dp) else Modifier.fillMaxSize()
+                        Column(viewport.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                            key(current.generation) {
+                                outputComponents(current.output).forEach { component ->
+                                    Vocabulary(
+                                        component,
+                                        onCommand = send,
+                                        onForm = { values -> send(current.command, JsonObject(current.args + values)) },
+                                        formInitial = current.args,
+                                    )
+                                }
                             }
                         }
                     }
@@ -183,6 +192,104 @@ class NewFeatureWorkflowTest {
         assertFalse(note(sourceId)["body"]!!.jsonPrimitive.content.contains("/n/"))
         runBlocking {api.post("/api/v1/suggestions/$proposal/accept", empty)}
         assertTrue(note(sourceId)["body"]!!.jsonPrimitive.content.contains("[$title](/n/$destinationId)"))
+    }
+
+    @Test fun thinkingHistoryChoosesSourcesAndConnectsAndRemovesTheirRelationAtLargeText() {
+        enable("thinking-desk")
+        val titles = listOf("Native history earlier idea $suffix", "Native history later idea $suffix")
+        val sources = titles.map { body -> runBlocking {
+            api.post("/api/v1/notes", buildJsonObject {put("body", body);put("private", true)})
+        } }
+        val flow = Workflow("thinking-desk", "desk", compactLargeText = true)
+        flow.click("New thinking desk")
+        compose.onNodeWithText("history", substring = false).assertExists()
+        compose.onNodeWithText("collision", substring = false).assertExists()
+        compose.onNodeWithText("history", substring = false).performScrollTo().performClick()
+        fill("Topic or desk title", "Native history $suffix")
+        flow.submit()
+        for(title in titles) {
+            flow.click("Review sources")
+            fill("Search notes (blank browses recent)", title)
+            flow.submit()
+            compose.onNodeWithText("Source choices").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Choose Add source").performScrollTo().performClick()
+            compose.onNodeWithText("Find an option").performTextInput(title)
+            compose.onNodeWithText("1. $title", substring = false).performClick()
+            flow.submit()
+        }
+        assertEquals(sources.map {it["id"]!!.jsonPrimitive.content}, ids(flow.output()))
+        compose.onNodeWithText("Notes in creation order", substring = true).assertExists()
+        compose.onAllNodesWithText("Open note", substring = false).assertCountEquals(2)
+        val date = sources[0]["created_at"]!!.jsonPrimitive.content.take(10)
+        assertTrue(compose.onAllNodesWithText(date, substring = true).fetchSemanticsNodes().isNotEmpty())
+        flow.click("Connect notes")
+        compose.onNodeWithContentDescription("Choose First note").performScrollTo().performClick()
+        compose.onNodeWithText("Find an option").performTextInput("later")
+        compose.onNodeWithText("2. ${titles[1]}", substring = false).performClick()
+        compose.onNodeWithText("challenges", substring = false).performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Choose Second note").performScrollTo().performClick()
+        compose.onNodeWithText("Find an option").performTextInput("earlier")
+        compose.onNodeWithText("1. ${titles[0]}", substring = false).performClick()
+        flow.submit()
+        compose.onNodeWithText("Note 2 challenges note 1", substring = true).assertExists()
+        flow.click("Connect notes")
+        compose.onNodeWithContentDescription("Choose First note").performScrollTo().performClick()
+        compose.onNodeWithText("Find an option").performTextInput("later")
+        compose.onNodeWithText("2. ${titles[1]}", substring = false).performClick()
+        compose.onNodeWithText("challenges", substring = false).performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Choose Second note").performScrollTo().performClick()
+        compose.onNodeWithText("Find an option").performTextInput("earlier")
+        compose.onNodeWithText("1. ${titles[0]}", substring = false).performClick()
+        compose.onNodeWithText("Remove this connection").assertExists()
+        compose.onNode(isToggleable()).performScrollTo().performClick()
+        flow.submit()
+        compose.onNodeWithText("Note 2 challenges note 1", substring = true).assertDoesNotExist()
+        assertEquals(sources.map {it["id"]!!.jsonPrimitive.content}, ids(flow.output()))
+        sources.forEachIndexed {index, source ->
+            assertEquals(titles[index], note(source["id"]!!.jsonPrimitive.content)["body"]!!.jsonPrimitive.content)
+        }
+    }
+
+    @Test fun thinkingDeskCollisionReviewsIdeaAndKeepsPrivateSnapshot() {
+        enable("thinking-desk")
+        val sources = listOf("Gardens $suffix #gardening", "Networks $suffix #computing").map { body ->
+            runBlocking { api.post("/api/v1/notes", buildJsonObject {
+                put("body", body)
+                put("private", true)
+            }) }
+        }
+        val deskId = java.util.UUID.randomUUID().toString()
+        serverCommand("thinking-desk", "edit", buildJsonObject {
+            put("request_id", deskId)
+            put("title", "Collision $suffix")
+            put("mode", "collision")
+            put("note_id", sources[0]["id"]!!)
+        })
+        val sourceId = sources[1]["id"]!!.jsonPrimitive.content
+        serverCommand("thinking-desk", "sources", buildJsonObject {
+            put("desk_id", deskId)
+            put("expected_revision", 1)
+            put("add", "1. Networks $suffix #computing")
+            put("source_choices", buildJsonArray { add("$sourceId@1") })
+        })
+        val flow = Workflow("thinking-desk", "edit", buildJsonObject {
+            put("desk_id", deskId)
+            put("expected_revision", 2)
+        })
+        val idea = "Prune weak network links like a garden."
+        fill("Your reflection or new idea", idea)
+        flow.submit()
+        val copied = resultCopyText(
+            InstrumentationRegistry.getInstrumentation().targetContext.resources, flow.output(),
+        )
+        assertTrue(copied.contains("surprising analogy"))
+        assertTrue(copied.contains(idea))
+        flow.click("Keep private note copy")
+        val saved = note(ids(flow.output()).single())
+        assertTrue(saved["private"]!!.jsonPrimitive.boolean)
+        assertFalse(saved["machine"]!!.jsonPrimitive.boolean)
+        assertTrue(saved["body"]!!.jsonPrimitive.content.contains(idea))
+        assertEquals("Gardens $suffix #gardening", note(sources[0]["id"]!!.jsonPrimitive.content)["body"]!!.jsonPrimitive.content)
     }
 
     @Test fun contextPackFormsCreateEditAndKeepPrivateSnapshot() {

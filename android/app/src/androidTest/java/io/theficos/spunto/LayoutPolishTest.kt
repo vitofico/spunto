@@ -19,6 +19,8 @@ import io.theficos.spunto.core.design.SpuntoTheme
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import io.theficos.spunto.core.plugins.SchemaForm
+import kotlinx.serialization.json.*
 
 /** Pure layout fixtures: no account, local replica, microphone or network access. */
 class LayoutPolishTest {
@@ -31,6 +33,30 @@ class LayoutPolishTest {
   }
  }
 
+ @Test fun booleanFormLabelWrapsBesideAnAccessibleReachableSwitchAtLargeText() {
+  val label="Remove this connection"
+  val schema=buildJsonObject {
+   put("type","object")
+   put("properties",buildJsonObject {put("disconnect",buildJsonObject {
+    put("type","boolean");put("title",label);put("default",false)
+   })})
+  }
+  var submitted:JsonObject?=null
+  compose.setContent {CompactLargeText {
+   Column(Modifier.fillMaxWidth().padding(16.dp)) {
+    SchemaForm(schema,saveLabel="Save connection",onSave={submitted=it})
+   }
+  }}
+  val text=compose.onNodeWithText(label).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+  val toggle=compose.onNodeWithContentDescription(label).assertIsDisplayed().assertIsOff()
+   .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+  val bounds=toggle.fetchSemanticsNode().boundsInRoot
+  assertTrue("The wrapping label must not run underneath the switch",text.right<bounds.left)
+  assertTrue("The label and switch must share a vertical row",text.top<bounds.bottom && bounds.top<text.bottom)
+  toggle.performClick().assertIsOn()
+  compose.onNodeWithText("Save connection").performClick()
+  compose.runOnIdle {assertEquals(true,submitted?.get("disconnect")?.jsonPrimitive?.boolean)}
+ }
  @Test fun longNotesFoldAfterEightLinesAndShowMoreUnfoldsInPlace() {
   val long=(1..40).joinToString("\n\n") { "Synthetic paragraph $it" }+"\n\nSynthetic tail line"
   compose.setContent {SpuntoTheme("carta","light") {Column {FoldedBody(long) {io.theficos.spunto.core.design.Markdown(it)};FoldedBody("Synthetic short note") {io.theficos.spunto.core.design.Markdown(it)}}}}

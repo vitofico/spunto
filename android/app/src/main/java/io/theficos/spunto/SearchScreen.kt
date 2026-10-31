@@ -136,7 +136,7 @@ import java.time.*
  Column(Modifier.fillMaxWidth().clickable(onClickLabel=context.getString(R.string.core_open)) { onOpen() }.padding(vertical=SpuntoSpacing.s12).semantics(mergeDescendants=true) {},verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
   Text(marked(note.title.ifBlank { context.getString(R.string.core_untitled) },terms,mark),style=SpuntoType.reading,maxLines=2,overflow=TextOverflow.Ellipsis)
   searchSnippet(note.body,terms)?.let { Text(marked(it,terms,mark),style=SpuntoType.readingSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=3,overflow=TextOverflow.Ellipsis) }
-  Text(listOfNotNull(noteTime(note.createdAt,locale),labels(note.body).map { "#${it.path}" }.distinct().take(3).joinToString(" ").ifEmpty { null },context.getString(R.string.core_similar_meaning).takeIf { similar }).joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
+  Text(listOfNotNull(noteTime(note.createdAt,locale),labels(note.body).map { "#${it.path}" }.distinct().take(3).joinToString(" ").ifEmpty { null },context.getString(if(similar) R.string.core_similar_meaning else R.string.core_search_terms_match)).joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
  }
 }
 private fun marked(text:String,terms:List<String>,style:SpanStyle):AnnotatedString=buildAnnotatedString { append(text);matchRanges(text,terms).forEach { addStyle(style,it.first,it.last+1) } }
@@ -162,8 +162,10 @@ internal fun matchRanges(text:String,terms:List<String>):List<IntRange> {
 private val lineMarker=Regex("^\\s*(?:#{1,6}\\s+|>\\s*|[-+*]\\s+(?:\\[[ xX]]\\s+)?|\\d+[.)]\\s+(?:\\[[ xX]]\\s+)?)")
 /** The line after the title that holds the first match, cut to about [width] characters around it; without a match, the next line of the note. */
 internal fun searchSnippet(body:String,terms:List<String>,width:Int=160):String? {
- val lines=body.lines().map { it.replace(lineMarker,"").trim() }.filter { it.isNotEmpty() }.drop(1)
- val line=lines.firstOrNull { matchRanges(it,terms).isNotEmpty() } ?: return lines.firstOrNull()?.let { if(it.length>width) it.take(width).trimEnd()+"…" else it }
+ val all=body.lines().map { it.replace(lineMarker,"").trim() }.filter { it.isNotEmpty() }
+ val lines=all.drop(1)
+ val first=all.firstOrNull()?.takeIf { line -> matchRanges(line,terms).any { it.first>=80 } }
+ val line=lines.firstOrNull { matchRanges(it,terms).isNotEmpty() } ?: first ?: return lines.firstOrNull()?.let { if(it.length>width) it.take(width).trimEnd()+"…" else it }
  if(line.length<=width) return line
  val start=(matchRanges(line,terms).first().first-width/3).coerceIn(0,line.length-width)
  return (if(start>0) "…" else "")+line.substring(start,start+width).trim()+(if(start+width<line.length) "…" else "")

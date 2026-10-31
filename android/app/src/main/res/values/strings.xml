@@ -6,4 +6,12 @@
  <string name="settings_background_plain">Plain</string>
  <string name="settings_background_artwork">Artwork</string>
  <string name="settings_background_help">Choose a quiet page or ink waves. This choice stays on this phone and keeps your colour theme.</string>
+  <string name="settings_plugin_thinking_desk_name">Thinking desk</string>
+  <string name="settings_plugin_thinking_desk_description">Follow your thinking over time and combine selected notes into new ideas.</string>
+  <string name="settings_thinking_desk_command">Thinking desk</string>
+  <string name="settings_thinking_desk_edit">Edit thinking desk</string>
+  <string name="settings_thinking_desk_sources">Choose thinking sources</string>
+  <string name="core_search_terms_match">Search terms match</string>
+  <string name="core_share_text_preview">Share note text?</string>
+  <string name="core_share_text_scope">Choose a recipient in the next step. This sends a copy of the saved note text shown below, including any written links. It does not send attachment files or grant access to Spunto or linked notes. Copies cannot be revoked.</string>
 </resources>

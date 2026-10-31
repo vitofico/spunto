@@ -8,6 +8,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -90,7 +92,7 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
    try {
     val fresh=readNoteForExport(model,note.id)
     if(fresh==null || !allowed(fresh.stamp) || approved!=null && approved!=fresh.stamp) {changed();return@launch}
-    if(fresh.note.privateNote && approved==null) {approval=ExportApproval(action,fresh.stamp);return@launch}
+    if((fresh.note.privateNote || action==ExportAction.Share) && approved==null) {approval=ExportApproval(action,fresh.stamp);return@launch}
     approval=null
     if(action==ExportAction.Share) {
      context.startActivity(Intent.createChooser(shareNoteIntent(fresh.note),context.getString(R.string.core_share_note)))
@@ -106,7 +108,15 @@ private data class SelectedDocument(val request:NoteExportSession.Request,val ur
  }
  Column {content({begin(ExportAction.Share)},{begin(ExportAction.Save)},enabled && gate.unlocked && !busy && request==null)}
  if(gate.unlocked) approval?.let {pending ->
-  AlertDialog(onDismissRequest={approval=null},title={Text(if(pending.action==ExportAction.Share) context.getString(R.string.core_share_private) else context.getString(R.string.core_save_private))},text={Text(context.getString(R.string.core_private_export_warning))},confirmButton={TextButton(onClick={begin(pending.action,pending.stamp)},enabled=!busy) {Text(context.getString(R.string.core_continue))}},dismissButton={TextButton(onClick={approval=null}) {Text(context.getString(R.string.core_cancel))}})
+  AlertDialog(onDismissRequest={approval=null},title={Text(context.getString(if(pending.action==ExportAction.Share) R.string.core_share_text_preview else R.string.core_save_private))},text={
+   if(pending.action==ExportAction.Share) Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+    Text(context.getString(R.string.core_share_text_scope))
+    if(note.privateNote) Text(context.getString(R.string.core_private_export_warning))
+    androidx.compose.foundation.text.selection.SelectionContainer {
+     Text(note.body,modifier=Modifier.heightIn(max=240.dp).verticalScroll(rememberScrollState()))
+    }
+   } else Text(context.getString(R.string.core_private_export_warning))
+  },confirmButton={TextButton(onClick={begin(pending.action,pending.stamp)},enabled=!busy) {Text(context.getString(R.string.core_continue))}},dismissButton={TextButton(onClick={approval=null}) {Text(context.getString(R.string.core_cancel))}})
  }
  if(gate.unlocked) selected?.let {destination ->
   AlertDialog(onDismissRequest={cancel()},title={Text(context.getString(R.string.core_save_selected_question))},text={Text(context.getString(R.string.core_save_selected_warning))},confirmButton={TextButton(enabled=!busy,onClick={

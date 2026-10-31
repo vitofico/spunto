@@ -4,4 +4,12 @@
  <string name="settings_background_plain">Liso</string>
  <string name="settings_background_artwork">Ilustrado</string>
  <string name="settings_background_help">Elige una página sencilla u ondas de tinta. La elección se guarda en este teléfono y mantiene tu tema de color.</string>
+  <string name="settings_plugin_thinking_desk_name">Mesa de ideas</string>
+  <string name="settings_plugin_thinking_desk_description">Sigue cómo cambia tu pensamiento y combina notas elegidas para crear ideas.</string>
+  <string name="settings_thinking_desk_command">Mesa de ideas</string>
+  <string name="settings_thinking_desk_edit">Editar mesa de ideas</string>
+  <string name="settings_thinking_desk_sources">Elegir fuentes de ideas</string>
+  <string name="core_search_terms_match">Coinciden los términos de búsqueda</string>
+  <string name="core_share_text_preview">¿Compartir el texto de la nota?</string>
+  <string name="core_share_text_scope">Elige un destinatario en el siguiente paso. Se envía una copia del texto guardado que aparece abajo, con los enlaces escritos. No envía archivos adjuntos ni da acceso a Spunto o a notas enlazadas. Las copias no se pueden revocar.</string>
 </resources>

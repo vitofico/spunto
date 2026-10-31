@@ -1093,6 +1093,16 @@
     "ask.undo_edit_hint": "Annulla modifica ripristina il testo precedente se la nota non è cambiata. L’annullamento è temporaneo e disponibile solo qui; aprire una nota chiude la chat.",
     "ask.creation_undone": "Nota creata spostata nel Cestino.",
     "ask.edit_undone": "Testo precedente ripristinato.",
-    "ask.view_latest": "Vai all’ultima risposta"
+    "ask.view_latest": "Vai all’ultima risposta",
+    "plugin.thinking-desk.name": "Tavolo delle idee",
+    "plugin.thinking-desk.description": "Segui come cambia il tuo pensiero e combina note selezionate in nuove idee.",
+    "plugin.thinking-desk.commands.desk.title": "Tavolo delle idee",
+    "plugin.thinking-desk.commands.edit.title": "Modifica tavolo delle idee",
+    "plugin.thinking-desk.commands.sources.title": "Scegli le fonti delle idee",
+    "search.terms_match": "Corrispondenza dei termini di ricerca",
+    "collaboration.preview_viewer": "{recipient} può leggere questa nota e gli allegati collegati.",
+    "collaboration.preview_editor": "{recipient} può leggere e modificare il testo di questa nota e leggere gli allegati collegati.",
+    "collaboration.preview_scope": "Include le modifiche future della nota, ma non la cronologia delle revisioni, le note collegate o il resto dello spazio. Altri permessi o l’appartenenza allo spazio possono dare accesso. Revocare l’accesso non cancella le copie già create.",
+    "slots.stale_form_recovery": "I dati inseriti sono ancora nel modulo. Copia il testo da conservare prima di riaprire lo strumento, poi controlla le fonti modificate e riprova."
   }
 }

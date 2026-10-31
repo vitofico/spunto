@@ -1,0 +1,32 @@
+id = "thinking-desk"
+name = "Thinking desk"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+runtime = "in-process"
+category = "develop"
+description = "Follow your thinking over time and combine selected notes into new ideas."
+entry = "spunto.plugins.thinking_desk:plugin"
+requires = []
+default = "off"
+data_version = 1
+creates = "owner"
+permissions = ["notes.read", "notes.create"]
+
+[[contributes.commands]]
+id = "desk"
+title = "Thinking desk"
+where = ["palette", "slash", "note-actions"]
+online = true
+
+[[contributes.commands]]
+id = "edit"
+title = "Edit thinking desk"
+where = []
+online = true
+
+[[contributes.commands]]
+id = "sources"
+title = "Choose thinking sources"
+where = []
+online = true

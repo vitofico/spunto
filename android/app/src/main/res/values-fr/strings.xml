@@ -4,4 +4,12 @@
  <string name="settings_background_plain">Uni</string>
  <string name="settings_background_artwork">Illustré</string>
  <string name="settings_background_help">Choisissez une page unie ou des vagues d’encre. Ce choix reste sur ce téléphone et conserve votre thème de couleurs.</string>
+  <string name="settings_plugin_thinking_desk_name">Atelier des idées</string>
+  <string name="settings_plugin_thinking_desk_description">Suivez votre réflexion et combinez des notes choisies pour créer des idées.</string>
+  <string name="settings_thinking_desk_command">Atelier des idées</string>
+  <string name="settings_thinking_desk_edit">Modifier cet atelier</string>
+  <string name="settings_thinking_desk_sources">Choisir les sources</string>
+  <string name="core_search_terms_match">Correspondance des termes recherchés</string>
+  <string name="core_share_text_preview">Partager le texte de la note ?</string>
+  <string name="core_share_text_scope">Choisissez un destinataire à l’étape suivante. Une copie du texte enregistré ci-dessous sera envoyée, avec les liens écrits. Les pièces jointes ne sont pas envoyées et aucun accès à Spunto ou aux notes liées n’est accordé. Les copies ne peuvent pas être révoquées.</string>
 </resources>

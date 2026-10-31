@@ -1093,6 +1093,16 @@
     "ask.undo_edit_hint": "Annuler rétablit le texte précédent si la note est inchangée. L’annulation est temporaire et disponible uniquement ici ; ouvrir une note quitte la conversation.",
     "ask.creation_undone": "Note créée déplacée dans la Corbeille.",
     "ask.edit_undone": "Texte précédent rétabli.",
-    "ask.view_latest": "Voir la dernière réponse"
+    "ask.view_latest": "Voir la dernière réponse",
+    "plugin.thinking-desk.name": "Atelier des idées",
+    "plugin.thinking-desk.description": "Suivez votre réflexion et combinez des notes choisies pour créer des idées.",
+    "plugin.thinking-desk.commands.desk.title": "Atelier des idées",
+    "plugin.thinking-desk.commands.edit.title": "Modifier cet atelier",
+    "plugin.thinking-desk.commands.sources.title": "Choisir les sources",
+    "search.terms_match": "Correspondance des termes recherchés",
+    "collaboration.preview_viewer": "{recipient} peut lire cette note et ses pièces jointes liées.",
+    "collaboration.preview_editor": "{recipient} peut lire et modifier le texte de cette note et lire ses pièces jointes liées.",
+    "collaboration.preview_scope": "Cela comprend les futures modifications de la note, mais pas son historique, les notes liées ou le reste de cet espace. D’autres autorisations ou l’appartenance à l’espace peuvent aussi donner accès. Retirer l’accès n’efface pas les copies déjà faites.",
+    "slots.stale_form_recovery": "Vos saisies sont toujours dans ce formulaire. Copiez le texte à conserver avant de rouvrir l’outil, puis vérifiez les sources modifiées et réessayez."
   }
 }

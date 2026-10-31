@@ -4,4 +4,12 @@
  <string name="settings_background_plain">Semplice</string>
  <string name="settings_background_artwork">Illustrato</string>
  <string name="settings_background_help">Scegli una pagina semplice o onde d’inchiostro. La scelta resta su questo telefono e mantiene il tema di colore.</string>
+  <string name="settings_plugin_thinking_desk_name">Tavolo delle idee</string>
+  <string name="settings_plugin_thinking_desk_description">Segui come cambia il tuo pensiero e combina note selezionate in nuove idee.</string>
+  <string name="settings_thinking_desk_command">Tavolo delle idee</string>
+  <string name="settings_thinking_desk_edit">Modifica tavolo delle idee</string>
+  <string name="settings_thinking_desk_sources">Scegli le fonti delle idee</string>
+  <string name="core_search_terms_match">Corrispondenza dei termini di ricerca</string>
+  <string name="core_share_text_preview">Condividere il testo della nota?</string>
+  <string name="core_share_text_scope">Scegli un destinatario nel prossimo passaggio. Verrà inviata una copia del testo salvato mostrato sotto, inclusi i link scritti. Non invia allegati né concede accesso a Spunto o alle note collegate. Le copie non si possono revocare.</string>
 </resources>

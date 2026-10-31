@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useSearch as useLocationSearch } from "wouter";
 import { fold, useSearch } from "../lib";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { searchExcerpt } from "../lib/searchExcerpt";
 import { NoteCard } from "../components/core/NoteCard";
 
 const LIMIT = 500;
@@ -36,7 +37,7 @@ function markMatches(body: HTMLElement, words: string[]) {
       const char = String.fromCodePoint(node.data.codePointAt(at)!);
       for (const unit of fold(char)) {
         folded += unit;
-        origin.push(at);
+        for (let index = 0; index < unit.length; index++) origin.push(at);
       }
       at += char.length;
     }
@@ -251,10 +252,17 @@ export default function SearchPage() {
       <div ref={results}>
         {all.map((note) => (
           <div key={note.id}>
-            {note.match === "meaning" && (
-              <p className="muted">{t("search.similar_meaning")}</p>
-            )}
-            <NoteCard note={note} />
+            <p className="muted">
+              {t(
+                note.match === "meaning"
+                  ? "search.similar_meaning"
+                  : "search.terms_match",
+              )}
+            </p>
+            <NoteCard
+              note={note}
+              excerpt={searchExcerpt(note.body, terms(submitted))}
+            />
           </div>
         ))}
       </div>

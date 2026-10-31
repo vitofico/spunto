@@ -103,6 +103,7 @@ class AskWriteActionTest {
   compose.runOnIdle {listGeneration++}
   compose.runOnIdle {assertEquals(1,disposals);assertEquals(1,calls)}
   compose.onNodeWithTag("write-turns").performScrollToIndex(0)
+  compose.waitUntil(10_000) {compose.onAllNodesWithText("Undo").fetchSemanticsNodes().size==1}
   compose.onNodeWithText("Undo").performScrollTo()
   compose.waitUntil(10_000) {compose.onNodeWithText("Undo").isDisplayed()}
   compose.onNodeWithText("Undo").assertIsDisplayed();compose.onNodeWithText("Create note").assertDoesNotExist();compose.onNodeWithText("Cancel").assertDoesNotExist()
@@ -112,6 +113,7 @@ class AskWriteActionTest {
   compose.runOnIdle {listGeneration++}
   compose.runOnIdle {assertEquals(2,disposals)}
   compose.onNodeWithTag("write-turns").performScrollToIndex(0)
+  compose.waitUntil(10_000) {compose.onAllNodesWithText("Note moved to Trash.").fetchSemanticsNodes().size==1}
   compose.onNodeWithText("Note moved to Trash.").performScrollTo()
   compose.waitUntil(10_000) {compose.onNodeWithText("Note moved to Trash.").isDisplayed()}
   compose.onNodeWithText("Note moved to Trash.").assertIsDisplayed();compose.onNodeWithText("Undo",useUnmergedTree=true).assertDoesNotExist()

@@ -288,3 +288,33 @@ it("lists a command that is both a note action and a palette command once, on th
     expect(run).toHaveBeenLastCalledWith("decision-journal", "journal", {}),
   );
 });
+
+it("preserves typed entries after a stale form rejection and explains safe recovery", async () => {
+  const { ApiError } = await import("../src/lib/errors");
+  vi.spyOn(api, "command").mockRejectedValue(
+    new ApiError(409, "version_conflict"),
+  );
+  render(
+    wrap(
+      <CommandResult
+        value={form(2, "Original reasoning")}
+        origin={{
+          plugin: "context-packs",
+          command: "edit",
+          args: { pack_id: "pack-a" },
+        }}
+      />,
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Rationale"), {
+    target: { value: "Keep my unsaved reasoning" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Run" }));
+  await screen.findByRole("alert");
+  expect(screen.getByRole("alert").textContent).toContain(
+    "Copy any text you want to keep before reopening",
+  );
+  expect(
+    (screen.getByLabelText("Rationale") as HTMLTextAreaElement).value,
+  ).toBe("Keep my unsaved reasoning");
+});

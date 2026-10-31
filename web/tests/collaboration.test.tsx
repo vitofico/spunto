@@ -969,3 +969,35 @@ it("keeps duplicate shared note IDs separate in links, cache, drafts and writes"
     queryClient.getQueryData(["shared-note", "beta", note.id]),
   ).toBeTruthy();
 });
+
+it("previews recipient, role and the exact note grant scope before granting access", async () => {
+  seed();
+  vi.spyOn(api, "noteShares").mockResolvedValue({ shares: [] });
+  const share = vi.spyOn(api, "shareNote").mockResolvedValue({ shares: [] });
+  render(<ShareNote id={note.id} />, { wrapper: Wrapper });
+  fireEvent.click(await screen.findByRole("button", { name: "Share" }));
+  const input = await screen.findByLabelText("Username or verified email");
+  fireEvent.change(input, { target: { value: "reader@example.org" } });
+  expect(
+    await screen.findByText(
+      "reader@example.org can read this note and its linked attachments.",
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Other grants or space membership may also provide access/,
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText(/not revision history, linked notes/)).toBeTruthy();
+  expect(share).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Access"), {
+    target: { value: "editor" },
+  });
+  expect(
+    screen.getByText(/reader@example.org can read and edit this note/),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Give access" }));
+  await waitFor(() =>
+    expect(share).toHaveBeenCalledWith(note.id, "reader@example.org", "editor"),
+  );
+});

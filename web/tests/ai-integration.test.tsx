@@ -507,3 +507,82 @@ it("shows the server's pause reason when Ask has used its allowance", async () =
   ]);
   expect(create).not.toHaveBeenCalled();
 });
+
+it("shows a bounded excerpt around a deep match and distinguishes search terms from meaning", async () => {
+  window.history.replaceState(null, "", "/search?q=needle");
+  const longBody =
+    "Opening ".repeat(100) + "needle in a long note " + "Closing ".repeat(100);
+  vi.mocked(api.search).mockResolvedValue({
+    hits: [{ ...note, body: longBody }],
+    semantic: "off",
+    next_cursor: null,
+  });
+  wrap(<Search />);
+  await screen.findByText("Search terms match");
+  const excerpt = document.querySelector(".note-body")!;
+  expect(excerpt.textContent).toContain("needle in a long note");
+  expect(excerpt.textContent!.length).toBeLessThanOrEqual(242);
+  expect(excerpt.querySelector("mark")?.textContent).toBe("needle");
+  expect(screen.queryByText("Similar meaning")).toBeNull();
+});
+
+it("retains saved checklist state and original-offset toggle actions alongside search excerpts", async () => {
+  window.history.replaceState(null, "", "/search?q=needle");
+  const body = "Checklist needle\n- [x] 🎈 Read this";
+  const offset = body.indexOf("[x]") + 1;
+  const task = {
+    ...note,
+    id: "search-checklist",
+    body,
+    html: `<p>Checklist needle</p><ul><li><input type="checkbox" data-checkbox-offset="${offset}" aria-label="Toggle task" checked> 🎈 Read this</li></ul>`,
+  };
+  vi.mocked(api.search).mockResolvedValue({
+    hits: [task],
+    semantic: "off",
+    next_cursor: null,
+  });
+  const update = vi.spyOn(api, "updateNote").mockResolvedValue({
+    ...task,
+    body: body.replace("[x]", "[ ]"),
+    version: 2,
+  });
+  wrap(<Search />);
+  const checkbox = await screen.findByRole("checkbox", { name: "Toggle task" });
+  expect((checkbox as HTMLInputElement).checked).toBe(true);
+  expect((checkbox as HTMLInputElement).disabled).toBe(false);
+  fireEvent.click(checkbox);
+  await waitFor(() =>
+    expect(update).toHaveBeenCalledWith(task.id, body.replace("[x]", "[ ]"), 1),
+  );
+  expect((checkbox as HTMLInputElement).checked).toBe(false);
+  expect(document.querySelector("mark[data-match]")?.textContent).toBe(
+    "needle",
+  );
+});
+
+it("escapes excerpt markup and reapplies highlights without duplicating marks", async () => {
+  window.history.replaceState(null, "", "/search?q=needle");
+  const hit = {
+    ...note,
+    body: '<img src=x onerror="bad()"> needle & literal text',
+  };
+  vi.mocked(api.search).mockResolvedValue({
+    hits: [hit],
+    semantic: "off",
+    next_cursor: null,
+  });
+  const view = wrap(<Search />);
+  await screen.findByText("Search terms match");
+  expect(document.querySelector(".note-body")?.textContent).toContain(
+    '<img src=x onerror="bad()">',
+  );
+  expect(document.querySelector(".note-body img")).toBeNull();
+  expect(document.querySelectorAll("mark[data-match]")).toHaveLength(1);
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <Search />
+    </QueryClientProvider>,
+  );
+  expect(document.querySelectorAll("mark[data-match]")).toHaveLength(1);
+  expect(document.querySelector("mark mark")).toBeNull();
+});

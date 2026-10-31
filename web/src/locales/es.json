@@ -1093,6 +1093,16 @@
     "ask.undo_edit_hint": "Deshacer restaura el texto anterior si la nota no ha cambiado. Deshacer es temporal y solo está disponible aquí; abrir una nota cierra el chat.",
     "ask.creation_undone": "Nota creada movida a la Papelera.",
     "ask.edit_undone": "Texto anterior restaurado.",
-    "ask.view_latest": "Ver última respuesta"
+    "ask.view_latest": "Ver última respuesta",
+    "plugin.thinking-desk.name": "Mesa de ideas",
+    "plugin.thinking-desk.description": "Sigue cómo cambia tu pensamiento y combina notas elegidas para crear ideas.",
+    "plugin.thinking-desk.commands.desk.title": "Mesa de ideas",
+    "plugin.thinking-desk.commands.edit.title": "Editar mesa de ideas",
+    "plugin.thinking-desk.commands.sources.title": "Elegir fuentes de ideas",
+    "search.terms_match": "Coinciden los términos de búsqueda",
+    "collaboration.preview_viewer": "{recipient} puede leer esta nota y sus archivos adjuntos enlazados.",
+    "collaboration.preview_editor": "{recipient} puede leer y editar el texto de esta nota y leer sus archivos adjuntos enlazados.",
+    "collaboration.preview_scope": "Incluye los cambios futuros de la nota, pero no el historial de revisiones, las notas enlazadas ni el resto del espacio. Otros permisos o la pertenencia al espacio también pueden dar acceso. Revocar el acceso no borra las copias ya realizadas.",
+    "slots.stale_form_recovery": "Tus datos siguen en este formulario. Copia el texto que quieras conservar antes de volver a abrir la herramienta; después revisa las fuentes modificadas y reinténtalo."
   }
 }

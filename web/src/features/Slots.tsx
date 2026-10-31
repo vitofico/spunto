@@ -12,6 +12,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
+import { safeError } from "../lib/errors";
 import { NoteBody } from "../components/core/NoteCard";
 import { useToast } from "../components/core/Toast";
 import { createIdempotencyKey } from "../lib/drafts";
@@ -876,6 +877,9 @@ export function CommandResult({
       {followup.error && (
         <p role="alert" className="error">
           {followup.error.message}
+          {safeError(followup.error).code === "version_conflict" && (
+            <> {t("slots.stale_form_recovery")}</>
+          )}
         </p>
       )}
     </div>

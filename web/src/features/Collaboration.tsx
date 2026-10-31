@@ -19,7 +19,9 @@ import styles from "./Feature.module.css";
 function GrantForm({
   add,
   pending,
+  note = false,
 }: {
+  note?: boolean;
   add: (account: string, role: "editor" | "viewer") => void;
   pending: boolean;
 }) {
@@ -58,6 +60,19 @@ function GrantForm({
           <option value="editor">{t("collaboration.can_edit")}</option>
         </select>
       </label>
+      {note && email.trim() && (
+        <div role="status">
+          <p>
+            {t(
+              role === "editor"
+                ? "collaboration.preview_editor"
+                : "collaboration.preview_viewer",
+              { recipient: email.trim() },
+            )}
+          </p>
+          <p>{t("collaboration.preview_scope")}</p>
+        </div>
+      )}
       <button disabled={pending || !email.trim()}>
         {pending ? t("collaboration.adding") : t("collaboration.give_access")}
       </button>
@@ -310,6 +325,7 @@ function NoteShareDialog({
         pending={remove.isPending}
       />
       <GrantForm
+        note
         add={(email, role) => add.mutate({ email, role })}
         pending={add.isPending || query.isPending || query.isError}
       />

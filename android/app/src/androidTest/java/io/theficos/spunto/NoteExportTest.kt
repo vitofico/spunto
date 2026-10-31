@@ -76,7 +76,9 @@ class NoteExportTest {
    compose.onNodeWithText("Share").assertIsNotEnabled()
    compose.runOnIdle {enabled.value=true}
    compose.onNodeWithText("Share").performClick()
-   compose.waitUntil(10000) {compose.onAllNodesWithText("Share private note?").fetchSemanticsNodes().isNotEmpty()}
+   compose.waitUntil(10000) {compose.onAllNodesWithText("Share note text?").fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithText(note.body).assertExists()
+   compose.onNodeWithText("It does not send attachment files",substring=true).assertExists()
    assertNull(captured.get())
    compose.onNodeWithText("Cancel").performClick();assertNull(captured.get())
    compose.onNodeWithText("Share").performClick()
@@ -89,6 +91,29 @@ class NoteExportTest {
    assertEquals(setOf(Intent.EXTRA_TEXT,Intent.EXTRA_SUBJECT),outbound.extras!!.keySet())
    assertNull(outbound.data);assertNull(outbound.clipData);assertEquals(0,outbound.flags)
    runBlocking {authority.requireCurrent();assertEquals(note.body,model.repository.dao.get(note.id)!!.body);assertNull(model.repository.dao.draftSnapshot(note.id))}
+  } finally {instrumentation.removeMonitor(monitor);cleanup(model,authority,note)}
+ }
+ @Test fun publicTextShareAlsoPreviewsTheSavedCopyBeforeChoosingARecipient() {
+  val (model,authority,original)=fixture()
+  val note=original.copy(privateNote=false)
+  runBlocking {authority.requireCurrent();model.repository.dao.put(NoteEntity.from(note))}
+  val captured=AtomicReference<Intent?>()
+  val monitor=object:Instrumentation.ActivityMonitor() {
+   override fun onStartActivity(intent:Intent):Instrumentation.ActivityResult? {
+    if(intent.action!=Intent.ACTION_CHOOSER) return null
+    captured.set(intent);return Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null)
+   }
+  }
+  instrumentation.addMonitor(monitor)
+  try {
+   compose.setContent {ExportContent(model,note,true)}
+   compose.onNodeWithText("Share").performClick()
+   compose.waitUntil(10000) {compose.onAllNodesWithText("Share note text?").fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithText(note.body).assertExists()
+   compose.onNodeWithText("Copies cannot be revoked.",substring=true).assertExists()
+   assertNull(captured.get())
+   compose.onNodeWithText("Cancel").performClick()
+   assertNull(captured.get())
   } finally {instrumentation.removeMonitor(monitor);cleanup(model,authority,note)}
  }
  @Test fun documentPickerUsesMarkdownAndChangedDraftInvalidatesItsResultWithoutWriting() {

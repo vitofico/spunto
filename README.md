@@ -58,14 +58,18 @@ Write a line, make a checklist or add a `#nested/label`. A short first-run guide
 | When you want to… | Spunto helps you… |
 |---|---|
 | **Catch the thought** | Write Markdown and checklists, share into Android, use quick capture or dictate with an available on-device speech service. |
-| **Find the thread again** | Search by words and nested labels. Add semantic search, related notes and answers with source citations when AI is configured. |
+| **Find the thread again** | Search by words and nested labels, with excerpts around matches and a clear distinction from similar meaning. Web checklist results keep their saved state and controls. Add semantic search, related notes and cited answers when AI is configured. |
 | **Carry context into your work** | Curate selected notes into a reusable **context pack**, with a brief and source snapshots that reveal when the originals have changed. |
+| **See how your thinking changed** | Use **Thinking desk → History** to arrange selected notes by creation date and record directed **builds-on**, **challenges** or **replaces** connections, keeping the originals intact. |
+| **Try an unexpected combination** | Use **Thinking desk → Collision** to choose two to five notes from different subjects, add an optional question and develop your own idea with creative prompts. |
 | **Remember why you decided** | Record alternatives, reasoning and an expected outcome in the **decision journal**. Add dated reviews and outcome notes while retaining the original decision. No AI required. |
 | **Keep your tags useful** | Suggest labels using past tagging examples. Opt in to applying confident existing tags automatically; review new labels and all curation changes yourself. |
 | **Work together** | In the web app on a multi-account installation, share one note or a space with an existing account, with explicit view or edit access. |
 | **Keep a recoverable record** | Use revision history, private notes, export, scheduled snapshots and explicit restore tools. |
 
-Context-pack and decision-journal changes require a connection; synced decision notes remain readable offline. [Plugin guides](docs/plugins.md#context-packs) explain the workflows and tag curation.
+**Thinking desk** is optional and off by default. The space owner enables it in Plugins and opens it from the command palette or a note’s actions. Its History and Collision workflows are manual: no AI, external processing or MCP tools. Review the desk, then explicitly choose **Keep private note copy** to save a snapshot. It never updates your original notes or refreshes that copy automatically. Changed or unavailable sources block a new snapshot until reviewed or removed; concurrent desk changes reject stale saves.
+
+Thinking desk, context-pack and decision-journal commands require a connection. Android can read synced snapshot and decision notes offline; the web app has no offline note replica. [Plugin guides](docs/plugins.md#thinking-desk) explain these workflows, source review and tag curation.
 
 ## Make it your own
 
@@ -85,7 +89,7 @@ The browser also offers **Background style → Plain / Artwork**, **Reading face
 | Client | What it is good at | Connection |
 |---|---|---|
 | **Android** | Capture, editing, search and a local replica that syncs later. Optional biometric or device-credential app lock. | Core note work continues offline. |
-| **Web** | A larger workspace for notes, review, context packs and instance settings. Capture drafts stay in the browser until Save. | Requires the server; no offline note replica. |
+| **Web** | A larger workspace for notes, review, thinking desks, context packs and instance settings. Capture drafts stay in the browser until Save. | Requires the server; no offline note replica. |
 | **MCP** | Let a coding agent search, read or capture notes through the same server. Separate tokens scope each client's access. | Requires the server and an authorized client. |
 
 Use Android on its own, or pair it with your server using a QR or one-use code. The [Android guide](android/README.md) explains both paths. Open the web app on your server, or set up [API and agent access](docs/api.md#mcp).
@@ -94,9 +98,9 @@ Use Android on its own, or pair it with your server using a QR or one-use code. 
 
 Labels stay the main way to organize notes. Your personal space is the default; you do not need projects, a team hierarchy or a workspace setup step to start writing. Create a shared space only when a group needs the same library and permissions. Its owner manages membership, editors write notes, and viewers read them.
 
-For a single note, use **Share** and enter the exact username or verified email of an existing account. The recipient finds it in **Shared with me**, without gaining access to the rest of your library. Grants can be changed or revoked. This is authenticated collaboration; there are no anonymous public-note links or invitation emails.
+For a single note, use **Share** and enter the exact username or verified email of an existing account. The form previews the recipient and read/edit capability, including access to linked attachments and future note edits. This grant does not include revision history, linked notes or the rest of the space; other grants or membership can independently provide access. The recipient finds the note in **Shared with me**. Grants can be changed or revoked, but revocation cannot erase copies already made. This is authenticated collaboration; there are no anonymous public-note links or invitation emails.
 
-Existing and shared notes autosave, with a **Save** action available immediately. Independent edits can merge, and overlapping changes are preserved as conflict copies for review.
+Existing and shared notes autosave, with a **Save** action available immediately. Independent edits can merge, and overlapping changes are preserved as conflict copies for review. A stale plugin form keeps your entries and explains how to copy them before reopening the tool and reviewing changed sources.
 
 The [hosted guide](docs/hosted.md) explains multiple accounts, shared spaces, roles and recovery. Sign in with a username and password or an optional SSO provider such as Authentik.
 
@@ -104,7 +108,7 @@ The [hosted guide](docs/hosted.md) explains multiple accounts, shared spaces, ro
 
 The core needs no model service. Configure local or cloud profiles when you want semantic search, related notes, translation, summaries, tag suggestions or cited answers. Chat, vision, transcription and embeddings can use different profiles; for example, keep embeddings local while choosing a cloud chat model. Choose models from your configured providers in web **Settings → AI**; provider addresses, credentials and limits stay under operator control.
 
-Proposed rewrites wait for review. Label automation is an explicit setting restricted to existing labels; new labels and taxonomy cleanup always require your approval. The decision journal and manually curated context packs work without AI.
+Proposed rewrites wait for review. Label automation is an explicit setting restricted to existing labels; new labels and taxonomy cleanup always require your approval. The decision journal, manually curated context packs and Thinking desk work without AI.
 
 Private notes are excluded from built-in AI processing. Agent tokens can read them only when explicitly granted private-note access. Configured cloud models and enabled external integrations can send data outside your server; choose their permissions and profiles accordingly. See the [privacy policy](PRIVACY.md), [AI configuration](docs/operations.md#ai-profiles-and-index-recovery) and [plugin contracts](docs/plugins.md).
 
@@ -132,7 +136,7 @@ Open **<http://localhost:8080>**, enter the one-time setup code from the logs an
 
 This example binds to your own machine. To use Spunto from your phone or remotely, configure your actual public URL and HTTPS. The [Compose HTTPS guide](deploy/compose/minimal/README.md) and [Kubernetes reference](deploy/k8s/README.md) use an imported immutable image and a protected owner-password hash. [Operations](docs/operations.md) covers configuration, backups and recovery.
 
-Take your notes with you: download a Markdown ZIP from web **Settings → Data**, or use **Share** and **Save Markdown** on an Android note. Android exports saved local text offline; attachment files are not bundled.
+Take your notes with you: download a Markdown ZIP from web **Settings → Data**, or use **Share** and **Save Markdown** on an Android note. Android previews the exact saved text before opening the recipient chooser. This sends a copy, with written links but no attachment files, and grants no Spunto access. Saved local text can be exported offline; recipient copies cannot be revoked.
 
 ## Downloads and updates
 

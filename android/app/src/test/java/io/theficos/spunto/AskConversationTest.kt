@@ -111,4 +111,11 @@ class AskConversationTest {
   assertTrue(state.created)
  }
 
+ @Test fun reviewedWritesAreAdvertisedOnlyForWritableWorkspaceRolesOrLegacyLocalMode() {
+  val capable=manifest(conversation=true,version="1.1.0")
+  for(role in listOf(null,"owner","editor")) assertTrue("Writable role $role",supportsAskNoteActions(capable,role))
+  for(role in listOf("viewer","unknown")) assertFalse("Read-only or unknown role $role",supportsAskNoteActions(capable,role))
+  for(role in listOf(null,"owner","editor","viewer")) assertFalse("Old server never supports reviewed writes",supportsAskNoteActions(manifest(conversation=true),role))
+ }
+
 }

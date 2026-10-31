@@ -88,11 +88,11 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
      HorizontalDivider()
     }
    }
-   pending?.let {submitted -> item {Text(submitted,style=MaterialTheme.typography.titleMedium);LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(if(supportsAskNoteActions(manifest)) R.string.core_ask_action_pending else R.string.core_reading_notes))}}
+   pending?.let {submitted -> item {Text(submitted,style=MaterialTheme.typography.titleMedium);LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(if(supportsAskNoteActions(manifest,auth?.workspaceRole)) R.string.core_ask_action_pending else R.string.core_reading_notes))}}
    failure?.let {error -> item {Text(error,color=MaterialTheme.colorScheme.error);Text(resources.getString(R.string.core_ask_retry_hint));TextButton(onClick={submit(retry)}) {Text(resources.getString(R.string.core_ask_retry))}}}
    item {
     if(turns.isNotEmpty()) TextButton(enabled=pending==null,onClick={actionScope.launch {listState.animateScrollToItem(turns.size)}}) {Text(resources.getString(R.string.core_ask_latest_reply))}
-    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=supportsAskNoteActions(manifest))
+    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=supportsAskNoteActions(manifest,auth?.workspaceRole))
    }
   }
  }

@@ -1,4 +1,4 @@
-import { useManifest } from "../lib/query";
+import { useManifest, useWorkspaceRole } from "../lib/query";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
 import {
   lazy,
@@ -641,6 +641,7 @@ export function CommandResult({
   const [saved, setSaved] = useState<{ id?: string } | null>(null);
   const client = useQueryClient();
   const manifest = usePlugins();
+  const workspaceRole = useWorkspaceRole();
   const [display, setDisplay] = useState(value);
   const [currentOrigin, setCurrentOrigin] = useState(origin);
   const [responseId, setResponseId] = useState(0);
@@ -702,7 +703,7 @@ export function CommandResult({
           ? undefined
           : await api.command("ask", "ask", {
               start: true,
-              ...askNoteActionOptions(manifest.data?.plugins),
+              ...askNoteActionOptions(manifest.data?.plugins, workspaceRole),
             });
         const handle = askPendingHandle.current ?? askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));
@@ -748,7 +749,8 @@ export function CommandResult({
     !!(
       askContinuation(display) ||
       (currentOrigin.command === "ask" &&
-        askNoteActionOptions(manifest.data?.plugins).note_actions === true &&
+        askNoteActionOptions(manifest.data?.plugins, workspaceRole)
+          .note_actions === true &&
         askItems(display).some((item) => item.type === "form"))
     );
   const save = useMutation({
@@ -936,6 +938,7 @@ export function PluginCommands({
 }) {
   useLanguage();
   const manifest = usePlugins();
+  const workspaceRole = useWorkspaceRole();
   const places = Array.isArray(where) ? where : [where];
   const slash = places.includes("slash");
   const [active, setActive] = useState(0);
@@ -1007,7 +1010,7 @@ export function PluginCommands({
           ? undefined
           : await api.command("ask", "ask", {
               start: true,
-              ...askNoteActionOptions(currentPlugins.current),
+              ...askNoteActionOptions(currentPlugins.current, workspaceRole),
             });
         const handle = pendingAskHandle.current ?? askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));

@@ -161,4 +161,22 @@ class AskRequestTest {
   assertEquals(buildJsonObject {put("start",true)},requests[0].second)
   assertEquals(2,requests.size)
  }
+ @Test fun workspaceViewerAllocationNeverOptsIntoReviewedWritesOnAModernServer()=runBlocking {
+  val manifest=buildJsonObject {put("plugins",JsonArray(listOf(buildJsonObject {
+   put("id","ask");put("version","1.1.0");put("state","enabled")
+   put("contributes",buildJsonObject {put("commands",JsonArray(listOf(buildJsonObject {put("id","clear-conversation")})))})
+  })))}
+  for(role in listOf(null,"owner","editor","viewer")) {
+   val requests=mutableListOf<Pair<String,JsonObject>>()
+   conversationAskRequest("What did I decide?",null,{command,args ->
+    requests+=command to args
+    if(args["start"]==JsonPrimitive(true)) startedConversation() else JsonObject(emptyMap())
+   },{true},{},noteActionsSupported=supportsAskNoteActions(manifest,role))
+   val start=requests.first().second
+   assertEquals("Role $role must control the allocation opt-in",if(role=="viewer") setOf("start") else setOf("start","note_actions"),start.keys)
+   assertEquals("ask",requests.first().first)
+   assertEquals(buildJsonObject {put("conversation_id","allocated");put("after_turn",0);put("question","What did I decide?")},requests[1].second)
+  }
+ }
+
 }

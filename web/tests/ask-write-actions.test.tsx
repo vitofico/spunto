@@ -14,6 +14,7 @@ import type { Plugin } from "../src/lib/types";
 import AskConversation from "../src/features/AskConversation";
 import { CommandResult, PaletteCommands } from "../src/features/Slots";
 import { api } from "../src/lib/api";
+import * as queryState from "../src/lib/query";
 import { invalidateRequests } from "../src/lib/identity";
 import {
   askAnswerSave,
@@ -482,41 +483,48 @@ it("refreshes cached search, labels, note details and history after both Apply a
     ).toBe(true);
 });
 
-it("offers safe starters on the first Ask screen and preserves a message already being written", async () => {
-  const request = vi.spyOn(api, "request");
-  render(
-    wrap(
-      <CommandResult
-        value={{
-          type: "form",
-          schema: {
-            type: "object",
-            properties: { question: { type: "string" } },
-          },
-        }}
-        origin={{ plugin: "ask", command: "ask" }}
-      />,
-    ),
-  );
-  const input = await screen.findByRole("textbox", { name: "Your message" });
-  const create = screen.getByRole("button", {
-    name: /Create a note: Create a note: Weekend shopping/,
-  });
-  fireEvent.click(create);
-  expect(input).toHaveProperty(
-    "value",
+it.each([
+  [
+    "Create a note",
     "Create a note: Weekend shopping — buy pasta and tomatoes.",
-  );
-  expect(document.activeElement).toBe(input);
-  expect(api.command).not.toHaveBeenCalled();
-  expect(request).not.toHaveBeenCalled();
-  expect(api.createNote).not.toHaveBeenCalled();
-  fireEvent.change(input, { target: { value: "My own request in progress" } });
-  fireEvent.click(
-    screen.getByRole("button", { name: /Edit a note: In my note/ }),
-  );
-  expect(input).toHaveProperty("value", "My own request in progress");
-});
+  ],
+  ["Edit a note", "Add olive oil to my note “Weekend shopping”."],
+])(
+  "prefills %s without sending and preserves a message already being written",
+  async (label, message) => {
+    const request = vi.spyOn(api, "request");
+    render(
+      wrap(
+        <CommandResult
+          value={{
+            type: "form",
+            schema: {
+              type: "object",
+              properties: { question: { type: "string" } },
+            },
+          }}
+          origin={{ plugin: "ask", command: "ask" }}
+        />,
+      ),
+    );
+    const input = await screen.findByRole("textbox", { name: "Your message" });
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^${label}:`) }),
+    );
+    expect(input).toHaveProperty("value", message);
+    expect(document.activeElement).toBe(input);
+    expect(api.command).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(api.createNote).not.toHaveBeenCalled();
+    fireEvent.change(input, {
+      target: { value: "My own request in progress" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Edit a note: Add olive oil/ }),
+    );
+    expect(input).toHaveProperty("value", "My own request in progress");
+  },
+);
 
 it("does not advertise note actions on a legacy server", () => {
   manifest("1.0.0");
@@ -581,3 +589,85 @@ it("explains the creation undo and chat lifetime beside its confirmed note link"
   expect(screen.queryByText("Not saved")).toBeNull();
   expect(screen.getByText("View original proposal")).toBeTruthy();
 });
+
+it.each(["owner", "editor", "viewer", "unknown", null, undefined])(
+  "negotiates reviewed note actions according to workspace role %s",
+  (role) => {
+    const plugins = [{ id: "ask", version: "1.1.0", state: "enabled" }];
+    expect(askNoteActionOptions(plugins, role)).toEqual(
+      role === "viewer" || role === "unknown" ? {} : { note_actions: true },
+    );
+  },
+);
+
+it.each(["direct", "palette", "form"])(
+  "does not advertise or negotiate authoring for workspace viewers through %s",
+  async (entry) => {
+    vi.spyOn(queryState, "useWorkspaceRole").mockReturnValue("viewer");
+    const reply = {
+      ui: 1,
+      items: [{ type: "text", text: "Legacy response" }, continuation],
+    };
+    vi.mocked(api.command).mockImplementation(
+      async (_plugin, _command, args) =>
+        args?.start === true
+          ? {
+              ui: 1,
+              items: [
+                {
+                  ...continuation,
+                  args: { conversation_id: "conversation", after_turn: 0 },
+                },
+              ],
+            }
+          : reply,
+    );
+    vi.spyOn(api, "request").mockResolvedValue(reply);
+    if (entry === "direct") {
+      render(wrap(<AskConversation value={undefined} />));
+      expect(
+        screen.queryByText(/draft a note, or describe a change/),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Create a note/ }),
+      ).toBeNull();
+      expect(screen.queryByRole("button", { name: /Edit a note/ })).toBeNull();
+      fireEvent.change(screen.getByRole("textbox", { name: "Your message" }), {
+        target: { value: "What is my plan?" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    } else if (entry === "palette") {
+      render(wrap(<PaletteCommands query="What is my plan?" />));
+      fireEvent.click(screen.getByRole("button", { name: /Ask your notes/ }));
+    } else {
+      render(
+        wrap(
+          <CommandResult
+            value={{
+              type: "form",
+              schema: {
+                type: "object",
+                properties: { question: { type: "string", title: "Question" } },
+              },
+            }}
+            origin={{ plugin: "ask", command: "ask" }}
+          />,
+        ),
+      );
+      expect(
+        screen.queryByRole("textbox", { name: "Your message" }),
+      ).toBeNull();
+      fireEvent.change(await screen.findByLabelText("Question"), {
+        target: { value: "What is my plan?" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Ask your notes" }));
+    }
+    await screen.findByText("Legacy response");
+    expect(api.command).toHaveBeenCalledWith("ask", "ask", { start: true });
+    expect(
+      vi
+        .mocked(api.command)
+        .mock.calls.some((call) => call[2]?.note_actions === true),
+    ).toBe(false);
+  },
+);

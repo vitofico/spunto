@@ -165,7 +165,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   val epoch=pluginReplicaEpoch
   fun valid()=config!=null && auth.value==config && pluginReplicaEpoch==epoch && container.manifest.enabled("ask") && current()
   try {
-   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> ApiClient(it).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value))}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
+   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> ApiClient(it).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value,it.workspaceRole))}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
   } catch(cancelled:CancellationException) {throw cancelled}
   catch(error:Exception) {
    if(valid() && onError!=null) onError(if(error is ApiException) apiErrorMessage(container.context.resources,error) else container.context.getString(R.string.core_ask_failed))

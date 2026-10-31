@@ -1079,7 +1079,7 @@
     "ask.starter_edit": "Edit a note",
     "ask.example_ask": "What are my plans for this weekend?",
     "ask.example_create": "Create a note: Weekend shopping — buy pasta and tomatoes.",
-    "ask.example_edit": "In my note “Weekend shopping”, add olive oil.",
+    "ask.example_edit": "Add olive oil to my note “Weekend shopping”.",
     "ask.review_new": "Review new note",
     "ask.review_edit": "Review note changes",
     "ask.not_saved": "Not saved",

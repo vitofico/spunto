@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
 import { requestGeneration } from "../lib/identity";
-import { subscribeOwner, useManifest } from "../lib/query";
+import { subscribeOwner, useManifest, useWorkspaceRole } from "../lib/query";
 import { t, useLanguage } from "../lib/i18n";
 import type { Args } from "../lib/types";
 import { VocabularyOutput, NoteReference } from "./Vocabulary";
@@ -32,6 +32,7 @@ export default function AskConversation({
 }) {
   useLanguage();
   const manifest = useManifest();
+  const workspaceRole = useWorkspaceRole();
   const client = useQueryClient();
   const [turns, setTurns] = useState<Turn[]>(
     value === undefined ? [] : [{ id: 0, question, value }],
@@ -39,7 +40,8 @@ export default function AskConversation({
   const input = useRef<HTMLTextAreaElement>(null);
   const latest = useRef<HTMLElement>(null);
   const canWrite =
-    askNoteActionOptions(manifest.data?.plugins).note_actions === true;
+    askNoteActionOptions(manifest.data?.plugins, workspaceRole).note_actions ===
+    true;
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
@@ -113,7 +115,7 @@ export default function AskConversation({
       if (!continuation.current) {
         const started = await api.command("ask", "ask", {
           start: true,
-          ...askNoteActionOptions(manifest.data?.plugins),
+          ...askNoteActionOptions(manifest.data?.plugins, workspaceRole),
         });
         const handle = askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));

@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.theficos.spunto.core.design.SpuntoTheme
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -60,7 +61,7 @@ class AskEntryTest {
   compose.onNodeWithContentDescription("Message for your notes").performTextReplacement("My unfinished request")
   compose.runOnIdle {assertEquals("My unfinished request",question);assertEquals(0,sent);question=""}
   compose.onNodeWithText("Edit a note").performScrollTo().performClick()
-  compose.runOnIdle {assertEquals("In my note “Weekend shopping”, add olive oil.",question);assertEquals(0,sent)}
+  compose.runOnIdle {assertEquals("Add olive oil to my note “Weekend shopping”.",question);assertEquals(0,sent)}
   compose.onNodeWithText("Send").performScrollTo().performClick()
   compose.runOnIdle {assertEquals(1,sent)}
  }
@@ -69,6 +70,18 @@ class AskEntryTest {
   compose.onNodeWithText("Create a note").assertDoesNotExist()
   compose.onNodeWithText("Edit a note").assertDoesNotExist()
   compose.onNodeWithText("Ask your notes").assertIsDisplayed()
+ }
+
+ @Test fun viewerOnModernServerSeesQuestionInputWithoutAuthoringPromptsOrIntro() {
+  val manifest=buildJsonObject {put("plugins",JsonArray(listOf(buildJsonObject {
+   put("id","ask");put("version","1.1.0");put("state","enabled")
+   put("contributes",buildJsonObject {put("commands",JsonArray(listOf(buildJsonObject {put("id","clear-conversation")})))})
+  })))}
+  compose.setContent {SpuntoTheme("carta","light") {AskQuestionInput("",true,true,false,{},{},noteActions=supportsAskNoteActions(manifest,"viewer"))}}
+  compose.onNodeWithText("Create a note").assertDoesNotExist()
+  compose.onNodeWithText("Edit a note").assertDoesNotExist()
+  compose.onNodeWithText("Ask a question, draft a note, or describe a change. Review every note change before saving.").assertDoesNotExist()
+  compose.onNodeWithContentDescription("Question for your notes").assertIsDisplayed()
  }
 
 }

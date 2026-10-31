@@ -19,7 +19,8 @@ internal fun supportsAskConversation(manifest:JsonObject):Boolean = manifest.obj
 } == true
 
 /** Only a released manifest that advertises reviewed writes may receive the opt-in argument. */
-internal fun supportsAskNoteActions(manifest:JsonObject):Boolean {
+internal fun supportsAskNoteActions(manifest:JsonObject,workspaceRole:String?=null):Boolean {
+ if(workspaceRole!=null && workspaceRole !in setOf("owner","editor")) return false
  if(!supportsAskConversation(manifest)) return false
  val plugin=manifest.objects("plugins").firstOrNull {it.string("id")=="ask"} ?: return false
  if(!plugin.bool("enabled",true) || plugin.string("state") !in setOf("","enabled")) return false

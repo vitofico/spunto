@@ -8,7 +8,8 @@ without changing the mutation protocol or its authorization requirements.
 ## Interaction
 
 An empty conversation offers example questions and, when the connected server
-supports reviewed note actions, examples for creating and editing a note.
+supports reviewed note actions and the current workspace role permits editing,
+examples for creating and editing a note.
 Choosing an example fills the composer and gives it focus. It does not send a
 message or confirm a write. Examples do not replace text the user is already
 writing. The composer accepts questions and requests to draft or change notes.
@@ -32,7 +33,10 @@ The server remains the authority for previews, operation receipts, permissions,
 freshness and writes. A preview card does not make its body directly editable.
 Refining a proposal uses another message and another explicit confirmation.
 Older servers keep the supported question-and-answer flow; create/edit examples
-are only offered when the existing capability negotiation allows them.
+are only offered when the existing capability negotiation and workspace role
+allow them. Viewers do not opt into note actions at conversation allocation.
+This does not change the server's existing transport policy for view-only
+accounts or grant additional permissions.
 
 Web and Android retain their existing ownership and conversation lifetime
 checks, strict acknowledgement matching, and protection against duplicate

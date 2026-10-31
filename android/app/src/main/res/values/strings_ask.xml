@@ -33,7 +33,7 @@
     <string name="core_ask_start_create">Create a note</string>
     <string name="core_ask_start_edit">Edit a note</string>
     <string name="core_ask_prompt_create">Create a note: Weekend shopping — buy pasta and tomatoes.</string>
-    <string name="core_ask_prompt_edit">In my note “Weekend shopping”, add olive oil.</string>
+    <string name="core_ask_prompt_edit">Add olive oil to my note “Weekend shopping”.</string>
     <string name="core_ask_new_note">New note</string>
     <string name="core_ask_note_changes">Note changes</string>
     <string name="core_ask_note_created">Note created.</string>

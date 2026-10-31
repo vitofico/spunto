@@ -6,7 +6,7 @@ Kotlin and Compose screens read the Room replica. Saving a note writes the note,
 
 ## Install Android
 
-Download [**2026.10.19.3**, version code **14**](https://github.com/vitofico/spunto/releases/tag/android/2026.10.19.3). The release includes the signed `spunto-2026.10.19.3.apk`, its checksum and `android-version.json`. Open the APK with Android’s package installer. Future updates must retain the same signing certificate and a higher version code.
+Download the APK and checksum from the [signed Android releases](https://github.com/vitofico/spunto/releases/latest). Open the APK with Android’s package installer. Future updates must retain the same signing certificate and a higher version code; see the [distribution guide](../docs/android-distribution.md) for verification and update details.
 
 Capture, editing and local search work without an account or server. The first-run guide explains the basics; **Settings → Show guide** replays it. When you want sync, use your server’s HTTPS address. Multi-account installations offer browser username/password sign-in or optional SSO, followed by QR/code pairing from web **Settings → Devices**. Local SQLite installations also support owner-password sign-in. Pairing can use the camera or a pasted one-use code.
 
@@ -18,6 +18,16 @@ Choosing a theme, a custom accent, or the instance theme applies that palette's 
 
 [Obtainium setup](../docs/android-distribution.md#obtainium) tracks stable Android releases directly from GitHub. F-Droid submission and external review are pending; Spunto is not listed there. Read the [privacy policy](../PRIVACY.md) for local storage, optional permissions and server/AI boundaries.
 
+## Think, find and share
+
+**Thinking desk** is an optional server plugin, off by default. A connected space owner can enable it in Plugins, then open it from the command menu or a note’s actions. **History** follows selected notes in creation order with explicit directed **builds-on**, **challenges** and **replaces** connections. **Collision** combines two to five deliberately selected subjects with an optional question and creative prompts for your own idea. Neither workflow uses AI, external processing or MCP tools, and originals remain intact.
+
+Commands need a connection. **Keep private note copy** explicitly saves the reviewed desk as an ordinary private snapshot; future desk edits do not change that copy. Changed or unavailable sources require review or removal before another snapshot, and stale desk revisions cannot overwrite concurrent changes. Once synced, snapshot notes can be read offline. See the [Thinking desk guide](../docs/plugins.md#thinking-desk) for the full workflow.
+
+Search shows marked excerpts around matching words, including deep matches in a long first line, and distinguishes those results from similar meaning when connected semantic search is available. Existing drafts and conflict copies remain available for recovery; failed plugin submissions keep the form open for review.
+
+A note’s **Share** action previews the saved text before opening Android’s recipient chooser, for public and private notes. It sends a copy with written links, not attachment files or Spunto access; recipient copies cannot be revoked. Live note and space grants are managed in the [web collaboration interface](../docs/hosted.md).
+
 ## Build locally
 
 Run these commands from the repository root with Docker Desktop running:
@@ -27,7 +37,7 @@ android/scripts/dgradle --no-watch-fs :core:model:test :data:local:testDebugUnit
 android/scripts/dgradle --no-watch-fs :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-The runner builds or reuses the `spunto-build:latest` local image (JDK 21, Android SDK 35, build tools 34), persists Gradle and the debug signing key in Docker volumes, and mounts the repository's shared conformance fixtures read-only. The host does not need Java. A local JDK 17 or newer and SDK 35 can alternatively run the same tasks through `android/gradlew` from `android/`.
+The runner builds or reuses the content-fingerprinted `spunto-build:<hash>` local image (JDK 21, Android SDK 35, build tools 34), persists Gradle and the debug signing key in Docker volumes, and mounts the repository's shared conformance fixtures read-only. The host does not need Java. A local JDK 17 or newer and SDK 35 can alternatively run the same tasks through `android/gradlew` from `android/`.
 
 Artifacts are `android/app/build/outputs/apk/debug/app-debug.apk` and `android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`. Installing them with `adb` is a separate device action; always select the intended emulator with `adb -s <serial>`. Debug instrumentation targets `io.theficos.spunto.debug` through `io.theficos.spunto.debug.test/androidx.test.runner.AndroidJUnitRunner`. Debug/test APKs use the local debug key; the release variant is unsigned until the explicit owner-signing step. No release is published by assembly. Never clear data, uninstall the owner's app or install a debug-signed APK over the release identity to make a test pass.
 
@@ -41,7 +51,7 @@ The [distribution guide's reproducibility check](../docs/android-distribution.md
 
 ## CalVer
 
-`android/gradle.properties` is the source of truth: `spuntoVersionName` uses **YYYY.MM.DD.<run>**, with a positive sequence for each release day, and `spuntoVersionCode` is an independent, strictly increasing integer for Android upgrades. The public release is `2026.10.19.3`, code `14`. Earlier deliveries retain their historical [acceptance records](../docs/development/android-distribution.md); rebuilding one uses its original version. Builds never derive versions from today's clock or a CI run number.
+`android/gradle.properties` is the source of truth: `spuntoVersionName` uses **YYYY.MM.DD.<run>**, with a positive sequence for each release day, and `spuntoVersionCode` is an independent, strictly increasing integer for Android upgrades. Inspect those properties for the current source version; they do not by themselves establish a published release. Earlier deliveries retain their historical [acceptance records](../docs/development/android-distribution.md); rebuilding one uses its original version. Builds never derive versions from today's clock or a CI run number.
 
 Inspect the version or advance it for a chosen release date from the repository root:
 

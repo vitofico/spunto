@@ -1103,6 +1103,9 @@
     "collaboration.preview_viewer": "{recipient} kann diese Notiz und ihre verknüpften Anhänge lesen.",
     "collaboration.preview_editor": "{recipient} kann den Text dieser Notiz lesen und bearbeiten und ihre verknüpften Anhänge lesen.",
     "collaboration.preview_scope": "Dies umfasst künftige Änderungen der Notiz, aber keinen Versionsverlauf, verlinkte Notizen oder den Rest dieses Bereichs. Andere Freigaben oder eine Mitgliedschaft können ebenfalls Zugriff geben. Ein Entzug löscht keine bereits erstellten Kopien.",
-    "slots.stale_form_recovery": "Deine Eingaben stehen noch in diesem Formular. Kopiere den gewünschten Text, bevor du das Werkzeug erneut öffnest. Prüfe dann die geänderten Quellen und versuche es erneut."
+    "slots.stale_form_recovery": "Deine Eingaben stehen noch in diesem Formular. Kopiere den gewünschten Text, bevor du das Werkzeug erneut öffnest. Prüfe dann die geänderten Quellen und versuche es erneut.",
+    "plugin.library-stats.name": "Bibliotheksstatistik",
+    "plugin.library-stats.description": "Notizanzahl, neue Notizen und Notizen mit Handlungsbedarf. Ohne Tracking oder KI.",
+    "plugin.library-stats.commands.summary.title": "Bibliotheksstatistik"
   }
 }

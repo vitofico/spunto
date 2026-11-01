@@ -120,7 +120,7 @@ before=$(sessions first)
 epoch_before=$(epoch)
 catalog=$(curl -sf -b "$jars/first" "$url/api/v1/plugins")
 [[ $(jq -c '[.plugins[].id] | sort' <<< "$catalog") == \
-  '["agent-inbox","ask","context-packs","decision-journal","develop","dictation","digest","duplicates","email-in","image-text","label-gardener","label-suggestions","link-enrichment","links","markdown-import","quick-capture","related","resurface","semantic-search","tasks","telegram","thinking-desk","tidy","title-summary","translate","voice-memos","webhooks"]' ]] \
+  '["agent-inbox","ask","context-packs","decision-journal","develop","dictation","digest","duplicates","email-in","image-text","label-gardener","label-suggestions","library-stats","link-enrichment","links","markdown-import","quick-capture","related","resurface","semantic-search","tasks","telegram","thinking-desk","tidy","title-summary","translate","voice-memos","webhooks"]' ]] \
   || fail "image plugin catalog differs"
 [[ $(jq '[.plugins[] | select(.default == "off" and .switch != "off")] | length' \
   <<< "$catalog") == 0 ]] || fail "non-AI plugins did not default off"

@@ -1103,6 +1103,9 @@
     "collaboration.preview_viewer": "{recipient} peut lire cette note et ses pièces jointes liées.",
     "collaboration.preview_editor": "{recipient} peut lire et modifier le texte de cette note et lire ses pièces jointes liées.",
     "collaboration.preview_scope": "Cela comprend les futures modifications de la note, mais pas son historique, les notes liées ou le reste de cet espace. D’autres autorisations ou l’appartenance à l’espace peuvent aussi donner accès. Retirer l’accès n’efface pas les copies déjà faites.",
-    "slots.stale_form_recovery": "Vos saisies sont toujours dans ce formulaire. Copiez le texte à conserver avant de rouvrir l’outil, puis vérifiez les sources modifiées et réessayez."
+    "slots.stale_form_recovery": "Vos saisies sont toujours dans ce formulaire. Copiez le texte à conserver avant de rouvrir l’outil, puis vérifiez les sources modifiées et réessayez.",
+    "plugin.library-stats.name": "Statistiques des notes",
+    "plugin.library-stats.description": "Consultez le nombre de notes, les captures récentes et les notes à organiser. Sans suivi ni IA.",
+    "plugin.library-stats.commands.summary.title": "Statistiques des notes"
   }
 }

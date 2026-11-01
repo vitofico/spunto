@@ -1103,6 +1103,9 @@
     "collaboration.preview_viewer": "{recipient} può leggere questa nota e gli allegati collegati.",
     "collaboration.preview_editor": "{recipient} può leggere e modificare il testo di questa nota e leggere gli allegati collegati.",
     "collaboration.preview_scope": "Include le modifiche future della nota, ma non la cronologia delle revisioni, le note collegate o il resto dello spazio. Altri permessi o l’appartenenza allo spazio possono dare accesso. Revocare l’accesso non cancella le copie già create.",
-    "slots.stale_form_recovery": "I dati inseriti sono ancora nel modulo. Copia il testo da conservare prima di riaprire lo strumento, poi controlla le fonti modificate e riprova."
+    "slots.stale_form_recovery": "I dati inseriti sono ancora nel modulo. Copia il testo da conservare prima di riaprire lo strumento, poi controlla le fonti modificate e riprova.",
+    "plugin.library-stats.name": "Statistiche delle note",
+    "plugin.library-stats.description": "Consulta il numero di note, le acquisizioni recenti e le note da organizzare. Senza tracciamento né IA.",
+    "plugin.library-stats.commands.summary.title": "Statistiche delle note"
   }
 }

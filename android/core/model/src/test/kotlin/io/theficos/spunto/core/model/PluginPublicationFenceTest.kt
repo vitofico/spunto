@@ -24,7 +24,24 @@ class PluginPublicationFenceTest {
   assertNull(fence.publish(owner,manifest(4,false),catalog(3,false)))
   assertNotNull(fence.publish(owner,manifest(4,false),catalog(4,false)))
   assertNotNull(fence.publish(owner,manifest(5,true),catalog(5,true)))
-  assertNull(fence.acknowledge(owner,row))
+  val current=fence.current(owner)!!
+  assertEquals(current,fence.acknowledge(owner,row));assertEquals(current,fence.current(owner))
+ }
+ @Test fun alreadyPublishedReceiptKeepsFullContributionsAndRejectsEqualRevisionContradiction() {
+  val fence=PluginPublicationFence();val owner=fence.bind("https://synthetic.invalid","a")
+  val current=fence.publish(owner,manifest(4,true),catalog(4,true))!!
+  assertEquals(current,fence.acknowledge(owner,Json.parseToJsonElement("""{"id":"dictation","switch":"on","plugins_rev":4}""").jsonObject))
+  assertEquals(1,fence.current(owner)!!.manifest["plugins"]!!.jsonArray.size)
+  assertNull(fence.acknowledge(owner,Json.parseToJsonElement("""{"id":"dictation","switch":"off","plugins_rev":4}""").jsonObject))
+  assertEquals(current,fence.current(owner))
+ }
+ @Test fun malformedPresentReceiptRevisionCannotBecomeLegacyOrAnAlreadyPublishedSuccess() {
+  val fence=PluginPublicationFence();val owner=fence.bind("https://synthetic.invalid","a")
+  val current=fence.publish(owner,manifest(4,true),catalog(4,true))!!
+  listOf("\"4\"","-1","9223372036854775808","1.5","true","null","{}","[]").forEach {revision ->
+   val row=Json.parseToJsonElement("""{"id":"dictation","switch":"off","plugins_rev":$revision}""").jsonObject
+   assertNull(fence.acknowledge(owner,row));assertEquals(current,fence.current(owner))
+  }
  }
  @Test fun revisionlessReceiptStaysOffThroughLocalEchoAndOldResponse() {
   val fence=PluginPublicationFence();val owner=fence.bind("https://synthetic.invalid","a")

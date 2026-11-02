@@ -52,6 +52,49 @@ class PluginPublicationTest {
   persistPluginSnapshot(repository,config,"a",manifest(4,false),catalog(3,false)) {config}
   assertEquals(state.manifest,repository.dao.state()!!.manifest);assertEquals(state.catalog,repository.dao.state()!!.catalog)
  }
+ @Test fun alreadySyncedEqualAndNewerReceiptsKeepTheCommittedFullSnapshot()=runBlocking {
+  val fence=PluginPublicationFence()
+  val equal=persistPluginSnapshot(repository,config,"a",manifest(4,true),catalog(4,true),fence) {config}!!
+  val row=Json.parseToJsonElement("""{"id":"dictation","switch":"on","plugins_rev":4}""").jsonObject
+  assertEquals(equal,acknowledgePluginSnapshot(repository,config,"a",row,fence) {config})
+  assertEquals(equal.manifest.toString(),repository.dao.state()!!.manifest)
+  val newer=persistPluginSnapshot(repository,config,"a",manifest(5,false),catalog(5,false),fence) {config}!!
+  assertEquals(newer,acknowledgePluginSnapshot(repository,config,"a",row,fence) {config})
+  assertEquals(newer.catalog.toString(),repository.dao.state()!!.catalog)
+  assertNull(acknowledgePluginSnapshot(repository,config,"a",Json.parseToJsonElement("""{"id":"dictation","switch":"on","plugins_rev":5}""").jsonObject,fence) {config})
+ }
+ @Test fun newerCommittedSyncAfterReceiptWriteStillAcknowledgesWithoutRollingItBack()=runBlocking {
+  val fence=PluginPublicationFence();readCommittedPluginPublication(repository,config,fence) {config}
+  val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>()
+  val row=Json.parseToJsonElement("""{"id":"dictation","switch":"off","plugins_rev":4}""").jsonObject
+  val receipt=async(Dispatchers.IO) {acknowledgePluginSnapshot(repository,config,"a",row,fence,PluginPublicationHooks(afterCommit={entered.complete(Unit);release.await()})) {config}}
+  entered.await()
+  val newer=persistPluginSnapshot(repository,config,"a",manifest(5,true),catalog(5,true),fence) {config}!!
+  release.complete(Unit);assertEquals(newer,receipt.await())
+  assertEquals(newer.manifest.toString(),repository.dao.state()!!.manifest);assertEquals(newer.catalog.toString(),repository.dao.state()!!.catalog)
+ }
+ @Test fun malformedPresentReceiptRevisionNeverWritesRoomOrAcknowledgesCurrentState()=runBlocking {
+  val fence=PluginPublicationFence();val original=repository.dao.state()!!
+  listOf("\"3\"","-1","9223372036854775808","1.5","true","null","{}","[]").forEach {revision ->
+   val row=Json.parseToJsonElement("""{"id":"dictation","switch":"on","plugins_rev":$revision}""").jsonObject
+   assertNull(acknowledgePluginSnapshot(repository,config,"a",row,fence) {config})
+   assertEquals(original,repository.dao.state())
+  }
+ }
+ @Test fun postCommitReceiptCannotAcknowledgeAnotherCredentialOrRestoredEpoch()=runBlocking {
+  for(changeOwner in listOf(false,true)) {
+   val fence=PluginPublicationFence();var current:AuthConfig?=config
+   val state=repository.dao.state()!!
+   repository.dao.putState(state.copy(epoch="a",manifest=manifest(3,true).toString(),catalog=catalog(3,true).toString()))
+   readCommittedPluginPublication(repository,config,fence) {current}
+   val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>()
+   val row=Json.parseToJsonElement("""{"id":"dictation","switch":"off","plugins_rev":4}""").jsonObject
+   val receipt=async(Dispatchers.IO) {acknowledgePluginSnapshot(repository,config,"a",row,fence,PluginPublicationHooks(afterCommit={entered.complete(Unit);release.await()})) {current}}
+   entered.await()
+   if(changeOwner) current=config.copy(deviceId="replacement-device") else repository.dao.putState(repository.dao.state()!!.copy(epoch="restored",manifest=manifest(1,true).toString(),catalog=catalog(1,true).toString()))
+   release.complete(Unit);assertNull(receipt.await())
+  }
+ }
  @Test fun heldWriteBeforeCommitStaysPrivateAndCancellationRollsBack()=runBlocking {
   val fence=PluginPublicationFence()
   val committed=readCommittedPluginPublication(repository,config,fence) {config}!!

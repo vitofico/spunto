@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_plugin_library_stats_name">Estadísticas de notas</string>
+    <string name="settings_plugin_library_stats_description">Consulta el número de notas, capturas recientes y notas que requieren atención. Sin seguimiento ni IA.</string>
+</resources>

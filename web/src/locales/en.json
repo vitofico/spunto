@@ -1103,6 +1103,9 @@
     "collaboration.preview_viewer": "{recipient} can read this note and its linked attachments.",
     "collaboration.preview_editor": "{recipient} can read and edit this note’s text and read its linked attachments.",
     "collaboration.preview_scope": "This includes future note edits, but not revision history, linked notes or the rest of this space. Other grants or space membership may also provide access. Removing access cannot erase copies already made.",
-    "slots.stale_form_recovery": "Your entries are still in this form. Copy any text you want to keep before reopening the tool, then review changed sources and retry."
+    "slots.stale_form_recovery": "Your entries are still in this form. Copy any text you want to keep before reopening the tool, then review changed sources and retry.",
+    "plugin.library-stats.name": "Library stats",
+    "plugin.library-stats.description": "See note counts, recent captures and notes that could use attention. No tracking or AI.",
+    "plugin.library-stats.commands.summary.title": "Library stats"
   }
 }

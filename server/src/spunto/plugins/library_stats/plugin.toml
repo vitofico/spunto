@@ -1,0 +1,19 @@
+id = "library-stats"
+name = "Library stats"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+runtime = "in-process"
+category = "organize"
+description = "See note counts, recent captures and notes that could use attention. No tracking or AI."
+entry = "spunto.plugins.library_stats:plugin"
+requires = []
+default = "off"
+data_version = 1
+permissions = ["notes.read"]
+
+[[contributes.commands]]
+id = "summary"
+title = "Library stats"
+where = ["palette"]
+online = true

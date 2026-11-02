@@ -186,6 +186,7 @@ jobs:
           uv run pytest tests/test_postgres.py tests/test_hosted.py tests/test_oidc.py \
             tests/test_hosted_local_auth.py tests/test_operator_workspace.py \
             tests/test_sqlite_import.py tests/test_postgres_snapshot.py \
+            tests/test_library_stats_hosted.py \
             tests/test_ask_writes.py::test_real_postgres_reviewed_edit_create_authoring_and_stale_undo \
             --junitxml="$RUNNER_TEMP/postgres.xml" -ra
           python3 - <<'PY'

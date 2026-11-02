@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_plugin_library_stats_name">Library stats</string>
+    <string name="settings_plugin_library_stats_description">See note counts, recent captures and notes that could use attention. No tracking or AI.</string>
+</resources>

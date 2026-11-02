@@ -94,6 +94,39 @@ class PluginNotes:
         self.ctx.check("notes.read")
         return {"labels": [dict(row) for row in rows], "total": len(rows)}
 
+    async def stats(self, *, machine=False):
+        """Count visible metadata in one snapshot, without fetching note bodies."""
+        self.ctx.check("notes.read")
+        if type(machine) is not bool:
+            raise ValueError("machine must be a boolean")
+        if machine and self.ai:
+            raise ContextError("machine_note_forbidden")
+        visibility, _ = self.core._visibility()
+        where = ["n.trashed_at IS NULL", visibility]
+        if not machine:
+            where.append("n.machine=0")
+        now = self.ctx.clock()
+        async with self.store.read() as conn:
+            row = (
+                await conn.execute_fetchall(
+                    "SELECT count(*) AS saved,"  # noqa: S608
+                    "sum(CASE WHEN n.archived_at IS NULL THEN 1 ELSE 0 END) AS active,"
+                    "sum(CASE WHEN n.archived_at IS NOT NULL THEN 1 ELSE 0 END) AS archived,"
+                    "sum(CASE WHEN n.archived_at IS NULL AND n.pinned=1 "
+                    "THEN 1 ELSE 0 END) AS pinned,"
+                    "sum(CASE WHEN n.archived_at IS NULL AND NOT EXISTS "
+                    "(SELECT 1 FROM note_label nl WHERE nl.note_id=n.id) "
+                    "THEN 1 ELSE 0 END) AS unlabeled,"
+                    "sum(CASE WHEN n.archived_at IS NULL THEN n.open_tasks ELSE 0 END) "
+                    "AS open_tasks,"
+                    "sum(CASE WHEN n.created_at>=? AND n.created_at<=? THEN 1 ELSE 0 END) "
+                    "AS created_30_days FROM note n WHERE " + " AND ".join(where),
+                    (now - 30 * 86_400_000, now),
+                )
+            )[0]
+        self.ctx.check("notes.read")
+        return {key: row[key] or 0 for key in row.keys()}
+
     async def search(self, query, *, limit=8, machine=False, match_any=False):
         self.ctx.check("notes.read")
         if machine or type(limit) is not int or not 1 <= limit <= 50:

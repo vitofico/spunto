@@ -52,4 +52,17 @@ class NoteExportStateTest {
   assertNull(ownerWebSettingsTarget(context,config.copy(serverUrl="https://user:secret@synthetic.invalid"),"https://synthetic.invalid",true,"data").url)
   assertNull(ownerWebSettingsTarget(context,config.copy(serverUrl="http://synthetic.invalid"),"http://synthetic.invalid",true,"data").url)
  }
+ @Test fun hostedAccountManagementIsUserScopedForEverySpaceRoleAndNeverBridgesCredentials() {
+  for(role in listOf("owner","editor","viewer")) {
+   val config=AuthConfig("https://synthetic.invalid","synthetic-account-secret","device-secret","Phone",userId="synthetic-user",workspaceId="synthetic-space",workspaceRole=role)
+   val target=ownerWebSettingsTarget(context,config,config.serverUrl,true,"account")
+   assertEquals("https://synthetic.invalid/settings/account",target.url)
+   val uri=java.net.URI(target.url!!);assertNull(uri.rawQuery);assertNull(uri.rawFragment);assertNull(uri.rawUserInfo)
+   listOf(config.token,config.deviceId,config.userId!!,config.workspaceId!!).forEach {assertFalse(target.url!!.contains(it))}
+   assertNull(ownerWebSettingsTarget(context,config,"https://other.invalid",true,"account").url)
+   assertNull(ownerWebSettingsTarget(context,config,config.serverUrl,false,"account").url)
+   assertNull(ownerWebSettingsTarget(context,config,config.serverUrl,true,"account",true).url)
+  }
+ }
+
 }

@@ -15,7 +15,7 @@
     <string name="settings_devices">Appareils</string>
     <string name="settings_remove_this_phone_or_others_in_the">Retirez ce téléphone ou d’autres dans l’application web</string>
     <string name="settings_profile">Profil</string>
-    <string name="settings_your_display_name_in_the_web_app">Votre nom affiché, dans l’application web</string>
+    <string name="settings_your_display_name_in_the_web_app">Nom affiché pour cet espace, dans l’application web</string>
     <string name="settings_sign_out">Se déconnecter</string>
     <string name="settings_your_notes_stay_on_this_phone">Vos notes restent sur ce téléphone</string>
     <string name="settings_sync">Synchroniser</string>
@@ -560,4 +560,11 @@
     <string name="settings_attaches_searchable_text">Ajoute du texte recherchable</string>
     <string name="settings_adds_plugin_routes">Ajoute des routes d’extension</string>
     <string name="settings_uses_device_microphone">Utilise le microphone de votre appareil</string>
+    <string name="settings_account">Compte</string>
+    <string name="settings_owner">Propriétaire</string>
+    <string name="settings_signed_in_as">Connecté en tant que %1$s</string>
+    <string name="settings_account_username">Nom d’utilisateur : %1$s</string>
+    <string name="settings_account_server">Serveur : %1$s</string>
+    <string name="settings_manage_account">Gérer le compte</string>
+    <string name="settings_signed_in">Connecté</string>
 </resources>

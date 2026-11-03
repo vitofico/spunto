@@ -60,6 +60,12 @@ export interface AuthOptions {
   login_url?: string;
   label?: string;
 }
+export interface SignedInAccount {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  email: string | null;
+}
 export interface AccountSecurity {
   local_username: string | null;
   local_password_set: boolean;

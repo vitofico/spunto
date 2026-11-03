@@ -21,6 +21,9 @@ import java.io.File
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
+@Serializable data class SignedInAccount(val id:String,@SerialName("display_name") val displayName:String?=null,val username:String?=null,val email:String?=null) {
+ val label:String? get()=listOf(displayName,username,email).firstNotNullOfOrNull {it?.trim()?.takeIf(String::isNotEmpty)}
+}
 @Serializable data class DeviceToken(val id:String,val token:String,val name:String,@SerialName("user_id") val userId:String?=null,@SerialName("workspace_id") val workspaceId:String?=null,@SerialName("workspace_role") val workspaceRole:String?=null)
 @Serializable data class PullItem(val kind:String,@SerialName("change_seq") val changeSeq:Long,val data:JsonObject)
 @Serializable data class PullResponse(val epoch:String,val cursor:String,@SerialName("has_more") val hasMore:Boolean,@SerialName("plugins_rev") val pluginsRev:Int,val items:List<PullItem>)
@@ -59,6 +62,7 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  suspend fun signOut():Boolean = try { request("/api/v1/auth/logout","POST");true } catch(e:CancellationException) { throw e } catch(e:ApiException) { e.status==401 } catch(e:Exception) { false }
  suspend fun get(path:String):JsonObject = request(path).jsonObject
  suspend fun post(path:String,body:JsonObject):JsonObject = request(path,"POST",body).jsonObject
+ suspend fun accountIdentity():SignedInAccount = json.decodeFromJsonElement(request("/api/v1/auth/me").jsonObject.getValue("account"))
  suspend fun ai():JsonObject = get("/api/v1/ai")
  suspend fun meta():JsonObject = request("/api/v1/meta").jsonObject
  suspend fun manifest():JsonObject = request("/api/v1/plugins/manifest").jsonObject

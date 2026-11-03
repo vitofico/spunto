@@ -30,6 +30,7 @@ import { Icon } from "./components/core/Icon";
 import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
+import { AccountIdentityLink } from "./features/AccountIdentity";
 import { ActiveSharedSpace } from "./features/Collaboration";
 import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
 const loadNote = () => import("./pages/Note");
@@ -263,6 +264,7 @@ function Rail({
         </div>
         <div className="rail-foot">
           <nav>
+            <AccountIdentityLink close={close} />
             <Link
               href="/settings/appearance"
               aria-label={t("app.settings")}

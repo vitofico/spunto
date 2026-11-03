@@ -62,6 +62,13 @@ in web or Android code. The provider identity key is its exact `(issuer, subject
 An email match never creates an account link, including when both identities have
 the same email. SSO enrollment, recovery and MFA follow the IdP's policy.
 
+The web navigation shows the signed-in account name. Android shows it in
+**Settings → Account**; tap the name to see the login name, server and phone
+separately. Names use the account display name, then username, then email, and
+never the active space or phone name. Android retains a verified name offline for
+the same account and credential and clears that cached identity on sign-out.
+Single-owner installations show **Owner** instead of inventing a username.
+
 Use **Settings → Account** to manage sign-in. An existing SSO account can add a
 username/password after fresh provider verification; this opens the same account,
 notes and spaces. Existing password accounts must supply their current password

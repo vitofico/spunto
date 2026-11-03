@@ -19,6 +19,14 @@ class ApiClientTest {
  @Before fun start() { server.start() }
  @After fun stop() { server.shutdown() }
  private fun api(token:String="test-synthetic")=ApiClient(AuthConfig(server.url("/").toString(),token,"device","Test",true))
+ @Test fun accountIdentityUsesAuthenticatedOwnAccountAndTrimsNameFallbacks() = runBlocking {
+  server.enqueue(MockResponse().setBody("""{"account":{"id":"alice","display_name":"  Élodie 李  ","username":"alice-login","email":null},"workspace":{"name":"Someone else’s space"}}"""))
+  val account=api().accountIdentity();assertEquals("alice",account.id);assertEquals("Élodie 李",account.label)
+  val request=server.takeRequest();assertEquals("/api/v1/auth/me",request.path);assertEquals("Bearer test-synthetic",request.getHeader("Authorization"))
+  assertEquals("login",account.copy(displayName=" ",username=" login ").label)
+  assertEquals("mail@example.test",account.copy(displayName=null,username=" ",email=" mail@example.test ").label)
+  assertNull(account.copy(displayName=" ",username=null,email=null).label)
+ }
  @Test fun pushUsesExactDtoAndBearerHeader() = runBlocking {
   server.enqueue(MockResponse().setBody("""{"epoch":"e","results":[{"op_id":"op","status":"applied","version":1}]}"""))
   assertEquals(1,api().push("e",listOf(OutboxOperation(opId="op",type="note.create",noteId="id",body="synthetic",createdAt=123,sourceKind="android"))).results.single().version)

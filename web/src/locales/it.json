@@ -1106,6 +1106,13 @@
     "slots.stale_form_recovery": "I dati inseriti sono ancora nel modulo. Copia il testo da conservare prima di riaprire lo strumento, poi controlla le fonti modificate e riprova.",
     "plugin.library-stats.name": "Statistiche delle note",
     "plugin.library-stats.description": "Consulta il numero di note, le acquisizioni recenti e le note da organizzare. Senza tracciamento né IA.",
-    "plugin.library-stats.commands.summary.title": "Statistiche delle note"
+    "plugin.library-stats.commands.summary.title": "Statistiche delle note",
+    "identity.account": "Account",
+    "identity.owner": "Proprietario",
+    "identity.account_named": "Account: {name}",
+    "identity.signed_in_as": "Accesso come {name}",
+    "identity.username": "Nome utente: {username}",
+    "identity.server": "Server: {server}",
+    "identity.signed_in": "Accesso effettuato"
   }
 }

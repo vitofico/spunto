@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { currentOwner, startSSO, useAuth } from "../lib/query";
+import { AccountIdentityDetails } from "./AccountIdentity";
 import styles from "./Feature.module.css";
 
 export function AccountPanel() {
@@ -75,6 +76,7 @@ export function AccountPanel() {
   return (
     <>
       <h1>{t("accountpanel.account")}</h1>
+      <AccountIdentityDetails />
       <p className="muted">
         {t("accountpanel.manage_how_you_sign_in_password_and_sso")}
       </p>

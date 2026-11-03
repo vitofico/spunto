@@ -1106,6 +1106,13 @@
     "slots.stale_form_recovery": "Your entries are still in this form. Copy any text you want to keep before reopening the tool, then review changed sources and retry.",
     "plugin.library-stats.name": "Library stats",
     "plugin.library-stats.description": "See note counts, recent captures and notes that could use attention. No tracking or AI.",
-    "plugin.library-stats.commands.summary.title": "Library stats"
+    "plugin.library-stats.commands.summary.title": "Library stats",
+    "identity.account": "Account",
+    "identity.owner": "Owner",
+    "identity.account_named": "Account: {name}",
+    "identity.signed_in_as": "Signed in as {name}",
+    "identity.username": "Username: {username}",
+    "identity.server": "Server: {server}",
+    "identity.signed_in": "Signed in"
   }
 }

@@ -10,6 +10,7 @@ import {
 } from "./identity";
 import type {
   Args,
+  SignedInAccount,
   Attachment,
   Credential,
   Flags,
@@ -249,6 +250,8 @@ export const api = {
       workspace: false,
       identity: false,
     }),
+  accountIdentity: () =>
+    request<{ account: SignedInAccount }>("/api/v1/auth/me"),
   accountSecurity: () =>
     request<AccountSecurity>("/api/v1/auth/account/security", {
       workspace: false,

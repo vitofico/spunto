@@ -761,6 +761,11 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
     metadata = await client.get("/api/v1/meta", headers=bearer)
     assert metadata.status_code == 200, metadata.text
     assert metadata.json()["sync_epoch"] != "sign-in-required"
+    identity = await client.get("/api/v1/auth/me", headers=bearer)
+    assert identity.status_code == 200, identity.text
+    assert identity.json()["account"]["id"] == bob["account"]["id"]
+    assert identity.json()["account"]["display_name"] == "Bob"
+    assert identity.json()["account"]["id"] != alice["account"]["id"]
     pull = await client.get("/api/v1/sync/pull", headers=bearer)
     assert pull.status_code == 200, pull.text
     assert pull.json()["epoch"] == metadata.json()["sync_epoch"]
@@ -769,6 +774,9 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
         headers=headers(alice),
         json={"user_id": bob["account"]["id"], "role": "viewer"},
     )
+    viewer_identity = await client.get("/api/v1/auth/me", headers=bearer)
+    assert viewer_identity.status_code == 200
+    assert viewer_identity.json()["account"]["id"] == bob["account"]["id"]
     assert (await client.get("/api/v1/notes", headers=bearer)).status_code == 200
     assert (await client.get("/api/v1/sync/pull", headers=bearer)).status_code == 200
     assert (

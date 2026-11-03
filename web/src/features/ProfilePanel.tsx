@@ -9,6 +9,7 @@ import type { Session } from "../lib/types";
 import { Dialog } from "./Dialog";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { plural } from "./format";
+import { AccountIdentityDetails } from "./AccountIdentity";
 import styles from "./Feature.module.css";
 
 export function ProfilePanel({
@@ -21,7 +22,14 @@ export function ProfilePanel({
   return (
     <>
       <h1>{t("profilepanel.profile")}</h1>
-      {hosted ? <DisplayName /> : <Password />}
+      {hosted ? (
+        <DisplayName />
+      ) : (
+        <>
+          <AccountIdentityDetails />
+          <Password />
+        </>
+      )}
       {onShowGuide && (
         <>
           <h2>{t("profilepanel.guide")}</h2>

@@ -26,6 +26,12 @@ const glyphs = {
       <path d="M20 15.5l-4.5-4.5L7 19.5" />
     </>
   ),
+  person: (
+    <>
+      <circle cx="12" cy="7.5" r="3.5" />
+      <path d="M5 20v-2a7 7 0 0 1 14 0v2" />
+    </>
+  ),
   notes: (
     <>
       <path d="M5 6.5h14M5 12h14M5 17.5h9" />

@@ -39,6 +39,10 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   return pages.getOrPut(day) { val job=Job(viewModelScope.coroutineContext[Job]);job to repository.paging(day).cachedIn(viewModelScope+job) }.second
  }
  val auth=container.auth.config.map {it?.takeIf {config ->config.replicaId==container.replicaId}}.stateIn(viewModelScope,SharingStarted.Eagerly,null)
+ private val accountIdentityCache=AccountIdentityCache(container.preferences)
+ private var accountIdentityRefresh:Job?=null
+ private var accountIdentitySigningOut=false
+ val accountIdentity=MutableStateFlow<SignedInAccount?>(null)
  val status=container.sync.state
  val online=combine(auth,status,container.connected) { auth,status,connected -> auth!=null && connected && status !is SyncStatus.Waiting && status!=SyncStatus.NeedsSignIn }.stateIn(viewModelScope,SharingStarted.Eagerly,false)
  val message=MutableStateFlow("")
@@ -53,6 +57,9 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   viewModelScope.launch {status.collect {if(it==SyncStatus.NeedsSignIn) reauthenticate.value=true}}
   viewModelScope.launch {auth.collect {config ->
    if(config!=pluginConfig) {
+    accountIdentitySigningOut=false
+    accountIdentity.value=accountIdentityCache.read(config)
+    if(config!=null) refreshAccountIdentity()
     pluginManager.invalidate();pluginConfig=config;catalog.value=JsonObject(emptyMap());pluginAi.value=JsonObject(emptyMap());pluginEpoch.value=""
     if(config!=null) {
      if(container.preferences.getString("native-plugin-server",null)==config.serverUrl.trimEnd('/')) {
@@ -129,6 +136,18 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   container.context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
  }
  fun task(scope:CoroutineScope=viewModelScope,block:suspend ()->Unit):Job = scope.launch { try { block() } catch(e:CancellationException) { throw e } catch(e:Exception) { if(e is ApiException && e.status==401) reauthenticate.value=true; message.value=when { e is ApiException -> apiErrorMessage(container.context.resources,e); e is LocalOperationException -> localOperationMessage(container.context.resources,e); e is IllegalArgumentException -> e.message.orEmpty(); else -> container.context.getString(R.string.sys_server_unreachable) } } }
+ internal fun refreshAccountIdentity():Job? {
+  if(accountIdentitySigningOut) return null
+  val config=auth.value?.takeIf {it.hosted} ?: return null
+  accountIdentityRefresh?.cancel()
+  return viewModelScope.launch {
+   try {
+    val identity=accountIdentityCache.refresh(config,{ApiClient(config).accountIdentity()},{container.auth.config.first().takeIf {auth.value==config}})
+    if(identity!=null) accountIdentity.value=identity
+   } catch(error:CancellationException) {throw error}
+   catch(error:Exception) {if(error is ApiException && error.status==401 && auth.value==config && !accountIdentitySigningOut) reauthenticate.value=true}
+  }.also {accountIdentityRefresh=it}
+ }
  fun synchronize()=task { val result=container.sync.sync(); if(result==SyncStatus.NeedsSignIn) reauthenticate.value=true; refreshPluginManager()?.join() }
  suspend fun saveLocal(body:String,id:String?=null):String { android.os.Trace.beginSection("spunto.local-save");return try { repository.save(body,id) } finally { android.os.Trace.endSection() } }
  fun save(body:String,id:String?=null,done:(String)->Unit={})=task { val noteId=saveLocal(body,id);repository.clearDraft(id?:"capture",body);done(noteId) }
@@ -154,10 +173,13 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  }
  internal fun retire() {viewModelScope.cancel()}
  /** Signs out at once; online, the server then revokes this phone's credential too, and offline it stays listed under Devices. */
- fun signOut()=task {
-  val config=container.auth.config.first()?.takeIf {it.replicaId==container.replicaId};val reachable=online.value
-  config?.let {container.auth.clear()};reauthenticate.value=false
-  if(config!=null && reachable && !ApiClient(config).signOut()) message.value=container.context.getString(R.string.sys_signed_out_listed)
+ fun signOut():Job {
+  accountIdentitySigningOut=true;accountIdentityRefresh?.cancel();accountIdentityCache.clear();accountIdentity.value=null
+  return task {
+   val config=container.auth.config.first()?.takeIf {it.replicaId==container.replicaId};val reachable=online.value
+   config?.let {container.auth.clear()};accountIdentityCache.clear();reauthenticate.value=false
+   if(config!=null && reachable && !ApiClient(config).signOut()) message.value=container.context.getString(R.string.sys_signed_out_listed)
+  }
  }
  fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(ApiClient(config).request(path,method,body)) }
  fun ask(question:String,continuation:JsonObject?=null,current:()->Boolean={true},onHandle:(JsonObject)->Unit={},onError:((String)->Unit)?=null,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {

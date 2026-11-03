@@ -39,6 +39,9 @@ import kotlinx.serialization.json.*
  val catalog by model.catalog.collectAsState();val manifest by model.manifest.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null);val logs by model.repository.dao.logs().collectAsState(emptyList())
  val phoneLock by model.container.appLock.state.collectAsState()
+ val accountIdentity by model.accountIdentity.collectAsState()
+ var accountDetails by remember(auth?.token) {mutableStateOf(false)}
+ LaunchedEffect(auth,online) {if(online) model.refreshAccountIdentity()}
  var signOut by remember {mutableStateOf(false)};var activity by rememberSaveable {mutableStateOf(false)}
  val ai=rememberAiStatus(model)
  val plugins=nativePluginCatalog(catalog,manifest)
@@ -63,10 +66,11 @@ import kotlinx.serialization.json.*
    SettingsRow(resources.getString(R.string.settings_plugins),when {plugins.valid -> resources.getString(R.string.settings_of_on ,plugins.onCount,plugins.rows.size);auth==null -> resources.getString(R.string.settings_connect_your_server_to_choose_plugins);else -> resources.getString(R.string.settings_sync_to_load_your_plugins)},onClick={onRoute("plugins")})
   }
   item {
-   SettingsSection(resources.getString(R.string.settings_server))
+   SettingsSection(resources.getString(R.string.settings_account))
    val config=auth
    if(config==null) SettingsRow(resources.getString(R.string.settings_connect_to_your_server),resources.getString(R.string.settings_sign_in_or_scan_a_pairing_code),onClick={onRoute("login")})
    else {
+    AccountIdentityRow(config,accountIdentity) {accountDetails=true}
     SettingsRow(config.serverUrl.removePrefix("https://"),resources.getString(R.string.settings_this_phone_is ,config.name))
     if(needsSignIn) SettingsRow(resources.getString(R.string.settings_sign_in_again),resources.getString(R.string.settings_sync_is_paused_until_this_phone_signs),onClick={onRoute("login")})
     SettingsRow(resources.getString(R.string.settings_devices),resources.getString(R.string.settings_remove_this_phone_or_others_in_the),enabled=online,onClick={model.pluginWeb("/settings/devices")})
@@ -97,6 +101,7 @@ import kotlinx.serialization.json.*
    SettingsRow("Spunto $version".trim(),resources.getString(R.string.settings_free_software_under_the_agpl_3_0))
   }
  }
+ if(accountDetails) auth?.let {config -> AccountIdentityDialog(config,accountIdentity,onDismiss={accountDetails=false},onManage={accountDetails=false;ownerPage(if(config.hosted) "account" else "profile")})}
  if(signOut) AlertDialog(onDismissRequest={signOut=false},title={Text(resources.getString(R.string.settings_sign_out_b1155))},text={Text(signOutText(resources,pending,online))},confirmButton={TextButton(onClick={model.signOut();signOut=false}) {Text(resources.getString(R.string.settings_sign_out))}},dismissButton={TextButton(onClick={signOut=false}) {Text(resources.getString(R.string.settings_cancel))}})
 }
 /** Online, signing out revokes this phone's credential; offline, it says where the phone stays listed. */

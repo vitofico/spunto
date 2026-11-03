@@ -109,10 +109,10 @@ fun sharedManagementTarget(context:Context,config:AuthConfig?,replicaRoot:String
  return SharedManagementTarget(root+path,context.getString(R.string.core_owner_sign_in))
 }
 
-/** These owner-only routes intentionally open browser sign-in without a device token. */
+/** Browser sign-in stays separate for library, space profile and user account settings. */
 fun ownerWebSettingsTarget(context:Context,config:AuthConfig?,replicaRoot:String?,online:Boolean,section:String,needsSignIn:Boolean=false):SharedManagementTarget {
  fun unavailable(message:String)=SharedManagementTarget(null,message)
- if(section !in setOf("data","profile")) return unavailable(context.getString(R.string.core_owner_setting_missing))
+ if(section !in setOf("data","profile","account")) return unavailable(context.getString(R.string.core_owner_setting_missing))
  if(config==null || config.token.isBlank() || needsSignIn) return unavailable(context.getString(R.string.core_owner_connect))
  if(!online) return unavailable(context.getString(R.string.core_owner_offline))
  val root=managementRoot(config.serverUrl) ?: return unavailable(context.getString(R.string.core_server_address_missing))

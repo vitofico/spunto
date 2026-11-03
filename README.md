@@ -102,6 +102,9 @@ For a single note, use **Share** and enter the exact username or verified email 
 
 Existing and shared notes autosave, with a **Save** action available immediately. Independent edits can merge, and overlapping changes are preserved as conflict copies for review. A stale plugin form keeps your entries and explains how to copy them before reopening the tool and reviewing changed sources.
 
+The web navigation and Android settings show the signed-in account name;
+account details keep your login name, server and phone name separate.
+
 The [hosted guide](docs/hosted.md) explains multiple accounts, shared spaces, roles and recovery. Sign in with a username and password or an optional SSO provider such as Authentik.
 
 ## AI on your terms

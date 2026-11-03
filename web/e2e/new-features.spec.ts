@@ -51,6 +51,8 @@ async function login(page: Page, pluginId: string) {
     plugin,
     `Bundled ${pluginId} must be in the real catalog`,
   ).toBeDefined();
+  // The live change feed refreshes commands after activation. Reloading here
+  // races its in-flight requests when WebKit tears down the document.
   const enabled = await page.request.post(
     `/api/v1/plugins/${pluginId}/enable`,
     {
@@ -59,8 +61,6 @@ async function login(page: Page, pluginId: string) {
     },
   );
   expect(enabled.status(), await enabled.text()).toBe(200);
-  // Refetch the real manifest before looking for the newly enabled command.
-  await page.goto("/");
 }
 
 async function palette(page: Page, title: string) {

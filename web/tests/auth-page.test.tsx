@@ -195,6 +195,8 @@ it("keeps the password field focused, selected and marked after a wrong password
 });
 
 it("says how long to wait when the server backs off", async () => {
+  // Keep the initial countdown stable while asynchronous user events settle.
+  vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 0, 1));
   auth.login.mockRejectedValueOnce(
     new ApiError(429, "rate_limited", undefined, undefined, 42),
   );

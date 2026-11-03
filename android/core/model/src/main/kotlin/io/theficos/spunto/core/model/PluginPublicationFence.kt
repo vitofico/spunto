@@ -43,9 +43,14 @@ class PluginPublicationFence {
   val id=text(row,"id") ?: return null
   val switch=text(row,"switch")?.takeIf {it in setOf("on","off")} ?: return null
   val rows=previous.catalog["plugins"] as? JsonArray ?: return null
-  if(rows.none {(it as? JsonObject)?.let {entry -> text(entry,"id")==id}==true}) return null
+  val existing=rows.firstOrNull {(it as? JsonObject)?.let {entry -> text(entry,"id")==id}==true} as? JsonObject ?: return null
   val receiptRevision=revision(row)
-  if(receiptRevision!=null && receiptRevision<previous.revision) return null
+  if("plugins_rev" in row && receiptRevision==null) return null
+  // Sync may already have committed this switch, or a later server change. Its full snapshot wins.
+  if(receiptRevision!=null && receiptRevision<=previous.revision) {
+   if(receiptRevision==previous.revision && text(existing,"switch")!=switch) return null
+   return PluginPublicationStage(previous,serial,acknowledged)
+  }
   val actualRevision=receiptRevision ?: previous.revision
   val catalog=safeCatalog(JsonObject(previous.catalog+("plugins_rev" to JsonPrimitive(actualRevision))+("plugins" to JsonArray(rows.map {if((it as? JsonObject)?.let {entry -> text(entry,"id")==id}==true) row else it}))))
   val manifest=JsonObject(previous.manifest+("plugins_rev" to JsonPrimitive(actualRevision))+("plugins" to JsonArray((previous.manifest["plugins"] as? JsonArray).orEmpty().filterNot {(it as? JsonObject)?.let {entry -> text(entry,"id")==id}==true})))

@@ -258,5 +258,17 @@ private suspend fun writePluginPublication(repository:NotesRepository,config:Aut
 }
 suspend fun persistPluginSnapshot(repository:NotesRepository,config:AuthConfig,epoch:String,manifest:JsonObject,catalog:JsonObject,fence:PluginPublicationFence=processPluginPublications,hooks:PluginPublicationHooks=PluginPublicationHooks(),configProvider:suspend ()->AuthConfig?):PluginPublication? =
  writePluginPublication(repository,config,epoch,configProvider,fence,hooks) {owner -> fence.stage(owner,manifest,catalog)}
-suspend fun acknowledgePluginSnapshot(repository:NotesRepository,config:AuthConfig,epoch:String,row:JsonObject,fence:PluginPublicationFence=processPluginPublications,hooks:PluginPublicationHooks=PluginPublicationHooks(),configProvider:suspend ()->AuthConfig?):PluginPublication? =
- writePluginPublication(repository,config,epoch,configProvider,fence,hooks) {owner -> fence.stageAcknowledgement(owner,row)}
+suspend fun acknowledgePluginSnapshot(repository:NotesRepository,config:AuthConfig,epoch:String,row:JsonObject,fence:PluginPublicationFence=processPluginPublications,hooks:PluginPublicationHooks=PluginPublicationHooks(),configProvider:suspend ()->AuthConfig?):PluginPublication? {
+ val written=writePluginPublication(repository,config,epoch,configProvider,fence,hooks) {owner -> fence.stageAcknowledgement(owner,row)}
+ if(written!=null) return written
+ // A newer durable snapshot can win after our write commits but before its caller resumes.
+ val revision=PluginPublicationFence.revision(row) ?: return null
+ val id=(row["id"] as? JsonPrimitive)?.takeIf {it.isString}?.content ?: return null
+ val switch=(row["switch"] as? JsonPrimitive)?.takeIf {it.isString && it.content in setOf("on","off")}?.content ?: return null
+ val committed=readCommittedPluginPublication(repository,config,fence,configProvider) ?: return null
+ if(committed.owner.epoch!=epoch) return null
+ val current=committed.publication ?: return null
+ val actual=(current.catalog["plugins"] as? JsonArray)?.mapNotNull {it as? JsonObject}?.firstOrNull {(it["id"] as? JsonPrimitive)?.takeIf {value -> value.isString}?.content==id} ?: return null
+ val actualSwitch=(actual["switch"] as? JsonPrimitive)?.takeIf {it.isString}?.content
+ return current.takeIf {it.revision>revision || it.revision==revision && actualSwitch==switch}
+}

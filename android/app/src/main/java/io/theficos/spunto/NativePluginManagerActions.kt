@@ -92,18 +92,21 @@ internal class NativePluginManagerActions(
     if(!owns(config,attempt)) return@launch
     require(row.pluginText("id")==id && row.pluginText("switch") in setOf("on","off") && row.pluginLong("plugins_rev")!=null) {resources.getString(R.string.settings_the_server_did_not_acknowledge_this_switch)}
     if(epoch()!=expectedEpoch || !owns(config,attempt)) return@launch
-    if(!acknowledge(config,expectedEpoch,row)) {if(owns(config,attempt)) onComplete(PluginToggleResult.Failed(resources.getString(R.string.settings_plugin_facts_changed_refresh_before_trying_again)));return@launch}
+    if(!acknowledge(config,expectedEpoch,row)) {if(owns(config,attempt) && epoch()==expectedEpoch) onComplete(PluginToggleResult.Failed(resources.getString(R.string.settings_plugin_facts_changed_refresh_before_trying_again)));return@launch}
     if(!owns(config,attempt) || epoch()!=expectedEpoch) return@launch
-    if(!on && row.pluginText("switch")=="off" && NativePluginFacts(row).canEnable) {
-     val receipt=PluginUndo(id,config.serverUrl.trimEnd('/'),permissions,plugin.granted.orEmpty().toSet(),now()+7000)
-     undo.value=receipt;expiry=scope.launch {delay(7000);if(undo.value===receipt) undo.value=null}
-    }
-    if(row.pluginText("switch")!=(if(on) "on" else "off")) report(resources.getString(R.string.settings_the_plugin_changed_on_the_server_its))
     var refreshFailed=false
     try {val snapshot=snapshot(api,expectedEpoch);ensureActive();if(owns(config,attempt) && epoch()==expectedEpoch) publish(config,snapshot)}
     catch(cancelled:CancellationException) {throw cancelled}
     catch(error:Exception) {refreshFailed=true;if(owns(config,attempt)) report(resources.getString(R.string.settings_switch_saved_refresh_unavailable))}
-    if(owns(config,attempt) && epoch()==expectedEpoch) onComplete(PluginToggleResult.Applied(row,refreshFailed))
+    if(owns(config,attempt) && epoch()==expectedEpoch) {
+     val latest=current();val actual=latest.rows.firstOrNull {it.id==id}
+     if(!on && row.pluginText("switch")=="off" && latest.valid && latest.revision==row.pluginLong("plugins_rev") && actual?.canEnable==true && !actual.wantedOn && actual.permissions?.toSet()==permissions.toSet() && actual.granted?.toSet()==plugin.granted?.toSet()) {
+      val receipt=PluginUndo(id,config.serverUrl.trimEnd('/'),permissions,actual.granted.orEmpty().toSet(),now()+7000)
+      undo.value=receipt;expiry=scope.launch {delay(7000);if(undo.value===receipt) undo.value=null}
+     }
+     if(actual==null || !actual.valid || actual.removed || actual.raw.pluginText("switch")!=(if(on) "on" else "off")) report(resources.getString(R.string.settings_the_plugin_changed_on_the_server_its))
+     onComplete(PluginToggleResult.Applied(row,refreshFailed))
+    }
    } catch(cancelled:CancellationException) {throw cancelled}
    catch(error:Exception) {
     if(owns(config,attempt)) {

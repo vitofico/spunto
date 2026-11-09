@@ -1,1 +1,4 @@
-<resources><color name="icon_paper">#F8F5F0</color></resources>
+<resources>
+    <color name="icon_background">#392544</color>
+    <color name="icon_foreground">#FFAB96</color>
+</resources>

@@ -53,7 +53,7 @@
 
 ## More than a place to put notes
 
-Write a line, make a checklist or add a `#nested/label`. A short first-run guide introduces capture, labels, search and sync; replay it from Settings whenever you want. The core works on its own; plugins add capabilities in a few fixed places, so your notes remain the centre of the app. [Five built-in themes](#make-it-your-own) include light and dark modes.
+Write a line, make a checklist or add a `#nested/label`. A short first-run guide introduces capture, labels, search and sync; replay it from Settings whenever you want. The core works on its own; plugins add capabilities in a few fixed places, so your notes remain the centre of the app. [Six built-in themes](#make-it-your-own) include light and dark modes.
 
 | When you want to… | Spunto helps you… |
 |---|---|
@@ -73,7 +73,7 @@ Thinking desk, context-pack and decision-journal commands require a connection. 
 
 ## Make it your own
 
-Open **Settings → Appearance** to choose **Carta**, **Ardesia**, **Salvia**, **Corallo** or **Elettrica**. In the web app, select **System**, **Light** or **Dark** independently of the palette. Use **Use a different theme on this device** for a browser-specific palette; otherwise the palette follows your instance setting.
+Open **Settings → Appearance** to choose **Carta**, **Ardesia**, **Salvia**, **Corallo**, **Elettrica** or **Prugna**. Carta is the default. In the web app, select **System**, **Light** or **Dark** independently of the palette. Use **Use a different theme on this device** for a browser-specific palette; otherwise the palette follows your instance setting.
 
 <p align="center">
   <a href="docs/assets/web-timeline-salvia.png"><img src="docs/assets/web-timeline-salvia.png" width="49%" alt="The same saved Darth Vader notes in Salvia, with the Plain background selected"></a>

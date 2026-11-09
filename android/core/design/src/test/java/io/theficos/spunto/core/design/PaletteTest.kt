@@ -8,8 +8,8 @@ import org.junit.rules.Timeout
 
 class PaletteTest {
  @get:Rule val timeout=Timeout(10,TimeUnit.MINUTES)
- @Test fun fiveCatalogChoicesHaveBothAccessibleModes() {
-  assertEquals(listOf("carta","ardesia","salvia","corallo","elettrica"),builtInThemes.map { it.id })
+ @Test fun builtInCatalogChoicesHaveBothAccessibleModes() {
+  assertEquals(listOf("carta","ardesia","salvia","corallo","elettrica","spunto-prugna"),builtInThemes.map { it.id })
   assertEquals(builtInTokens.keys,builtInThemes.map { it.id }.toSet())
   builtInTokens.forEach { (id,modes) -> assertEquals(setOf("light","dark"),modes.keys);modes.forEach { (mode,palette) -> assertEquals("$id $mode",emptyList<String>(),paletteErrors(palette)) } }
  }

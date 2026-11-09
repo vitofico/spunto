@@ -1,1 +1,10 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#9F4C2A" android:pathData="M60,43a11,11 0,1 0,0 22a11,11 0,1 0,0 -22" /></vector>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Map the mark's 64-unit frame to the adaptive icon's visible 72dp square. -->
+    <group android:translateX="18" android:translateY="18"
+        android:scaleX="1.125" android:scaleY="1.125">
+        <path android:fillColor="@color/icon_foreground"
+            android:pathData="M32 14 L34 20 C26 23 22 29 22 34 L33 32 L35 46 L17 48 C11 33 17 21 32 14 Z M52 37 A7 7 0 1 0 38 37 A7 7 0 1 0 52 37 Z" />
+    </group>
+</vector>

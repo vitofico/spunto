@@ -4,7 +4,7 @@ import { themeCatalog } from "../src/lib/theme-catalog";
 import { themeIssues, contrast } from "../scripts/theme-contrast.mjs";
 
 const source = JSON.parse(readFileSync("tokens.json", "utf8"));
-it("adds exactly two vivid themes and preserves all original palette values", () => {
+it("lists all built-in themes and preserves the original palette values", () => {
   const original = JSON.parse(
     readFileSync("tests/fixtures/original-themes.json", "utf8"),
   );
@@ -14,6 +14,7 @@ it("adds exactly two vivid themes and preserves all original palette values", ()
     "salvia",
     "corallo",
     "elettrica",
+    "spunto-prugna",
   ]);
   for (const id of Object.keys(original))
     expect(source.themes[id]).toEqual(original[id]);

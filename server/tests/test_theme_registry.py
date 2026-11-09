@@ -41,12 +41,21 @@ def pack(tmp_path, *, key="operator-paper", colors=None, accent=False):
 
 def test_colour_pack_preserves_builtins_and_ignores_executable_extra_keys(tmp_path, settings):
     pack(tmp_path, accent=True)
+    pack(tmp_path, key="prugna", accent=True)
     registry = ThemeRegistry(settings.model_copy(update={"data_dir": tmp_path}))
-    assert registry.builtin_ids == {"carta", "ardesia", "salvia", "corallo", "elettrica"}
+    assert registry.builtin_ids == {
+        "carta",
+        "ardesia",
+        "salvia",
+        "corallo",
+        "elettrica",
+        "spunto-prugna",
+    }
     for key in registry.builtin_ids:
         assert registry.selected(key) == theme_manifest(key)
         assert registry.cards[key]["accents"] == []
     assert registry.selected("operator-paper", "extra")["accent"] == "extra"
+    assert registry.selected("prugna", "extra")["accent"] == "extra"
     assert registry.selected("missing")["id"] == "carta"
     css = registry.css("operator-paper", "extra")
     assert 'data-theme="operator-paper"' in css and 'data-accent="extra"' in css
@@ -146,7 +155,7 @@ async def test_public_css_owner_preferences_manifest_and_safe_ssr(server, tmp_pa
     ).status_code == 403
     manifest = await server.client.get("/api/v1/plugins/manifest")
     assert manifest.json()["theme"]["accent"] == "extra"
-    assert len(manifest.json()["theme_catalog"]) == 6
+    assert len(manifest.json()["theme_catalog"]) == 7
     web = tmp_path / "web"
     web.mkdir()
     (web / "index.html").write_text("<html><head></head><body></body></html>")

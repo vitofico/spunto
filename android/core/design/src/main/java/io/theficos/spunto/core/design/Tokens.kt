@@ -8,6 +8,7 @@ val builtInThemes = listOf(
  ThemeChoice("salvia","Salvia","Sage paper, a green accent."),
  ThemeChoice("corallo","Corallo","Coral and rose, with deep wine ink."),
  ThemeChoice("elettrica","Elettrica","Electric blue and violet, with lavender light."),
+ ThemeChoice("spunto-prugna","Prugna","Plum ink and soft peach."),
 )
 val builtInTokens: Map<String, Map<String, Map<String, String>>> = mapOf(
  "carta" to mapOf(
@@ -29,6 +30,10 @@ val builtInTokens: Map<String, Map<String, Map<String, String>>> = mapOf(
  "elettrica" to mapOf(
   "light" to mapOf("paper" to "#EFEEFF","raised" to "#FAF8FF","sunken" to "#DDD7FF","ink" to "#16103A","ink-2" to "#423777","ink-3" to "#5B4C92","rule" to "#CFC5F5","rule-strong" to "#A798D0","field" to "#7661B0","accent" to "#5232DD","accent-strong" to "#3D1FBC","accent-soft" to "#DAD2FF","on-accent" to "#FFFFFF","highlight" to "#C6EEFF","danger" to "#AC1840","warn" to "#86520D","sh" to "22 16 58","chrome" to "#C7BDFF","chrome-pill" to "#F1EDFF"),
   "dark" to mapOf("paper" to "#13102C","raised" to "#211A44","sunken" to "#090719","ink" to "#F3EEFF","ink-2" to "#C7B8EF","ink-3" to "#AE9CD8","rule" to "#493966","rule-strong" to "#6B568D","field" to "#8C76C7","accent" to "#B6A1FF","accent-strong" to "#D0BFFF","accent-soft" to "#352366","on-accent" to "#180C3B","highlight" to "#143E64","danger" to "#FF92B2","warn" to "#F4C070","sh" to "0 0 0","chrome" to "#0B0820","chrome-pill" to "#2B2151"),
+ ),
+ "spunto-prugna" to mapOf(
+  "light" to mapOf("paper" to "#FAF5F6","raised" to "#FFFDFC","sunken" to "#EEE2EB","ink" to "#392544","ink-2" to "#624B61","ink-3" to "#6F5A6D","rule" to "#E6D9E2","rule-strong" to "#CDB9C8","field" to "#94788F","accent" to "#67405E","accent-strong" to "#61364D","accent-soft" to "#FCE4DC","on-accent" to "#FFF8F5","highlight" to "#F8DDAD","danger" to "#A52D49","warn" to "#8A550D","sh" to "57 37 68","chrome" to "#EDE2EA","chrome-pill" to "#FAF5F6"),
+  "dark" to mapOf("paper" to "#221926","raised" to "#2E2332","sunken" to "#1D1521","ink" to "#F4E9F0","ink-2" to "#CDB9CA","ink-3" to "#B9A5B7","rule" to "#47364B","rule-strong" to "#644C66","field" to "#866D86","accent" to "#FFAB96","accent-strong" to "#FFD0BF","accent-soft" to "#462C3C","on-accent" to "#392544","highlight" to "#5C4129","danger" to "#FF9BA9","warn" to "#F2BA78","sh" to "0 0 0","chrome" to "#17101A","chrome-pill" to "#2E2332"),
  ),
 )
 object SpuntoSpacing { val s2=2.dp; val s4=4.dp; val s8=8.dp; val s12=12.dp; val s16=16.dp; val s20=20.dp; val s24=24.dp; val s32=32.dp; val s48=48.dp; val s64=64.dp; val s96=96.dp }

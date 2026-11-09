@@ -214,7 +214,14 @@ test("the complete wordmark follows every theme accent, including the collapsed 
   await page.setViewportSize({ width: 1280, height: 844 });
   const wordmark = page.locator(".rail-heading .wordmark");
   const dot = wordmark.locator("span:last-child");
-  for (const theme of ["carta", "ardesia", "salvia", "corallo", "elettrica"]) {
+  for (const theme of [
+    "carta",
+    "ardesia",
+    "salvia",
+    "corallo",
+    "elettrica",
+    "spunto-prugna",
+  ]) {
     for (const mode of ["light", "dark"]) {
       await page.evaluate(
         ({ theme, mode }) => {

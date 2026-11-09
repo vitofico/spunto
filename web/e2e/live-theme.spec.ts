@@ -8,7 +8,7 @@ const palettes: Record<
 const rgb = (hex: string) =>
   `rgb(${[1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16)).join(", ")})`;
 
-test("live theme controls recolor the wordmark, labels, Ask, and wave without reloading", async ({
+test("live theme controls recolor the wordmark, labels, Ask, and ambient artwork without reloading", async ({
   page,
 }) => {
   let settings = {
@@ -152,11 +152,9 @@ test("live theme controls recolor the wordmark, labels, Ask, and wave without re
       .poll(() =>
         page
           .locator(".rail-heading")
-          .evaluate(
-            (element) => getComputedStyle(element, "::before").backgroundColor,
-          ),
+          .evaluate((element) => getComputedStyle(element, "::before").content),
       )
-      .toBe(accent);
+      .toBe("none");
     await page.locator(".rail-search").click();
     await expect(
       page.locator(".palette-row").filter({ hasText: "Ask your notes" }),
@@ -180,6 +178,7 @@ test("live theme controls recolor the wordmark, labels, Ask, and wave without re
     salvia: "Salvia",
     corallo: "Corallo",
     elettrica: "Elettrica",
+    "spunto-prugna": "Prugna",
   })) {
     await page.getByRole("button", { name, exact: true }).click();
     for (const mode of ["light", "dark"]) {

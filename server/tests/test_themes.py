@@ -12,9 +12,9 @@ from spunto.api.plugins import Preferences
 from spunto.host.themes import contrast, theme_catalog, theme_errors, theme_ids, theme_manifest
 
 
-def test_all_five_themes_match_source_and_pass_unrounded_contrast():
+def test_all_builtin_themes_match_source_and_pass_unrounded_contrast():
     source = json.loads((Path(__file__).parents[2] / "web/tokens.json").read_text())
-    assert theme_ids() == ("carta", "ardesia", "salvia", "corallo", "elettrica")
+    assert theme_ids() == ("carta", "ardesia", "salvia", "corallo", "elettrica", "spunto-prugna")
     assert theme_catalog() == source["catalog"]
     for theme in theme_ids():
         assert theme_errors(source["themes"][theme]) == []
@@ -55,7 +55,8 @@ async def test_vivid_instance_selection_and_cookie_override_survive_fresh_html(s
             json={"code": server.services.setup_code, "password": "correct horse battery"},
         )
     ).status_code == 204
-    for theme in ("corallo", "elettrica"):
+    assert (await server.client.get("/api/v1/settings")).json()["theme"] == "carta"
+    for theme in ("corallo", "elettrica", "spunto-prugna"):
         changed = await server.client.put(
             "/api/v1/settings", json={"theme": theme}, headers={"Origin": PUBLIC_URL}
         )
@@ -67,8 +68,8 @@ async def test_vivid_instance_selection_and_cookie_override_survive_fresh_html(s
         'data-theme="corallo"'
         in (await server.client.get("/", headers={"Cookie": "theme=" + cookie})).text
     )
-    assert (await server.client.get("/api/v1/settings")).json()["theme"] == "elettrica"
-    assert 'data-theme="elettrica"' in (await server.client.get("/")).text
+    assert (await server.client.get("/api/v1/settings")).json()["theme"] == "spunto-prugna"
+    assert 'data-theme="spunto-prugna"' in (await server.client.get("/")).text
     assert (
         await server.client.put(
             "/api/v1/settings", json={"theme": "untrusted-theme"}, headers={"Origin": PUBLIC_URL}

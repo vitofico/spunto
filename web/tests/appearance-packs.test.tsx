@@ -53,7 +53,7 @@ afterEach(() => {
 
 it("validates installed palettes and one accent, retaining unavailable selections", () => {
   const cards = appearanceCards(manifest([installed]));
-  expect(cards).toHaveLength(6);
+  expect(cards).toHaveLength(7);
   expect(cards.at(-1)).toMatchObject({
     id: installed.id,
     name: installed.name,
@@ -110,7 +110,7 @@ it("isolates malformed cards and strips every unvalidated preview value", () => 
     expect(card.accents).toEqual([]);
   }
   expect(cards.at(-1)?.status).toBe("available");
-  expect(appearanceCards({ theme_catalog: {} } as Manifest)).toHaveLength(5);
+  expect(appearanceCards({ theme_catalog: {} } as Manifest)).toHaveLength(6);
   expect(
     appearanceCards(
       manifest([

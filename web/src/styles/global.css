@@ -1548,36 +1548,6 @@ mark[data-match] {
   max-inline-size: 24rem;
 }
 
-/* An open thread belongs to brand and quiet chrome, never to the note body. */
-.rail-heading {
-  position: relative;
-  isolation: isolate;
-}
-.rail-heading::before,
-.empty::before {
-  content: "";
-  display: block;
-  background: var(--accent);
-  mask: url("/brand-wave.svg") center / contain no-repeat;
-  pointer-events: none;
-}
-.rail-heading::before {
-  position: absolute;
-  z-index: -1;
-  opacity: 0.26;
-}
-.rail-heading::before {
-  inline-size: 58%;
-  block-size: 64px;
-  inset-inline-end: 0;
-  inset-block-start: -24px;
-}
-.empty::before {
-  inline-size: min(60%, 14rem);
-  block-size: 64px;
-  margin-block-end: var(--s-16);
-  opacity: 0.38;
-}
 .day {
   display: flex;
   align-items: center;
@@ -1593,13 +1563,9 @@ mark[data-match] {
   .collapsed .wordmark {
     font-size: 0.9375rem;
   }
-  .collapsed .rail-heading::before {
-    display: none;
-  }
 }
 
 /* Preserve opaque controls outside the approved home artwork composition. */
-.rail-heading .wordmark,
 .rail-search,
 .app:not([data-home="true"]) .topbar > .button,
 .app:not([data-home="true"]) .topbar .wordmark {
@@ -1633,10 +1599,6 @@ mark[data-match] {
 :root:not([data-background="plain"]) .auth form,
 :root:not([data-background="plain"]) .auth-state {
   background: var(--paper);
-}
-:root[data-background="plain"] .rail-heading::before,
-:root[data-background="plain"] .empty::before {
-  display: none;
 }
 .background-choices {
   display: grid;

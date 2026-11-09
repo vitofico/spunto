@@ -300,7 +300,14 @@ test("four steps remain reachable at 320px and 200% text in all themes", async (
         return range.getClientRects().length;
       }),
   ).toBe(1);
-  for (const theme of ["carta", "ardesia", "salvia", "corallo", "elettrica"]) {
+  for (const theme of [
+    "carta",
+    "ardesia",
+    "salvia",
+    "corallo",
+    "elettrica",
+    "spunto-prugna",
+  ]) {
     for (const mode of ["light", "dark"]) {
       await page.evaluate(
         ({ theme, mode }) => {

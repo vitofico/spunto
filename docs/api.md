@@ -167,7 +167,7 @@ The optional, default-off `library-stats` plugin contributes `summary` through t
 
 The MCP list includes enabled, visible plugin tools per token scope. Plugin tools retain declared destructive/idempotent hints, have closed input schemas, and pass outside text through the same fencing and response ceiling as the core. Invalid plugin tool schemas cannot break core discovery. Tools from bundled and operator-installed plugins use the same permission-checked host. See [operator plugins](plugins.md) for API1.0 loading, compatibility and configuration.
 
-Owner-session `GET`/`PUT /api/v1/settings` supports `plugin_order`, `hidden_mcp_tools`, `hidden_views`, the instance `theme` and nullable `theme_accent`. The five built-in IDs are `carta`, `ardesia`, `salvia`, `corallo` and `elettrica`; available operator packs and explicit accents come from the validated `theme_catalog` in `/plugins/manifest`. `GET /api/v1/changes/wait` waits up to 25 seconds for a new epoch/sequence cursor or plugin revision. Status includes plugin states, job counts and outbound destination-host counts, with no request paths, query strings or secrets.
+Owner-session `GET`/`PUT /api/v1/settings` supports `plugin_order`, `hidden_mcp_tools`, `hidden_views`, the instance `theme` and nullable `theme_accent`. The six built-in IDs are `carta`, `ardesia`, `salvia`, `corallo`, `elettrica` and `spunto-prugna` (Prugna); available operator packs and explicit accents come from the validated `theme_catalog` in `/plugins/manifest`. `GET /api/v1/changes/wait` waits up to 25 seconds for a new epoch/sequence cursor or plugin revision. Status includes plugin states, job counts and outbound destination-host counts, with no request paths, query strings or secrets.
 
 ## M3 web contracts
 

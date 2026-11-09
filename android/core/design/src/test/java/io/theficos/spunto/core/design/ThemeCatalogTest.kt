@@ -6,8 +6,8 @@ import org.junit.Test
 
 class ThemeCatalogTest {
  private fun pack()=ThemeCard("fixture-pack","Fixture paper",light=builtInTokens.getValue("carta").getValue("light"),dark=builtInTokens.getValue("carta").getValue("dark"),accents=listOf(ThemeAccent("blue-accent","Blue",builtInTokens.getValue("ardesia").getValue("light"),builtInTokens.getValue("ardesia").getValue("dark"))))
- @Test fun allFiveOriginalSixteenRoleMapsRemainByteExact() {
-  val frozen=mapOf("carta" to "b4c8fd201f493038eccc8ecf08a6f285f14a2b4d4cc843418f156c0f15a09623","ardesia" to "0985b936e120bf0398ba0f10aeef8a4c2adb0f1d0af036671974e7933736feee","salvia" to "00ce22ddfeab421b71576d84de533f320da842c671440aa4b9876243096e7495","corallo" to "7a5e85efa73f4efe5f6d677242d95767c8f09368fcc3f4f19a4f5bb1ea8292d7","elettrica" to "cd0667012e6bfaafe1cb3933566eb3eacc57500734cd1ac439f10427cc57b856")
+ @Test fun builtInSixteenRoleMapsRemainByteExact() {
+  val frozen=mapOf("carta" to "b4c8fd201f493038eccc8ecf08a6f285f14a2b4d4cc843418f156c0f15a09623","ardesia" to "0985b936e120bf0398ba0f10aeef8a4c2adb0f1d0af036671974e7933736feee","salvia" to "00ce22ddfeab421b71576d84de533f320da842c671440aa4b9876243096e7495","corallo" to "7a5e85efa73f4efe5f6d677242d95767c8f09368fcc3f4f19a4f5bb1ea8292d7","elettrica" to "cd0667012e6bfaafe1cb3933566eb3eacc57500734cd1ac439f10427cc57b856","spunto-prugna" to "886a7f464d77a544399fdec05fa4c1a298bc141098fd11507034455788ba6975")
   frozen.forEach { (id,expected) ->
    val exact=listOf("light","dark").flatMap { mode -> themeColorRoles.sorted().map { role -> "$mode:$role=${builtInTokens.getValue(id).getValue(mode).getValue(role)}" } }.joinToString("\n")
    assertEquals(id,expected,MessageDigest.getInstance("SHA-256").digest(exact.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) })

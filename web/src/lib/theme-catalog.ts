@@ -24,6 +24,11 @@ export const themeCatalog = [
     "id": "elettrica",
     "name": "Elettrica",
     "description": "Electric blue and violet, with lavender light."
+  },
+  {
+    "id": "spunto-prugna",
+    "name": "Prugna",
+    "description": "Plum ink and soft peach."
   }
 ] as const;
 export type BuiltinTheme = (typeof themeCatalog)[number]["id"];

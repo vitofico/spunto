@@ -11,7 +11,16 @@ import org.junit.Test
 class HeaderWaveContrastTest {
  @Test fun builtInPalettesKeepTheirVisibleWave() {
   for((name,modes) in builtInTokens) for((mode,tokens) in modes) {
-   assertEquals("$name/$mode",.65f,headerWaveOpacity(tokenColor(tokens.getValue("paper")),tokenColor(tokens.getValue("accent"))),.0001f)
+   val paper=tokenColor(tokens.getValue("paper"))
+   val accent=tokenColor(tokens.getValue("accent"))
+   val alpha=headerWaveOpacity(paper,accent)
+   if(name=="spunto-prugna" && mode=="dark") {
+    // The peach accent reaches the white status-bar icon contrast limit before full wave opacity.
+    assertTrue("$name/$mode",alpha>0f && alpha<.65f)
+   } else {
+    assertEquals("$name/$mode",.65f,alpha,.0001f)
+   }
+   verifyAllBlends(paper,accent,alpha)
   }
  }
  @Test fun acceptedNearThresholdPapersReduceOnlyTheUnsafeWave() {

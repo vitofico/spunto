@@ -127,15 +127,17 @@ class PluginNotes:
         self.ctx.check("notes.read")
         return {key: row[key] or 0 for key in row.keys()}
 
-    async def search(self, query, *, limit=8, machine=False, match_any=False):
+    async def search(self, query, *, limit=8, machine=False, match_any=False, mode="hybrid"):
         self.ctx.check("notes.read")
         if machine or type(limit) is not int or not 1 <= limit <= 50:
             raise ValueError("AI search needs eligible notes and a limit of 1 to 50")
+        if mode not in ("keyword", "hybrid"):
+            raise ValueError("Search mode must be keyword or hybrid")
         result = await self.core.search(
             query,
             limit=limit,
             machine=False,
-            mode="keyword" if match_any else "hybrid",
+            mode="keyword" if match_any else mode,
             match_any=match_any,
         )
         for note in result["hits"]:

@@ -1,6 +1,6 @@
 id = "context-packs"
 name = "Context packs"
-version = "1.0.0"
+version = "1.1.0"
 api = "1.0"
 kind = "server"
 runtime = "in-process"

@@ -186,7 +186,7 @@ internal data class SearchPages(val hits:List<Note> = emptyList(),val meaning:Se
 }
 
 /** One cancelled query owns no later page publication, even if a transport completes after cancellation. */
-internal suspend fun searchServerPages(request:suspend (String?)->JsonObject,awaitMore:suspend ()->Unit,show:(SearchPages)->Unit,failed:(Exception)->Unit) {
+internal suspend fun searchServerPages(request:suspend (String?)->JsonObject,awaitMore:suspend ()->Unit,show:(SearchPages)->Unit,failed:suspend (Exception)->Unit) {
  var pages=SearchPages()
  while(true) {
   try {

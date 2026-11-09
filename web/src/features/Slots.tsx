@@ -1,4 +1,8 @@
-import { useManifest, useWorkspaceRole } from "../lib/query";
+import {
+  invalidateContentFor,
+  useManifest,
+  useWorkspaceRole,
+} from "../lib/query";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
 import {
   lazy,
@@ -17,12 +21,19 @@ import { NoteBody } from "../components/core/NoteCard";
 import { useToast } from "../components/core/Toast";
 import { createIdempotencyKey } from "../lib/drafts";
 import { copyText } from "./copy";
-import type { Args, Annotation, Note, Plugin, Suggestion } from "../lib/types";
+import type {
+  Args,
+  Annotation,
+  Note,
+  Plugin,
+  Schema,
+  Suggestion,
+} from "../lib/types";
 import { SuggestionPreview } from "./LazyPluginViews";
 import { VocabularyOutput } from "./Vocabulary";
 import { outputText, validComponent } from "./vocabularyData";
 import { Dialog } from "./Dialog";
-import { suggestionTitle } from "./suggestionTitle";
+import { requiresSuggestionPreview, suggestionTitle } from "./suggestionTitle";
 import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
@@ -32,9 +43,20 @@ import {
   askItems,
   askNoteActionOptions,
 } from "./askConversationData";
+const LinkPicker = lazy(() =>
+  import("./LinkPicker").then((m) => ({ default: m.LinkPicker })),
+);
+const CommandProposal = lazy(() => import("./CommandProposal"));
+const NotePicker = lazy(() =>
+  import("./NotePicker").then((m) => ({ default: m.NotePicker })),
+);
 const AskConversation = lazy(() => import("./AskConversation"));
 export function usePlugins() {
   return useManifest();
+}
+export function supportsNotePicker(plugin: Plugin) {
+  const [major, minor] = plugin.version.split(".").map(Number);
+  return major > 1 || (major === 1 && minor >= 1);
 }
 export function activePlugins(plugins: Plugin[] | undefined) {
   return (plugins ?? [])
@@ -45,7 +67,11 @@ export function visibleSuggestions(
   note: Pick<Note, "suggestions">,
   plugins: Plugin[],
 ) {
-  const ids = new Set(activePlugins(plugins).map((p) => p.id));
+  const ids = new Set(
+    activePlugins(plugins)
+      .filter((p) => p.id !== "links" || supportsNotePicker(p))
+      .map((p) => p.id),
+  );
   const counts = new Map<string, number>();
   return (note.suggestions ?? []).filter(
     (s) =>
@@ -141,8 +167,7 @@ export function SuggestionLine({
   if (editing || !suggestions.length) return null;
   const apply = (s: Suggestion, trigger: HTMLElement) => {
     opener.current = trigger;
-    if (["replace_body", "merge_notes", "label_change"].includes(s.action))
-      setPreview(s);
+    if (requiresSuggestionPreview(s)) setPreview(s);
     else decision.mutate({ id: s.id, action: "accept" });
   };
   return (
@@ -162,15 +187,10 @@ export function SuggestionLine({
         }
         if (e.key === "a") {
           e.preventDefault();
-          if (
-            suggestions.some((s) =>
-              ["replace_body", "merge_notes", "label_change"].includes(
-                s.action,
-              ),
-            )
-          ) {
+          const review = suggestions.find(requiresSuggestionPreview);
+          if (review) {
             opener.current = null;
-            onReview ? onReview() : setPreview(suggestions[0]);
+            onReview ? onReview() : setPreview(review);
           } else
             for (const s of suggestions)
               decision.mutate({ id: s.id, action: "accept" });
@@ -345,12 +365,12 @@ function PanelSection({
   const command = useMutation({
     mutationFn: ({ id, args }: { id: string; args: Args }) =>
       api.command(plugin.id, id, args),
-    onSuccess: (result) =>
+    onSuccess: (result, { id, args }) =>
       window.dispatchEvent(
         new CustomEvent("spunto:command-result", {
           detail: {
             value: result,
-            origin: { plugin: plugin.id, command: "" },
+            origin: { plugin: plugin.id, command: id, args },
           },
         }),
       ),
@@ -628,7 +648,27 @@ function saveCommand(
     }
   }
 }
-export function CommandResult({
+export function CommandResult(props: {
+  value: unknown;
+  onDismiss?: () => void;
+  origin?: CommandOrigin;
+}) {
+  const sourceId = props.origin?.args?.note_id;
+  if (
+    props.value === true &&
+    props.origin?.plugin === "links" &&
+    props.origin.command === "link" &&
+    typeof sourceId === "string"
+  )
+    return (
+      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
+        <LinkPicker sourceId={sourceId} onClose={props.onDismiss} />
+      </Suspense>
+    );
+  return <PluginResult {...props} />;
+}
+
+function PluginResult({
   value,
   onDismiss,
   origin,
@@ -646,14 +686,50 @@ export function CommandResult({
   const [display, setDisplay] = useState(value);
   const [currentOrigin, setCurrentOrigin] = useState(origin);
   const [responseId, setResponseId] = useState(0);
+  const [review, setReview] = useState<{ id: string; response: number }>();
+  const [applied, setApplied] = useState(false);
+  const noteId = currentOrigin?.args?.note_id;
   const session = useMemo(() => ({}), [value, origin]);
   const activeSession = useRef(session);
   const appliedSession = useRef(session);
   activeSession.current = session;
-  const text = outputText(display);
+  const resultItems = askItems(display);
+  const interactive = resultItems.some(
+    (item) => item.type === "form" || item.type === "pill",
+  );
+  const text = interactive ? "" : outputText(display);
   const plugin = manifest.data?.plugins.find(
     (p) => p.id === currentOrigin?.plugin,
   );
+  const sourceForm =
+    currentOrigin?.command === "sources" &&
+    ["context-packs", "thinking-desk"].includes(currentOrigin.plugin)
+      ? resultItems.find(
+          (item) =>
+            validComponent(item) &&
+            item.type === "form" &&
+            (item.schema as Schema).properties?.selected_ids !== undefined,
+        )
+      : undefined;
+  const sourceFields =
+    sourceForm && validComponent(sourceForm) && sourceForm.type === "form"
+      ? (sourceForm.schema as Schema).properties
+      : undefined;
+  const selectedIds = sourceFields?.selected_ids?.default;
+  const sourceRevision = sourceFields?.expected_revision?.default;
+  const sourceLimit = sourceFields?.max_sources?.default;
+  const sourcePickerArgs =
+    currentOrigin &&
+    Array.isArray(selectedIds) &&
+    typeof sourceRevision === "number"
+      ? {
+          ...(currentOrigin.plugin === "context-packs"
+            ? { pack_id: currentOrigin.args?.pack_id ?? null }
+            : { desk_id: currentOrigin.args?.desk_id ?? null }),
+          expected_revision: sourceRevision,
+          picker: true,
+        }
+      : undefined;
   const providedSave = saveCommand(display, saveCommandIds(plugin));
   const askPendingHandle = useRef<Args | undefined>(undefined);
   const askLifetime = useRef({ active: true, generation: requestGeneration() });
@@ -686,6 +762,7 @@ export function CommandResult({
     setResponseId((prior) => prior + 1);
     setCopied(false);
     setSaved(null);
+    setApplied(false);
   }, [value, origin, session]);
   const followup = useMutation({
     mutationFn: async ({
@@ -742,6 +819,7 @@ export function CommandResult({
       setResponseId((prior) => prior + 1);
       setCopied(false);
       setSaved(null);
+      setApplied(false);
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
@@ -763,7 +841,8 @@ export function CommandResult({
   });
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onDismiss?.();
+      if (e.key === "Escape" && !document.querySelector("dialog[open]"))
+        onDismiss?.();
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         if (conversationView) return;
@@ -815,16 +894,36 @@ export function CommandResult({
       <VocabularyOutput
         key={responseId}
         value={display}
-        formLabel={formLabel}
+        formLabel={
+          sourcePickerArgs ? t("notepicker.update_sources") : formLabel
+        }
         onCommand={
           currentOrigin && !followup.isPending
             ? (id, args) =>
                 followup.mutate({
                   plugin: currentOrigin.plugin,
                   id,
-                  args,
+                  args:
+                    id === "sources" &&
+                    !args.action &&
+                    plugin &&
+                    supportsNotePicker(plugin) &&
+                    ["context-packs", "thinking-desk"].includes(
+                      currentOrigin.plugin,
+                    )
+                      ? { ...args, picker: true }
+                      : args,
                   session,
                 })
+            : undefined
+        }
+        onSuggestion={
+          typeof noteId === "string" &&
+          plugin &&
+          (plugin.id !== "links" || supportsNotePicker(plugin)) &&
+          !applied &&
+          !followup.isPending
+            ? (id) => setReview({ id, response: responseId })
             : undefined
         }
         onForm={
@@ -833,23 +932,84 @@ export function CommandResult({
                 followup.mutate({
                   plugin: currentOrigin.plugin,
                   id: currentOrigin.command,
-                  args: { ...currentOrigin.args, ...args },
+                  args: sourcePickerArgs
+                    ? {
+                        ...sourcePickerArgs,
+                        remove: args.remove ?? null,
+                        refresh: args.refresh === true,
+                      }
+                    : { ...currentOrigin.args, ...args },
                   session,
                 })
             : undefined
         }
       />
+      {sourcePickerArgs &&
+        currentOrigin &&
+        Array.isArray(selectedIds) &&
+        (typeof sourceLimit === "number" &&
+        selectedIds.length >= sourceLimit ? (
+          <p role="status">
+            {t("notepicker.source_limit", { count: sourceLimit })}
+          </p>
+        ) : (
+          <Suspense
+            fallback={<p role="status">{t("timeline.loading_notes")}</p>}
+          >
+            <NotePicker
+              exclude={selectedIds.filter(
+                (id): id is string => typeof id === "string",
+              )}
+              action={t("notepicker.add_source")}
+              busy={followup.isPending}
+              onSelect={(note) =>
+                followup.mutate({
+                  plugin: currentOrigin.plugin,
+                  id: currentOrigin.command,
+                  args: {
+                    ...sourcePickerArgs,
+                    add_id: note.id,
+                    add_version: note.version,
+                  },
+                  session,
+                })
+              }
+            />
+          </Suspense>
+        ))}
       {followup.isPending && currentOrigin?.plugin === "ask" && (
         <p role="status">{t("timeline.loading_notes")}</p>
       )}
+      {review?.response === responseId &&
+        typeof noteId === "string" &&
+        plugin && (
+          <Suspense
+            fallback={<p role="status">{t("timeline.loading_notes")}</p>}
+          >
+            <CommandProposal
+              key={review.id}
+              id={review.id}
+              plugin={plugin.id}
+              noteId={noteId}
+              onClose={() => setReview(undefined)}
+              onApplied={() => {
+                setReview(undefined);
+                setApplied(true);
+              }}
+            />
+          </Suspense>
+        )}
+      {applied && <p role="status">{t("commandproposal.applied")}</p>}
       <footer>
-        <button
-          disabled={!text}
-          onClick={() => void copyText(text).then(setCopied)}
-        >
-          {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
-        </button>
-        {genericSave && (
+        {!interactive && (
+          <button
+            disabled={!text}
+            onClick={() => void copyText(text).then(setCopied)}
+          >
+            {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
+          </button>
+        )}
+        {genericSave && !interactive && (
           <button
             className="primary"
             disabled={!text || save.isPending || !!saved}
@@ -1095,6 +1255,9 @@ export function PluginCommands({
         .filter(
           ({ command, at }) =>
             places.some((place) => at.includes(place)) &&
+            (p.id !== "links" ||
+              command.id !== "link" ||
+              supportsNotePicker(p)) &&
             (!("online" in command) ||
               !(command as unknown as { online?: boolean }).online ||
               navigator.onLine),
@@ -1121,8 +1284,21 @@ export function PluginCommands({
         c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
   const highlighted = Math.min(active, commands.length - 1);
-  const choose = (c: CommandChoice) =>
-    onChoose ? onChoose(c) : command.mutate(c);
+  const choose = (c: CommandChoice) => {
+    if (onChoose) onChoose(c);
+    else if (
+      c.plugin === "links" &&
+      c.id === "link" &&
+      typeof c.args?.note_id === "string"
+    ) {
+      const nextOrigin = { plugin: c.plugin, command: c.id, args: c.args };
+      if (onResult) onResult(true, nextOrigin);
+      else {
+        setResult(true);
+        setOrigin(nextOrigin);
+      }
+    } else command.mutate(c);
+  };
   useEffect(() => setActive(0), [query]);
   // The slash menu is driven from the editor: arrows move, Enter runs the highlighted command.
   useEffect(() => {

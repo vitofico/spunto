@@ -3,7 +3,7 @@
 #
 #   docker buildx build --platform linux/amd64,linux/arm64 -f server/Dockerfile .
 
-ARG PYTHON=python:3.14-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+ARG PYTHON=python:3.14-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 ARG NODE=node:26.9.0-slim@sha256:3a771f83944bb763050c23c0225c260638c4b7899e7a72485ef75e5e570499e5
 
 FROM ${NODE} AS web
@@ -45,6 +45,12 @@ ENV PATH=/app/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     SPUNTO_VERSION=${VERSION} \
     SPUNTO_WEB_DIR=/app/web
+# The pinned base includes the apt fix from DSA-6607-1. Apply DSA-6613-1
+# until the official base also includes the zlib update.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade zlib1g \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge 1:1.3.dfsg+really1.3.1-1+deb13u1 \
+    && rm -rf /var/lib/apt/lists/*
 # uv builds an unseeded application environment; runtime package installers are
 # unused, and pip's vendored dependencies carry separate vulnerability advisories.
 RUN python -m pip uninstall --yes pip \

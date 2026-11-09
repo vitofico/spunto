@@ -129,7 +129,15 @@ class Records:
         return [{**dict(row), "data": json.loads(row["data"])} for row in rows]
 
     async def compare_and_set(
-        self, collection, record_id, expected_data, data, *, note_id=None, key=None
+        self,
+        collection,
+        record_id,
+        expected_data,
+        data,
+        *,
+        note_id=None,
+        key=None,
+        source_versions=None,
     ):
         """Replace exact JSON atomically; expected_data=None requires an absent row."""
         self.ctx.check_write()
@@ -149,6 +157,9 @@ class Records:
             ):
                 self.ctx.check()
                 return False
+            if source_versions is not None:
+                self.ctx.check("notes.read")
+                await self.ctx.notes._guard_sources(conn, source_versions)
             await conn.execute(
                 "INSERT INTO plugin_record(plugin_id,collection,id,note_id,key,data,updated_at) "
                 "VALUES(?,?,?,?,?,?,?) ON CONFLICT(plugin_id,collection,id) DO UPDATE SET "

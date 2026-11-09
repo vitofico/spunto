@@ -164,6 +164,8 @@ export function VocabularyItem({
                     "base_version",
                     "revision",
                     "source_choices",
+                    "selected_ids",
+                    "max_sources",
                     "removal_choices",
                   ].includes(key) && field.default !== undefined,
               )

@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 from spunto.api.errors import Problem
+from spunto.core.note_links import append_link, link_text, proposal_target, visible_link
+from spunto.core.note_links import targets as note_link_targets
 from spunto.core.notes import MAX_BODY, Notes, _body, iso, sequence
 from spunto.core.plugin_notes import PluginNotes
 from spunto.core.text import label_key, labels, rewrite_labels, set_labels
@@ -98,14 +100,18 @@ def validate_payload(action: str, payload: dict) -> dict:
     return result
 
 
-def value(row: dict) -> dict:
+def is_link_proposal(row) -> bool:
+    return row["plugin_id"] == "links" and row["action"] == "append_text"
+
+
+def value(row: dict, *, payload: dict | None = None) -> dict:
     return {
         "id": row["id"],
         "plugin": row["plugin_id"],
         "note_id": row["note_id"],
         "note_version": row["note_version"],
         "action": row["action"],
-        "payload": json.loads(row["payload"]),
+        "payload": json.loads(row["payload"]) if payload is None else payload,
         "confidence": row["confidence"],
         "reason": row["reason"],
         "status": row["status"],
@@ -166,6 +172,12 @@ async def suggest(
             note_version = row["version"]
         elif note_version is not None:
             raise ManifestError("a global suggestion cannot carry a note version")
+        if ctx.plugin_id == "links" and action == "append_text":
+            target_id = proposal_target(payload)
+            if target_id is None or target_id == note_id:
+                raise ManifestError("a link suggestion needs one target note")
+            await adapter.core._row(conn, target_id)
+            payload = {"text": link_text(target_id)}
         if action == "add_label":
             visibility, _ = adapter.core._visibility()
             exists = await conn.execute_fetchall(
@@ -406,7 +418,32 @@ async def _rename_cluster(conn, domain, visibility, payload):
     return {"changed": changed}
 
 
-async def references_visible(conn, domain, row, *, include_trashed=False) -> bool:
+async def _link_destination(conn, domain, row):
+    try:
+        payload = json.loads(row["payload"])
+    except json.JSONDecodeError:
+        payload = None
+    target_id = proposal_target(payload)
+    if target_id is None or target_id == row["note_id"]:
+        raise Problem(404, "not_found", "That suggestion is unavailable.")
+    return await domain._row(conn, target_id)
+
+
+async def visible_payload(
+    conn, domain, row, *, include_trashed=False, source=None, link_titles=True
+) -> dict | None:
+    if is_link_proposal(row):
+        try:
+            if source is None:
+                source = await domain._row(conn, row["note_id"])
+            if source["trashed_at"] is not None:
+                return None
+            target = await _link_destination(conn, domain, row)
+        except Problem as error:
+            if error.status != 404:
+                raise
+            return None
+        return {"text": visible_link(target) if link_titles else link_text(target["id"])}
     payload = json.loads(row["payload"])
     related = []
     if row["action"] == "merge_notes":
@@ -421,13 +458,25 @@ async def references_visible(conn, domain, row, *, include_trashed=False) -> boo
         except Problem as error:
             if error.status != 404:
                 raise
-            return False
+            return None
     if row["action"] == "open" and "plugin_id" in payload:
         enabled = await conn.execute_fetchall(
             "SELECT id FROM plugin WHERE id=? AND state='enabled'", (payload["plugin_id"],)
         )
-        return bool(enabled)
-    return True
+        if not enabled:
+            return None
+    return payload
+
+
+async def sync_value(conn, domain, row):
+    if not is_link_proposal(row):
+        return value(dict(row))
+    # Devices can accept an append offline. Keep the cached caption independent of note titles.
+    payload = await visible_payload(conn, domain, row, link_titles=False)
+    if payload is None:
+        row = {**dict(row), "status": "superseded", "note_id": None}
+        payload = {}
+    return value(dict(row), payload=payload)
 
 
 async def pending(store, principal, *, note_id=None, scope="note", limit=100):
@@ -456,8 +505,9 @@ async def pending(store, principal, *, note_id=None, scope="note", limit=100):
         )  # noqa: S608
         visible = []
         for row in records:
-            if await references_visible(conn, domain, row):
-                visible.append(value(dict(row)))
+            payload = await visible_payload(conn, domain, row)
+            if payload is not None:
+                visible.append(value(dict(row), payload=payload))
     return {"suggestions": visible}
 
 
@@ -490,16 +540,24 @@ async def decide(store, principal, suggestion_id, decision, *, connection=None):
         row = dict(found[0])
         if row["note_id"] is None and not principal.owner:
             raise Problem(404, "not_found", "That suggestion is unavailable.")
-        if not await references_visible(
-            conn, domain, row, include_trashed=row["status"] in {"accepted", "dismissed"}
-        ):
-            raise Problem(404, "not_found", "That suggestion is unavailable.")
-        note = await domain._row(conn, row["note_id"]) if row["note_id"] else None
-        payload = json.loads(row["payload"])
-        if row["status"] in {"accepted", "dismissed"}:
+        terminal = row["status"] in {"accepted", "dismissed"}
+        destination = None
+        if is_link_proposal(row):
+            note = await domain._row(conn, row["note_id"])
+            if terminal:
+                payload = await visible_payload(conn, domain, row, source=note) or {}
+            else:
+                destination = await _link_destination(conn, domain, row)
+                payload = {"text": visible_link(destination)}
+        else:
+            payload = await visible_payload(conn, domain, row, include_trashed=terminal)
+            if payload is None:
+                raise Problem(404, "not_found", "That suggestion is unavailable.")
+            note = await domain._row(conn, row["note_id"]) if row["note_id"] else None
+        if terminal:
             if row["status"] != {"accept": "accepted", "dismiss": "dismissed"}[decision]:
                 raise Problem(409, "suggestion_decided", "That suggestion already has a decision.")
-            return {"suggestion": value(row), "applied": False}
+            return {"suggestion": value(row, payload=payload), "applied": False}
         offline_replace = (
             connection is not None
             and principal.kind == "device"
@@ -526,7 +584,12 @@ async def decide(store, principal, suggestion_id, decision, *, connection=None):
             elif action == "set_title":
                 body = "# " + payload["title"] + "\n\n" + note["body"]
             elif action == "append_text":
-                body = note["body"] + "\n\n" + payload["text"]
+                if destination is None:
+                    body = note["body"] + "\n\n" + payload["text"]
+                elif destination["id"] in note_link_targets(note["body"]):
+                    body = note["body"]
+                else:
+                    body = append_link(note, destination)
             elif action == "replace_body":
                 if offline_replace and note["version"] != row["note_version"]:
                     result = await domain.edit_in_transaction(
@@ -589,8 +652,6 @@ async def decide(store, principal, suggestion_id, decision, *, connection=None):
             elif action == "open":
                 if "note_id" in payload:
                     await domain._row(conn, payload["note_id"])
-                elif not await references_visible(conn, domain, row):
-                    raise Problem(404, "not_found", "That view is unavailable.")
                 result, body = {"open": payload}, None
             else:
                 raise Problem(422, "validation_failed", "Unknown suggestion action.")
@@ -611,4 +672,8 @@ async def decide(store, principal, suggestion_id, decision, *, connection=None):
             store.emit("suggestion.decided", row["note_id"], note["version"] if note else None)
     if stale:
         raise Problem(409, "suggestion_stale", "That suggestion expired or the note changed.")
-    return {"suggestion": value(row), "applied": decision == "accept", "result": result}
+    return {
+        "suggestion": value(row, payload=payload),
+        "applied": decision == "accept",
+        "result": result,
+    }

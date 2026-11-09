@@ -38,6 +38,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
@@ -57,13 +58,14 @@ internal fun resultCopyText(resources:Resources,data:JsonElement):String=outputC
  }
 }.joinToString("\n\n")
 
-internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonObject,onResult:(JsonObject)->Unit,onComplete:()->Unit={},scope:CoroutineScope=model.viewModelScope,onError:(String)->Unit={model.message.value=it})=model.task(scope) {
+internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonObject,onResult:(JsonObject)->Unit,onComplete:()->Unit={},scope:CoroutineScope=model.viewModelScope,onError:(String)->Unit={model.message.value=it},pickerSession:NotePickerSession?=null)=model.task(scope) {
  val resources=model.container.context.resources
  val auth=model.auth.value
  val epoch=model.pluginReplicaEpoch
  val requestContext=currentCoroutineContext()
  var pendingAskHandle:JsonObject?=null
- fun current()=auth!=null && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(plugin)
+ fun current()=auth!=null && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(plugin) && pickerSession?.current(model)!=false
+ suspend fun authorized()=current() && pickerSession?.authorized(model)!=false
  try {
   require(Regex("[a-z][a-z0-9-]{1,23}").matches(plugin) && Regex("[a-z][a-z0-9-]{0,127}").matches(id)) { resources.getString(R.string.settings_this_command_is_unavailable) }
   if(!current()) return@task
@@ -80,13 +82,13 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
   }
   val result=if(plugin=="ask" && id=="ask" && args.string("question").isNotBlank()) {
    conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value),noteActionsSupported=supportsAskNoteActions(model.container.manifest.value,auth?.workspaceRole)) ?: return@task
-  } else ApiClient(auth!!).guarded {current()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
-  if(!current()) return@task
+  } else ApiClient(auth!!).guarded {authorized()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
+  if(!authorized()) return@task
   model.synchronize().join()
-  if(current()) {onResult(commandEnvelope(plugin,id,args,result));pendingAskHandle=null}
+  if(authorized()) {onResult(commandEnvelope(plugin,id,args,result));pendingAskHandle=null}
  } catch(error:CancellationException) {throw error}
  catch(error:Exception) {
-  if(current()) {
+  if(authorized()) {
    if(error is ApiException && error.status==401) model.reauthenticate.value=true
    onError(when(error) {is ApiException -> apiErrorMessage(resources,error);is IllegalArgumentException -> error.message ?: resources.getString(R.string.settings_check_the_tool_inputs);is java.net.SocketTimeoutException -> resources.getString(R.string.settings_the_tool_took_too_long_try_again);else -> resources.getString(R.string.settings_couldn_t_reach_the_server_check_your)})
   }
@@ -253,24 +255,53 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val plugin=wrapper.string("plugin").ifEmpty { wrapper.string("plugin_id") }
  val command=wrapper.string("command_id")
  val initial=wrapper["command_args"] as? JsonObject ?: JsonObject(emptyMap())
+ val components=outputComponents(data)
+ val sourcePicker=sourcePickerState(plugin,command,initial,components)
+ val pickerSupported=plugin in setOf("thinking-desk","context-packs") && supportsNotePicker(model.manifest.collectAsState().value,plugin)
+ val pickerSession=if(pickerSupported) remember(plugin) {NotePickerSession.open(model,plugin)} else null
+ val ownsPicker=if(pickerSession==null) false else {
+  val auth by model.auth.collectAsState()
+  val epoch by model.pluginReplicaEpochState.collectAsState()
+  val gate by model.container.appLock.state.collectAsState()
+  remember(auth,epoch,gate,pickerSession) {pickerSession.current(model)}
+ }
+ if(sourcePicker!=null && !ownsPicker) return
  val deliver:(JsonObject)->Unit=onResult ?: { model.remote.value=it }
  val ownScope=rememberCoroutineScope()
  val scope=commandScope ?: ownScope
  var running by remember(data) { mutableStateOf(false) }
  var error by remember(data) {mutableStateOf("")}
- val run:(String,JsonObject)->Unit={ id,args -> if(!running && online && plugin.isNotBlank()) { running=true;error="";runCommand(model,plugin,id,args,deliver,{running=false},scope,onError={error=it}) } }
+ var pickerRefresh by remember {mutableIntStateOf(0)}
+ val run:(String,JsonObject)->Unit=run@{id,args ->
+  if(running || !online || plugin.isBlank()) return@run
+  val opensPicker=pickerSupported && opensSourcePicker(plugin,id,args)
+  val usesPicker=opensPicker || sourcePicker!=null
+  if(usesPicker && !ownsPicker) return@run
+  val input=if(opensPicker) JsonObject(args+("picker" to JsonPrimitive(true))) else args
+  running=true;error=""
+  runCommand(model,plugin,id,input,deliver,{running=false},scope,onError={
+   error=it
+   if(sourcePicker!=null && id=="sources") pickerRefresh++
+  },pickerSession=pickerSession.takeIf {usesPicker})
+ }
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value=resources.getString(R.string.settings_sync_to_review_this_suggestion) }
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-  val components=outputComponents(data)
   if(components.isEmpty() && command.isNotBlank()) Text(resources.getString(R.string.settings_this_result_has_no_preview_in_this),style=MaterialTheme.typography.bodySmall)
   components.forEach { component ->
+   if(component.string("type")=="form" && sourcePicker!=null && pickerSession!=null) {
+    SourceNotePicker(model,sourcePicker,pickerSession,online,running,pickerRefresh,onQueryChanged={error=""}) {run(command,it)}
+    if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+   }
    Vocabulary(component,onNote,review,run,online=online && !running,
-    onForm=if(command.isNotBlank()) { args -> run(command,JsonObject(initial+args)) } else null,formInitial=initial,formHidden=initial.keys.filter { it=="note_id" }.toSet(),noteReference={id,reason -> RoomReference(model,id,reason,onNote)},proposalPill={ pill ->
+    onForm=if(command.isNotBlank()) { args -> run(command,sourcePicker?.update(args) ?: JsonObject(initial+args)) } else null,
+    formInitial=if(sourcePicker!=null) sourcePicker.args else initial,
+    formHidden=if(sourcePicker!=null) setOf("selected_ids","max_sources") else initial.keys.filter { it=="note_id" }.toSet(),
+    noteReference={id,reason -> RoomReference(model,id,reason,onNote)},proposalPill={ pill ->
      val id=pill.string("suggestion_id");val proposal=outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let(::proposalData)
      ProposedPill(pill.string("label"),model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.let {localizedPluginName(resources,it,catalog)} ?: plugin,proposal?.string("action") in setOf("replace_body","merge_notes"),{review(id)},{model.decide(id,"dismiss")})
     })
   }
-  if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
+  if(sourcePicker==null && error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
   if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(R.string.settings_working_this_can_take_a_moment_with),style=MaterialTheme.typography.bodySmall)}
  }
 }
@@ -311,7 +342,9 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val target by remember(id) { model.repository.observe(id) }.collectAsState(null)
  when(action) {
   "add_label" -> Text(resources.getString(R.string.settings_add ,proposed.string("path")))
-  "append_text" -> { Text(resources.getString(R.string.settings_append_this_text));Markdown(proposed.string("text"),machine=true) }
+  "append_text" -> if(data.string("plugin")=="links") Text(resources.getString(R.string.core_link_legacy_preview)) else {
+   Text(resources.getString(R.string.settings_append_this_text));Markdown(proposed.string("text"),machine=true)
+  }
   "replace_body" -> { Text(resources.getString(R.string.settings_based_on_version ,data["note_version"] ?: resources.getString(R.string.settings_unknown)),style=MaterialTheme.typography.bodySmall);if(target==null) Text(resources.getString(R.string.settings_note_unavailable)) else TextChangePreview(target!!.body,proposed.string("body")) }
   "set_title" -> Text(resources.getString(R.string.settings_title ,proposed.string("title")))
   "label_change" -> { Text(labelChangeSummary(resources,proposed));Text(resources.getString(R.string.settings_review_the_affected_notes_in_the_web),style=MaterialTheme.typography.bodySmall) }
@@ -325,6 +358,13 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val action=data.string("action")
  val proposed=data["payload"] as? JsonObject ?: JsonObject(emptyMap())
  val noteId=if(action=="merge_notes") proposed.string("target_id") else data.string("note_id")
+ val suggestionId=data.string("id")
+ val link=action=="append_text" && data.string("plugin")=="links"
+ val linkSupported=link && supportsNotePicker(model.manifest.collectAsState().value,"links")
+ val linkSession=remember(suggestionId,linkSupported) {if(linkSupported) NotePickerSession.open(model,"links") else null}
+ val scope=rememberCoroutineScope()
+ var acceptingLink by remember(suggestionId) {mutableStateOf(false)}
+ var linkError by remember(suggestionId) {mutableStateOf("")}
  val note by remember(noteId) { model.repository.observe(noteId) }.collectAsState(null)
  val source by remember(proposed.string("source_id")) { model.repository.observe(proposed.string("source_id")) }.collectAsState(null)
  val online by model.online.collectAsState()
@@ -337,19 +377,38 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
   "label_change" -> false
   "merge_notes" -> eligible && source!=null && !source!!.trashed && !source!!.privateNote
   "open" -> true
-  else -> eligible
+  else -> if(link) current!=null && !current.trashed && online && linkSession?.current(model)==true && !acceptingLink else eligible
  }
- AlertDialog(onDismissRequest=onClose,title={Text(if(action=="merge_notes") resources.getString(R.string.settings_compare_notes) else resources.getString(R.string.settings_review_change))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+ AlertDialog(onDismissRequest={if(!acceptingLink) onClose()},title={Text(if(action=="merge_notes") resources.getString(R.string.settings_compare_notes) else resources.getString(R.string.settings_review_change))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   SuggestionPreview(model,data)
   if(stale) Text(resources.getString(R.string.settings_this_note_changed_wait_for_a_fresh),style=MaterialTheme.typography.bodySmall)
   if(data.string("status")!="pending") Text(suggestionStatus(resources,data.string("status")),style=MaterialTheme.typography.bodySmall)
+  if(link && !linkSupported) Text(resources.getString(R.string.core_link_upgrade_server))
+  else if(link && !online) Text(resources.getString(R.string.settings_needs_a_connection))
+  if(linkError.isNotBlank()) Text(linkError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
  }},confirmButton={
   if(action=="label_change") TextButton(enabled=online,onClick={model.auth.value?.let { runCatching { uri.openUri(it.serverUrl.trimEnd('/')+"/review") } };onClose()}) { Text(if(online) resources.getString(R.string.settings_open_web_review) else resources.getString(R.string.settings_needs_a_connection)) }
-  else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);model.decide(data.string("id"),"accept");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_apply_changes) else resources.getString(R.string.settings_apply)) }
- },dismissButton={TextButton(enabled=action!="label_change" || online,onClick={model.decide(data.string("id"),"dismiss");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_keep_original) else resources.getString(R.string.settings_dismiss)) }})
+  else if(link && linkSession!=null) TextButton(enabled=canApply,onClick={
+   if(!acceptingLink) {
+    acceptingLink=true;linkError=""
+    scope.launch {
+     try {
+      linkSession.cleanSource(model,noteId)
+      // A legacy proposal still needs the server to validate its current link and visibility.
+      linkSession.api(model).request("/api/v1/suggestions/$suggestionId/accept","POST")
+      linkSession.refresh(model)
+      onClose()
+     } catch(error:CancellationException) {throw error}
+     catch(error:Exception) {linkError=linkSession.reportError(model,resources,error)}
+     finally {acceptingLink=false}
+    }
+   }
+  }) {Text(resources.getString(if(acceptingLink) R.string.core_link_inserting else R.string.settings_apply))}
+  else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);model.decide(suggestionId,"accept");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_apply_changes) else resources.getString(R.string.settings_apply)) }
+ },dismissButton={TextButton(enabled=!acceptingLink && (action!="label_change" || online),onClick={model.decide(suggestionId,"dismiss");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_keep_original) else resources.getString(R.string.settings_dismiss)) }})
 }
 
-@Composable fun NoteCommands(model:SpuntoViewModel,noteId:String,privateNote:Boolean=false,onResult:(JsonObject)->Unit) {
+@Composable internal fun NoteCommands(model:SpuntoViewModel,noteId:String,privateNote:Boolean=false,onLink:()->Unit,onResult:(JsonObject)->Unit) {
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
  val manifest=model.manifest.collectAsState().value
@@ -363,7 +422,14 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val locale=LocalConfiguration.current.locales[0]
  val commands=remember(manifest,catalog,privateNote,locale) {noteTools(resources,model.container.manifest.plugins(),privateNote,catalog)}
  if(commands.isEmpty()) return
- fun run(tool:NoteTool) {running=true;error="";attempt=runCommand(model,tool.pluginId,tool.id,buildJsonObject {put("note_id",noteId)},{expanded=false;onResult(it)},{running=false},scope,onError={error=it})}
+ fun run(tool:NoteTool) {
+  if(tool.pluginId=="links" && tool.id=="link") {
+   if(supportsNotePicker(manifest,"links")) {expanded=false;onLink()}
+   else error=resources.getString(R.string.core_link_upgrade_server)
+   return
+  }
+  running=true;error="";attempt=runCommand(model,tool.pluginId,tool.id,buildJsonObject {put("note_id",noteId)},{expanded=false;onResult(it)},{running=false},scope,onError={error=it})
+ }
  // 03 R9: plugin verbs between hairlines, each with its plugin's name in grey; six here, the rest under More.
  HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
  commands.take(6).forEach {tool -> NoteSheetRow(tool.title,tool.pluginName,enabled=online && !running) {run(tool)}}

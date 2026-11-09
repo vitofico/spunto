@@ -74,6 +74,37 @@ async def test_manifest_and_forms(host):
     validate_output(await desk.relate(ctx(host), desk_id, 1))
 
 
+async def test_desk_picker_keeps_committed_revision_and_skips_legacy_search(host):
+    notes = Notes(host.store, OWNER)
+    first = await notes.create("Initial source")
+    second = await notes.create("New source")
+    desk_id = await create(host, note=first)
+
+    async def picker(revision, **args):
+        result = await desk.sources(ctx(host), desk_id, revision, picker=True, **args)
+        validate_output(result)
+        props = next(
+            item["schema"]["properties"] for item in result["items"] if item["type"] == "form"
+        )
+        assert "query" not in props and "source_choices" not in props
+        return props
+
+    props = await picker(1)
+    assert props["selected_ids"]["default"] == [first["id"]]
+    assert props["expected_revision"]["default"] == 1
+    newer = await notes.edit(second["id"], "Updated before selection", second["version"])
+    with pytest.raises(Problem, match="changed"):
+        await picker(1, add_id=second["id"], add_version=second["version"])
+    props = await picker(1, add_id=newer["id"], add_version=newer["version"])
+    assert props["selected_ids"]["default"] == [first["id"], newer["id"]]
+    assert props["expected_revision"]["default"] == 2
+    with pytest.raises(Problem, match="changed"):
+        await picker(1)
+    props = await picker(2, remove=props["remove"]["enum"][1])
+    assert props["expected_revision"]["default"] == 3
+    assert props["selected_ids"]["default"] == [newer["id"]]
+
+
 async def test_history_relations_stale_and_originals(host):
     notes = Notes(host.store, OWNER)
     first = await notes.create("Original idea #science")

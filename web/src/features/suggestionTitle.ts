@@ -1,5 +1,11 @@
 import { t } from "../lib/i18n";
 import type { Suggestion } from "../lib/types";
+export function requiresSuggestionPreview(s: Suggestion) {
+  return (
+    ["replace_body", "merge_notes", "label_change"].includes(s.action) ||
+    (s.plugin === "links" && s.action === "append_text")
+  );
+}
 export function suggestionTitle(s: Suggestion) {
   const p = s.payload;
   switch (s.action) {
@@ -8,7 +14,11 @@ export function suggestionTitle(s: Suggestion) {
     case "set_title":
       return t("suggestionpreview.title_value1", { value1: String(p.title) });
     case "append_text":
-      return t("suggestionpreview.append_text");
+      return t(
+        s.plugin === "links"
+          ? "plugin.links.commands.link.title"
+          : "suggestionpreview.append_text",
+      );
     case "replace_body":
       return t("suggestionpreview.review_edit");
     case "merge_notes":

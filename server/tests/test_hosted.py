@@ -74,6 +74,55 @@ def headers(user, workspace=None):
     return result
 
 
+async def test_hosted_link_insert_serializes_retries_and_obeys_workspace_visibility(hosted):
+    client, _, users, _ = hosted
+    alice, bob, _ = users
+    catalog = (await client.get("/api/v1/plugins", headers=headers(alice))).json()
+    links = next(plugin for plugin in catalog["plugins"] if plugin["id"] == "links")
+    enabled = await client.post(
+        "/api/v1/plugins/links/enable",
+        headers=headers(alice),
+        json={"permissions": links["permissions"]},
+    )
+    assert enabled.status_code == 200, enabled.text
+
+    async def create_note(user, body, private=False):
+        response = await client.post(
+            "/api/v1/notes", headers=headers(user), json={"body": body, "private": private}
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    source = await create_note(alice, "Synthetic source")
+    target = await create_note(alice, "Synthetic private title", private=True)
+    inaccessible = await create_note(bob, "Synthetic other workspace title")
+
+    async def insert(destination):
+        return await client.post(
+            "/api/v1/plugins/links/commands/link",
+            headers=headers(alice),
+            json={
+                "note_id": source["id"],
+                "base_version": source["version"],
+                "target_id": destination["id"],
+                "target_version": destination["version"],
+                "insert": True,
+            },
+        )
+
+    rejected = await insert(inaccessible)
+    assert rejected.status_code == 404 and "Synthetic other workspace title" not in rejected.text
+    results = await asyncio.gather(insert(target), insert(target))
+    assert all(result.status_code == 200 for result in results)
+    assert {result.json()["text"] for result in results} == {
+        "Link inserted.",
+        "This note already links to the selected note.",
+    }
+    saved = (await client.get(f"/api/v1/notes/{source['id']}", headers=headers(alice))).json()
+    assert saved["version"] == source["version"] + 1
+    assert saved["body"] == f"Synthetic source\n\n[Linked note](/n/{target['id']})"
+
+
 async def test_http_policy_changes_atomic_account_allowance_without_resetting_usage(hosted):
     from spunto.ai.policy import HTTPPolicy
     from spunto.ai.quota import ACTIONS, AccountQuota, QuotaExceeded

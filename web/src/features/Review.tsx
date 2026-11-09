@@ -9,8 +9,9 @@ import { Dialog } from "./Dialog";
 import { NoteReference } from "./Vocabulary";
 import styles from "./Feature.module.css";
 import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
+import { requiresSuggestionPreview } from "./suggestionTitle";
 import { labelChangeImpact } from "./labelChange";
-import { activePlugins, usePlugins } from "./Slots";
+import { activePlugins, supportsNotePicker, usePlugins } from "./Slots";
 export function ReviewPage() {
   useLanguage();
   useDocumentTitle(t("review.review"));
@@ -20,7 +21,9 @@ export function ReviewPage() {
     queryFn: () => api.suggestions("review"),
   });
   const manifest = usePlugins();
-  const plugins = activePlugins(manifest.data?.plugins);
+  const plugins = activePlugins(manifest.data?.plugins).filter(
+    (p) => p.id !== "links" || supportsNotePicker(p),
+  );
   const client = useQueryClient();
   const [preview, setPreview] = useState<Suggestion | null>(null);
   const opener = useRef<HTMLElement>(null);
@@ -76,8 +79,7 @@ export function ReviewPage() {
     ) ?? [];
   const apply = (s: Suggestion, trigger?: HTMLElement) => {
     opener.current = trigger ?? null;
-    if (["replace_body", "merge_notes", "label_change"].includes(s.action))
-      setPreview(s);
+    if (requiresSuggestionPreview(s)) setPreview(s);
     else decide.mutate({ s, action: "accept" });
   };
   useEffect(() => {
@@ -183,11 +185,7 @@ export function ReviewPage() {
                       >
                         {!navigator.onLine
                           ? t("review.needs_a_connection")
-                          : [
-                                "replace_body",
-                                "merge_notes",
-                                "label_change",
-                              ].includes(s.action)
+                          : requiresSuggestionPreview(s)
                             ? t("review.compare")
                             : t("review.apply")}
                       </button>

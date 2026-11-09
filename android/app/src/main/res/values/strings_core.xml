@@ -305,4 +305,17 @@
     <string name="core_plugin">plugin</string>
     <string name="core_only_original">Only in the original: %1$s</string>
     <string name="core_only_copy">Only in this copy: %1$s</string>
+    <string name="core_link_insert">Insert link</string>
+    <string name="core_link_inserting">Inserting…</string>
+    <string name="core_link_inserted">Link inserted</string>
+    <string name="core_link_already_inserted">This note already links to the selected note.</string>
+    <string name="core_picker_recent_notes">Recent notes</string>
+    <string name="core_link_unsaved">Save your draft before inserting a link.</string>
+    <string name="core_link_source_changed">This note changed. Reopen Link to note.</string>
+    <string name="core_picker_no_notes">No other notes found.</string>
+    <string name="core_link_legacy_preview">A link will be added to this note.</string>
+    <string name="core_picker_add_source">Add source</string>
+    <string name="core_picker_source_limit">Remove a source before adding another.</string>
+    <string name="core_link_upgrade_server">Update your Spunto server to insert note links safely.</string>
+    <string name="core_link_waiting_to_sync">Link inserted on the server. Waiting to sync.</string>
 </resources>

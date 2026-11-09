@@ -1,7 +1,9 @@
 """Second-wave contracts on real SQLite with a fenced, synthetic ASGI provider."""
 
+import asyncio
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -14,7 +16,7 @@ from spunto.ai.profiles import Profile
 from spunto.ai.vectors import VectorIndex
 from spunto.api.errors import Problem
 from spunto.auth.tokens import Principal
-from spunto.core.notes import Notes
+from spunto.core.notes import MAX_BODY, Notes
 from spunto.core.plugin_notes import PluginNotes
 from spunto.core.suggestions import decide, pending
 from spunto.host import ContextError, Ctx, Host, validate_output
@@ -256,9 +258,12 @@ async def test_links_direct_target_compatibility_and_duplicate_protection(wave):
     assert len(links.targets((await notes.get(source["id"]))["body"])) == 1
 
 
-async def test_link_captions_escape_markdown_and_do_not_publish_private_titles(wave):
+@pytest.mark.parametrize("private_source", [False, True])
+async def test_link_captions_escape_markdown_and_do_not_publish_private_titles(
+    wave, private_source
+):
     host, _, notes = wave
-    source = await notes.create("Public source")
+    source = await notes.create("Source note", private=private_source)
     for private in (False, True):
         destination = await notes.create(r"A \[bracket\] and backslash \\", private=private)
         result = await host.invoke_command(
@@ -274,6 +279,159 @@ async def test_link_captions_escape_markdown_and_do_not_publish_private_titles(w
             assert f"[Linked note](/n/{destination['id']})" in body
         else:
             assert r"[A \[bracket\] and backslash \\]" in body
+
+
+async def test_direct_link_insert_guards_versions_and_retries_concurrently(wave):
+    host, _, notes = wave
+    source = await notes.create("Source before insertion")
+    destination = await notes.create("Current target title")
+    args = {
+        "note_id": source["id"],
+        "target_id": destination["id"],
+        "base_version": source["version"],
+        "target_version": destination["version"],
+        "insert": True,
+    }
+
+    async def insert():
+        return await host.invoke_command("links", "link", args, principal=OWNER)
+
+    with pytest.raises(ValueError, match="versions must be positive integers"):
+        await host.invoke_command(
+            "links", "link", {**args, "target_version": None}, principal=OWNER
+        )
+    source = await notes.edit(source["id"], "Source after edit", source["version"])
+    with pytest.raises(Problem, match="This note changed"):
+        await insert()
+    args["base_version"] = source["version"]
+    destination = await notes.flags(destination["id"], {"private": True})
+    with pytest.raises(Problem, match="That note changed"):
+        await insert()
+    args["target_version"] = destination["version"]
+    assert (await notes.get(source["id"]))["version"] == source["version"]
+
+    results = await asyncio.gather(insert(), insert())
+    assert {item["text"] for item in results} == {
+        "Link inserted.",
+        "This note already links to the selected note.",
+    }
+    saved = await notes.get(source["id"])
+    assert saved["version"] == source["version"] + 1
+    assert saved["body"] == f"Source after edit\n\n[Linked note](/n/{destination['id']})"
+    assert not await review(host)
+    await notes.flags(destination["id"], {"trashed": True})
+    with pytest.raises(Problem) as error:
+        await insert()
+    assert error.value.status == 404
+
+
+async def test_direct_link_preserves_notes_when_append_is_too_large(wave):
+    host, _, notes = wave
+    source = await notes.create("a" * MAX_BODY)
+    destination = await notes.create("Destination")
+    with pytest.raises(Problem) as error:
+        await host.invoke_command(
+            "links",
+            "link",
+            {
+                "note_id": source["id"],
+                "base_version": source["version"],
+                "target_id": destination["id"],
+                "target_version": destination["version"],
+                "insert": True,
+            },
+            principal=OWNER,
+        )
+    assert error.value.status == 422
+    assert (await notes.get(source["id"]))["version"] == source["version"]
+
+
+async def test_legacy_link_refreshes_caption_when_privacy_changes(wave):
+    host, _, notes = wave
+    source = await notes.create("Private source", private=True)
+    destination = await notes.create("Original caption")
+    pill = await host.invoke_command(
+        "links", "link", {"note_id": source["id"], "target_id": destination["id"]}, principal=OWNER
+    )
+    suggestion_id = pill["suggestion_id"]
+    # Reproduce the old on-disk payload that included the title.
+    async with host.store.write() as conn:
+        await conn.execute(
+            "UPDATE suggestion SET payload=? WHERE id=?",
+            (json.dumps({"text": f"[Original caption](/n/{destination['id']})"}), suggestion_id),
+        )
+
+    async def previews():
+        return [
+            (await notes.get(source["id"]))["suggestions"][0]["payload"]["text"],
+            (await review(host))[0]["payload"]["text"],
+        ]
+
+    assert all("Original caption" in text for text in await previews())
+    destination = await notes.edit(destination["id"], "Updated caption", destination["version"])
+    assert all("Updated caption" in text for text in await previews())
+    await notes.flags(destination["id"], {"private": True})
+    safe = f"[Linked note](/n/{destination['id']})"
+    assert await previews() == [safe, safe]
+    applied = await decide(host.store, OWNER, suggestion_id, "accept")
+    assert applied["suggestion"]["payload"]["text"] == safe
+    assert applied["result"]["body"] == "Private source\n\n" + safe
+    retry = await decide(host.store, OWNER, suggestion_id, "accept")
+    assert retry["suggestion"]["payload"]["text"] == safe
+    assert retry["applied"] is False
+    await notes.flags(destination["id"], {"trashed": True})
+    redacted = await decide(host.store, OWNER, suggestion_id, "accept")
+    assert redacted["suggestion"]["status"] == "accepted"
+    assert redacted["suggestion"]["payload"] == {} and redacted["applied"] is False
+
+
+@pytest.mark.parametrize("unavailable", ["trashed", "inaccessible", "malformed"])
+async def test_legacy_link_does_not_expose_or_apply_unavailable_destination(wave, unavailable):
+    host, _, notes = wave
+    source = await notes.create("Source note")
+    destination = await notes.create("Destination caption")
+    pill = await host.invoke_command(
+        "links", "link", {"note_id": source["id"], "target_id": destination["id"]}, principal=OWNER
+    )
+    principal = OWNER
+    if unavailable == "trashed":
+        await notes.flags(destination["id"], {"trashed": True})
+    elif unavailable == "inaccessible":
+        await notes.flags(destination["id"], {"private": True})
+        principal = replace(OWNER, private_ok=False)
+    else:
+        async with host.store.write() as conn:
+            await conn.execute(
+                "UPDATE suggestion SET payload=? WHERE id=?",
+                (
+                    json.dumps({"text": f"[Caption](/n/{destination['id']}) and extra text"}),
+                    pill["suggestion_id"],
+                ),
+            )
+    assert not (await Notes(host.store, principal).get(source["id"]))["suggestions"]
+    assert not (await pending(host.store, principal))["suggestions"]
+    with pytest.raises(Problem) as error:
+        await decide(host.store, principal, pill["suggestion_id"], "accept")
+    assert error.value.status == 404
+    assert (await notes.get(source["id"]))["version"] == source["version"]
+
+
+async def test_legacy_link_accept_leaves_existing_reference_unchanged(wave):
+    host, _, notes = wave
+    source = await notes.create("Source note")
+    destination = await notes.create("Destination caption")
+    pill = await host.invoke_command(
+        "links", "link", {"note_id": source["id"], "target_id": destination["id"]}, principal=OWNER
+    )
+    manually_linked = await notes.edit(
+        source["id"],
+        f"Source note [with link][ref]\n\n[ref]: /n/{destination['id']}",
+        source["version"],
+    )
+    await decide(host.store, OWNER, pill["suggestion_id"], "accept")
+    saved = await notes.get(source["id"])
+    assert saved["body"] == manually_linked["body"]
+    assert saved["version"] == manually_linked["version"]
 
 
 async def test_private_machine_and_stale_sources_never_mutate(wave):

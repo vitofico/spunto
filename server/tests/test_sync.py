@@ -574,6 +574,54 @@ async def test_offline_suggestions_append_and_replace_use_latest_note_and_receip
     assert (await push(server, headers, [decision]))[0]["status"] == "duplicate"
 
 
+async def test_legacy_link_sync_uses_neutral_caption_and_rechecks_destination(server):
+    headers = await signed(server)
+    host = server.services.host
+    await host.enable("links", permissions=host.manifests["links"]["permissions"])
+    domain = Notes(host.store, OWNER)
+    source = await domain.create("Source note")
+    destination = await domain.create("Original link title")
+    pill = await host.invoke_command(
+        "links", "link", {"note_id": source["id"], "target_id": destination["id"]}, principal=OWNER
+    )
+    suggestion_id = pill["suggestion_id"]
+    async with host.store.write() as conn:
+        await conn.execute(
+            "UPDATE suggestion SET payload=? WHERE id=?",
+            (json.dumps({"text": f"[Original link title](/n/{destination['id']})"}), suggestion_id),
+        )
+
+    async def wire_suggestion():
+        response = await server.client.get("/api/v1/sync/pull", headers=headers)
+        assert response.status_code == 200
+        return next(
+            item["data"]
+            for item in response.json()["items"]
+            if item["kind"] == "suggestion" and item["data"]["id"] == suggestion_id
+        )
+
+    assert (await wire_suggestion())["payload"] == {
+        "text": f"[Linked note](/n/{destination['id']})"
+    }
+    await domain.flags(destination["id"], {"trashed": True})
+    redacted = await wire_suggestion()
+    assert redacted["status"] == "superseded" and redacted["payload"] == {}
+    result = await push(
+        server,
+        headers,
+        [
+            {
+                "op_id": str(uuid.uuid4()),
+                "type": "suggestion.decide",
+                "suggestion_id": suggestion_id,
+                "decision": "accept",
+            }
+        ],
+    )
+    assert result[0]["status"] == "rejected" and result[0]["code"] == "not_found"
+    assert (await domain.get(source["id"]))["version"] == source["version"]
+
+
 async def test_restore_reconcile_flag_only_change_and_preserve_newer_server_flags(server):
     from spunto.core.notes import iso
 

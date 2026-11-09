@@ -94,6 +94,41 @@ async def test_manifest_opt_in_manual_and_component_budgets(pack_host):
     assert result["items"][1]["args"] == {"note_id": seed["id"]}
 
 
+async def test_pack_picker_guards_source_at_cas_and_keeps_classification(pack_host, monkeypatch):
+    from spunto.host.storage import Records
+
+    note = await core(pack_host, "Private source before selection", private=True)
+    pack_id, _ = await create(pack_host)
+    handler = ctx(pack_host)
+    add_args = {"picker": True, "add_id": note["id"], "add_version": note["version"]}
+    real_compare = Records.compare_and_set
+
+    async def change_before_compare(self, *args, **kwargs):
+        await Notes(pack_host.store, OWNER).edit(note["id"], "Changed before save", note["version"])
+        return await real_compare(self, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Records, "compare_and_set", change_before_compare)
+        with pytest.raises(Problem, match="source changed"):
+            await packs.sources(handler, pack_id, 1, **add_args)
+    assert (await packs.record(handler, pack_id, 1))["sources"] == []
+
+    add_args["add_version"] += 1
+    result = await packs.sources(handler, pack_id, 1, **add_args)
+    validate_output(result)
+    props = next(item["schema"]["properties"] for item in result["items"] if item["type"] == "form")
+    assert "query" not in props and "source_choices" not in props
+    assert props["selected_ids"]["default"] == [note["id"]]
+    assert props["expected_revision"]["default"] == 2
+
+    removed = await packs.sources(
+        handler, pack_id, 2, picker=True, remove=props["remove"]["enum"][1]
+    )
+    validate_output(removed)
+    saved = await packs.record(handler, pack_id, 3)
+    assert saved["sources"] == [] and saved["private"]
+
+
 async def test_curated_brief_round_trip_sources_reopen_and_delete(pack_host):
     note = await core(pack_host)
     pack_id, saved = await create(

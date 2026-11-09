@@ -1,34 +1,14 @@
 """Stored backlinks including explicit machine follow-ups, without AI or network."""
 
 import re
-import uuid
-
-from markdown_it import MarkdownIt
 
 from spunto.api.errors import Problem
+from spunto.core.note_links import insert_link, link_text, targets
 from spunto.host import Ctx, Plugin
 from spunto.plugins._wave2 import text
 
 plugin = Plugin("links")
-
-
-def targets(body):
-    result = []
-    parser = MarkdownIt("commonmark", {"html": False})
-    for token in parser.parse(body):
-        for child in token.children or []:
-            if child.type != "link_open":
-                continue
-            match = re.fullmatch(r"(?:/n/|note://)([0-9a-fA-F-]{36})", child.attrGet("href") or "")
-            if not match:
-                continue
-            try:
-                note_id = str(uuid.UUID(match[1]))
-                if uuid.UUID(note_id).version == 7 and note_id not in result:
-                    result.append(note_id)
-            except ValueError:
-                continue
-    return result[:50]
+_DUPLICATE = "This note already links to the selected note."
 
 
 async def refresh(ctx, target_id):
@@ -58,7 +38,7 @@ async def refresh(ctx, target_id):
 async def index(ctx: Ctx, note_id: str, note_version: int | None = None):
     old = await ctx.storage.records.get("indexed", note_id, [])
     note = await ctx.notes.get(note_id)
-    new = targets(note["body"]) if note else []
+    new = targets(note["body"])[:50] if note else []
     if note and note_version is not None and note["version"] != note_version:
         return
     for target_id in old:
@@ -96,7 +76,26 @@ async def link(
     target: str = "Choose a note",
     source_choices: list[str] | None = None,
     base_version: int | None = None,
+    target_version: int | None = None,
+    insert: bool = False,
 ):
+    if type(insert) is not bool:
+        raise ValueError("Insert must be a boolean.")
+    if target_version is not None and (type(target_version) is not int or target_version < 1):
+        raise ValueError("Target version must be a positive integer.")
+    if insert:
+        if (
+            not isinstance(note_id, str)
+            or not isinstance(target_id, str)
+            or target != "Choose a note"
+        ):
+            raise ValueError("Choose a source and target note to insert a link.")
+        if type(base_version) is not int or base_version < 1 or target_version is None:
+            raise ValueError("Source and target versions must be positive integers.")
+        inserted = await insert_link(
+            ctx, note_id, target_id, base_version=base_version, target_version=target_version
+        )
+        return text("Link inserted." if inserted else _DUPLICATE)
     source = await ctx.notes.get(note_id)
     if source is None:
         return text("The note is unavailable.")
@@ -104,7 +103,6 @@ async def link(
         type(base_version) is not int or source["version"] != base_version
     ):
         raise Problem(409, "version_conflict", "This note changed. Reopen Link to note.")
-    target_version = None
     if target != "Choose a note":
         match = re.fullmatch(r"([1-8])\. .{1,60}", target) if isinstance(target, str) else None
         if (
@@ -124,7 +122,7 @@ async def link(
             raise ValueError("Search supports up to 200 characters.")
         query = query.strip()
         hits = (
-            (await ctx.notes.search(query, limit=9))["hits"]
+            (await ctx.notes.search(query, limit=9, mode="keyword"))["hits"]
             if query
             else (await ctx.notes.query(limit=9, machine=True))["notes"]
         )
@@ -186,15 +184,11 @@ async def link(
     if note_id == target_id:
         raise ValueError("Choose another note.")
     if target_id in targets(source["body"]):
-        return text("This note already links to the selected note.")
-    title = "Linked note"
-    if not destination["private"] or source["private"]:
-        title = re.sub(r"\s+", " ", destination.get("title") or "").strip()[:100] or title
-    title = re.sub(r"([\\`*_{}\[\]()#+.!<>~-])", r"\\\1", title)
+        return text(_DUPLICATE)
     proposal = await ctx.notes.suggest(
         note_id,
         "append_text",
-        {"text": f"[{title}](/n/{destination['id']})"},
+        {"text": link_text(destination["id"])},
         note_version=source["version"],
         source_versions={destination["id"]: destination["version"]},
     )

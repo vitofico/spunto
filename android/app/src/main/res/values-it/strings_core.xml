@@ -305,4 +305,17 @@
     <string name="core_plugin">plugin</string>
     <string name="core_only_original">Solo nell’originale: %1$s</string>
     <string name="core_only_copy">Solo in questa copia: %1$s</string>
+    <string name="core_link_insert">Inserisci collegamento</string>
+    <string name="core_link_inserting">Inserimento…</string>
+    <string name="core_link_inserted">Collegamento inserito</string>
+    <string name="core_link_already_inserted">Questa nota contiene già un collegamento alla nota selezionata.</string>
+    <string name="core_picker_recent_notes">Note recenti</string>
+    <string name="core_link_unsaved">Salva la bozza prima di inserire un collegamento.</string>
+    <string name="core_link_source_changed">Questa nota è cambiata. Riapri «Collega a una nota».</string>
+    <string name="core_picker_no_notes">Nessun’altra nota trovata.</string>
+    <string name="core_link_legacy_preview">Verrà aggiunto un collegamento a questa nota.</string>
+    <string name="core_picker_add_source">Aggiungi fonte</string>
+    <string name="core_picker_source_limit">Rimuovi una fonte prima di aggiungerne un’altra.</string>
+    <string name="core_link_upgrade_server">Aggiorna il server Spunto per inserire in sicurezza i collegamenti alle note.</string>
+    <string name="core_link_waiting_to_sync">Collegamento inserito sul server. In attesa di sincronizzazione.</string>
 </resources>

@@ -552,6 +552,7 @@ export async function invalidateContentFor(client: QueryClient) {
       "notes",
       "note",
       "search",
+      "note-picker",
       "labels",
       "history",
       "suggestions",

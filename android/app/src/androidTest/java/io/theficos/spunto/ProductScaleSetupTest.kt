@@ -48,7 +48,7 @@ class ProductScaleSetupTest {
   val repository=product?.repository ?: NotesRepository(db)
   try {
    val sql=db.openHelper.writableDatabase
-   val emptyTables=listOf("notes","outbox","drafts","attachments","recording_drafts","plugin_output","view_memberships","tombstones","revisions","server_revisions","history_cache","refresh_notes","sync_log","sync_state")
+   val emptyTables=listOf("notes","outbox","drafts","draft_images","attachments","recording_drafts","plugin_output","view_memberships","tombstones","revisions","server_revisions","history_cache","refresh_notes","sync_log","sync_state")
    fun count(table:String):Long=sql.query("SELECT COUNT(*) FROM $table").use {it.moveToFirst();it.getLong(0)}
    require(emptyTables.all {count(it)==0L}) {"Refusing a populated replica. No data will be erased."}
    val start=SystemClock.elapsedRealtimeNanos()

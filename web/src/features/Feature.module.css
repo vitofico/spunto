@@ -586,6 +586,12 @@
   border-left: 2px solid var(--rule-strong);
   padding-left: var(--s-12);
 }
+.railWorkspace {
+  display: grid;
+  gap: var(--s-4);
+  font-size: var(--t-meta-size);
+  color: var(--ink-3);
+}
 .grantList {
   list-style: none;
   padding: 0;
@@ -599,6 +605,9 @@
   gap: var(--s-12);
   padding: var(--s-16) 0;
   border-bottom: 1px solid var(--rule);
+}
+.grantList select {
+  width: auto;
 }
 .grantIdentity {
   min-width: 0;
@@ -846,4 +855,11 @@
 
 .noteChoices small {
   display: block;
+}
+
+.tokenFields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }

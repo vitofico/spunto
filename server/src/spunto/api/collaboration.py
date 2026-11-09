@@ -41,6 +41,11 @@ class Grant(BaseModel):
     role: Literal["editor", "viewer"] = "viewer"
 
 
+class GrantRole(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Literal["editor", "viewer"]
+
+
 class SharedEdit(BaseModel):
     model_config = ConfigDict(extra="forbid")
     body: str = Field(max_length=100_000)
@@ -113,6 +118,23 @@ async def add_member(workspace_id: str, body: Grant, request: Request):
     }
 
 
+@router.patch("/workspaces/{workspace_id}/members/{user_id}", status_code=204)
+async def change_member_role(workspace_id: str, user_id: str, body: GrantRole, request: Request):
+    manager, account, _ = context(request)
+    await manager.accounts.require_owner(account["id"], workspace_id)
+    if user_id == account["id"]:
+        raise Problem(409, "owner_membership", "The owner's membership cannot be changed here.")
+    async with manager.accounts.transaction() as conn:
+        updated = await conn.execute(
+            "UPDATE public.spunto_membership SET role=%s WHERE workspace_id=%s AND user_id=%s "
+            "AND role<>'owner'",
+            (body.role, workspace_id, user_id),
+        )
+        if not updated.rowcount:
+            raise Problem(404, "not_found", "That space membership is unavailable.")
+    return Response(status_code=204)
+
+
 @router.delete("/workspaces/{workspace_id}/members/{user_id}", status_code=204)
 async def remove_member(workspace_id: str, user_id: str, request: Request):
     manager, account, _ = context(request)
@@ -173,6 +195,20 @@ async def share(note_id: str, body: Grant, request: Request):
         "username": recipient["username"],
         "role": body.role,
     }
+
+
+@router.patch("/notes/{note_id}/shares/{user_id}", status_code=204)
+async def change_share_role(note_id: str, user_id: str, body: GrantRole, request: Request):
+    manager, _, workspace, _ = await owned_note(request, note_id)
+    async with manager.accounts.transaction() as conn:
+        updated = await conn.execute(
+            "UPDATE public.spunto_note_share SET role=%s WHERE workspace_id=%s AND note_id=%s "
+            "AND grantee_id=%s",
+            (body.role, workspace["id"], note_id, user_id),
+        )
+        if not updated.rowcount:
+            raise Problem(404, "not_found", "That note grant is unavailable.")
+    return Response(status_code=204)
 
 
 @router.delete("/notes/{note_id}/shares/{user_id}", status_code=204)

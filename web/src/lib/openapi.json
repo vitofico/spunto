@@ -987,6 +987,22 @@
             },
             "title": "Restore Ids",
             "type": "array"
+          },
+          "workspace_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "owner",
+                  "editor",
+                  "viewer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Role"
           }
         },
         "required": [

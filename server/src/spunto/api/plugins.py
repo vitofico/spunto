@@ -454,11 +454,14 @@ async def changes(
         )
         remaining = deadline - asyncio.get_running_loop().time()
         if changed or remaining <= 0:
-            return {
+            result = {
                 "cursor": meta["sync_epoch"] + "." + str(seq),
                 "plugins_rev": rev,
                 "changed": changed,
             }
+            if principal.kind == "device" and principal.user_id is not None:
+                result["workspace_role"] = principal.workspace_role
+            return result
         try:
             async with asyncio.timeout(remaining):
                 await event.wait()

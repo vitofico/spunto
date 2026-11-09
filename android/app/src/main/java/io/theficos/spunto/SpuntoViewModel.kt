@@ -15,8 +15,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 
-class SpuntoViewModel(application:Application):AndroidViewModel(application) {
- val container=(application as SpuntoApplication).container.current
+class SpuntoViewModel internal constructor(application:Application,val container:ReplicaContainer):AndroidViewModel(application) {
+ constructor(application:Application):this(application,(application as SpuntoApplication).container.current)
  val repository=container.repository
  private val historyRepository by lazy { HistoryRepository(repository,container.auth) }
  val notes=repository.notes.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
@@ -39,6 +39,9 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   return pages.getOrPut(day) { val job=Job(viewModelScope.coroutineContext[Job]);job to repository.paging(day).cachedIn(viewModelScope+job) }.second
  }
  val auth=container.auth.config.map {it?.takeIf {config ->config.replicaId==container.replicaId}}.stateIn(viewModelScope,SharingStarted.Eagerly,null)
+ val workspaceCanWrite=container.auth.selection.map {it.canWrite(container.replicaId)}.distinctUntilChanged().stateIn(viewModelScope,SharingStarted.Eagerly,!container.replicaId.startsWith("account-"))
+ internal suspend fun canWriteWorkspace()=container.auth.selection.first().canWrite(container.replicaId)
+ internal suspend fun requireWorkspaceWrite() {require(canWriteWorkspace()) {container.context.getString(R.string.workspace_read_only)}}
  private val accountIdentityCache=AccountIdentityCache(container.preferences)
  private var accountIdentityRefresh:Job?=null
  private var accountIdentitySigningOut=false
@@ -70,7 +73,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
     publishPluginReplica(container.database.dao().state());if(config!=null) synchronize()
    }
   }}
-  viewModelScope.launch {container.database.dao().observeState().collect(::publishPluginReplica)}
+  if(container.publishesPlugins) viewModelScope.launch {container.database.dao().observeState().collect(::publishPluginReplica)}
  }
  internal val pluginManager:NativePluginManagerActions by lazy {NativePluginManagerActions(
   container.context.resources,viewModelScope,{auth.value},{online.value},{pluginEpoch.value},
@@ -94,6 +97,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   {error -> message.value=error;if(error.contains("401")) reauthenticate.value=true}
  )}
  private suspend fun publishPluginReplica(emitted:io.theficos.spunto.data.local.SyncStateEntity?) {
+  if(!container.publishesPlugins) return
   // Read the authority again; emitted rows may have waited behind a restore or credential change.
   val config=container.auth.config.first()
   val committed=readCommittedPluginPublication(repository,config) {container.auth.config.first()} ?: return
@@ -149,13 +153,13 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   }.also {accountIdentityRefresh=it}
  }
  fun synchronize()=task { val result=container.sync.sync(); if(result==SyncStatus.NeedsSignIn) reauthenticate.value=true; refreshPluginManager()?.join() }
- suspend fun saveLocal(body:String,id:String?=null):String { android.os.Trace.beginSection("spunto.local-save");return try { repository.save(body,id) } finally { android.os.Trace.endSection() } }
+ suspend fun saveLocal(body:String,id:String?=null):String { requireWorkspaceWrite();android.os.Trace.beginSection("spunto.local-save");return try { repository.save(body,id) } finally { android.os.Trace.endSection() } }
  fun save(body:String,id:String?=null,done:(String)->Unit={})=task { val noteId=saveLocal(body,id);repository.clearDraft(id?:"capture",body);done(noteId) }
  suspend fun refreshHistory(id:String):HistoryRefreshResult { val result=historyRepository.refresh(id);if(result==HistoryRefreshResult.NeedsSignIn) reauthenticate.value=true;return result }
- fun restoreHistory(id:String,revision:RevisionEntity)=task { repository.restoreHistory(id,revision) }
- fun flags(id:String,pinned:Boolean?=null,archived:Boolean?=null,trashed:Boolean?=null,privateNote:Boolean?=null)=task { repository.setFlags(id,pinned,archived,trashed,privateNote) }
- fun toggleTask(note:Note,line:Int)=task { val lines=note.body.lines().toMutableList(); lines[line]=lines[line].replaceFirst(Regex("\\[[ xX]]"),if(lines[line].contains("[ ]")) "[x]" else "[ ]"); repository.update(note.id,lines.joinToString("\n")) }
- fun decide(id:String,decision:String)=task { repository.decideSuggestion(id,decision) }
+ fun restoreHistory(id:String,revision:RevisionEntity)=task { requireWorkspaceWrite();repository.restoreHistory(id,revision) }
+ fun flags(id:String,pinned:Boolean?=null,archived:Boolean?=null,trashed:Boolean?=null,privateNote:Boolean?=null)=task { requireWorkspaceWrite();repository.setFlags(id,pinned,archived,trashed,privateNote) }
+ fun toggleTask(note:Note,line:Int)=task { requireWorkspaceWrite();val lines=note.body.lines().toMutableList(); lines[line]=lines[line].replaceFirst(Regex("\\[[ xX]]"),if(lines[line].contains("[ ]")) "[x]" else "[ ]"); repository.update(note.id,lines.joinToString("\n")) }
+ fun decide(id:String,decision:String)=task { requireWorkspaceWrite();repository.decideSuggestion(id,decision) }
  /** The sign-in form's problem; sign-in failures never reach [message] or [reauthenticate]. */
  internal val signInProblem=MutableStateFlow<SignInProblem?>(null)
  fun login(server:String,password:String,code:String,name:String,consent:Boolean)=viewModelScope.launch { signInProblem.value=null; try { signIn(server,password,code,name,consent);message.value="" } catch(e:CancellationException) { throw e } catch(e:Exception) { signInProblem.value=signInProblem(container.context.resources,e,code.isNotBlank()) } }
@@ -185,7 +189,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
  fun ask(question:String,continuation:JsonObject?=null,current:()->Boolean={true},onHandle:(JsonObject)->Unit={},onError:((String)->Unit)?=null,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
   val config=auth.value
   val epoch=pluginReplicaEpoch
-  fun valid()=config!=null && auth.value==config && pluginReplicaEpoch==epoch && container.manifest.enabled("ask") && current()
+  fun valid()=config!=null && workspaceCanWrite.value && auth.value==config && pluginReplicaEpoch==epoch && container.manifest.enabled("ask") && current()
   try {
    completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> ApiClient(it).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value,it.workspaceRole))}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
   } catch(cancelled:CancellationException) {throw cancelled}
@@ -195,6 +199,7 @@ class SpuntoViewModel(application:Application):AndroidViewModel(application) {
   }
  }
  fun fetch(path:String)=request(path) { remote.value=if(it is JsonObject) it else buildJsonObject { put("items",it) } }
- internal fun pluginToggle(plugin:NativePluginFacts,on:Boolean,accepted:List<String>?=null,onComplete:(PluginToggleResult)->Unit={})=pluginManager.toggle(plugin.id,on,accepted,onComplete=onComplete)
+ internal fun pluginToggle(plugin:NativePluginFacts,on:Boolean,accepted:List<String>?=null,onComplete:(PluginToggleResult)->Unit={})=
+  if(workspaceCanWrite.value) pluginManager.toggle(plugin.id,on,accepted,onComplete=onComplete) else null
  fun draft(id:String,text:String)=task { repository.saveDraft(id,text) }
 }

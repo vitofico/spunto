@@ -34,10 +34,15 @@ class AccountReplicaSwitchTest {
   try {
    val repoA=NotesRepository(dbA,a.replicaId);val repoB=NotesRepository(dbB,b.replicaId)
    auth.save(a);assertEquals(retained,AuthStore(base).config.first());assertEquals(a,auth.config.first());repoA.create("Alice pending note");val pending=repoA.dao.outbox().single()
+   auth.updateWorkspaceRole(a,"viewer")
+   assertEquals(a,auth.config.first());assertEquals("viewer",AuthStore(context).selection.first().workspaceRole)
+   assertFalse(auth.selection.first().canWrite(a.replicaId));assertTrue(auth.selection.first().canWrite("signed-out"))
    auth.save(b);assertEquals(b.replicaId,auth.selection.first().replicaId);assertTrue(repoB.dao.all().isEmpty());repoB.create("Bob pending note")
    auth.clear();assertNull(auth.config.first());assertEquals("signed-out",auth.selection.first().replicaId);assertEquals(retained,AuthStore(base).config.first())
    assertEquals(pending,repoA.dao.outbox().single());assertEquals("Bob pending note",repoB.dao.all().single().body)
    auth.save(a.copy(token="synthetic-refreshed"));assertEquals(a.replicaId,auth.selection.first().replicaId);assertEquals(pending,repoA.dao.outbox().single())
+   auth.updateWorkspaceRole(a,"viewer")
+   assertEquals("owner",auth.selection.first().workspaceRole);assertTrue(auth.selection.first().canWrite(a.replicaId))
   } finally {auth.clear();dbA.close();dbB.close();names.forEach {context.deleteDatabase(it)}}
  }
 }

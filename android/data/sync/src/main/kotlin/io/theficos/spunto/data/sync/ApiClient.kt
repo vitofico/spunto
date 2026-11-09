@@ -29,9 +29,10 @@ import java.util.concurrent.TimeUnit
 @Serializable data class PullResponse(val epoch:String,val cursor:String,@SerialName("has_more") val hasMore:Boolean,@SerialName("plugins_rev") val pluginsRev:Int,val items:List<PullItem>)
 @Serializable data class PushResult(@SerialName("op_id") val opId:String="",val status:String,val version:Int?=null,val note:JsonObject?=null,val body:String?=null,@SerialName("conflict_id") val conflictId:String?=null,val code:String?=null,val original:PushResult?=null)
 @Serializable data class PushResponse(val epoch:String,val results:List<PushResult>)
-@Serializable data class ReconcileResponse(val epoch:String,@SerialName("restore_ids") val restoreIds:List<String>)
+@Serializable data class ReconcileResponse(val epoch:String,@SerialName("restore_ids") val restoreIds:List<String>,@SerialName("workspace_role") val workspaceRole:String?=null)
 /** [detail] is the problem document's safe sentence; [retryAfter] the seconds a rate limit asks to wait. */
 class ApiException(val status:Int,val code:String,val detail:String="",val retryAfter:Long?=null):Exception("HTTP $status: $code")
+internal val ApiException.readOnlyWorkspace get()=status==403 && code=="read_only_space"
 private val defaultApiHttpClient=OkHttpClient.Builder().callTimeout(40,TimeUnit.SECONDS).readTimeout(35,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
 // Generation can outlive an ordinary sync request, including operator-installed tools.
 private val pluginCommandPath=Regex("/api/v1/plugins/[a-z][a-z0-9-]{1,23}/commands/[a-z][a-z0-9-]{0,127}")
@@ -42,6 +43,11 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  private val extendedCommandClient by lazy { this.client.newBuilder().readTimeout(240,TimeUnit.SECONDS).callTimeout(240,TimeUnit.SECONDS).build() }
  private fun requestClient(path:String,method:String):OkHttpClient = if(method=="POST" && pluginCommandPath.matches(path) || method=="POST" && path=="/api/v1/ai/check") extendedCommandClient else client
  private val json=Json { ignoreUnknownKeys=true }
+ private fun problem(response:Response,text:String,fallback:String):ApiException {
+  val data=runCatching {json.parseToJsonElement(text).jsonObject}.getOrNull()
+  fun field(name:String)=(data?.get(name) as? JsonPrimitive)?.contentOrNull
+  return ApiException(response.code,field("code")?:fallback,field("detail").orEmpty(),response.header("Retry-After")?.toLongOrNull())
+ }
  init { val url=config.serverUrl.toHttpUrl(); requireLocal(url.scheme=="https" || config.httpConsent,LocalOperationProblem.UnencryptedConnectionConsentRequired) { "Confirm the unencrypted connection before connecting." }; requireLocal(url.encodedPath=="/" && url.username.isEmpty() && url.password.isEmpty(),LocalOperationProblem.ServerRootRequired) { "Use the server's root URL." } }
  suspend fun request(path:String, method:String="GET", body:JsonElement?=null, query:Map<String,String> = emptyMap()):JsonElement = withContext(Dispatchers.IO) {
   checkAuthority()
@@ -51,7 +57,7 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
   if(method!="GET") builder.method(method,(body?:JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
   val result=requestClient(path,method).newCall(builder.build()).awaitDecodedResponse { response ->
    val text=response.body?.string().orEmpty()
-   if(!response.isSuccessful) { val problem=runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull(); val field={ name:String -> runCatching { problem?.get(name)?.jsonPrimitive?.content }.getOrNull() }; throw ApiException(response.code,field("code")?:"request_failed",field("detail").orEmpty(),response.header("Retry-After")?.toLongOrNull()) }
+   if(!response.isSuccessful) throw problem(response,text,"request_failed")
    if(text.isBlank()) JsonObject(emptyMap()) else json.parseToJsonElement(text)
   }
   checkAuthority();result
@@ -99,7 +105,7 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
   checkAuthority()
   val file=File(path); val body=MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("file",filename,file.asRequestBody(mime.toMediaType())).build()
   val request=Request.Builder().url(config.serverUrl.trimEnd('/')+"/api/v1/attachments").header("Authorization","Bearer ${config.token}").post(body).build()
-  val result=client.newCall(request).awaitDecodedResponse { response -> val content=response.body?.string().orEmpty(); if(!response.isSuccessful) throw ApiException(response.code,"attachment_failed"); json.parseToJsonElement(content).jsonObject }
+  val result=client.newCall(request).awaitDecodedResponse { response -> val content=response.body?.string().orEmpty(); if(!response.isSuccessful) throw problem(response,content,"attachment_failed"); json.parseToJsonElement(content).jsonObject }
   checkAuthority();result
  }
 }

@@ -25,6 +25,8 @@ data class NoteFts(val foldedTitle: String, val foldedBody: String)
 data class OutboxEntity(@PrimaryKey val opId: String, val noteId: String?, val payload: String, val createdAt: Long, val sent: Boolean = false, val error: String? = null)
 @Entity(tableName = "drafts")
 data class DraftEntity(@PrimaryKey val id: String, val body: String, val updatedAt: Long)
+@Entity(tableName="draft_images",indices=[Index(value=["draftId","position"],unique=true)])
+data class DraftImageEntity(@PrimaryKey val id:String,val draftId:String,val localPath:String,val mime:String,val position:Int)
 @Entity(tableName = "revisions")
 data class RevisionEntity(@PrimaryKey val id: String = uuidV7(), val noteId: String, val body: String, val at: Long, val version: Int, @ColumnInfo(defaultValue="'legacy'") val historySource:String="legacy", @ColumnInfo(defaultValue="0") val lastEditAt:Long=0, val changedBy:String?=null, @ColumnInfo(defaultValue="'edit'") val changeKind:String="edit")
 @Entity(tableName="server_revisions",primaryKeys=["serverUrl","epoch","noteId","version"])
@@ -86,6 +88,11 @@ interface SpuntoDao {
  @Query("SELECT * FROM drafts WHERE id=:id") suspend fun draftSnapshot(id:String):DraftEntity?
  @Query("DELETE FROM drafts WHERE id=:id AND body=:body AND updatedAt=:updatedAt") suspend fun clearDraftSnapshot(id:String,body:String,updatedAt:Long)
  @Query("DELETE FROM drafts WHERE id=:id AND body=:body") suspend fun clearDraft(id: String, body: String)
+ @Query("SELECT * FROM draft_images WHERE draftId=:id ORDER BY position") fun draftImages(id:String):Flow<List<DraftImageEntity>>
+ @Query("SELECT * FROM draft_images WHERE draftId=:id ORDER BY position") suspend fun draftImageSnapshots(id:String):List<DraftImageEntity>
+ @Insert suspend fun putDraftImage(image:DraftImageEntity)
+ @Query("DELETE FROM draft_images WHERE draftId=:id") suspend fun clearDraftImages(id:String)
+ @Query("SELECT localPath FROM draft_images UNION SELECT localPath FROM attachments") suspend fun draftImageFileReferences():List<String>
  /**
   * A draft holding words the note never saved. Older builds kept a draft after saving it; once a sync
   * replaced that text, the history holds it, so such a draft never reopens over the newer note.
@@ -152,6 +159,7 @@ interface SpuntoDao {
  @Query("SELECT * FROM plugin_output") fun outputs(): Flow<List<PluginOutputEntity>>
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTombstone(tombstone: TombstoneEntity)
  @Query("SELECT * FROM tombstones WHERE id=:id") suspend fun tombstone(id: String): TombstoneEntity?
+ @Query("DELETE FROM tombstones") suspend fun clearTombstones()
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putAttachment(attachment: AttachmentEntity)
  @Query("SELECT * FROM attachments WHERE remoteId IS NULL AND status IN ('queued','uploading','failed','paused')") suspend fun pendingAttachments(): List<AttachmentEntity>
  @Query("SELECT * FROM attachments WHERE noteId=:id") fun attachments(id: String): Flow<List<AttachmentEntity>>
@@ -171,10 +179,10 @@ interface SpuntoDao {
  @Query("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY id DESC LIMIT 200)") suspend fun trimLog()
  @Query("SELECT * FROM sync_log ORDER BY id DESC LIMIT 200") fun logs(): Flow<List<SyncLogEntity>>
 }
-@Database(entities=[NoteEntity::class, NoteFts::class, OutboxEntity::class, DraftEntity::class, RevisionEntity::class, ServerRevisionEntity::class, HistoryCacheEntity::class, ViewMembershipEntity::class, LabelEntity::class, SyncStateEntity::class, PluginOutputEntity::class, TombstoneEntity::class, AttachmentEntity::class, RecordingDraftEntity::class, RefreshNoteEntity::class, SyncLogEntity::class], version=6, exportSchema=false)
+@Database(entities=[NoteEntity::class, NoteFts::class, OutboxEntity::class, DraftEntity::class, DraftImageEntity::class, RevisionEntity::class, ServerRevisionEntity::class, HistoryCacheEntity::class, ViewMembershipEntity::class, LabelEntity::class, SyncStateEntity::class, PluginOutputEntity::class, TombstoneEntity::class, AttachmentEntity::class, RecordingDraftEntity::class, RefreshNoteEntity::class, SyncLogEntity::class], version=7, exportSchema=false)
 abstract class SpuntoDatabase: RoomDatabase() {
  abstract fun dao(): SpuntoDao
- companion object { fun open(context: Context,name:String="spunto.db") = Room.databaseBuilder(context.applicationContext,SpuntoDatabase::class.java,name).enableMultiInstanceInvalidation().addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6).build() }
+ companion object { fun open(context: Context,name:String="spunto.db") = Room.databaseBuilder(context.applicationContext,SpuntoDatabase::class.java,name).enableMultiInstanceInvalidation().addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).build() }
 }
 private fun ensureColumn(db:SupportSQLiteDatabase,table:String,column:String,definition:String) {
  val present=db.query("PRAGMA table_info(`$table`)").use { cursor -> var found=false;while(cursor.moveToNext()) if(cursor.getString(cursor.getColumnIndexOrThrow("name"))==column) found=true;found }
@@ -240,4 +248,11 @@ val MIGRATION_4_5=object:Migration(4,5) {
 
 val MIGRATION_5_6=object:Migration(5,6) {
  override fun migrate(db:SupportSQLiteDatabase) {ensureColumn(db,"sync_state","replicaId","TEXT NOT NULL DEFAULT ''")}
+}
+
+val MIGRATION_6_7=object:Migration(6,7) {
+ override fun migrate(db:SupportSQLiteDatabase) {
+  db.execSQL("CREATE TABLE draft_images (id TEXT NOT NULL PRIMARY KEY,draftId TEXT NOT NULL,localPath TEXT NOT NULL,mime TEXT NOT NULL,position INTEGER NOT NULL)")
+  db.execSQL("CREATE UNIQUE INDEX index_draft_images_draftId_position ON draft_images(draftId,position)")
+ }
 }

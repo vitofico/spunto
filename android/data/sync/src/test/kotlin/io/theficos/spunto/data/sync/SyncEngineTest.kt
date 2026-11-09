@@ -26,6 +26,146 @@ class SyncEngineTest {
  private fun engine(on:NotesRepository=repo)=SyncEngine(on,{AuthConfig(server.url("/").toString(),"synthetic","d","Phone",true)})
  private fun response(body:String,code:Int=200)=MockResponse().setResponseCode(code).setBody(body)
  private fun note(id:String,body:String,version:Int=1)=buildJsonObject {put("id",id);put("body",body);put("version",version);put("created_at","2026-10-14T00:00:00Z");put("updated_at","2026-10-14T00:00:00Z")}
+ private fun hostedConfig(role:String)=AuthConfig(server.url("/").toString().trimEnd('/'),"synthetic","d","Phone",true,"user","space",role)
+ private fun pullNote(id:String,body:String,version:Int,epoch:String="e")=buildJsonObject {
+  put("epoch",epoch);put("cursor","$epoch.$version");put("has_more",false);put("plugins_rev",0)
+  put("items",buildJsonArray {add(buildJsonObject {put("kind","note");put("change_seq",version);put("data",note(id,body,version))})})
+ }
+ @Test fun pairedViewerOnlyReadsEvenWithRetainedWrites()=runBlocking {
+  val config=hostedConfig("viewer")
+  val workspace=NotesRepository(db,config.replicaId)
+  val local=workspace.create("Kept pending")
+  val before=workspace.dao.outbox().single()
+  val remote=uuidV7()
+  // No metadata role on an older server. The verified role from pairing still applies.
+  server.enqueue(response("""{"sync_epoch":"e"}"""))
+  server.enqueue(response(pullNote(remote,"Read from server",1).toString()))
+  repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
+  assertEquals(SyncStatus.Complete(1),SyncEngine(workspace,{config}).sync())
+  assertEquals("Read from server",workspace.dao.get(remote)?.body)
+  assertEquals("Kept pending",workspace.dao.get(local)?.body)
+  assertEquals(before,workspace.dao.outbox().single())
+  assertEquals(listOf("GET","GET","GET","GET"),List(4) {server.takeRequest().method})
+  assertEquals(4,server.requestCount)
+ }
+ @Test fun viewerEpochRefreshesDownloadedNotesAndOnlyPreparesLocalEditsForRestore()=runBlocking {
+  val config=hostedConfig("viewer")
+  val workspace=NotesRepository(db,config.replicaId)
+  val local=workspace.create("Keep this pending edit")
+  val pending=workspace.dao.outbox().single()
+  val clean=uuidV7()
+  workspace.putNote(Note(clean,"Downloaded from old epoch",serverRev=8))
+  workspace.dao.putState(SyncStateEntity(epoch="old",cursor="old.8",serverUrl=config.serverUrl,replicaId=config.replicaId))
+  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"viewer"}"""))
+  server.enqueue(response("""{"epoch":"e","restore_ids":["$local","$clean"]}"""))
+  server.enqueue(response(pullNote(clean,"Downloaded from restored epoch",1).toString()))
+  repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
+  assertEquals(SyncStatus.Complete(2),SyncEngine(workspace,{config}).sync())
+  assertEquals("Downloaded from restored epoch",workspace.dao.get(clean)?.body)
+  assertEquals("Keep this pending edit",workspace.dao.get(local)?.body)
+  val outbox=workspace.dao.outbox()
+  assertEquals(setOf(local),outbox.map {it.noteId}.toSet())
+  assertTrue(outbox.contains(pending.copy(sent=true)))
+  val requests=List(5) {server.takeRequest()}
+  val reconcile=requests.single {it.method=="POST"}
+  assertEquals("/api/v1/sync/reconcile",reconcile.path)
+  val notes=Json.parseToJsonElement(reconcile.body.readUtf8()).jsonObject.getValue("notes").jsonArray
+  assertEquals(listOf(local),notes.map {it.jsonObject.getValue("id").jsonPrimitive.content})
+ }
+ @Test fun demotionAtReconcileKeepsQueuedEditsAndStopsOldTombstonesMaskingRestoredNotes()=runBlocking {
+  val config=hostedConfig("editor")
+  val workspace=NotesRepository(db,config.replicaId)
+  val local=workspace.create("Keep the queued edit")
+  val pending=workspace.dao.outbox().single()
+  val clean=uuidV7()
+  val restored=uuidV7()
+  workspace.putNote(Note(clean,"Keep the cached words locally",serverRev=8))
+  workspace.dao.putTombstone(TombstoneEntity(restored,1))
+  workspace.dao.putState(SyncStateEntity(epoch="old",cursor="old.8",serverUrl=config.serverUrl,replicaId=config.replicaId))
+  var cachedRole=config.workspaceRole
+  val engine=SyncEngine(workspace,{config},{ApiClient(it)},{cachedRole},{_,role ->cachedRole=role})
+  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"editor"}"""))
+  server.enqueue(response("""{"epoch":"e","restore_ids":["$local","$clean"],"workspace_role":"viewer"}"""))
+  server.enqueue(response(pullNote(restored,"Live in the restored snapshot",1).toString()))
+  repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
+  assertEquals(SyncStatus.Complete(2),engine.sync())
+  assertEquals("viewer",cachedRole)
+  assertEquals("e.1",workspace.dao.state()?.cursor)
+  assertNull(workspace.dao.tombstone(restored))
+  assertEquals("Live in the restored snapshot",workspace.dao.get(restored)?.body)
+  assertEquals("Keep the cached words locally",workspace.dao.get(clean)?.body)
+  assertEquals("Keep the queued edit",workspace.dao.get(local)?.body)
+  val outbox=workspace.dao.outbox()
+  assertEquals(setOf(local),outbox.map {it.noteId}.toSet())
+  assertTrue(outbox.contains(pending.copy(sent=true)))
+  val writes=List(5) {server.takeRequest()}.filter {it.method=="POST"}
+  assertEquals(listOf("/api/v1/sync/reconcile"),writes.map {it.path})
+ }
+ @Test fun quietHostedWaitWithDowngradeHintRefreshesRoleBeforeAnyWrites()=runBlocking {
+  val config=hostedConfig("editor")
+  val workspace=NotesRepository(db,config.replicaId)
+  workspace.dao.putState(SyncStateEntity(epoch="e",cursor="e.0",serverUrl=config.serverUrl,replicaId=config.replicaId))
+  val local=workspace.create("Keep the edit queued")
+  val pending=workspace.dao.outbox().single()
+  val remote=uuidV7()
+  val cachedRole=java.util.concurrent.atomic.AtomicReference(config.workspaceRole)
+  val waiting=java.util.concurrent.atomic.AtomicInteger()
+  val metadataRole=java.util.concurrent.atomic.AtomicReference<String>()
+  val engine=SyncEngine(workspace,{config},{ApiClient(it)},{cachedRole.get()},{_,role ->cachedRole.set(role)})
+  server.dispatcher=object:Dispatcher() {override fun dispatch(request:RecordedRequest)=when(request.requestUrl?.encodedPath) {
+   "/api/v1/changes/wait" -> if(waiting.incrementAndGet()==1) response("""{"cursor":"e.0","changed":false,"workspace_role":"viewer"}""") else MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+   "/api/v1/meta" -> {metadataRole.set(cachedRole.get());response("""{"sync_epoch":"e","workspace_role":"viewer"}""")}
+   "/api/v1/sync/pull" -> response(pullNote(remote,"Quiet-space update",1).toString())
+   "/api/v1/plugins","/api/v1/plugins/manifest" -> response("""{"plugins":[]}""")
+   else -> response("{}",404)
+  }}
+  val waiter=launch {ChangeWaiter({config},workspace,engine).run()}
+  try {assertEquals(SyncStatus.Complete(1),withTimeout(10_000) {engine.state.first {it is SyncStatus.Complete}})}
+  finally {waiter.cancelAndJoin()}
+  assertEquals("viewer",metadataRole.get())
+  assertEquals("Quiet-space update",workspace.dao.get(remote)?.body)
+  assertEquals("Keep the edit queued",workspace.dao.get(local)?.body)
+  assertEquals(pending,workspace.dao.outbox().single())
+ }
+ @Test fun downgradeBetweenMetadataAndPushKeepsPullingAndReplaysTheSameOperationAfterUpgrade()=runBlocking {
+  val config=hostedConfig("editor")
+  val workspace=NotesRepository(db,config.replicaId)
+  val local=workspace.create("Previously queued words")
+  val before=workspace.dao.outbox().single()
+  val remote=uuidV7()
+  var cachedRole=config.workspaceRole
+  val engine=SyncEngine(workspace,{config},{ApiClient(it)},{cachedRole},{current,role ->
+   assertEquals(config,current);cachedRole=role
+  })
+  fun enqueueReads(version:Int) {
+   server.enqueue(response(pullNote(remote,"Remote $version",version).toString()))
+   repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
+  }
+  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"editor"}"""))
+  server.enqueue(response("""{"code":"read_only_space"}""",403))
+  enqueueReads(1)
+  assertEquals(SyncStatus.Complete(1),engine.sync())
+  assertEquals("viewer",cachedRole)
+  assertEquals(before.copy(sent=true),workspace.dao.outbox().single())
+  assertEquals("Remote 1",workspace.dao.get(remote)?.body)
+  assertEquals("Previously queued words",workspace.dao.get(local)?.body)
+  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"viewer"}"""))
+  enqueueReads(2)
+  assertEquals(SyncStatus.Complete(1),engine.sync())
+  assertEquals("Remote 2",workspace.dao.get(remote)?.body)
+  assertEquals(before.copy(sent=true),workspace.dao.outbox().single())
+  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"editor"}"""))
+  server.enqueue(response("""{"epoch":"e","results":[{"op_id":"${before.opId}","status":"applied","version":1}]}"""))
+  enqueueReads(3)
+  assertEquals(SyncStatus.Complete(0),engine.sync())
+  assertEquals("editor",cachedRole)
+  assertEquals("Remote 3",workspace.dao.get(remote)?.body)
+  assertEquals("Previously queued words",workspace.dao.get(local)?.body)
+  assertTrue(workspace.dao.outbox().isEmpty())
+  val writes=List(server.requestCount) {server.takeRequest()}.filter {it.method=="POST"}
+  assertEquals(listOf("/api/v1/sync/push","/api/v1/sync/push"),writes.map {it.path})
+  assertEquals(writes[0].body.readUtf8(),writes[1].body.readUtf8())
+ }
  @Test fun unauthorizedPreservesEntireReplicaAndOutbox()=runBlocking {
   val id=repo.create("offline");val before=repo.dao.outbox();server.enqueue(response("""{"code":"unauthorized"}""",401))
   assertEquals(SyncStatus.NeedsSignIn,engine().sync());assertEquals("offline",repo.dao.get(id)!!.body);assertEquals(before,repo.dao.outbox())

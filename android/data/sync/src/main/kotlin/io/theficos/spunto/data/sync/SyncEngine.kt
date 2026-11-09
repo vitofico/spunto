@@ -19,11 +19,16 @@ sealed interface SyncStatus {
  data class Waiting(val reason:String):SyncStatus
  data class Complete(val pending:Int):SyncStatus
 }
-class SyncEngine(private val repository:NotesRepository, private val configProvider:suspend ()->AuthConfig?, private val apiFactory:(AuthConfig)->ApiClient = { ApiClient(it) }) {
- constructor(repository:NotesRepository,auth:AuthStore,apiFactory:(AuthConfig)->ApiClient = { ApiClient(it) }):this(repository,{ auth.config.first() },apiFactory)
+private fun JsonObject.hostedWorkspaceRole()=(this["workspace_role"] as? JsonPrimitive)?.takeIf {it.isString}?.content?.takeIf {it in setOf("owner","editor","viewer")}
+
+class SyncEngine internal constructor(private val repository:NotesRepository, private val configProvider:suspend ()->AuthConfig?, private val apiFactory:(AuthConfig)->ApiClient, private val cachedRole:suspend (AuthConfig)->String?, private val publishRole:suspend (AuthConfig,String)->Unit) {
+ constructor(repository:NotesRepository,configProvider:suspend ()->AuthConfig?,apiFactory:(AuthConfig)->ApiClient = { ApiClient(it) }):this(repository,configProvider,apiFactory,{it.workspaceRole},{_,_->})
+ constructor(repository:NotesRepository,auth:AuthStore,apiFactory:(AuthConfig)->ApiClient = { ApiClient(it) }):this(repository,{ auth.config.first() },apiFactory,{expected ->auth.selection.first().takeIf {it.config==expected}?.workspaceRole},auth::updateWorkspaceRole)
  private val mutex=globalMutex; private val mutableState=MutableStateFlow<SyncStatus>(SyncStatus.Idle)
  companion object { private val globalMutex=Mutex() }
  val state:StateFlow<SyncStatus> = mutableState.asStateFlow()
+ internal suspend fun workspaceRole(config:AuthConfig)=cachedRole(config)
+ internal suspend fun suspendWorkspaceWrites(config:AuthConfig) {publishRole(config,"viewer")}
  private var syncingConfig:AuthConfig?=null
  private suspend fun owns(config:AuthConfig):Boolean=configProvider()==config && config.ownsReplica(repository.replicaId)
  private suspend fun <T> ownedTransaction(block:suspend ()->T):T=repository.db.withTransaction {
@@ -41,38 +46,36 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
    if(state.serverUrl.isNotEmpty() && state.serverUrl!=serverUrl) return@withLock SyncStatus.Waiting("different_server").also { mutableState.value=it }
    if(state.replicaId.isNotEmpty() && state.replicaId!=config.replicaId) return@withLock SyncStatus.Waiting("different_identity").also {mutableState.value=it}
    state=state.copy(replicaId=config.replicaId);ownedTransaction {dao.putState(state)}
-   // Older builds kept a refused decision queued as a refused note change; the server's copies settle it instead.
-   ownedTransaction { dao.outbox().filter { it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="suggestion.decide" }.forEach { dao.removeOutbox(it.opId);it.noteId?.let { id -> dao.putRefresh(RefreshNoteEntity(id)) } } }
    val previousEpoch=state.epoch
    val meta=api.meta(); val epoch=meta["sync_epoch"]?.jsonPrimitive?.content ?: state.epoch
+   var role=if(config.hosted) meta.hostedWorkspaceRole()?.also {publishRole(config,it)} ?: workspaceRole(config) else null
    val maximum=(meta["max_upload_bytes"] as? JsonPrimitive)?.takeUnless {it.isString}?.longOrNull?.takeIf {it in 1_000_000L..1_000_000_000L}?:LEGACY_UPLOAD_LIMIT
    state=state.copy(maxUploadBytes=maximum);putStateKeepingPluginCache(state)
    if(epoch.isEmpty()) throw IllegalStateException("missing_epoch")
    if(state.serverUrl.isEmpty()) { state=state.copy(serverUrl=serverUrl);putStateKeepingPluginCache(state) }
-   if(state.epoch.isNotEmpty() && state.epoch!=epoch) reconcile(api,epoch)
+   val viewerWork=if(previousEpoch.isNotEmpty() && previousEpoch!=epoch) reconcile(api,epoch,viewer=role=="viewer") else null
+   if(viewerWork!=null) role="viewer"
    state=dao.state()?:state
    if(state.epoch!=epoch) { state=state.copy(epoch=epoch,cursor="$epoch.0",manifest="{}",catalog="{}"); ownedTransaction {dao.putState(state)} }
    if(previousEpoch.isNotEmpty() && previousEpoch!=epoch) ownedTransaction {
     for(item in dao.attachmentSnapshots()) {
+     if(viewerWork!=null && item.noteId !in viewerWork) continue
      val note=dao.get(item.noteId)
      if(item.remoteId!=null && item.marker.isNotEmpty() && item.marker in note?.body.orEmpty() && note?.trashed==false && dao.tombstone(item.noteId)==null && item.serverUrl==serverUrl && java.io.File(item.localPath).isFile) dao.putAttachment(item.copy(remoteId=null,status="queued",error=null))
     }
    }
-   if(dao.pendingAttachments().any {it.kind=="recording"}) {
-    val manifest=api.manifest();val catalog=api.get("/api/v1/plugins")
-    persistPluginSnapshot(repository,config,epoch,manifest,catalog,configProvider=configProvider)
-   }
-   uploadAttachments(api)
-   var batches=0
-   while(batches++<1000) {
-    // Once sent, the idempotency key and payload are immutable across failures.
-    val batch=ownedTransaction { dao.outbox().filter { it.error==null }.let { queued -> val restores=queued.filter { Json.decodeFromString<OutboxOperation>(it.payload).type=="note.restore" }; val decisions=queued.filter { Json.decodeFromString<OutboxOperation>(it.payload).type=="suggestion.decide" }; (if(restores.isNotEmpty() && decisions.isNotEmpty()) decisions.distinctBy { it.noteId?:it.opId } else if(restores.isNotEmpty()) restores else queued.distinctBy { it.noteId?:it.opId }).take(100) }.also { dao.markSent(it.map(OutboxEntity::opId)) } }
-    if(batch.isEmpty()) break
-    val response=api.push(epoch,batch.map { Json.decodeFromString<OutboxOperation>(it.payload) })
-    if(response.epoch!=epoch) throw ApiException(409,"resync_required")
-    for(result in response.results) acknowledge(result,batch)
-    refreshOriginals(api)
-    if(response.results.none { it.status in listOf("applied","merged","conflict","duplicate","rejected") }) break
+   if(role!="viewer") try {
+    if(dao.pendingAttachments().any {it.kind=="recording"}) {
+     val manifest=api.manifest();val catalog=api.get("/api/v1/plugins")
+     persistPluginSnapshot(repository,config,epoch,manifest,catalog,configProvider=configProvider)
+    }
+    uploadAttachments(api)
+    push(api,epoch)
+    // Older builds kept refused decisions as failed note edits; let server copies settle them.
+    ownedTransaction { dao.outbox().filter { it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="suggestion.decide" }.forEach { dao.removeOutbox(it.opId);it.noteId?.let { id -> dao.putRefresh(RefreshNoteEntity(id)) } } }
+   } catch(error:ApiException) {
+    if(!config.hosted || !error.readOnlyWorkspace) throw error
+    publishRole(config,"viewer")
    }
    refreshOriginals(api)
    var more=true
@@ -102,18 +105,49 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
    mutableState.value=result; result
   }
  }
+ private suspend fun push(api:ApiClient,epoch:String) {
+  val dao=repository.dao
+  var batches=0
+  while(batches++<1000) {
+   // Once sent, the idempotency key and payload are immutable across failures.
+   val batch=ownedTransaction { dao.outbox().filter { it.error==null }.let { queued -> val restores=queued.filter { Json.decodeFromString<OutboxOperation>(it.payload).type=="note.restore" }; val decisions=queued.filter { Json.decodeFromString<OutboxOperation>(it.payload).type=="suggestion.decide" }; (if(restores.isNotEmpty() && decisions.isNotEmpty()) decisions.distinctBy { it.noteId?:it.opId } else if(restores.isNotEmpty()) restores else queued.distinctBy { it.noteId?:it.opId }).take(100) }.also { dao.markSent(it.map(OutboxEntity::opId)) } }
+   if(batch.isEmpty()) break
+   val response=api.push(epoch,batch.map { Json.decodeFromString<OutboxOperation>(it.payload) })
+   if(response.epoch!=epoch) throw ApiException(409,"resync_required")
+   for(result in response.results) acknowledge(result,batch)
+   refreshOriginals(api)
+   if(response.results.none { it.status in listOf("applied","merged","conflict","duplicate","rejected") }) break
+  }
+ }
  private suspend fun putStateKeepingPluginCache(state:SyncStateEntity)=ownedTransaction {
   val current=repository.dao.state()
   val sameOwner=current!=null && current.serverUrl==state.serverUrl && current.epoch==state.epoch
   repository.dao.putState(if(sameOwner) state.copy(manifest=current!!.manifest,catalog=current.catalog,pluginsRev=maxOf(state.pluginsRev,current.pluginsRev)) else state)
  }
- private suspend fun reconcile(api:ApiClient,epoch:String) {
+ private suspend fun queuedRestoreNotes():Set<String> = repository.dao.outbox().mapNotNull {row ->
+  val operation=Json.decodeFromString<OutboxOperation>(row.payload)
+  operation.noteId?.takeIf {operation.type in setOf("note.create","note.update","note.flags","note.restore")}
+ }.toSet()
+ private suspend fun reconcile(api:ApiClient,epoch:String,viewer:Boolean):Set<String>? {
   val dao=repository.dao
-  val notes=dao.reconcilableNotes().map { it.note() }
+  // Downloaded viewer copies stay local. Only queued local work can become a restore.
+  var viewerWork=if(viewer) queuedRestoreNotes() else null
+  val notes=dao.reconcilableNotes().map {it.note()}
+  val restoreBatches=mutableListOf<List<String>>()
   for(chunk in notes.chunked(1000)) {
-   val response=api.reconcile(epoch,chunk)
+   val candidates=viewerWork?.let {pending ->chunk.filter {it.id in pending}} ?: chunk
+   if(candidates.isEmpty()) continue
+   val response=api.reconcile(epoch,candidates)
+   if(response.epoch!=epoch) throw ApiException(409,"resync_required")
+   if(api.config.hosted && response.workspaceRole=="viewer" && viewerWork==null) {
+    publishRole(api.config,"viewer")
+    viewerWork=queuedRestoreNotes()
+   }
+   if(response.restoreIds.isNotEmpty()) restoreBatches+=response.restoreIds
+  }
+  // A later chunk can observe a demotion that happened after metadata and the earlier chunks.
+  for(restoreIds in restoreBatches) {
    ownedTransaction {
-    if(response.restoreIds.isEmpty()) return@ownedTransaction
     val restoring=mutableSetOf<String>()
     val superseded=mutableMapOf<String?,MutableList<String>>()
     for(row in dao.outbox()) {
@@ -123,7 +157,8 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
       "note.create","note.update","note.flags" -> superseded.getOrPut(row.noteId) {mutableListOf()}.add(row.opId)
      }
     }
-    for(id in response.restoreIds) {
+    for(id in restoreIds) {
+     if(viewerWork?.contains(id)==false) continue
      // Pending notes are represented by a restore of their latest local body;
      // retain existing operations unchanged, then replay against restored version.
      val note=dao.get(id)?.note()?:continue
@@ -136,7 +171,13 @@ class SyncEngine(private val repository:NotesRepository, private val configProvi
     }
    }
   }
-  val old=dao.state()?:SyncStateEntity(); ownedTransaction {dao.putState(old.copy(epoch=epoch,cursor="$epoch.0",manifest="{}",catalog="{}"))}
+  ownedTransaction {
+   val old=dao.state()?:SyncStateEntity()
+   // Old viewer tombstones are not evidence of deletion in the restored server snapshot.
+   if(viewerWork!=null) dao.clearTombstones()
+   dao.putState(old.copy(epoch=epoch,cursor="$epoch.0",manifest="{}",catalog="{}"))
+  }
+  return viewerWork
  }
  private suspend fun acknowledge(result:PushResult,batch:List<OutboxEntity>) = ownedTransaction {
   val dao=repository.dao; val sent=batch.firstOrNull { it.opId==result.opId }?:return@ownedTransaction
@@ -206,8 +247,13 @@ class ChangeWaiter(private val configProvider:suspend ()->AuthConfig?,private va
     val state=repository.dao.state()
     if(state!=null && state.serverUrl.isNotEmpty() && state.serverUrl!=config.serverUrl.trimEnd('/')) return
     if(state==null || state.cursor.isEmpty()) { engine.sync();delay(1000);continue }
-    val response=ApiClient(config).waitForChanges(settled?.takeIf {it.first==state.cursor}?.second ?: state.cursor,state.pluginsRev)
-    if(response["changed"]?.jsonPrimitive?.booleanOrNull==true && engine.sync() is SyncStatus.Complete && repository.dao.state()?.cursor==state.cursor) settled=response["cursor"]?.jsonPrimitive?.contentOrNull?.let {state.cursor to it}
+    val response=ApiClient(config).guarded {configProvider()==config}.waitForChanges(settled?.takeIf {it.first==state.cursor}?.second ?: state.cursor,state.pluginsRev)
+    val changed=response["changed"]?.jsonPrimitive?.booleanOrNull==true
+    // A wait can have started before a role change. A hint may restrict writes; only fresh metadata may resume them.
+    val reportedRole=response.hostedWorkspaceRole()
+    val roleChanged=config.hosted && reportedRole!=null && reportedRole!=engine.workspaceRole(config)
+    if(roleChanged && reportedRole=="viewer") engine.suspendWorkspaceWrites(config)
+    if((changed || roleChanged) && engine.sync() is SyncStatus.Complete && changed && repository.dao.state()?.cursor==state.cursor) settled=response["cursor"]?.jsonPrimitive?.contentOrNull?.let {state.cursor to it}
    }
    catch(cancelled:CancellationException) { throw cancelled }
    catch(error:Exception) { if(error is ApiException && error.status==401) { engine.sync(); return }; delay(30_000) }

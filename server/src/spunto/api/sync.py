@@ -153,6 +153,7 @@ class Reconcile(BaseModel):
 class ReconcileResponse(BaseModel):
     epoch: str
     restore_ids: list[str]
+    workspace_role: Literal["owner", "editor", "viewer"] | None = None
 
 
 async def metadata(conn):
@@ -478,7 +479,7 @@ async def pull(
     return Response(encoded, media_type="application/json", headers={"Vary": "Accept-Encoding"})
 
 
-@router.post("/reconcile", response_model=ReconcileResponse)
+@router.post("/reconcile", response_model=ReconcileResponse, response_model_exclude_none=True)
 async def reconcile(body: Reconcile, principal: DeviceDep, services: ServicesDep):
     restore = []
     async with services.store.read() as conn:
@@ -499,4 +500,8 @@ async def reconcile(body: Reconcile, principal: DeviceDep, services: ServicesDep
                 rows[0]["body_hash"] != note.body_hash and rows[0]["updated_at"] == local_time
             ):
                 restore.append(note.id)
-    return {"epoch": meta["sync_epoch"], "restore_ids": restore}
+    return ReconcileResponse(
+        epoch=meta["sync_epoch"],
+        restore_ids=restore,
+        workspace_role=principal.workspace_role if principal.user_id is not None else None,
+    )

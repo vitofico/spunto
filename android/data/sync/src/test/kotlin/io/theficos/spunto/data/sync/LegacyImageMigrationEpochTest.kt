@@ -23,8 +23,8 @@ class LegacyImageMigrationEpochTest {
  private data class Legacy(val noteId:String,val imageId:String,val remoteId:String,val file:File,val body:String)
  private suspend fun migrated(context:Context,name:String,root:String,folder:File):Pair<SpuntoDatabase,List<Legacy>> {
   val template=Room.inMemoryDatabaseBuilder(context,SpuntoDatabase::class.java).build();val schema=template.openHelper.writableDatabase
-  val ddl=schema.query("SELECT name,sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL AND name NOT IN ('android_metadata','room_master_table','sqlite_sequence','recording_drafts') AND name NOT LIKE 'notes_fts_%'").use {cursor ->buildList {while(cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))}}
-  val extra=schema.query("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL").use {cursor ->buildList {while(cursor.moveToNext()) add(cursor.getString(0))}};template.close()
+  val ddl=schema.query("SELECT name,sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL AND name NOT IN ('android_metadata','room_master_table','sqlite_sequence','recording_drafts','draft_images') AND name NOT LIKE 'notes_fts_%'").use {cursor ->buildList {while(cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))}}
+  val extra=schema.query("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL AND tbl_name!='draft_images'").use {cursor ->buildList {while(cursor.moveToNext()) add(cursor.getString(0))}};template.close()
   val rows=listOf("linked","missing","trashed","tombstone").map {kind ->
    val id=uuidV7();val image=uuidV7();val remote=uuidV7();val marker="![Synthetic legacy image](/a/$remote)"
    Legacy(id,image,remote,File(folder,"$image.jpg").apply {writeBytes(byteArrayOf(-1,-40,-1,1))},if(kind=="missing") "Owner removed the legacy link" else "Original owner words\n\n$marker")
@@ -46,7 +46,7 @@ class LegacyImageMigrationEpochTest {
    old.insertOrThrow("sync_state",null,ContentValues().apply {put("id",1);put("epoch","old");put("cursor","old.2");put("pluginsRev",0);put("manifest","{\"plugins\":[]}");put("catalog","{\"plugins\":[]}");put("serverUrl",root)})
    old.version=4
   }
-  return Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6).build() to rows
+  return Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).build() to rows
  }
  @Test fun realFourToFiveMigrationThenEpochRestoresOnlyLinkedSameRootImageAndKeepsConcurrentWordsFlags()=runBlocking {
   val context=ApplicationProvider.getApplicationContext<Context>();val server=MockWebServer();server.start()

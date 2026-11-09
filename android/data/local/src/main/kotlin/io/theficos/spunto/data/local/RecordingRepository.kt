@@ -93,6 +93,7 @@ class RecordingRepository(private val notes:NotesRepository,directory:File) {
    if(target==null && privateNote) notes.setFlags(saved,privateNote=true)
    val enabled=recordingPluginFacts(dao.state()).captureAllowed
    dao.putAttachment(AttachmentEntity(id,saved,file.absolutePath,"audio/ogg",kind="recording",durationMs=metadata.durationMs,byteSize=metadata.byteSize,sha256=metadata.sha256,serverUrl=before.serverUrl.ifEmpty {root},marker=marker,status=if(enabled) "queued" else "paused"))
+   if(target==null && editorWrite!=null) notes.transferDraftImages(before.draftId,saved)
    dao.putRecording(before.copy(state="retained",noteId=saved))
    captureDraft?.takeIf {it.id==before.draftId && it.body==body}?.let {dao.clearDraftSnapshot(it.id,it.body,it.updatedAt)}
    saved

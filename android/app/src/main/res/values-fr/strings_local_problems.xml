@@ -34,4 +34,5 @@
     <string name="local_problem_label_review_on_web_required">Vérifiez les changements d’étiquettes sur la page Vérifier du web après connexion pour examiner leur impact.</string>
     <string name="local_problem_replacement_superseded">Ce remplacement est dépassé. Comparez la note actuelle avant d’appliquer une nouvelle proposition.</string>
     <string name="local_problem_merge_superseded">Cette fusion est dépassée. Comparez à nouveau les deux notes actuelles avant de les fusionner.</string>
+    <string name="local_problem_draft_image_limit">Un brouillon peut contenir jusqu’à 10 images.</string>
 </resources>

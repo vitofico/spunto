@@ -49,6 +49,7 @@ import io.theficos.spunto.plugins.dictation.voice.*
 import io.theficos.spunto.data.local.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 
 @Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
@@ -71,7 +72,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  // Focus once per page visit: returning from a note, a rotation or a permission dialog restores this flag, so the keyboard stays down.
  var focusSpent by rememberSaveable(id,draftId) { mutableStateOf(false) }
  ReportDrawnWhen { ready && (autoDictate || !autoFocus || focused || focusSpent) }
- var images by remember(id,draftId) { mutableStateOf(emptyList<Pair<java.io.File,String>>()) }
+ val imageStore=if(id=="capture" && onPlainCaptureSaved!=null) model.container.draftImageStore else null
+ val images by remember(imageStore,draftId) {imageStore?.observe(draftId) ?: flowOf(emptyList<DraftImageEntity>())}.collectAsState(initial=null)
+ val imageCount=images.orEmpty().size
+ var imageBusy by remember(id,draftId) {mutableStateOf(false)}
+ val canWrite by model.workspaceCanWrite.collectAsState()
  var committed by remember(id,draftId) { mutableStateOf(initial) }
  var saving by remember(id,draftId) { mutableStateOf(false) }
  var closing by remember(id,draftId) { mutableStateOf(false) }
@@ -169,7 +174,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   if(!saved && recording.id!=null && voice.isCurrent(snapshot) && value.text!=snapshot.text) value=TextFieldValue(snapshot.text,TextRange(snapshot.text.length))
  }
  suspend fun commitEditor(write:io.theficos.spunto.data.local.EditorWrite):Boolean = try {
-  model.repository.persistEditor(write,commit=true)
+  if(model.canWriteWorkspace()) model.repository.persistEditor(write,commit=true) else false
  } catch(error:CancellationException) {throw error}
  catch(error:Exception) {
   model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else if(error is IllegalArgumentException) error.message.orEmpty() else context.getString(R.string.core_save_failed)
@@ -215,10 +220,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
    closing=true
    saving=true
    try {
+    model.requireWorkspaceWrite()
     val active=session.state.value.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)
     val keepRecording=recordingActive(voice.state.value.phase) || voice.state.value.recording!=null || latestPendingRecording!=null
     voice.onForegroundChanged(false);if(voice.hasSession) voice.stop()
     val body=if(voice.hasSession) voice.textSnapshot().text else if(active) session.stopForSave() else latestText
+    model.requireWorkspaceWrite()
     if(keepRecording) {
      check(ownerRevision==tappedRevision) {context.getString(R.string.core_editor_changed)}
      val clipId=recoveredId?:voice.state.value.recording?.id?:latestPendingRecording?.id?:error(context.getString(R.string.core_recording_finish_failed))
@@ -242,7 +249,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     voice.onForegroundChanged(false)
     val finalText=if(active) session.state.value.text else latestText
     model.container.scope.launch {
-     try {if(voice.hasSession) voice.stop();val body=if(voice.hasSession) voice.textSnapshot().text else finalText;model.repository.finishEditor(model.repository.editorWrite(editorLease,body))}
+     try {
+      if(voice.hasSession) voice.stop()
+      val body=if(voice.hasSession) voice.textSnapshot().text else finalText
+      val write=model.repository.editorWrite(editorLease,body)
+      if(editorLease.noteId==null || model.canWriteWorkspace()) model.repository.finishEditor(write)
+      else {model.repository.persistEditor(write);model.repository.abandonEditor(editorLease)}
+     }
      catch(error:CancellationException) {throw error}
      catch(error:Exception) {
       model.repository.abandonEditor(editorLease)
@@ -268,32 +281,56 @@ import kotlinx.coroutines.flow.distinctUntilChanged
   val caret=value.selection.max;val lineStart=value.text.lastIndexOf('\n',caret-1)+1;val lineEnd=value.text.indexOf('\n',caret).let {if(it<0) value.text.length else it}
   if(value.text.substring(lineStart,lineEnd).isBlank()) insertAtCaret("- [ ] ",lineStart,lineEnd) else insertAtCaret("\n- [ ] ",lineEnd,lineEnd)
  }
- suspend fun attachImage(uri:Uri) {
+ suspend fun attachImage(uri:Uri,pickedLease:EditorLease) {
+  model.requireWorkspaceWrite()
   val mime=context.contentResolver.getType(uri)?.takeIf {it.startsWith("image/")} ?: "image/jpeg"
-  val file=withContext(Dispatchers.IO) {
-   val target=java.io.File(model.container.privateDirectory("pending-attachments"),java.util.UUID.randomUUID().toString())
-   try {requireNotNull(context.contentResolver.openInputStream(uri)) {context.getString(R.string.core_image_missing)}.use {input ->target.outputStream().use {input.copyTo(it)}};target} catch(error:Exception) {target.delete();throw error}
+  if(imageStore!=null) {
+   imageStore.add(pickedLease,mime,authorize={model.requireWorkspaceWrite()}) {
+    requireNotNull(context.contentResolver.openInputStream(uri)) {context.getString(R.string.core_image_missing)}
+   }
+   return
   }
+  val file=java.io.File(model.container.privateDirectory("pending-attachments"),java.util.UUID.randomUUID().toString())
+  var queued=false
   try {
-   if(file.length() !in 1..IMAGE_IMPORT_LIMIT) {file.delete();throw IllegalArgumentException(context.getString(R.string.core_image_limit))}
-   if(id=="capture") images=images+(file to mime)
-   else {val attachment=model.repository.queueImage(id,file.absolutePath,mime);val text=value.text.trimEnd()+"\n\n[image:$attachment]";ownerValue(TextFieldValue(text,TextRange(text.length)))}
-  } catch(error:Exception) {if(id=="capture") file.delete();throw error}
+   withContext(Dispatchers.IO) {
+    requireNotNull(context.contentResolver.openInputStream(uri)) {context.getString(R.string.core_image_missing)}.use {copyPickedImage(it,file)}
+   }
+   model.requireWorkspaceWrite()
+   val attachment=model.repository.queueImage(id,file.absolutePath,mime)
+   queued=true
+   val text=value.text.trimEnd()+"\n\n[image:$attachment]"
+   ownerValue(TextFieldValue(text,TextRange(text.length)))
+  } finally {
+   if(!queued) withContext(NonCancellable+Dispatchers.IO) {
+    if(model.repository.dao.attachmentReferences(file.absolutePath)==0) file.delete()
+   }
+  }
  }
  val pickImage=rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {uri ->
-  if(uri!=null) scope.launch {try {attachImage(uri)} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else (error as? IllegalArgumentException)?.message ?: context.getString(R.string.core_image_add_failed)}}
+  if(uri!=null && !imageBusy && !saving && !closing) {
+   val pickedLease=lease;imageBusy=true
+   scope.launch {
+    try {attachImage(uri,pickedLease)}
+    catch(cancelled:CancellationException) {throw cancelled}
+    catch(error:Exception) {model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else (error as? IllegalArgumentException)?.message ?: context.getString(R.string.core_image_add_failed)}
+    finally {imageBusy=false}
+   }
+  }
  }
  fun saveNow() {
-    if(startingVoice || saving) return
+    if(startingVoice || saving || imageBusy || imageStore!=null && images==null) return
     val tappedRevision=ownerRevision
     val tappedWrite=model.repository.editorWrite(lease,value.text)
     retaining=recordingActive(voice.state.value.phase) || voice.state.value.recording!=null || pendingRecording!=null
     scope.launch {
-    if(saving) return@launch
+    if(saving || imageBusy) return@launch
     saving=true
     try {
+     model.requireWorkspaceWrite()
      if(retaining) {
       if(voice.hasSession) voice.stop()
+      model.requireWorkspaceWrite()
       check(ownerRevision==tappedRevision) {context.getString(R.string.core_editor_changed)}
       val clipId=recoveredId?:voice.state.value.recording?.id?:pendingRecording?.id?:error(context.getString(R.string.core_recording_save_failed))
       val body=if(voice.hasSession) voice.textSnapshot().text else tappedWrite.body
@@ -310,11 +347,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
       onRecordingSaved(noteId)
      } else {
       val body=if(listening) session.stopForSave() else value.text
-      if(body.isNotBlank() || canSaveEmpty || images.isNotEmpty()) {
+      if(body.isNotBlank() || canSaveEmpty || imageCount>0) {
+       model.requireWorkspaceWrite()
        if(id!="capture") check(model.repository.finishEditor(model.repository.editorWrite(lease,body))) { context.getString(R.string.core_editor_inactive) }
        val dictated=dictatedText || listening && body.isNotBlank() && body!=dictationInitial
        val captured=if(id=="capture" && onPlainCaptureSaved!=null) {
-        model.repository.capture(body,draftId,images.map { (file,mime) -> file.absolutePath to mime },if(dictated) "dictation" else null).also {images=emptyList()}
+        model.repository.capture(model.repository.editorWrite(lease,body),if(dictated) "dictation" else null)
        } else {onSave(body);null}
        if(id=="capture" && captured==null) model.container.scope.launch { runCatching { model.repository.clearDraft(draftId,body) } }
        if(value.text==body) { saved=true;value=TextFieldValue("");dictatedText=false }
@@ -327,7 +365,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     finally { saving=false;retaining=false }
    }
  }
- val canSave=ready && !closing && !saving && (value.text.isNotBlank() || images.isNotEmpty() || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty)
+ val canSave=canWrite && ready && !closing && !saving && !imageBusy && (imageStore==null || images!=null) && (value.text.isNotBlank() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty)
  val switchLanguage:()->Unit={scope.launch {
   val restart=listening || dictation.phase==DictationPhase.NeedsLanguage;session.stopAndKeep()
   language=when(language) {"it-IT" -> "en-US";"en-US" -> if(autoAvailable) "auto" else "it-IT";else -> "it-IT"};device.update(language=language)
@@ -356,9 +394,19 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     }
    }
   }
-  if(images.isNotEmpty()) Row(verticalAlignment=Alignment.CenterVertically) {
-   Text(context.resources.getQuantityString(R.plurals.core_images_to_attach,images.size,images.size),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
-   TextButton(onClick={images.forEach {it.first.delete()};images=emptyList()},modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_remove))}
+  if(imageStore!=null && imageCount>0) Row(verticalAlignment=Alignment.CenterVertically) {
+   Text(context.resources.getQuantityString(R.plurals.core_images_to_attach,imageCount,imageCount),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
+   TextButton(onClick={
+    if(!imageBusy && !saving) {
+     val selectedLease=lease;imageBusy=true
+     scope.launch {
+      try {imageStore.clear(selectedLease)}
+      catch(cancelled:CancellationException) {throw cancelled}
+      catch(error:Exception) {model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else context.getString(R.string.core_save_failed)}
+      finally {imageBusy=false}
+     }
+    }
+   },enabled=canWrite && !imageBusy && !saving,modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_remove))}
   }
   if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT<33) Text(context.getString(R.string.core_voice_android),style=MaterialTheme.typography.bodySmall)
   VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=context.getString(R.string.core_clip_discard_failed)}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=context.getString(R.string.core_clip_recover_failed)}}},saveAction=if(showSaveAction) context.getString(R.string.core_save) else context.getString(R.string.core_done))
@@ -368,7 +416,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  // stops holding the composer in place (a focused item stays composed, which kept day headers from sticking).
  val imeVisible=WindowInsets.isImeVisible;val focusManager=LocalFocusManager.current;var keyboardShown by remember { mutableStateOf(false) }
  LaunchedEffect(imeVisible) { if(keyboardShown && !imeVisible && focused && id=="capture" && !listening) focusManager.clearFocus();keyboardShown=imeVisible }
- val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || images.isNotEmpty() || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
+ val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
  // A label already typed in full offers nothing to complete, so the tools stay.
  val suggestions=prefix?.let {labelCounts.filter {label -> label.key.startsWith(it,true) && !label.path.equals(it,true)}.sortedByDescending {it.count}.take(5)}.orEmpty()
  val newLabel=prefix?.takeIf {it.isNotEmpty() && labelCounts.none {label -> label.path.equals(it,true)}}
@@ -384,7 +432,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
    } else if(tools) {
     IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_add_label)})}
     IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription=context.getString(R.string.core_add_task),modifier=Modifier.size(24.dp))}
-    if(id!="capture" || onPlainCaptureSaved!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=ready && !closing && !saving) {Icon(painterResource(R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
+    if(id!="capture" || onPlainCaptureSaved!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=canWrite && ready && !closing && !saving && !imageBusy) {Icon(painterResource(R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
     if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,false,startingVoice) {micTap()}
     if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_record))}
    }

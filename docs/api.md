@@ -56,9 +56,11 @@ Workspace APIs require a browser session. `X-Spunto-Workspace` selects a workspa
 | `POST /workspaces` | `{name}` creates a shared workspace owned by the current account |
 | `GET /workspaces/{id}/members` | `{members: [{user_id, username, email, display_name, role}]}` for an authorized member |
 | `POST /workspaces/{id}/members` | Owner grants/changes exactly one `{username, role: "editor"\|"viewer"}`, `{email, role}` or `{user_id, role}` |
+| `PATCH /workspaces/{id}/members/{user_id}` | Owner changes an existing non-owner member to `{role: "editor"\|"viewer"}` |
 | `DELETE /workspaces/{id}/members/{user_id}` | Owner revokes a non-owner member |
 | `GET /notes/{id}/shares` | Owner reads `{shares: [{user_id, username, email, display_name, role}]}` |
 | `POST /notes/{id}/shares` | Owner grants/changes exactly one `{username, role: "editor"\|"viewer"}`, `{email, role}` or `{user_id, role}` |
+| `PATCH /notes/{id}/shares/{user_id}` | Owner changes an existing note grant to `{role: "editor"\|"viewer"}` |
 | `DELETE /notes/{id}/shares/{user_id}` | Owner revokes an individual-note grant |
 | `GET /shared-notes` | `{notes: [...]}` containing granted notes with `workspace_id`, `share_role` and `shared_by` |
 | `GET /shared-notes/{id}?workspace_id={source_workspace}` | Reads that granted note without opening its source library |

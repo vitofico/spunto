@@ -57,7 +57,8 @@ import java.time.*
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
  val epoch by model.pluginReplicaEpochState.collectAsState()
- val enabled=model.container.manifest.enabled("ask")
+ val writable by model.workspaceCanWrite.collectAsState()
+ val enabled=writable && model.container.manifest.enabled("ask")
  val localNotes by model.notes.collectAsState()
  val focus=remember { FocusRequester() }; var focusSpent by rememberSaveable { mutableStateOf(false) }; val focusManager=LocalFocusManager.current
  LaunchedEffect(Unit) { if(!focusSpent) { focusSpent=true;runCatching { focus.requestFocus() } } }

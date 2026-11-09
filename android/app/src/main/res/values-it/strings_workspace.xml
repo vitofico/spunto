@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workspace_read_only">Questo spazio è in sola lettura.</string>
+    <string name="workspace_queued_edits">Questo spazio è in sola lettura. Le modifiche restano su questo telefono finché non potrai sincronizzarle di nuovo.</string>
+    <string name="workspace_write_on_phone">Scrivi su questo telefono</string>
+    <string name="workspace_save_on_phone">Salva su questo telefono</string>
+</resources>

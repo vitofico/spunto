@@ -644,21 +644,46 @@ async def test_shared_space_roles_and_immediate_membership_revocation(hosted):
             json={"user_id": alice["account"]["id"], "role": "editor"},
         )
     ).status_code == 403
-    await client.post(
-        f"/api/v1/workspaces/{space}/members",
-        headers=headers(alice),
-        json={"user_id": bob["account"]["id"], "role": "editor"},
+    membership = f"/api/v1/workspaces/{space}/members/{bob['account']['id']}"
+    owner_pat = await client.post(
+        "/api/v1/tokens", headers=headers(alice), json={"name": "Owner agent", "scope": "write"}
     )
+    assert owner_pat.status_code == 201, owner_pat.text
+    bearer = {"Authorization": "Bearer " + owner_pat.json()["token"]}
+    denied = await client.patch(membership, headers=bearer, json={"role": "editor"})
+    assert denied.status_code == 403 and denied.json()["code"] == "session_required"
+    assert (
+        await client.patch(membership, headers=headers(bob, space), json={"role": "editor"})
+    ).status_code == 403
+    assert (
+        await client.patch(
+            membership,
+            headers={**headers(alice), "Origin": "https://attacker.invalid"},
+            json={"role": "editor"},
+        )
+    ).status_code == 403
+    assert (
+        await client.patch(
+            f"/api/v1/workspaces/{space}/members/{alice['account']['id']}",
+            headers=headers(alice),
+            json={"role": "viewer"},
+        )
+    ).status_code == 409
+    changed = await client.patch(
+        membership,
+        headers=headers(alice),
+        json={"role": "editor"},
+    )
+    assert changed.status_code == 204, changed.text
     assert (
         await client.post(
             "/api/v1/notes", headers=headers(bob, space), json={"body": "Editor note"}
         )
     ).status_code == 201
+    assert (await client.delete(membership, headers=headers(alice))).status_code == 204
     assert (
-        await client.delete(
-            f"/api/v1/workspaces/{space}/members/{bob['account']['id']}", headers=headers(alice)
-        )
-    ).status_code == 204
+        await client.patch(membership, headers=headers(alice), json={"role": "viewer"})
+    ).status_code == 404
     assert (await client.get("/api/v1/notes", headers=headers(bob, space))).status_code == 404
 
 
@@ -694,9 +719,26 @@ async def test_individual_share_does_not_grant_library_or_settings_access(hosted
         json={"body": "Forbidden", "version": a["version"]},
     )
     assert edit.status_code == 403, edit.text
-    await client.post(
-        url, headers=headers(alice), json={"user_id": bob["account"]["id"], "role": "editor"}
+    recipient_grant = url + "/" + bob["account"]["id"]
+    owner_pat = await client.post(
+        "/api/v1/tokens", headers=headers(alice), json={"name": "Owner agent", "scope": "write"}
     )
+    assert owner_pat.status_code == 201, owner_pat.text
+    bearer = {"Authorization": "Bearer " + owner_pat.json()["token"]}
+    denied = await client.patch(recipient_grant, headers=bearer, json={"role": "editor"})
+    assert denied.status_code == 403 and denied.json()["code"] == "session_required"
+    assert (
+        await client.patch(recipient_grant, headers=headers(bob), json={"role": "editor"})
+    ).status_code == 404
+    assert (
+        await client.patch(
+            recipient_grant,
+            headers={**headers(alice), "Origin": "https://attacker.invalid"},
+            json={"role": "editor"},
+        )
+    ).status_code == 403
+    changed = await client.patch(recipient_grant, headers=headers(alice), json={"role": "editor"})
+    assert changed.status_code == 204, changed.text
     edit = await client.patch(
         "/api/v1/shared-notes/" + a["id"],
         headers=headers(bob),
@@ -706,7 +748,10 @@ async def test_individual_share_does_not_grant_library_or_settings_access(hosted
     assert (await client.get("/api/v1/notes/" + a["id"], headers=headers(alice))).json()[
         "body"
     ] == "Bob edit"
-    await client.delete(url + "/" + bob["account"]["id"], headers=headers(alice))
+    assert (await client.delete(recipient_grant, headers=headers(alice))).status_code == 204
+    assert (
+        await client.patch(recipient_grant, headers=headers(alice), json={"role": "viewer"})
+    ).status_code == 404
     assert (
         await client.get("/api/v1/shared-notes/" + a["id"], headers=headers(bob))
     ).status_code == 404
@@ -810,6 +855,8 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
     metadata = await client.get("/api/v1/meta", headers=bearer)
     assert metadata.status_code == 200, metadata.text
     assert metadata.json()["sync_epoch"] != "sign-in-required"
+    assert metadata.json()["workspace_role"] == "editor"
+    assert "workspace_role" not in (await client.get("/api/v1/meta")).json()
     identity = await client.get("/api/v1/auth/me", headers=bearer)
     assert identity.status_code == 200, identity.text
     assert identity.json()["account"]["id"] == bob["account"]["id"]
@@ -826,8 +873,47 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
     viewer_identity = await client.get("/api/v1/auth/me", headers=bearer)
     assert viewer_identity.status_code == 200
     assert viewer_identity.json()["account"]["id"] == bob["account"]["id"]
+    assert (await client.get("/api/v1/meta", headers=bearer)).json()["workspace_role"] == "viewer"
+    viewer_wait = await client.get(
+        "/api/v1/changes/wait",
+        headers=bearer,
+        params={
+            "timeout": 0,
+            "cursor": pull.json()["cursor"],
+            "plugins_rev": pull.json()["plugins_rev"],
+        },
+    )
+    assert viewer_wait.status_code == 200, viewer_wait.text
+    assert viewer_wait.json()["workspace_role"] == "viewer"
+    browser_wait = await client.get(
+        "/api/v1/changes/wait", headers=headers(bob, space), params={"timeout": 0}
+    )
+    assert browser_wait.status_code == 200 and "workspace_role" not in browser_wait.json()
     assert (await client.get("/api/v1/notes", headers=bearer)).status_code == 200
     assert (await client.get("/api/v1/sync/pull", headers=bearer)).status_code == 200
+    viewer_sync = {"epoch": metadata.json()["sync_epoch"]}
+    reconciled = await client.post(
+        "/api/v1/sync/reconcile", headers=bearer, json={**viewer_sync, "notes": []}
+    )
+    assert reconciled.status_code == 200, reconciled.text
+    assert reconciled.json()["restore_ids"] == []
+    assert reconciled.json()["workspace_role"] == "viewer"
+    for extra, code in (
+        ({"Origin": "https://other.example"}, "origin_mismatch"),
+        ({"X-Spunto-Workspace": "other-space"}, "workspace_mismatch"),
+    ):
+        denied = await client.post(
+            "/api/v1/sync/reconcile", headers={**bearer, **extra}, json={**viewer_sync, "notes": []}
+        )
+        assert denied.status_code == 403 and denied.json()["code"] == code
+    browser = await client.post(
+        "/api/v1/sync/reconcile", headers=headers(bob, space), json={**viewer_sync, "notes": []}
+    )
+    assert browser.status_code == 403
+    blocked = await client.post(
+        "/api/v1/sync/push", headers=bearer, json={**viewer_sync, "ops": []}
+    )
+    assert blocked.status_code == 403 and blocked.json()["code"] == "read_only_space"
     assert (
         await client.post("/api/v1/notes", headers=bearer, json={"body": "No"})
     ).status_code == 403

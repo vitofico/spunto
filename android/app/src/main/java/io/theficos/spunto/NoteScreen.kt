@@ -66,6 +66,8 @@ import kotlinx.serialization.json.*
  LaunchedEffect(id) { if(model.historyFor.value==id) model.historyFor.value=null }
  val value=note?.takeIf {it.id==id} ?: run { if(loaded.second) Text(context.getString(R.string.core_note_missing),Modifier.padding(SpuntoSpacing.s20),color=MaterialTheme.colorScheme.onSurfaceVariant);return }
  val online by model.online.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
+ LaunchedEffect(writable) {if(!writable) {editing=false;commandResult=null}}
  val refused by model.repository.refused.collectAsState(emptyMap())
  fun finishEditing() {
   if(finishing || restoring) return
@@ -84,8 +86,8 @@ import kotlinx.serialization.json.*
  }
  BackHandler(editing) {finishEditing()}
  TopBarActions {
-  IconToggleButton(checked=value.pinned,onCheckedChange={model.flags(id,pinned=it)},enabled=!restoring,colors=IconButtonDefaults.iconToggleButtonColors(checkedContentColor=MaterialTheme.colorScheme.onSurface)) {Icon(painterResource(if(value.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin),contentDescription=context.getString(R.string.core_pin_note),modifier=Modifier.size(24.dp))}
-  if(editing && doneInTopBar) NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)
+  if(writable) IconToggleButton(checked=value.pinned,onCheckedChange={model.flags(id,pinned=it)},enabled=!restoring,colors=IconButtonDefaults.iconToggleButtonColors(checkedContentColor=MaterialTheme.colorScheme.onSurface)) {Icon(painterResource(if(value.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin),contentDescription=context.getString(R.string.core_pin_note),modifier=Modifier.size(24.dp))}
+  if(editing && writable && doneInTopBar) NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)
   else if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_note_actions),modifier=Modifier.size(24.dp))}
  }
  LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
@@ -97,24 +99,24 @@ import kotlinx.serialization.json.*
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
   refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code)}}
   item {
-   if(editing) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,
+   if(editing && writable) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,
     trailing=if(doneInTopBar) null else ({NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)}),onSave={editing=false})
    // Tapping the text edits it in place with the caret where the finger landed (A5); links, labels and checkboxes keep their own taps.
    // Each touch first forgets the last place, so a tap beside the text opens the editor at the end.
-   else Box(Modifier.fillMaxWidth().pointerInput(Unit) {awaitEachGesture {awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial);caret=null}}.clickable(enabled=!value.trashed && !restoring,onClickLabel=context.getString(R.string.core_edit_note),interactionSource=remember {MutableInteractionSource()},indication=null) {editing=true}) {
-    Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")},onText={caret=it}) {model.toggleTask(value,it)}
+   else Box(Modifier.fillMaxWidth().pointerInput(Unit) {awaitEachGesture {awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial);caret=null}}.clickable(enabled=writable && !value.trashed && !restoring,onClickLabel=context.getString(R.string.core_edit_note),interactionSource=remember {MutableInteractionSource()},indication=null) {editing=true}) {
+    Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")},onText={caret=it},onToggle=if(writable) ({model.toggleTask(value,it)}) else null)
    }
   }
-  if(!editing) item {Suggestions(model,id,onNote)}
+  if(!editing && writable) item {Suggestions(model,id,onNote)}
   item {NoteAttachments(model,id,value.body)}
   if(!editing) item {TextButton(onClick={about=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_about_note),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}}
  }
  if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={commandResult=it},onTrashed=onClose)
  if(history) ModalBottomSheet(onDismissRequest={history=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
   LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
-   revisionHistoryItems(context,revisions,online,historyResult,editing || finishing || restoring,value.body) {revision ->
-    if(!editing && !finishing && !restoring) {restoring=true;editorScope.launch {
-     try {model.repository.restoreHistory(id,revision);history=false}
+   revisionHistoryItems(context,revisions,online,historyResult,editing || finishing || restoring,value.body,canRestore=writable) {revision ->
+    if(writable && !editing && !finishing && !restoring) {restoring=true;editorScope.launch {
+     try {model.requireWorkspaceWrite();model.repository.restoreHistory(id,revision);history=false}
      catch(error:kotlinx.coroutines.CancellationException) {throw error}
      catch(error:Exception) {model.message.value=context.getString(R.string.core_restore_failed)}
      finally {restoring=false}
@@ -144,10 +146,12 @@ import kotlinx.serialization.json.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun NoteActionsSheet(model:SpuntoViewModel,note:Note,onDismiss:()->Unit,onHistory:()->Unit,onCommandResult:(JsonObject)->Unit,onTrashed:()->Unit={}) {
  val online by model.online.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
  val feedback=LocalFeedback.current
  val context=LocalContext.current
  var linkSession by remember(note.id) {mutableStateOf<Pair<NotePickerSession,Int>?>(null)}
- linkSession?.let {(session,version) ->
+ LaunchedEffect(writable) {if(!writable) linkSession=null}
+ linkSession?.takeIf {writable}?.let {(session,version) ->
   NoteLinkPickerSheet(model,note.id,version,session,onClose={linkSession=null},onInserted={
    linkSession=null;onDismiss();feedback.show(context.getString(it))
   })
@@ -157,28 +161,28 @@ import kotlinx.serialization.json.*
   Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom=SpuntoSpacing.s16)) {
    NoteExportActions(model,note,enabled=true) {share,save,available ->
     Row(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),horizontalArrangement=Arrangement.SpaceEvenly) {
-     ActionTile(if(note.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin,if(note.pinned) context.getString(R.string.core_unpin) else context.getString(R.string.core_pin)) {model.flags(note.id,pinned=!note.pinned);onDismiss()}
+     if(writable) ActionTile(if(note.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin,if(note.pinned) context.getString(R.string.core_unpin) else context.getString(R.string.core_pin)) {model.flags(note.id,pinned=!note.pinned);onDismiss()}
      ActionTile(R.drawable.ic_copy,context.getString(R.string.core_copy)) {
       val clip=ClipData.newPlainText(note.title,note.body)
       if(note.privateNote) clip.description.extras=android.os.PersistableBundle().apply {putBoolean(ClipDescription.EXTRA_IS_SENSITIVE,true)}
       context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip);feedback.show(context.getString(R.string.core_copied));onDismiss()
      }
      ActionTile(R.drawable.ic_share,context.getString(R.string.core_share),enabled=available,onClick=share)
-     ActionTile(R.drawable.ic_archive,if(note.archived) context.getString(R.string.core_unarchive) else context.getString(R.string.core_archive)) {
+     if(writable) ActionTile(R.drawable.ic_archive,if(note.archived) context.getString(R.string.core_unarchive) else context.getString(R.string.core_archive)) {
       val archived=!note.archived;model.flags(note.id,archived=archived);onDismiss()
       feedback.show(if(archived) context.getString(R.string.core_archived) else context.getString(R.string.core_unarchived),context.getString(R.string.core_undo)) {model.flags(note.id,archived=!archived)}
      }
     }
-    if(online && !note.trashed) NoteCommands(model,note.id,privateNote=note.privateNote,
+    if(writable && online && !note.trashed) NoteCommands(model,note.id,privateNote=note.privateNote,
      onLink={linkSession=NotePickerSession.open(model,"links")?.let {it to note.serverRev}}) {onDismiss();onCommandResult(it)}
     HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
-    Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
+    if(writable) Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
      Column(Modifier.weight(1f)) {Text(context.getString(R.string.core_private),style=MaterialTheme.typography.bodyLarge);Text(context.getString(R.string.core_private_hint),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
      Switch(checked=note.privateNote,onCheckedChange=null)
     }
     NoteSheetRow(context.getString(R.string.core_history)) {onDismiss();onHistory()}
     NoteSheetRow(context.getString(R.string.core_save_markdown),enabled=available,onClick=save)
-    NoteSheetRow(if(note.trashed) context.getString(R.string.core_restore_trash) else context.getString(R.string.core_move_trash),destructive=!note.trashed) {
+    if(writable) NoteSheetRow(if(note.trashed) context.getString(R.string.core_restore_trash) else context.getString(R.string.core_move_trash),destructive=!note.trashed) {
      val trashed=!note.trashed;model.flags(note.id,trashed=trashed);onDismiss()
      if(trashed) {feedback.show(context.getString(R.string.core_moved_trash),context.getString(R.string.core_undo)) {model.flags(note.id,trashed=false)};onTrashed()} else feedback.show(context.getString(R.string.core_restored))
     }
@@ -207,9 +211,11 @@ import kotlinx.serialization.json.*
  val originalId=copy.conflictOf ?: return
  val original by remember(originalId) {model.repository.observe(originalId)}.collectAsState(null)
  val kept by model.conflicts.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
  var comparing by remember(copy.id) {mutableStateOf(kept.any {it.id==copy.id})}
  val feedback=LocalFeedback.current;val nav=LocalNavigator.current
  fun settle(message:String,keepCopy:Boolean) = model.task {
+  model.requireWorkspaceWrite()
   if(keepCopy) model.repository.keepConflictCopy(copy.id) else model.repository.setFlags(copy.id,trashed=true)
   nav.back();nav.open("note:$originalId")
   feedback.show(message,context.getString(R.string.core_undo)) {model.flags(copy.id,trashed=false)}
@@ -227,7 +233,7 @@ import kotlinx.serialization.json.*
     else {
      ConflictVersion(context.getString(R.string.core_original),saved.body,copy.body,R.string.core_only_original)
      ConflictVersion(context.getString(R.string.core_this_copy),copy.body,saved.body,R.string.core_only_copy)
-     FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+     if(writable) FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
       Button(onClick={settle(context.getString(R.string.core_kept_copy),true)},modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_keep_copy))}
       OutlinedButton(onClick={settle(context.getString(R.string.core_copy_trashed),false)},modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_keep_original))}
       TextButton(onClick={model.keepBothConflict(copy.id);comparing=false;feedback.show(context.getString(R.string.core_both_stay),context.getString(R.string.core_open_original)) {nav.open("note:$originalId")}},modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_keep_both))}
@@ -257,7 +263,7 @@ internal fun relativeTime(context:Context,at:Long,now:Long=System.currentTimeMil
 }
 internal fun changeKindName(context:Context,kind:String)=when(kind) {"create" -> context.getString(R.string.core_created);"edit" -> context.getString(R.string.core_edited);"append" -> context.getString(R.string.core_added_to);"merge" -> context.getString(R.string.core_merged);"restore" -> context.getString(R.string.core_restored);"accept" -> context.getString(R.string.core_suggestion_accepted);else -> kind.replace('_',' ').replaceFirstChar(Char::uppercase)}
 /** One line per revision; tap to read it. Server versions keep their number; versions only on this phone have none yet, so numbers never shift after a sync. */
-internal fun LazyListScope.revisionHistoryItems(context:Context,revisions:List<RevisionEntity>,online:Boolean,result:HistoryRefreshResult?,editing:Boolean,current:String?=null,onRestore:(RevisionEntity)->Unit) {
+internal fun LazyListScope.revisionHistoryItems(context:Context,revisions:List<RevisionEntity>,online:Boolean,result:HistoryRefreshResult?,editing:Boolean,current:String?=null,canRestore:Boolean=true,onRestore:(RevisionEntity)->Unit) {
  item {
   Text(context.getString(R.string.core_history),style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(bottom=SpuntoSpacing.s8).semantics {heading()})
   if(!online || result is HistoryRefreshResult.Cached) Text(context.getString(R.string.core_history_local),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
@@ -278,7 +284,7 @@ internal fun LazyListScope.revisionHistoryItems(context:Context,revisions:List<R
    }
    if(open) {
     Markdown(rev.body)
-    if(!isCurrent) TextButton(onClick={onRestore(rev)},enabled=!editing,modifier=Modifier.heightIn(min=48.dp)) { Text(context.getString(R.string.core_restore_version)) }
+    if(!isCurrent && canRestore) TextButton(onClick={onRestore(rev)},enabled=!editing,modifier=Modifier.heightIn(min=48.dp)) { Text(context.getString(R.string.core_restore_version)) }
    }
    HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
   }

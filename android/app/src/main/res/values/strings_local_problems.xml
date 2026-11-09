@@ -34,4 +34,5 @@
     <string name="local_problem_label_review_on_web_required">Review label changes in the authenticated web Review page to check their impact.</string>
     <string name="local_problem_replacement_superseded">This replacement is superseded. Compare the current note before applying a new proposal.</string>
     <string name="local_problem_merge_superseded">This merge is superseded. Compare both live notes again before merging.</string>
+    <string name="local_problem_draft_image_limit">A draft can have up to 10 images.</string>
 </resources>

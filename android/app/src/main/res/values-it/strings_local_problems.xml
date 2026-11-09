@@ -34,4 +34,5 @@
     <string name="local_problem_label_review_on_web_required">Rivedi le modifiche delle etichette nella pagina Rivedi del web dopo l’accesso per verificarne l’impatto.</string>
     <string name="local_problem_replacement_superseded">Questa sostituzione è superata. Confronta la nota attuale prima di applicare una nuova proposta.</string>
     <string name="local_problem_merge_superseded">Questa unione è superata. Confronta nuovamente entrambe le note attuali prima di unirle.</string>
+    <string name="local_problem_draft_image_limit">Una bozza può contenere fino a 10 immagini.</string>
 </resources>

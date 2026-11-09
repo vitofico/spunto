@@ -65,6 +65,10 @@ class AttachmentUploader(
     }
    } catch(cancelled:CancellationException) {withContext(NonCancellable) {claimed?.let {pause(it,"interrupted")}};throw cancelled}
    catch(error:Exception) {
+    if(error is ApiException && error.readOnlyWorkspace) {
+     claimed?.let {pause(it,"read_only_space")}
+     throw error
+    }
     val code=if(error is ApiException && error.status==401) "auth_required" else if(error is IllegalArgumentException) "attachment_invalid" else "upload_failed"
     repository.db.withTransaction {val item=dao.attachment(candidate.id);if(item==claimed || claimed==null && item==candidate) item?.let {dao.putAttachment(it.copy(status="failed",error=code))}}
     if(error is ApiException || error !is IllegalArgumentException) throw error

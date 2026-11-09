@@ -10,30 +10,47 @@ import {
   useOwner,
   useWorkspaceRole,
   type AccessGrant,
+  type Workspace,
 } from "../lib";
 import { choiceLabel } from "./format";
 import { Dialog } from "./Dialog";
 import { ErrorLine } from "./SettingsParts";
 import styles from "./Feature.module.css";
 
+type GrantRole = Exclude<AccessGrant["role"], "owner">;
+
+function RoleOptions() {
+  useLanguage();
+  return (
+    <>
+      <option value="viewer">{t("collaboration.can_view")}</option>
+      <option value="editor">{t("collaboration.can_edit")}</option>
+    </>
+  );
+}
+
 function GrantForm({
   add,
+  disabled,
   pending,
   note = false,
 }: {
   note?: boolean;
-  add: (account: string, role: "editor" | "viewer") => void;
+  add: (account: string, role: GrantRole) => void;
+  disabled: boolean;
   pending: boolean;
 }) {
   useLanguage();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"editor" | "viewer">("viewer");
+  const [role, setRole] = useState<GrantRole>("viewer");
+  const account = email.trim();
+  const ready = !disabled && !pending && !!account;
   return (
     <form
       className={`${styles.formField} ${styles.grantForm}`}
       onSubmit={(event) => {
         event.preventDefault();
-        add(email.trim(), role);
+        if (ready) add(account, role);
       }}
     >
       <label>
@@ -56,24 +73,23 @@ function GrantForm({
           value={role}
           onChange={(event) => setRole(event.target.value as typeof role)}
         >
-          <option value="viewer">{t("collaboration.can_view")}</option>
-          <option value="editor">{t("collaboration.can_edit")}</option>
+          <RoleOptions />
         </select>
       </label>
-      {note && email.trim() && (
+      {note && account && (
         <div role="status">
           <p>
             {t(
               role === "editor"
                 ? "collaboration.preview_editor"
                 : "collaboration.preview_viewer",
-              { recipient: email.trim() },
+              { recipient: account },
             )}
           </p>
           <p>{t("collaboration.preview_scope")}</p>
         </div>
       )}
-      <button disabled={pending || !email.trim()}>
+      <button disabled={!ready}>
         {pending ? t("collaboration.adding") : t("collaboration.give_access")}
       </button>
     </form>
@@ -81,44 +97,106 @@ function GrantForm({
 }
 function Grants({
   grants,
+  changeRole,
   remove,
   pending,
 }: {
   grants: AccessGrant[];
+  changeRole?: (userId: string, role: GrantRole) => void;
   remove?: (userId: string) => void;
   pending: boolean;
 }) {
   useLanguage();
   return (
     <ul className={styles.grantList}>
-      {grants.map((grant) => (
-        <li key={grant.user_id}>
-          <div className={styles.grantIdentity}>
-            {grant.display_name ||
-              grant.username ||
-              grant.email ||
-              grant.user_id}
-            {grant.display_name && (grant.username || grant.email) && (
-              <small>{grant.username || grant.email}</small>
+      {grants.map((grant) => {
+        const recipient = grant.username || grant.email || grant.user_id;
+        return (
+          <li key={grant.user_id}>
+            <div className={styles.grantIdentity}>
+              {grant.display_name || recipient}
+              {grant.display_name && (grant.username || grant.email) && (
+                <small>{recipient}</small>
+              )}
+              {(!changeRole || grant.role === "owner") && (
+                <small>{choiceLabel(grant.role)}</small>
+              )}
+            </div>
+            {changeRole && grant.role !== "owner" && (
+              <select
+                className="field"
+                aria-label={t("collaboration.access_for_value1", {
+                  value1: recipient,
+                })}
+                disabled={pending}
+                value={grant.role}
+                onChange={(event) =>
+                  changeRole(grant.user_id, event.target.value as GrantRole)
+                }
+              >
+                <RoleOptions />
+              </select>
             )}
-            <small>{choiceLabel(grant.role)}</small>
-          </div>
-          {remove && grant.role !== "owner" && (
-            <button
-              disabled={pending}
-              onClick={() => remove(grant.user_id)}
-              aria-label={t("collaboration.remove_access_for_value1", {
-                value1: grant.username || grant.email || grant.user_id,
-              })}
-            >
-              {t("collaboration.remove_access")}
-            </button>
-          )}
-        </li>
-      ))}
+            {remove && grant.role !== "owner" && (
+              <button
+                disabled={pending}
+                onClick={() => remove(grant.user_id)}
+                aria-label={t("collaboration.remove_access_for_value1", {
+                  value1: recipient,
+                })}
+              >
+                {t("collaboration.remove_access")}
+              </button>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
+
+function WorkspaceSelect({
+  label,
+  workspaces,
+  active,
+  pending,
+  select,
+  rail = false,
+}: {
+  label: string;
+  workspaces: Workspace[];
+  active?: string;
+  pending: boolean;
+  select: (workspace: Workspace) => void;
+  rail?: boolean;
+}) {
+  useLanguage();
+  return (
+    <label className={rail ? styles.railWorkspace : styles.formField}>
+      <span className={rail ? "rail-label" : undefined}>{label}</span>
+      <select
+        className="field"
+        aria-label={label}
+        value={active ?? ""}
+        disabled={pending || !workspaces.length}
+        onChange={(event) => {
+          const workspace = workspaces.find(
+            (space) => space.id === event.target.value,
+          );
+          if (workspace) select(workspace);
+        }}
+      >
+        {workspaces.map((space) => (
+          <option value={space.id} key={space.id}>
+            {space.personal ? t("collaboration.personal") : space.name} ·{" "}
+            {choiceLabel(space.role)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function SpacesPanel() {
   useLanguage();
   const hosted = useHosted();
@@ -156,68 +234,67 @@ function HostedSpaces() {
     onSuccess: async (value) => {
       setName("");
       await switchWorkspace(value);
-      navigate("/");
     },
   });
   const change = useMutation({
-    mutationFn: async (id: string) => {
-      const value = spaces.data?.workspaces.find((space) => space.id === id);
-      if (value) {
-        await switchWorkspace(value);
-        navigate("/");
-      }
-    },
+    mutationFn: switchWorkspace,
+    onSuccess: () => navigate("/"),
   });
+  const refreshMembers = () =>
+    client.invalidateQueries({
+      queryKey: ["workspace-members", workspace?.id],
+    });
   const add = useMutation({
-    mutationFn: ({
-      email,
-      role,
-    }: {
-      email: string;
-      role: "editor" | "viewer";
-    }) => api.addWorkspaceMember(workspace!.id, email, role),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["workspace-members"] }),
+    mutationFn: ({ email, role }: { email: string; role: GrantRole }) =>
+      api.addWorkspaceMember(workspace!.id, email, role),
+    onSuccess: refreshMembers,
+  });
+  const edit = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: GrantRole }) =>
+      api.changeWorkspaceMemberRole(workspace!.id, userId, role),
+    onSettled: refreshMembers,
   });
   const remove = useMutation({
     mutationFn: (userId: string) =>
       api.removeWorkspaceMember(workspace!.id, userId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["workspace-members"] }),
+    onSuccess: refreshMembers,
   });
+  const accessPending = add.isPending || edit.isPending || remove.isPending;
   return (
     <>
       <h1>{t("collaboration.spaces")}</h1>
       <p className="muted">
         {t("collaboration.keep_your_own_notes_in_your_personal_space")}
       </p>
-      <label className={styles.formField}>
-        {t("collaboration.current_space")}
-        <select
-          className="field"
-          value={workspace?.id ?? session?.workspace_id ?? ""}
-          disabled={change.isPending || !spaces.data}
-          onChange={(event) => change.mutate(event.target.value)}
-        >
-          {spaces.data?.workspaces.map((space) => (
-            <option value={space.id} key={space.id}>
-              {space.personal ? t("collaboration.personal") : space.name} ·{" "}
-              {choiceLabel(space.role)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <WorkspaceSelect
+        label={t("collaboration.current_space")}
+        workspaces={spaces.data?.workspaces ?? []}
+        active={session?.workspace_id}
+        pending={change.isPending || create.isPending}
+        select={(space) => change.mutate(space)}
+      />
       {workspace && !workspace.personal && (
         <>
-          <h2>{t("collaboration.members")}</h2>
+          <div className={styles.between}>
+            <h2>{t("collaboration.members")}</h2>
+            <Link href="/" className="button">
+              {t("app.all_notes")}
+            </Link>
+          </div>
           <Grants
             grants={members.data?.members ?? []}
+            changeRole={
+              role === "owner"
+                ? (userId, role) => edit.mutate({ userId, role })
+                : undefined
+            }
             remove={role === "owner" ? (id) => remove.mutate(id) : undefined}
-            pending={remove.isPending}
+            pending={accessPending}
           />
           {role === "owner" && (
             <GrantForm
               add={(email, role) => add.mutate({ email, role })}
+              disabled={edit.isPending || remove.isPending}
               pending={add.isPending}
             />
           )}
@@ -235,7 +312,7 @@ function HostedSpaces() {
           <input
             className="field"
             required
-            maxLength={120}
+            maxLength={80}
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
@@ -253,6 +330,7 @@ function HostedSpaces() {
           create.error ??
           change.error ??
           add.error ??
+          edit.error ??
           remove.error
         }
       />
@@ -295,22 +373,23 @@ function NoteShareDialog({
     queryKey: ["note-shares", id],
     queryFn: () => api.noteShares(id),
   });
+  const refreshShares = () =>
+    client.invalidateQueries({ queryKey: ["note-shares", id] });
   const add = useMutation({
-    mutationFn: ({
-      email,
-      role,
-    }: {
-      email: string;
-      role: "editor" | "viewer";
-    }) => api.shareNote(id, email, role),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["note-shares", id] }),
+    mutationFn: ({ email, role }: { email: string; role: GrantRole }) =>
+      api.shareNote(id, email, role),
+    onSuccess: refreshShares,
+  });
+  const edit = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: GrantRole }) =>
+      api.changeNoteShareRole(id, userId, role),
+    onSettled: refreshShares,
   });
   const remove = useMutation({
     mutationFn: (userId: string) => api.unshareNote(id, userId),
-    onSuccess: () =>
-      client.invalidateQueries({ queryKey: ["note-shares", id] }),
+    onSuccess: refreshShares,
   });
+  const accessPending = add.isPending || edit.isPending || remove.isPending;
   return (
     <Dialog
       title={t("collaboration.share_this_note")}
@@ -321,32 +400,49 @@ function NoteShareDialog({
       <p>{t("collaboration.give_an_existing_account_access_to_this_note")}</p>
       <Grants
         grants={query.data?.shares ?? []}
+        changeRole={(userId, role) => edit.mutate({ userId, role })}
         remove={(userId) => remove.mutate(userId)}
-        pending={remove.isPending}
+        pending={accessPending}
       />
       <GrantForm
         note
         add={(email, role) => add.mutate({ email, role })}
-        pending={add.isPending || query.isPending || query.isError}
+        disabled={
+          edit.isPending || remove.isPending || query.isPending || query.isError
+        }
+        pending={add.isPending}
       />
-      <ErrorLine error={query.error ?? add.error ?? remove.error} />
+      <ErrorLine
+        error={query.error ?? add.error ?? edit.error ?? remove.error}
+      />
     </Dialog>
   );
 }
 
-export function ActiveSharedSpace() {
+export function SpaceSwitcher({ close }: { close: () => void }) {
   useLanguage();
   const spaces = useQuery({
     queryKey: ["workspaces"],
     queryFn: api.workspaces,
   });
   useOwner();
-  const workspace = spaces.data?.workspaces.find(
-    (space) => space.id === currentSession()?.workspace_id,
-  );
-  return workspace && !workspace.personal ? (
-    <Link href="/settings/spaces" className="muted">
-      {workspace.name} · {choiceLabel(workspace.role)}
-    </Link>
+  const [, navigate] = useLocation();
+  const change = useMutation({
+    mutationFn: switchWorkspace,
+    onSuccess: () => {
+      close();
+      navigate("/");
+    },
+    onError: close,
+  });
+  return spaces.data && spaces.data.workspaces.length > 1 ? (
+    <WorkspaceSelect
+      rail
+      label={t("collaboration.switch_space")}
+      workspaces={spaces.data.workspaces}
+      active={currentSession()?.workspace_id}
+      pending={change.isPending}
+      select={(space) => change.mutate(space)}
+    />
   ) : null;
 }

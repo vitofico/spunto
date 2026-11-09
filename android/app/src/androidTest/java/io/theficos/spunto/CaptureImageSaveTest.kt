@@ -30,16 +30,16 @@ class CaptureImageSaveTest {
  @get:Rule val timeout=org.junit.rules.Timeout(3,java.util.concurrent.TimeUnit.MINUTES)
  // Queue test continuations so Room resumes cannot run a test frame on an IO worker.
  @get:Rule val compose=createComposeRule(effectContext=StandardTestDispatcher())
- @Test fun imageOnlyCaptureClosesAfterItsImageAndNoteAreDurable()=capture("",1)
+ @Test fun imageOnlyCaptureRestoresAfterReopeningAndSavesTheNote()=capture("",1,reopen=true)
  @Test fun textAndImagesCloseOnlyAfterTheWholeCaptureCommits()=capture("Synthetic quick capture",2)
- private fun capture(body:String,count:Int) {
+ private fun capture(body:String,count:Int,reopen:Boolean=false) {
   val context=InstrumentationRegistry.getInstrumentation().targetContext
   check(context.packageName=="io.theficos.spunto.debug")
   val model=SpuntoViewModel(context.applicationContext as SpuntoApplication)
   val authority=runBlocking {LocalFixtureAuthority.require(model.container)}
   val key="test-image-capture:${System.nanoTime()}"
   val source=File.createTempFile("synthetic-picker-",".png",context.cacheDir).apply {writeBytes(byteArrayOf(1,2,3))}
-  val folder=model.container.privateDirectory("pending-attachments")
+  val folder=model.container.privateDirectory("draft-images")
   val before=folder.listFiles().orEmpty().toSet()
   val mounted=mutableStateOf(true)
   var completed:String?=null
@@ -64,6 +64,7 @@ class CaptureImageSaveTest {
       val images=model.repository.dao.attachments(id).first()
       assertEquals(count,images.size);assertTrue(images.all {it.marker in note.body && File(it.localPath).isFile})
       assertTrue(note.body.startsWith(body));assertNull(model.repository.dao.draftSnapshot(key))
+      assertTrue(model.repository.dao.draftImageSnapshots(key).isEmpty())
      }} catch(error:Throwable) {completionFailure=error}
      completed=id;mounted.value=false
     },onSave={error("Plain capture bypassed durable save")})
@@ -83,7 +84,14 @@ class CaptureImageSaveTest {
     // Compose can be idle while the picker copy is still running on Dispatchers.IO.
     compose.waitUntil(10_000) {compose.onAllNodesWithText(attached).fetchSemanticsNodes().size==1}
    }
-   compose.onNodeWithText(context.resources.getQuantityString(R.plurals.core_images_to_attach,count,count)).assertExists()
+   val attached=context.resources.getQuantityString(R.plurals.core_images_to_attach,count,count)
+   if(reopen) {
+    compose.runOnIdle {mounted.value=false};compose.waitForIdle()
+    assertEquals(count,runBlocking {model.repository.dao.draftImageSnapshots(key).size})
+    compose.runOnIdle {mounted.value=true}
+    compose.waitUntil(10_000) {compose.onAllNodesWithText(attached).fetchSemanticsNodes().size==1}
+   }
+   compose.onNodeWithText(attached).assertExists()
    runBlocking {authority.requireCurrent()}
    compose.onNodeWithText(save).assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick)
    compose.waitUntil(10_000) {completed!=null}
@@ -98,6 +106,7 @@ class CaptureImageSaveTest {
    compose.runOnIdle {mounted.value=false};compose.waitForIdle()
    runBlocking {
     authority.requireCurrent()
+    model.container.draftImageStore.clear(lease)
     completed?.let {id ->
      model.repository.dao.attachments(id).first().forEach {model.repository.dao.removeAttachment(it.id)}
      model.repository.dao.outbox().filter {it.noteId==id}.forEach {model.repository.dao.removeOutbox(it.opId)}

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.*
 import io.theficos.spunto.core.model.processPluginPublications
+import io.theficos.spunto.core.model.PluginPublicationFence
 import android.net.ConnectivityManager
 import android.net.Network
 
@@ -29,11 +30,14 @@ class AppContainer(val context:Context) {
  val connected=MutableStateFlow(connectivity.activeNetwork!=null)
  val scheduler by lazy {SyncScheduler(context)}
  private val databases=ReplicaDatabaseCache(context)
+ private val deviceStorage by lazy {ReplicaStorage(context,"signed-out",databases,scope) {}}
  private var generation=0L
  private val active=MutableStateFlow(newReplica(runBlocking(Dispatchers.IO) {auth.selection.first()}))
  val replicas:kotlinx.coroutines.flow.StateFlow<ReplicaContainer> = active
- private fun newReplica(selection:AuthSelection)=ReplicaContainer(context,selection.replicaId,++generation,auth,appLock,connected,scheduler,databases)
+ private fun newReplica(selection:AuthSelection)=ReplicaContainer(context,selection.replicaId,++generation,auth,appLock,connected,scheduler,databases,if(selection.replicaId=="signed-out") deviceStorage else null)
  val current get()=active.value
+ private val deviceLibrary by lazy {ReplicaContainer(context,"signed-out",0,auth,appLock,connected,scheduler,databases,deviceStorage,publishesPlugins=false)}
+ internal fun localCaptureReplica():ReplicaContainer=deviceLibrary
  val database get()=current.database
  val repository get()=current.repository
  val recordings get()=current.recordings
@@ -46,20 +50,34 @@ class AppContainer(val context:Context) {
   connectivity.registerDefaultNetworkCallback(object:ConnectivityManager.NetworkCallback() {override fun onAvailable(network:Network) {connected.value=true};override fun onLost(network:Network) {connected.value=false}})
  }
 }
-class ReplicaContainer internal constructor(val context:Context,val replicaId:String,val generation:Long,val auth:AuthStore,internal val appLock:AppLock,val connected:MutableStateFlow<Boolean>,val scheduler:SyncScheduler,private val databases:ReplicaDatabaseCache) {
- val key get()="$replicaId:$generation"
- val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+/** The signed-out screen and device capture share local leases and recovery, even across activation. */
+internal class ReplicaStorage(private val context:Context,private val replicaId:String,private val databases:ReplicaDatabaseCache,private val scope:CoroutineScope,onChange:()->Unit) {
  val database by lazy {databases.get(replicaDatabaseName(replicaId))}
- val repository by lazy {NotesRepository(database,replicaId) {scope.launch {scheduler.schedule()}}}
+ val repository by lazy {NotesRepository(database,replicaId,onChange)}
  fun privateDirectory(name:String)=java.io.File(context.filesDir,if(replicaId=="legacy") name else "replicas/$replicaId/$name").apply {mkdirs()}
+ val draftImageStore by lazy {DraftImageStore(repository,privateDirectory("draft-images")).also {store -> scope.launch {store.recover()}}}
  val recordingDirectory by lazy {privateDirectory("recordings")}
  val recordings by lazy {RecordingRepository(repository,recordingDirectory)}
  val recordingRecovery by lazy {scope.async {recordings.recover()}}
+}
+
+class ReplicaContainer internal constructor(val context:Context,val replicaId:String,val generation:Long,val auth:AuthStore,internal val appLock:AppLock,val connected:MutableStateFlow<Boolean>,val scheduler:SyncScheduler,databases:ReplicaDatabaseCache,storage:ReplicaStorage?=null,internal val publishesPlugins:Boolean=true) {
+ val key get()="$replicaId:$generation"
+ val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+ private val local=storage ?: ReplicaStorage(context,replicaId,databases,scope) {scope.launch {scheduler.schedule()}}
+ val database get()=local.database
+ val repository get()=local.repository
+ fun privateDirectory(name:String)=local.privateDirectory(name)
+ val draftImageStore get()=local.draftImageStore
+ val recordingDirectory get()=local.recordingDirectory
+ val recordings get()=local.recordings
+ val recordingRecovery get()=local.recordingRecovery
  val sync by lazy {SyncEngine(repository,auth)}
- val manifest=ManifestCache(context,namespace=if(replicaId=="legacy") "" else replicaId)
+ val manifest=if(publishesPlugins) ManifestCache(context,namespace=if(replicaId=="legacy") "" else replicaId)
+  else ManifestCache(context,publications=PluginPublicationFence(),namespace="device-capture")
  val preferences=context.getSharedPreferences(if(replicaId=="legacy") "appearance" else "appearance-$replicaId",Context.MODE_PRIVATE)
  init {
-  scope.launch {
+  if(publishesPlugins) scope.launch {
    var previous:String?="initial"
    combine(repository.notes,repository.outputs(),database.dao().observeState(),auth.config,appLock.state) {notes,outputs,state,config,_ -> Pair(Triple(notes,outputs,state),config)}.collect {(replica,config) ->
     val (notes,outputs,_)=replica

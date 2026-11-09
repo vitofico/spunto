@@ -14,12 +14,14 @@ Signing in creates a personal space. It is the default, so ordinary capture and
 search need no organization setup. Labels remain the main way to organize notes,
 including project-related notes. There is no separate project entity.
 
-Use **Settings → Spaces** when a group needs a shared library. Create a named
-space, then invite an existing account by its exact username or verified email. Select
-**Can edit** or **Can view**. The owner manages membership and configuration;
-editors can write notes; viewers cannot edit. Personal-space membership cannot
-be expanded. Switch the active space from the same settings page; notes, labels
-and drafts follow that selection.
+Use **Settings → Spaces** when a group needs a shared library. After you create
+a named space, the same page shows its members and lets you add an existing
+account by exact username or verified email. Choose **Can edit** or **Can view**
+when adding someone or change their role on their member row. Owners manage
+membership and configuration, editors can write notes, and viewers can read.
+Personal-space membership stays with its owner. When you have more than one
+space, use **Switch space** in navigation. Notes, labels and drafts follow your
+selection.
 
 Use a note's **Share** action when one note is enough. Invite an existing account
 with view or edit access; change or revoke that grant from the same dialog.

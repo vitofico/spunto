@@ -19,6 +19,8 @@ import kotlinx.coroutines.delay
 @Composable fun StatusLines(model:SpuntoViewModel) {
  val resources=LocalContext.current.resources
  val auth by model.auth.collectAsState(); val connected by model.container.connected.collectAsState(); val sync by model.status.collectAsState(); val message by model.message.collectAsState(); val pending by model.pending.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
+ val context=LocalContext.current
  val conflicts by model.conflicts.collectAsState(); val nav=LocalNavigator.current
  // An edit is pending for a moment after every save; only a backlog that outlasts a few seconds is news.
  var backlog by remember { mutableStateOf(false) }
@@ -29,19 +31,24 @@ import kotlinx.coroutines.delay
   when {
    message.isNotEmpty() -> StatusLine(message,resources.getString(R.string.settings_dismiss_message),dismiss=true) {model.message.value=""}
    auth!=null && sync==SyncStatus.NeedsSignIn -> StatusLine(resources.getString(R.string.settings_not_signed_in_sign_in_to_sync),resources.getString(R.string.settings_sign_in)) {model.reauthenticate.value=true}
+   auth?.hosted==true && !writable -> Column(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8)) {
+    Text(resources.getString(if(pending>0) R.string.workspace_queued_edits else R.string.workspace_read_only),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    if(nav.route=="timeline") TextButton(onClick={context.startActivity(localCaptureIntent(context))},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.workspace_write_on_phone))}
+   }
    conflict!=null -> StatusLine(resources.getString(R.string.settings_edited_on_two_devices_both_versions_are),resources.getString(R.string.settings_compare),warn=true) {nav.open("note:${conflict.id}")}
    review!=null -> StatusLine(resources.getQuantityString(R.plurals.settings_refused_notes,refused.size,refused.size),resources.getString(R.string.settings_review),warn=true) {nav.open("note:$review")}
    auth!=null && !connected -> StatusLine(resources.getString(R.string.settings_offline_notes_stay_on_this_phone))
+   auth!=null && sync is SyncStatus.Waiting && pending==0 -> StatusLine(syncSummary(resources,sync,0,connected,null),resources.getString(R.string.settings_sync),wrap=true) {model.synchronize()}
    auth!=null && (backlog || sync is SyncStatus.Waiting) && pending>0 -> SyncStatusNotice(pending,sync is SyncStatus.Waiting) {model.synchronize()}
    auth?.serverUrl?.startsWith("http://")==true -> StatusLine(resources.getString(R.string.settings_not_encrypted_this_server_uses_plain_http))
   }
  }
 }
-@Composable private fun StatusLine(text:String,action:String?=null,warn:Boolean=false,dismiss:Boolean=false,onAction:()->Unit={}) {
+@Composable private fun StatusLine(text:String,action:String?=null,warn:Boolean=false,dismiss:Boolean=false,wrap:Boolean=false,onAction:()->Unit={}) {
  val resources=LocalContext.current.resources
  Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
   if(warn) Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
-  Text(text,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=if(dismiss) 3 else 1,overflow=TextOverflow.Ellipsis)
+  Text(text,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=if(dismiss || wrap) 3 else 1,overflow=TextOverflow.Ellipsis)
   if(action!=null) {
    if(dismiss) IconButton(onClick=onAction,modifier=Modifier.size(48.dp).semantics {contentDescription=action}) {Text("×",style=MaterialTheme.typography.titleMedium)}
    else TextButton(onClick=onAction,modifier=Modifier.heightIn(min=48.dp)) {Text(action)}
@@ -57,6 +64,7 @@ internal fun notesCount(resources:Resources,count:Int)=resources.getQuantityStri
 @Composable internal fun RefusedChangeNotice(model:SpuntoViewModel,id:String,code:String) {
  val resources=LocalContext.current.resources
  val nav=LocalNavigator.current; val feedback=LocalFeedback.current
+ val writable by model.workspaceCanWrite.collectAsState()
  Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
   Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
@@ -64,7 +72,7 @@ internal fun notesCount(resources:Resources,count:Int)=resources.getQuantityStri
     Text(refusedChangeMessage(resources,code),style=MaterialTheme.typography.bodyMedium)
    }
    // Shortening a note that is too long lets it sync, so only the other refusals need a new note.
-   if(code!="too_large") Button(onClick={model.task {val copy=model.repository.keepRefusedAsNewNote(id);nav.back();nav.open("note:$copy");feedback.show(resources.getString(R.string.settings_kept_as_a_new_note))}},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_keep_as_new_note))}
+   if(writable && code!="too_large") Button(onClick={model.task {model.requireWorkspaceWrite();val copy=model.repository.keepRefusedAsNewNote(id);nav.back();nav.open("note:$copy");feedback.show(resources.getString(R.string.settings_kept_as_a_new_note))}},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_keep_as_new_note))}
   }
  }
 }

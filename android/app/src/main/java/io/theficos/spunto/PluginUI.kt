@@ -64,7 +64,7 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
  val epoch=model.pluginReplicaEpoch
  val requestContext=currentCoroutineContext()
  var pendingAskHandle:JsonObject?=null
- fun current()=auth!=null && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(plugin) && pickerSession?.current(model)!=false
+ fun current()=model.workspaceCanWrite.value && auth!=null && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(plugin) && pickerSession?.current(model)!=false
  suspend fun authorized()=current() && pickerSession?.authorized(model)!=false
  try {
   require(Regex("[a-z][a-z0-9-]{1,23}").matches(plugin) && Regex("[a-z][a-z0-9-]{0,127}").matches(id)) { resources.getString(R.string.settings_this_command_is_unavailable) }
@@ -187,6 +187,8 @@ internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugin
 }
 
 @Composable fun Suggestions(model:SpuntoViewModel,noteId:String,onNote:(String)->Unit) {
+ val canWrite by model.workspaceCanWrite.collectAsState()
+ if(!canWrite) return
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
  val manifest=model.manifest.collectAsState().value
@@ -212,6 +214,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val manifest=model.manifest.collectAsState().value
  val outputs by model.outputs.collectAsState()
  val online by model.online.collectAsState()
+ val canWrite by model.workspaceCanWrite.collectAsState()
  var selected by remember { mutableStateOf<String?>(null) }
  val expanded=remember { mutableStateMapOf<String,Boolean>() }
  val proposals=waitingProposals(model,outputs)
@@ -228,7 +231,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
       Text(model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.let {localizedPluginName(resources,it,catalog)} ?: plugin,style=MaterialTheme.typography.bodySmall)
       item.noteId?.let { RoomReference(model,it,"",onNote) }
       if(data.string("reason").isNotBlank()) Text(data.string("reason"),style=MaterialTheme.typography.bodySmall)
-      Row { TextButton(onClick={selected=item.id}) { Text(resources.getString(R.string.settings_review)) };TextButton(enabled=data.string("action")!="label_change" || online,onClick={model.decide(item.id,"dismiss")}) { Text(resources.getString(R.string.settings_dismiss)) } }
+      Row { TextButton(enabled=canWrite,onClick={selected=item.id}) { Text(resources.getString(R.string.settings_review)) };TextButton(enabled=canWrite && (data.string("action")!="label_change" || online),onClick={model.decide(item.id,"dismiss")}) { Text(resources.getString(R.string.settings_dismiss)) } }
      }
     }
    }
@@ -251,6 +254,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val resources=LocalContext.current.resources
  val online by model.online.collectAsState()
  val outputs by model.outputs.collectAsState()
+ val canWrite by model.workspaceCanWrite.collectAsState()
  val wrapper=data as? JsonObject ?: JsonObject(emptyMap())
  val plugin=wrapper.string("plugin").ifEmpty { wrapper.string("plugin_id") }
  val command=wrapper.string("command_id")
@@ -259,7 +263,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val sourcePicker=sourcePickerState(plugin,command,initial,components)
  val pickerSupported=plugin in setOf("thinking-desk","context-packs") && supportsNotePicker(model.manifest.collectAsState().value,plugin)
  val pickerSession=if(pickerSupported) remember(plugin) {NotePickerSession.open(model,plugin)} else null
- val ownsPicker=if(pickerSession==null) false else {
+ val ownsPicker=if(pickerSession==null || !canWrite) false else {
   val auth by model.auth.collectAsState()
   val epoch by model.pluginReplicaEpochState.collectAsState()
   val gate by model.container.appLock.state.collectAsState()
@@ -273,7 +277,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  var error by remember(data) {mutableStateOf("")}
  var pickerRefresh by remember {mutableIntStateOf(0)}
  val run:(String,JsonObject)->Unit=run@{id,args ->
-  if(running || !online || plugin.isBlank()) return@run
+  if(running || !online || !canWrite || plugin.isBlank()) return@run
   val opensPicker=pickerSupported && opensSourcePicker(plugin,id,args)
   val usesPicker=opensPicker || sourcePicker!=null
   if(usesPicker && !ownsPicker) return@run
@@ -292,11 +296,11 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
     SourceNotePicker(model,sourcePicker,pickerSession,online,running,pickerRefresh,onQueryChanged={error=""}) {run(command,it)}
     if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
    }
-   Vocabulary(component,onNote,review,run,online=online && !running,
-    onForm=if(command.isNotBlank()) { args -> run(command,sourcePicker?.update(args) ?: JsonObject(initial+args)) } else null,
+   Vocabulary(component,onNote,review,run,online=online && canWrite && !running,
+    onForm=if(canWrite && command.isNotBlank()) { args -> run(command,sourcePicker?.update(args) ?: JsonObject(initial+args)) } else null,
     formInitial=if(sourcePicker!=null) sourcePicker.args else initial,
     formHidden=if(sourcePicker!=null) setOf("selected_ids","max_sources") else initial.keys.filter { it=="note_id" }.toSet(),
-    noteReference={id,reason -> RoomReference(model,id,reason,onNote)},proposalPill={ pill ->
+    noteReference={id,reason -> RoomReference(model,id,reason,onNote)},proposalPill=if(!canWrite) null else { pill ->
      val id=pill.string("suggestion_id");val proposal=outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let(::proposalData)
      ProposedPill(pill.string("label"),model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.let {localizedPluginName(resources,it,catalog)} ?: plugin,proposal?.string("action") in setOf("replace_body","merge_notes"),{review(id)},{model.decide(id,"dismiss")})
     })
@@ -361,31 +365,61 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val suggestionId=data.string("id")
  val link=action=="append_text" && data.string("plugin")=="links"
  val linkSupported=link && supportsNotePicker(model.manifest.collectAsState().value,"links")
- val linkSession=remember(suggestionId,linkSupported) {if(linkSupported) NotePickerSession.open(model,"links") else null}
+ val canWrite by model.workspaceCanWrite.collectAsState()
+ val auth by model.auth.collectAsState()
+ val epoch by model.pluginReplicaEpochState.collectAsState()
+ val gate by model.container.appLock.state.collectAsState()
+ val linkSession=remember(suggestionId,linkSupported,auth,epoch,gate.revision,canWrite) {
+  if(linkSupported && canWrite) NotePickerSession.open(model,"links") else null
+ }
  val scope=rememberCoroutineScope()
  var acceptingLink by remember(suggestionId) {mutableStateOf(false)}
- var linkError by remember(suggestionId) {mutableStateOf("")}
+ var linkError by remember(suggestionId,linkSession) {mutableStateOf("")}
  val note by remember(noteId) { model.repository.observe(noteId) }.collectAsState(null)
  val source by remember(proposed.string("source_id")) { model.repository.observe(proposed.string("source_id")) }.collectAsState(null)
  val online by model.online.collectAsState()
+ var previewAttempt by remember(suggestionId) {mutableIntStateOf(0)}
+ var linkPreview by remember(suggestionId,linkSession,online,previewAttempt) {mutableStateOf<Note?>(null)}
+ var loadingLink by remember(suggestionId,linkSession,online,previewAttempt) {mutableStateOf(linkSession!=null && online)}
+ LaunchedEffect(suggestionId,noteId,linkSession,online,previewAttempt) {
+  if(linkSession==null || !online) return@LaunchedEffect
+  linkError=""
+  try {
+   linkPreview=loadLegacyLinkPreview(linkSession.api(model),noteId,suggestionId)
+   if(linkPreview==null) linkError=resources.getString(R.string.settings_note_unavailable)
+  } catch(error:CancellationException) {throw error}
+  catch(error:Exception) {linkError=linkSession.reportError(model,resources,error)}
+  finally {loadingLink=false}
+ }
  val uri=LocalUriHandler.current
  val current=note
  val base=(data["note_version"] as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
  val stale=action=="replace_body" && (current==null || current.pending || current.serverRev!=base)
  val eligible=current!=null && !current.trashed && !current.privateNote
- val canApply=data.string("status")=="pending" && !stale && when(action) {
+ val canApply=canWrite && data.string("status")=="pending" && !stale && when(action) {
   "label_change" -> false
   "merge_notes" -> eligible && source!=null && !source!!.trashed && !source!!.privateNote
   "open" -> true
-  else -> if(link) current!=null && !current.trashed && online && linkSession?.current(model)==true && !acceptingLink else eligible
+  else -> if(link) current!=null && !current.trashed && linkPreview!=null && online &&
+   linkSession?.current(model)==true && !acceptingLink else eligible
  }
  AlertDialog(onDismissRequest={if(!acceptingLink) onClose()},title={Text(if(action=="merge_notes") resources.getString(R.string.settings_compare_notes) else resources.getString(R.string.settings_review_change))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-  SuggestionPreview(model,data)
+  if(!link) SuggestionPreview(model,data)
+  else if(loadingLink) Text(resources.getString(R.string.core_loading),modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+  else linkPreview?.let { target ->
+   Text(resources.getString(R.string.settings_destination),style=MaterialTheme.typography.labelLarge)
+   Text(target.title.ifBlank {resources.getString(R.string.core_untitled)},style=MaterialTheme.typography.titleMedium)
+   searchSnippet(target.body,emptyList())?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+  }
   if(stale) Text(resources.getString(R.string.settings_this_note_changed_wait_for_a_fresh),style=MaterialTheme.typography.bodySmall)
   if(data.string("status")!="pending") Text(suggestionStatus(resources,data.string("status")),style=MaterialTheme.typography.bodySmall)
   if(link && !linkSupported) Text(resources.getString(R.string.core_link_upgrade_server))
   else if(link && !online) Text(resources.getString(R.string.settings_needs_a_connection))
-  if(linkError.isNotBlank()) Text(linkError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+  if(linkError.isNotBlank()) {
+   Text(linkError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+   if(linkPreview==null && online && linkSession!=null)
+    TextButton(onClick={previewAttempt++}) {Text(resources.getString(R.string.core_ask_retry))}
+  }
  }},confirmButton={
   if(action=="label_change") TextButton(enabled=online,onClick={model.auth.value?.let { runCatching { uri.openUri(it.serverUrl.trimEnd('/')+"/review") } };onClose()}) { Text(if(online) resources.getString(R.string.settings_open_web_review) else resources.getString(R.string.settings_needs_a_connection)) }
   else if(link && linkSession!=null) TextButton(enabled=canApply,onClick={
@@ -399,16 +433,21 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
       linkSession.refresh(model)
       onClose()
      } catch(error:CancellationException) {throw error}
-     catch(error:Exception) {linkError=linkSession.reportError(model,resources,error)}
+     catch(error:Exception) {
+      if(error is ApiException && error.status==404) linkPreview=null
+      linkError=linkSession.reportError(model,resources,error)
+     }
      finally {acceptingLink=false}
     }
    }
   }) {Text(resources.getString(if(acceptingLink) R.string.core_link_inserting else R.string.settings_apply))}
   else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);model.decide(suggestionId,"accept");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_apply_changes) else resources.getString(R.string.settings_apply)) }
- },dismissButton={TextButton(enabled=!acceptingLink && (action!="label_change" || online),onClick={model.decide(suggestionId,"dismiss");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_keep_original) else resources.getString(R.string.settings_dismiss)) }})
+ },dismissButton={TextButton(enabled=canWrite && !acceptingLink && (action!="label_change" || online),onClick={model.decide(suggestionId,"dismiss");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_keep_original) else resources.getString(R.string.settings_dismiss)) }})
 }
 
 @Composable internal fun NoteCommands(model:SpuntoViewModel,noteId:String,privateNote:Boolean=false,onLink:()->Unit,onResult:(JsonObject)->Unit) {
+ val canWrite by model.workspaceCanWrite.collectAsState()
+ if(!canWrite) return
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
  val manifest=model.manifest.collectAsState().value

@@ -31,7 +31,7 @@ import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
 import { AccountIdentityLink } from "./features/AccountIdentity";
-import { ActiveSharedSpace } from "./features/Collaboration";
+import { SpaceSwitcher } from "./features/Collaboration";
 import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
 const loadNote = () => import("./pages/Note");
 // React.lazy keeps a failed import for good, so "Try again" builds fresh ones.
@@ -184,7 +184,7 @@ function Rail({
           </span>
           <kbd>{formatShortcut("mod+k")}</kbd>
         </button>
-        {hosted && <ActiveSharedSpace />}
+        {hosted && <SpaceSwitcher close={close} />}
         <nav>
           <Link
             href="/"

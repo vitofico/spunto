@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workspace_read_only">Dieser Bereich ist schreibgeschützt.</string>
+    <string name="workspace_queued_edits">Dieser Bereich ist schreibgeschützt. Deine Änderungen bleiben auf diesem Gerät, bis du sie wieder synchronisieren kannst.</string>
+    <string name="workspace_write_on_phone">Auf diesem Gerät schreiben</string>
+    <string name="workspace_save_on_phone">Auf diesem Gerät speichern</string>
+</resources>

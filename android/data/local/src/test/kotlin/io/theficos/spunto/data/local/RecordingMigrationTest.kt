@@ -22,8 +22,8 @@ class RecordingMigrationTest {
  @Test fun numberedFourToFivePreservesRetainedReplicaAndImageMetadata()=runBlocking {
   val context=ApplicationProvider.getApplicationContext<Context>();val template=Room.inMemoryDatabaseBuilder(context,SpuntoDatabase::class.java).build()
   val schema=template.openHelper.writableDatabase
-  val ddl=schema.query("SELECT name,sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL AND name NOT IN ('android_metadata','room_master_table','sqlite_sequence','recording_drafts') AND name NOT LIKE 'notes_fts_%'").use {cursor->buildList {while(cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))}}
-  val extra=schema.query("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL").use {cursor->buildList {while(cursor.moveToNext()) add(cursor.getString(0))}}
+  val ddl=schema.query("SELECT name,sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL AND name NOT IN ('android_metadata','room_master_table','sqlite_sequence','recording_drafts','draft_images') AND name NOT LIKE 'notes_fts_%'").use {cursor->buildList {while(cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))}}
+  val extra=schema.query("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger') AND sql IS NOT NULL AND tbl_name!='draft_images'").use {cursor->buildList {while(cursor.moveToNext()) add(cursor.getString(0))}}
   template.close();val name="synthetic-v4-recordings.db";context.deleteDatabase(name);val file=context.getDatabasePath(name);file.parentFile!!.mkdirs()
   val id=uuidV7();val image=uuidV7();val operation=OutboxOperation(type="note.update",noteId=id,body="Private pending owner words",baseVersion=3);val payload=Json.encodeToString(operation)
   SQLiteDatabase.openOrCreateDatabase(file,null).use {old ->
@@ -42,9 +42,9 @@ class RecordingMigrationTest {
    old.execSQL("INSERT INTO server_revisions VALUES (?,?,?,?,?,?,?,?)",arrayOf("https://same.example","e",id,3,"Canonical owner words",1L,"device","edit"))
    old.execSQL("INSERT INTO history_cache VALUES (?,?,?,?,?)",arrayOf("https://same.example","e",id,2L,3));old.version=4
   }
-  val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6).allowMainThreadQueries().build()
+  val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).allowMainThreadQueries().build()
   try {
-   val dao=upgraded.dao();assertEquals(6,upgraded.openHelper.writableDatabase.version);assertEquals(operation.body,dao.get(id)!!.body);assertTrue(dao.get(id)!!.privateNote);assertTrue(dao.get(id)!!.pinned)
+   val dao=upgraded.dao();assertEquals(7,upgraded.openHelper.writableDatabase.version);assertEquals(operation.body,dao.get(id)!!.body);assertTrue(dao.get(id)!!.privateNote);assertTrue(dao.get(id)!!.pinned)
    assertEquals(payload,dao.outbox().single().payload);assertTrue(dao.outbox().single().sent);assertEquals("Synthetic retained draft",dao.draft("capture").first()!!.body)
    assertEquals("e.42",dao.state()!!.cursor);assertEquals("https://same.example",dao.state()!!.serverUrl);assertEquals(LEGACY_UPLOAD_LIMIT,dao.state()!!.maxUploadBytes)
    assertEquals("Canonical owner words",dao.serverHistory(id).first().single().body);assertEquals(3,dao.historyCache(id).first()!!.maxVersion)

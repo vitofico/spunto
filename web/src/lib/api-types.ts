@@ -1284,6 +1284,8 @@ export interface components {
             epoch: string;
             /** Restore Ids */
             restore_ids: string[];
+            /** Workspace Role */
+            workspace_role?: ("owner" | "editor" | "viewer") | null;
         };
         /** ReindexBody */
         ReindexBody: {

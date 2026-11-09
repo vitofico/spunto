@@ -36,6 +36,8 @@ import kotlinx.serialization.json.*
  val resources=LocalContext.current.resources
  val context=LocalContext.current;val feedback=LocalFeedback.current
  val auth by model.auth.collectAsState();val online by model.online.collectAsState();val reauth by model.reauthenticate.collectAsState();val status by model.status.collectAsState();val pending by model.pending.collectAsState()
+ val connected by model.container.connected.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
  val catalog by model.catalog.collectAsState();val manifest by model.manifest.collectAsState()
  val replica by model.repository.dao.observeState().collectAsState(initial=null);val logs by model.repository.dao.logs().collectAsState(emptyList())
  val phoneLock by model.container.appLock.state.collectAsState()
@@ -81,7 +83,8 @@ import kotlinx.serialization.json.*
   item {
    SettingsSection(resources.getString(R.string.settings_sync))
    val running=status==SyncStatus.Running
-   SettingsRow(resources.getString(R.string.settings_sync_now),syncSummary(resources,if(auth==null) SyncStatus.SignedOut else status,pending,online,logs.firstOrNull {it.outcome=="complete"}?.at),enabled=auth!=null && online && !needsSignIn && !running,onClick={model.synchronize()}) {if(running) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)}
+   val summary=if(auth?.hosted==true && !writable && pending>0 && status is SyncStatus.Complete) resources.getString(R.string.workspace_queued_edits) else syncSummary(resources,if(auth==null) SyncStatus.SignedOut else status,pending,connected,logs.firstOrNull {it.outcome=="complete"}?.at)
+   SettingsRow(resources.getString(R.string.settings_sync_now),summary,enabled=auth!=null && connected && !needsSignIn && !running,onClick={model.synchronize()}) {if(running) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)}
    SettingsRow(resources.getString(R.string.settings_sync_activity),resources.getString(R.string.settings_recent_sync_attempts_for_troubleshooting),onClick={activity=!activity},expanded=activity)
    if(activity) Column(Modifier.padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     if(logs.isEmpty()) Text(resources.getString(R.string.settings_no_sync_activity_yet),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
@@ -157,7 +160,9 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
 @Composable fun PluginsScreen(model:SpuntoViewModel,onPlugin:(String)->Unit) {
  val resources=LocalContext.current.resources
  val catalog by model.catalog.collectAsState();val manifest by model.manifest.collectAsState();val ai by model.pluginAi.collectAsState()
- val auth by model.auth.collectAsState();val online by model.online.collectAsState()
+ val auth by model.auth.collectAsState();val connected by model.online.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
+ val online=connected && writable
  val actions=model.pluginManager;val busy by actions.busy.collectAsState();val undo by actions.undo.collectAsState()
  val projection=nativePluginCatalog(catalog,manifest)
  val enable=remember(auth) {PluginEnableState()}
@@ -198,7 +203,9 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
 @Composable fun PluginScreen(model:SpuntoViewModel,id:String) {
  val resources=LocalContext.current.resources
  val catalog by model.catalog.collectAsState();val manifest by model.manifest.collectAsState()
- val auth by model.auth.collectAsState();val online by model.online.collectAsState()
+ val auth by model.auth.collectAsState();val connected by model.online.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
+ val online=connected && writable
  val actions=model.pluginManager;val busy by actions.busy.collectAsState();val page by actions.page.collectAsState()
  val projection=nativePluginCatalog(catalog,manifest)
  val plugin=projection.rows.firstOrNull {it.id==id}

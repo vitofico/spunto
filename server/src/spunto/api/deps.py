@@ -37,6 +37,16 @@ ServicesDep = Annotated[Services, Depends(get_services)]
 _UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+def is_viewer_reconciliation(request: Request, principal: tokens.Principal) -> bool:
+    """Allow hosted viewer devices to compare restore metadata without changing server notes."""
+    return (
+        principal.kind == "device"
+        and principal.workspace_role == "viewer"
+        and request.method == "POST"
+        and request.url.path == "/api/v1/sync/reconcile"
+    )
+
+
 def check_origin(request: Request, settings: Settings, *, required: bool) -> None:
     """Refuse a write that a page on another site made the browser send (02 §9.4).
 
@@ -76,7 +86,11 @@ async def current_principal(request: Request, services: ServicesDep) -> tokens.P
         principal = request.state.hosted_principal
         if principal.scope == "status":
             raise Problem(403, "status_only_token", "This token reaches only the status endpoint.")
-        if request.method in _UNSAFE and not principal.writable:
+        if (
+            request.method in _UNSAFE
+            and not principal.writable
+            and not is_viewer_reconciliation(request, principal)
+        ):
             raise Problem(403, "read_only_token", "This token is read-only.")
         if request.method in _UNSAFE or principal.kind != "session":
             check_origin(request, services.settings, required=principal.kind == "session")

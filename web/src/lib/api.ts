@@ -294,6 +294,18 @@ export const api = {
       method: "POST",
       body: { ...recipient(account), role },
     }),
+  changeWorkspaceMemberRole: (
+    id: string,
+    userId: string,
+    role: "editor" | "viewer",
+  ) =>
+    request<void>(
+      `/api/v1/workspaces/${segment(id)}/members/${segment(userId)}`,
+      {
+        method: "PATCH",
+        body: { role },
+      },
+    ),
   removeWorkspaceMember: (id: string, userId: string) =>
     request(`/api/v1/workspaces/${segment(id)}/members/${segment(userId)}`, {
       method: "DELETE",
@@ -304,6 +316,15 @@ export const api = {
     request(`/api/v1/notes/${segment(id)}/shares`, {
       method: "POST",
       body: { ...recipient(account), role },
+    }),
+  changeNoteShareRole: (
+    id: string,
+    userId: string,
+    role: "editor" | "viewer",
+  ) =>
+    request<void>(`/api/v1/notes/${segment(id)}/shares/${segment(userId)}`, {
+      method: "PATCH",
+      body: { role },
     }),
   unshareNote: (id: string, userId: string) =>
     request(`/api/v1/notes/${segment(id)}/shares/${segment(userId)}`, {

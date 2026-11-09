@@ -7,12 +7,12 @@ import kotlinx.serialization.json.*
 import java.net.URI
 
 /** The Sync row's summary: what is waiting and when the phone last reached the server. */
-internal fun syncSummary(resources:Resources,status:SyncStatus,pending:Int,online:Boolean,lastSynced:Long?):String=when {
+internal fun syncSummary(resources:Resources,status:SyncStatus,pending:Int,connected:Boolean,lastSynced:Long?):String=when {
  status==SyncStatus.SignedOut -> resources.getString(R.string.settings_connect_a_server_to_sync_you_can)
  status==SyncStatus.NeedsSignIn -> resources.getString(R.string.settings_paused_until_this_phone_signs_in_again)
  status==SyncStatus.Running -> resources.getString(R.string.settings_syncing)
- !online -> resources.getString(R.string.settings_offline_notes_are_saved_here_and_sync)
  status is SyncStatus.Waiting && status.reason in setOf("different_identity","different_server") -> resources.getString(R.string.settings_this_library_belongs_to_a_different_account)
+ !connected -> resources.getString(R.string.settings_offline_notes_are_saved_here_and_sync)
  status is SyncStatus.Waiting -> resources.getString(R.string.settings_the_last_sync_didn_t_finish_your)
  else -> listOfNotNull(if(pending>0) resources.getQuantityString(R.plurals.settings_changes_waiting,pending,pending) else resources.getString(R.string.settings_up_to_date),lastSynced?.let {resources.getString(R.string.settings_last_synced ,noteTime(it,resources.configuration.locales[0]))}).joinToString(" · ")
 }

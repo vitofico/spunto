@@ -34,4 +34,5 @@
     <string name="local_problem_label_review_on_web_required">Revisa los cambios de etiquetas en la página Revisar de la web tras iniciar sesión para comprobar su efecto.</string>
     <string name="local_problem_replacement_superseded">Esta sustitución ha quedado obsoleta. Compara la nota actual antes de aplicar una propuesta nueva.</string>
     <string name="local_problem_merge_superseded">Esta combinación ha quedado obsoleta. Vuelve a comparar ambas notas actuales antes de combinarlas.</string>
+    <string name="local_problem_draft_image_limit">Un borrador puede tener hasta 10 imágenes.</string>
 </resources>

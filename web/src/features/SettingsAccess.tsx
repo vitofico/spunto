@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { copyText } from "./copy";
 import { agentSnippets } from "./agentSnippets";
 import { useConfirm } from "../components/core/ConfirmDialog";
-import type { Credential, TokenInput } from "../lib/types";
+import type { Credential, Meta, TokenInput } from "../lib/types";
 import { Dialog } from "./Dialog";
 import styles from "./Feature.module.css";
 import { PairDevice } from "./PairDevice";
@@ -169,12 +169,23 @@ export function Devices() {
     </>
   );
 }
-export function Tokens() {
+function TokenCreator({
+  meta,
+  connect = false,
+}: {
+  meta?: Meta;
+  connect?: boolean;
+}) {
   useLanguage();
   const formId = useId();
   const [open, setOpen] = useState(false);
   const creator = useRef<HTMLButtonElement>(null);
-  const [secret, setSecret] = useState<string | null>(null);
+  const submitting = useRef(false);
+  const [secret, setSecret] = useState<{
+    value: string;
+    client: TokenInput["client"];
+    scope: TokenInput["scope"];
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [name, setName] = useState("");
   const [scope, setScope] = useState<"read" | "write" | "status">("read");
@@ -184,52 +195,63 @@ export function Tokens() {
   const [expires, setExpires] = useState("");
   const client = useQueryClient();
   const create = useMutation({
-    mutationFn: async () => {
-      const data = await api.createToken({
-        name,
-        scope,
-        client: clientName,
-        private_ok: scope === "status" ? false : privateOk,
-        external_ok: scope === "status" ? false : externalOk,
-        expires_at: expires ? new Date(expires).toISOString() : null,
+    mutationFn: async (input: TokenInput) => {
+      const data = await api.createToken(input);
+      // Keep the one-time value out of QueryClient mutation data.
+      setSecret({
+        value: data.token,
+        client: input.client,
+        scope: input.scope,
       });
-      setSecret(data.token);
       setOpen(false);
-      setName("");
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["credentials"] });
+    },
+    onSettled: () => {
+      submitting.current = false;
     },
   });
   const ready =
     !create.isPending &&
     !!name.trim() &&
     (!expires || new Date(expires).getTime() > Date.now());
+  const close = () => {
+    if (!submitting.current) setOpen(false);
+  };
+  const buttonText = t(
+    connect ? "settingsaccess.connect_agent" : "settingsaccess.create_token",
+  );
   return (
     <>
-      <h1>{t("settings.access_tokens")}</h1>
-      <p className="muted">
-        {t("settingsaccess.create_a_separate_token_for_each_agent_or")}
-      </p>
       <button
         ref={creator}
         className="primary"
         onClick={() => {
           create.reset();
+          setName("");
+          setClientName(connect && meta?.mcp_url ? "codex" : "script");
+          setScope("read");
+          setPrivate(false);
+          setExternal(false);
+          setExpires("");
           setOpen(true);
         }}
       >
-        {t("settingsaccess.create_token")}
+        {buttonText}
       </button>
-      <CredentialRows kind="tokens" />
       {open && (
         <Dialog
-          title={t("settingsaccess.create_an_access_token")}
+          title={t(
+            connect
+              ? "settingsaccess.connect_agent"
+              : "settingsaccess.create_an_access_token",
+          )}
           opener={creator.current}
-          onClose={() => setOpen(false)}
+          onClose={close}
           footer={
             <>
-              <button onClick={() => setOpen(false)}>
+              <button disabled={create.isPending} onClick={close}>
                 {t("profilepanel.cancel")}
               </button>
               <button
@@ -249,84 +271,111 @@ export function Tokens() {
             id={formId}
             onSubmit={(event) => {
               event.preventDefault();
-              if (ready) create.mutate();
+              if (!ready || submitting.current) return;
+              submitting.current = true;
+              create.mutate({
+                name: name.trim(),
+                scope,
+                client: clientName,
+                private_ok: scope !== "status" && privateOk,
+                external_ok: scope !== "status" && externalOk,
+                expires_at: expires ? new Date(expires).toISOString() : null,
+              });
             }}
           >
-            <label className={styles.formField}>
-              {t("settingsaccess.name")}
-              <input
-                className="field"
-                value={name}
-                maxLength={120}
-                required
-                autoFocus
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <label className={styles.formField}>
-              {t("settingsaccess.client")}
-              <select
-                className="field"
-                value={clientName}
-                onChange={(e) =>
-                  setClientName(e.target.value as TokenInput["client"])
-                }
-              >
-                {Object.entries(clientNames()).map(([value, title]) => (
-                  <option key={value} value={value}>
-                    {title}
+            <fieldset
+              disabled={create.isPending}
+              className={styles.tokenFields}
+            >
+              <label className={styles.formField}>
+                {t("settingsaccess.name")}
+                <input
+                  className="field"
+                  value={name}
+                  maxLength={120}
+                  required
+                  autoFocus
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+              <label className={styles.formField}>
+                {t("settingsaccess.client")}
+                <select
+                  className="field"
+                  value={clientName}
+                  onChange={(e) => {
+                    const next = e.target.value as TokenInput["client"];
+                    setClientName(next);
+                    setScope(next === "monitor" ? "status" : "read");
+                    setPrivate(false);
+                    setExternal(false);
+                  }}
+                >
+                  {Object.entries(clientNames())
+                    .filter(
+                      ([value]) =>
+                        !connect ||
+                        !!meta?.mcp_url ||
+                        value === "script" ||
+                        value === "monitor",
+                    )
+                    .map(([value, title]) => (
+                      <option key={value} value={value}>
+                        {title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className={styles.formField}>
+                {t("settingsaccess.scope")}
+                <select
+                  className="field"
+                  value={scope}
+                  disabled={clientName === "monitor"}
+                  onChange={(e) => setScope(e.target.value as typeof scope)}
+                >
+                  <option value="read">{t("settingsaccess.read_notes")}</option>
+                  <option value="write">
+                    {t("settingsaccess.read_and_write_notes")}
                   </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.formField}>
-              {t("settingsaccess.scope")}
-              <select
-                className="field"
-                value={scope}
-                onChange={(e) => setScope(e.target.value as typeof scope)}
-              >
-                <option value="read">{t("settingsaccess.read_notes")}</option>
-                <option value="write">
-                  {t("settingsaccess.read_and_write_notes")}
-                </option>
-                <option value="status">
-                  {t("settingsaccess.status_only_no_note_text")}
-                </option>
-              </select>
-            </label>
-            {scope !== "status" && (
-              <>
-                <label className={styles.row}>
-                  <input
-                    type="checkbox"
-                    checked={privateOk}
-                    onChange={(e) => setPrivate(e.target.checked)}
-                  />
-                  {t("settingsaccess.include_private_notes")}
-                </label>
-                <label className={styles.row}>
-                  <input
-                    type="checkbox"
-                    checked={externalOk}
-                    onChange={(e) => setExternal(e.target.checked)}
-                  />
-                  {t("settingsaccess.include_external_origin_notes")}
-                </label>
-              </>
-            )}
-            <label className={styles.formField}>
-              {t("settingsaccess.expires_at_optional")}
-              <input
-                className="field"
-                type="datetime-local"
-                value={expires}
-                onChange={(e) => setExpires(e.target.value)}
-              />
-              <small>
-                {t("settingsaccess.leave_blank_for_no_expiry_you_can_revoke")}
-              </small>
-            </label>
+                  <option value="status">
+                    {t("settingsaccess.status_only_no_note_text")}
+                  </option>
+                </select>
+              </label>
+              {scope !== "status" && (
+                <>
+                  <label className={styles.row}>
+                    <input
+                      type="checkbox"
+                      checked={privateOk}
+                      onChange={(e) => setPrivate(e.target.checked)}
+                    />
+                    {t("settingsaccess.include_private_notes")}
+                  </label>
+                  <label className={styles.row}>
+                    <input
+                      type="checkbox"
+                      checked={externalOk}
+                      onChange={(e) => setExternal(e.target.checked)}
+                    />
+                    {t("settingsaccess.include_external_origin_notes")}
+                  </label>
+                </>
+              )}
+              <label className={styles.formField}>
+                {t("settingsaccess.expires_at_optional")}
+                <input
+                  className="field"
+                  type="datetime-local"
+                  value={expires}
+                  onChange={(e) => setExpires(e.target.value)}
+                />
+                <small>
+                  {t("settingsaccess.leave_blank_for_no_expiry_you_can_revoke")}
+                </small>
+              </label>
+            </fieldset>
           </form>
           <ErrorLine error={create.error} />
         </Dialog>
@@ -340,7 +389,9 @@ export function Tokens() {
           }}
           footer={
             <>
-              <button onClick={() => void copyText(secret).then(setCopied)}>
+              <button
+                onClick={() => void copyText(secret.value).then(setCopied)}
+              >
                 {copied
                   ? t("settingsaccess.copied")
                   : t("settingsaccess.copy_token")}
@@ -358,12 +409,36 @@ export function Tokens() {
           }
         >
           <p>{t("settingsaccess.this_is_the_only_time_it_will_be")}</p>
-          <pre className={styles.copy}>{secret}</pre>
+          <pre className={styles.copy}>{secret.value}</pre>
+          {meta && (
+            <>
+              <p>{t("settingsaccess.set_token_environment")}</p>
+              <AgentInstructions
+                meta={meta}
+                client={secret.scope === "status" ? "monitor" : secret.client}
+              />
+            </>
+          )}
         </Dialog>
       )}
     </>
   );
 }
+export function Tokens() {
+  useLanguage();
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
+  return (
+    <>
+      <h1>{t("settings.access_tokens")}</h1>
+      <p className="muted">
+        {t("settingsaccess.create_a_separate_token_for_each_agent_or")}
+      </p>
+      <TokenCreator meta={meta.data} />
+      <CredentialRows kind="tokens" />
+    </>
+  );
+}
+
 function CopySnippet({ title, text }: { title: string; text: string }) {
   useLanguage();
   const [copied, setCopied] = useState(false);
@@ -379,64 +454,100 @@ function CopySnippet({ title, text }: { title: string; text: string }) {
     </>
   );
 }
+function AgentInstructions({
+  meta,
+  client,
+}: {
+  meta: Meta;
+  client: TokenInput["client"];
+}) {
+  const snippets = agentSnippets(meta.public_url, meta.mcp_url ?? "");
+  if ((client === "codex" || client === "claude-code") && !meta.mcp_url)
+    return <p>{t("settingsaccess.mcp_is_disabled_by_the_operator")}</p>;
+  if (client === "codex")
+    return (
+      <>
+        <CopySnippet
+          title={t("settingsaccess.codex_codex_config_toml")}
+          text={snippets.codex}
+        />
+        <p className={styles.facts}>
+          {t("settingsaccess.read_tools_can_run_directly_other_tools_ask")}{" "}
+          <a
+            href="https://learn.chatgpt.com/docs/extend/mcp"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t("settingsaccess.official_codex_mcp_setup")}
+          </a>
+        </p>
+      </>
+    );
+  if (client === "claude-code")
+    return (
+      <>
+        <CopySnippet
+          title={t("settingsaccess.claude_code_mcp_json")}
+          text={snippets.claude}
+        />
+        <p className={styles.facts}>
+          {t("settingsaccess.the_token_is_expanded_from_your_environment_when")}{" "}
+          <a
+            href="https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t("settingsaccess.claude_code_mcp_setup")}
+          </a>
+        </p>
+      </>
+    );
+  return (
+    <>
+      <CopySnippet
+        title={t(
+          client === "monitor"
+            ? "settingsaccess.status_monitor"
+            : "settingsaccess.scripts_http_api",
+        )}
+        text={client === "monitor" ? snippets.monitor : snippets.script}
+      />
+      <p className={styles.facts}>
+        {t("settingsaccess.send_tokens_in_the_authorization_header")}{" "}
+        <a href="/api/v1/docs">{t("settingsaccess.api_reference")}</a>
+      </p>
+    </>
+  );
+}
+
 export function Agents() {
   useLanguage();
   const query = useQuery({ queryKey: ["meta"], queryFn: api.meta });
-  const url = query.data?.mcp_url;
-  const snippets = agentSnippets(query.data?.public_url ?? "", url ?? "");
+  const meta = query.data;
   return (
     <>
       <h1>{t("settings.agents")}</h1>
-      <p className="muted">
-        {t("settingsaccess.agents_explanation")}{" "}
-        <Link href="/settings/tokens">{t("settings.access_tokens")}</Link>
-      </p>
-      {url ? (
+      <p className="muted">{t("settingsaccess.agents_explanation")}</p>
+      {meta ? (
         <>
-          <CopySnippet
-            title={t("settingsaccess.codex_codex_config_toml")}
-            text={snippets.codex}
-          />
-          <p className={styles.facts}>
-            {t("settingsaccess.read_tools_can_run_directly_other_tools_ask")}{" "}
-            <a
-              href="https://learn.chatgpt.com/docs/extend/mcp"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("settingsaccess.official_codex_mcp_setup")}
-            </a>
+          <TokenCreator meta={meta} connect />
+          <p>
+            <Link href="/settings/tokens">{t("settings.access_tokens")}</Link>
           </p>
-          <CopySnippet
-            title={t("settingsaccess.claude_code_mcp_json")}
-            text={snippets.claude}
-          />
-          <p className={styles.facts}>
-            {t(
-              "settingsaccess.the_token_is_expanded_from_your_environment_when",
-            )}{" "}
-            <a
-              href="https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("settingsaccess.claude_code_mcp_setup")}
-            </a>
-          </p>
-          <CopySnippet
-            title={t("settingsaccess.scripts_http_api")}
-            text={snippets.script}
-          />
-          <p className={styles.facts}>
-            {t("settingsaccess.send_tokens_in_the_authorization_header")}{" "}
-            <a href="/api/v1/docs">{t("settingsaccess.api_reference")}</a>
-          </p>
+          {meta.mcp_url ? (
+            <>
+              <AgentInstructions meta={meta} client="codex" />
+              <AgentInstructions meta={meta} client="claude-code" />
+            </>
+          ) : (
+            <p>{t("settingsaccess.mcp_is_disabled_by_the_operator")}</p>
+          )}
+          <AgentInstructions meta={meta} client="script" />
+          <AgentInstructions meta={meta} client="monitor" />
         </>
       ) : query.isPending ? (
         <p>{t("settingsaccess.loading_connection_details")}</p>
-      ) : (
-        <p>{t("settingsaccess.mcp_is_disabled_by_the_operator")}</p>
-      )}
+      ) : null}
       <ErrorLine error={query.error} />
     </>
   );

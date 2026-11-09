@@ -34,4 +34,5 @@
     <string name="local_problem_label_review_on_web_required">Prüfe Labeländerungen nach der Anmeldung auf der Prüfseite im Web, um ihre Auswirkungen zu sehen.</string>
     <string name="local_problem_replacement_superseded">Diese Ersetzung ist überholt. Vergleiche die aktuelle Notiz, bevor du einen neuen Vorschlag anwendest.</string>
     <string name="local_problem_merge_superseded">Diese Zusammenführung ist überholt. Vergleiche beide aktuellen Notizen erneut, bevor du sie zusammenführst.</string>
+    <string name="local_problem_draft_image_limit">Ein Entwurf kann bis zu 10 Bilder enthalten.</string>
 </resources>

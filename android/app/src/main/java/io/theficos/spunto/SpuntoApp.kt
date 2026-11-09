@@ -67,6 +67,7 @@ import kotlinx.serialization.json.*
  val appearanceManifest=validatedManifest?.takeIf { it.first==manifestFingerprint }?.second
  LaunchedEffect(manifestRaw) { validatedManifest=manifestFingerprint to withContext(Dispatchers.Default) { decodeThemeManifest(manifestRaw) } }
  val online by model.online.collectAsState()
+ val writable by model.workspaceCanWrite.collectAsState()
  LaunchedEffect(manifest) {
   model.container.manifest.withCurrentPublication {
   val quick=model.container.manifest.enabled("quick-capture"); val dictate=model.container.manifest.enabled("dictation")
@@ -124,7 +125,7 @@ import kotlinx.serialization.json.*
   var createdTo by rememberSaveable { mutableStateOf("") }
   val brandedHeader=route=="timeline" && !WindowInsets.isImeVisible
   val headerActions:@Composable RowScope.()->Unit={
-   if((isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={nav.open("ask")},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_ask_notes)}) {Text(context.getString(R.string.core_ask))}
+   if(writable && (isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={nav.open("ask")},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_ask_notes)}) {Text(context.getString(R.string.core_ask))}
    if(isLabelsNavigationRoute(route)) IconButton(onClick={nav.open("search")}) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(24.dp))}
    if(filterable) IconButton(onClick={filtersOpen=true}) {
     BadgedBox(badge={if(createdFrom.isNotBlank() || createdTo.isNotBlank()) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=if(createdFrom.isNotBlank() || createdTo.isNotBlank()) context.getString(R.string.core_filters_applied) else context.getString(R.string.core_filter_notes),modifier=Modifier.size(24.dp))}
@@ -157,7 +158,7 @@ import kotlinx.serialization.json.*
       IconButton(onClick={more=true},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
       DropdownMenu(expanded=more,onDismissRequest={more=false}) {
        DropdownMenuItem(text={Text(context.getString(R.string.core_filter_notes))},onClick={more=false;filtersOpen=true})
-       if(model.container.manifest.enabled("ask")) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
+       if(writable && model.container.manifest.enabled("ask")) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
       }
      }
     }
@@ -175,7 +176,7 @@ import kotlinx.serialization.json.*
      route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo)
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
-     route=="ask" -> AskScreen(model,onNote=openNote)
+     route=="ask" -> if(writable) AskScreen(model,onNote=openNote)
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote=openNote)
      route=="review" -> ReviewScreen(model,openNote)
@@ -193,8 +194,9 @@ import kotlinx.serialization.json.*
      route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))
     }
     val remote by model.remote.collectAsState()
-    if(online && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})
-    if(remote.string("suggestion_preview").isNotBlank()) {
+    LaunchedEffect(writable) {if(!writable) model.remote.value=JsonObject(emptyMap())}
+    if(writable && online && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})
+    if(writable && remote.string("suggestion_preview").isNotBlank()) {
      val outputs by model.outputs.collectAsState()
      outputs.firstOrNull { it.id==remote.string("suggestion_preview") && it.kind=="suggestion" && model.container.manifest.enabled(payload(it.payload).string("plugin")) }?.let { item -> SuggestionDecisionDialog(model,proposalData(item),openNote,{model.remote.value=JsonObject(emptyMap())}) }
     }

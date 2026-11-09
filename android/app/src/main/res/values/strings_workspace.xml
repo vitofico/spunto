@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workspace_read_only">This space is read-only.</string>
+    <string name="workspace_queued_edits">This space is read-only. Your edits are kept on this phone until you can sync them again.</string>
+    <string name="workspace_write_on_phone">Write on this phone</string>
+    <string name="workspace_save_on_phone">Save on this phone</string>
+</resources>

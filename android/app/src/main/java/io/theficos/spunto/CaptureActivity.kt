@@ -1,6 +1,7 @@
 package io.theficos.spunto
 
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.viewModels
@@ -18,6 +19,8 @@ import io.theficos.spunto.core.design.SpuntoWordmark
 import io.theficos.spunto.core.design.SpuntoType
 import kotlinx.coroutines.*
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import java.io.File
 import androidx.room.withTransaction
 
@@ -27,16 +30,43 @@ internal class CaptureLaunchState:androidx.lifecycle.ViewModel() {
  var selectionError by mutableStateOf("")
  var opened by mutableStateOf(false)
 }
+internal fun localCaptureIntent(context:Context)=Intent(context,LocalCaptureActivity::class.java)
 
-class CaptureActivity:LockedActivity() {
- private val model:SpuntoViewModel by viewModels()
+open class CaptureActivity:LockedActivity() {
+ private val owner get()=(application as SpuntoApplication).container
+ protected open val localOnly=false
+ private val model:SpuntoViewModel by viewModels {viewModelFactory {initializer {
+  SpuntoViewModel(application,if(localOnly) owner.localCaptureReplica() else owner.current)
+ }}}
  private val launchState:CaptureLaunchState by viewModels()
  // Tile, widget and shortcut launches own their task; removing it returns to the app underneath, not to Spunto. A share runs in the sharing app's task and only finishes.
  override fun finish() { if(isTaskRoot) finishAndRemoveTask() else super.finish() }
  override fun onCreate(savedInstanceState:Bundle?) {
   super.onCreate(savedInstanceState)
-  lifecycleScope.launch {(application as SpuntoApplication).container.replicas.collect {if(it.key!=model.container.key) finish()}}
-  setProtectedContent { LaunchedEffect(Unit) {initializeCapture()} }
+  val selected=if(localOnly) owner.current.key else model.container.key
+  lifecycleScope.launch {owner.replicas.collect {if(it.key!=selected) finish()}}
+  setCaptureContent { LaunchedEffect(Unit) {initializeCapture()} }
+ }
+ private fun setCaptureContent(content:@Composable ()->Unit) {
+  setProtectedContent {
+   val writable by model.workspaceCanWrite.collectAsState()
+   if(writable) content()
+   else SpuntoTheme {
+    Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) {Surface {
+     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+      Text(getString(R.string.workspace_read_only))
+      TextButton(onClick=::openLocalCapture,modifier=Modifier.heightIn(min=48.dp)) {Text(getString(R.string.workspace_write_on_phone))}
+      TextButton(onClick={finish()},modifier=Modifier.heightIn(min=48.dp)) {Text(getString(R.string.core_close))}
+     }
+    }}
+   }
+  }
+ }
+ private fun openLocalCapture() {
+  val handoff=Intent(intent).setClass(this,LocalCaptureActivity::class.java)
+  referrer?.let {handoff.putExtra(Intent.EXTRA_REFERRER,it)}
+  startActivity(handoff)
+  super.finish()
  }
  private fun initializeCapture() {
   if(intent.action==Intent.ACTION_PROCESS_TEXT) {
@@ -44,8 +74,8 @@ class CaptureActivity:LockedActivity() {
    lifecycleScope.launch {
     if(selection.isBlank()) { finish();return@launch }
     val body=selection.lines().joinToString("\n") { "> $it" }
-    if(!launchState.selectionStarted) {launchState.selectionStarted=true;model.task {try {launchState.selectionId=model.repository.create(body,sourceKind="selection",sourceRef=referrer?.host)} catch(error:Exception) {launchState.selectionError=getString(R.string.core_selection_save_failed);throw error}}}
-    setProtectedContent { SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(shape=MaterialTheme.shapes.large) {
+    if(!launchState.selectionStarted) {launchState.selectionStarted=true;model.task {try {model.requireWorkspaceWrite();launchState.selectionId=model.repository.create(body,sourceKind="selection",sourceRef=referrer?.host)} catch(error:Exception) {launchState.selectionError=getString(R.string.core_selection_save_failed);throw error}}}
+    setCaptureContent { SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(shape=MaterialTheme.shapes.large) {
      val id=launchState.selectionId
      if(id==null) Column(Modifier.padding(SpuntoSpacing.s20)) {Text(launchState.selectionError.ifEmpty {getString(R.string.core_saving_selection)});if(launchState.selectionError.isNotEmpty()) TextButton(onClick={finish()}) {Text(getString(R.string.core_close))}}
      else if(!launchState.opened) TextButton(onClick={launchState.opened=true}) {Text(getString(R.string.core_saved_add_thought))}
@@ -61,7 +91,7 @@ class CaptureActivity:LockedActivity() {
   val image=if(intent.type?.startsWith("image/")==true) intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) else null
   val shareKey=if(intent.action==Intent.ACTION_SEND) "share:"+java.security.MessageDigest.getInstance("SHA-256").digest(listOf(shared,image?.toString().orEmpty(),intent.type.orEmpty(),referrer?.toString().orEmpty()).joinToString("\u0000").toByteArray()).joinToString("") { "%02x".format(it) } else "capture"
   val source=shared.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-  setProtectedContent {
+  setCaptureContent {
    val error by model.message.collectAsState()
    SpuntoTheme(namespace=model.container.replicaId.takeUnless {it=="legacy"}.orEmpty()) {
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomCenter) { Surface(Modifier.fillMaxWidth().wrapContentHeight(),shape=MaterialTheme.shapes.extraLarge,color=MaterialTheme.colorScheme.background) {
@@ -70,8 +100,8 @@ class CaptureActivity:LockedActivity() {
       // A share (03 A3): what came in, sunken and quoted on save; an optional thought; up to three recent labels.
       // A3 puts Save in the header row: the composer's bar docks there instead of under the field.
       val header=remember { BottomBarSlot() }
-      if(sharing) Row(verticalAlignment=Alignment.CenterVertically) { Text(getString(R.string.core_save_spunto),style=MaterialTheme.typography.titleMedium);Box(Modifier.weight(1f)) { header.content?.invoke() } }
-      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { SpuntoWordmark(style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text(getString(R.string.core_close)) } }
+      if(sharing) Row(verticalAlignment=Alignment.CenterVertically) { Text(getString(if(localOnly) R.string.workspace_save_on_phone else R.string.core_save_spunto),style=MaterialTheme.typography.titleMedium);Box(Modifier.weight(1f)) { header.content?.invoke() } }
+      else Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { if(localOnly) Text(getString(R.string.workspace_write_on_phone),style=MaterialTheme.typography.titleLarge) else SpuntoWordmark(style=MaterialTheme.typography.titleLarge);TextButton(onClick={finish()}) { Text(getString(R.string.core_close)) } }
       if(error.isNotEmpty()) Text(error)
       if(shared.isNotEmpty()) Surface(color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,shape=MaterialTheme.shapes.medium) {
        Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
@@ -96,6 +126,7 @@ class CaptureActivity:LockedActivity() {
  }
  /** The thought first, then the shared text as a quote, then any chosen labels, so the title is never a label. */
  private suspend fun saveShare(comment:String,shared:String,source:String?,image:Uri?,draftId:String,labels:String="") {
+   model.requireWorkspaceWrite()
    val body=listOf(comment,if(shared.isNotEmpty()) shared.lines().joinToString("\n") { "> $it" } else "",labels).filter { it.isNotBlank() }.joinToString("\n\n")
    val attachment=if(image!=null) withContext(Dispatchers.IO) {
     val folder=model.container.privateDirectory("pending-attachments")
@@ -104,6 +135,7 @@ class CaptureActivity:LockedActivity() {
     catch(error:Exception) { target.delete();throw error }
    } else null
    try {
+    model.requireWorkspaceWrite()
     model.container.database.withTransaction {
      val noteId=model.repository.create(body,sourceUrl=source,sourceKind="share",sourceRef=referrer?.host)
      if(attachment!=null) model.repository.queueImage(noteId,attachment.absolutePath,intent.type ?: "image/jpeg")
@@ -113,3 +145,6 @@ class CaptureActivity:LockedActivity() {
    finish()
  }
 }
+
+/** An explicit choice from the read-only space or capture handoff. */
+class LocalCaptureActivity:CaptureActivity() {override val localOnly=true}

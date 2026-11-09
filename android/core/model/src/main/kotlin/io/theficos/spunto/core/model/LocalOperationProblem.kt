@@ -11,6 +11,7 @@ enum class LocalOperationProblem {
  OriginalUnavailable,
  NoteTooLarge,
  ImageTooLarge,
+ DraftImageLimit,
  RecordingJournalRequired,
  RecordingPathInvalid,
  VoiceMemosDisabled,

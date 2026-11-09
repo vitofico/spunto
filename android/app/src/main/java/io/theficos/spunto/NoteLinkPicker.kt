@@ -49,7 +49,7 @@ internal fun supportsNotePicker(manifest:JsonObject,pluginId:String):Boolean {
 }
 
 internal class NotePickerSession private constructor(private val config:AuthConfig,private val epoch:String,private val lockRevision:Long,private val pluginId:String) {
- fun current(model:SpuntoViewModel)=model.auth.value==config && model.pluginReplicaEpoch==epoch &&
+ fun current(model:SpuntoViewModel)=model.workspaceCanWrite.value && model.auth.value==config && model.pluginReplicaEpoch==epoch &&
   model.container.appLock.state.value.let {it.unlocked && it.revision==lockRevision} &&
   model.container.manifest.enabled(pluginId) && supportsNotePicker(model.container.manifest.value,pluginId)
 

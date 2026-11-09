@@ -28,7 +28,7 @@ from spunto.api import (
     themes,
     web,
 )
-from spunto.api.deps import Services, check_origin
+from spunto.api.deps import Services, check_origin, is_viewer_reconciliation
 from spunto.api.errors import Problem, problem_response
 from spunto.api.network import SecurityHeadersMiddleware, WrongHostMiddleware, client_ip
 from spunto.auth import devices, passwords, sessions, tokens
@@ -367,7 +367,9 @@ class HostedIdentityMiddleware:
                     "/api/v1/workspaces",
                     "/mcp",
                 }
-                if not principal.writable and not account_action:
+                if not principal.writable and not (
+                    account_action or is_viewer_reconciliation(request, principal)
+                ):
                     raise Problem(403, "read_only_space", "This space is read-only.")
             admin = request.url.path.startswith(
                 (
@@ -629,6 +631,7 @@ def create_hosted_app(services):
                 sync_epoch=values["sync_epoch"],
                 plugins_rev=int(values["plugins_rev"]),
                 ai_capabilities=scoped.ai.capabilities,
+                workspace_role=request.state.hosted_principal.workspace_role,
             )
         return result
 

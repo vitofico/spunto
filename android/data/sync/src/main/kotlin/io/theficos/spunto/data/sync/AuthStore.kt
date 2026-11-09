@@ -10,6 +10,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.datastore.core.DataStore
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -29,7 +30,9 @@ import javax.crypto.spec.GCMParameterSpec
 }
 fun replicaHash(parts:List<String>):String=MessageDigest.getInstance("SHA-256").digest(Json.encodeToString(parts).toByteArray(Charsets.UTF_8)).joinToString("") {"%02x".format(it)}
 fun AuthConfig.ownsReplica(replicaId:String):Boolean=if(hosted) this.replicaId==replicaId else replicaId in setOf("","legacy")
-data class AuthSelection(val config:AuthConfig?,val replicaId:String)
+data class AuthSelection(val config:AuthConfig?,val replicaId:String,val workspaceRole:String?=config?.workspaceRole) {
+ fun canWrite(replica:String)=replica=="signed-out" || replica==replicaId && workspaceRole!="viewer" && (replica=="legacy" || config?.replicaId==replica)
+}
 fun AuthConfig.accept(device:DeviceToken):AuthConfig=copy(token=device.token,deviceId=device.id,userId=device.userId,workspaceId=device.workspaceId,workspaceRole=device.workspaceRole)
 
 // Cache by the actual application-private file, including isolated test contexts.
@@ -42,8 +45,16 @@ class AuthStore(context: Context) {
  private val store=authDataStore(context)
  private val secretKey=stringPreferencesKey("session")
  private val replicaKey=stringPreferencesKey("replica")
- val selection:Flow<AuthSelection> = store.data.map {prefs -> val config=prefs[secretKey]?.let {decrypt(it)};AuthSelection(config,prefs[replicaKey] ?: config?.replicaId ?: "legacy")}
- val config: Flow<AuthConfig?> = selection.map {it.config}
+ private val roleKey=stringPreferencesKey("workspace_role")
+ val selection:Flow<AuthSelection> = store.data.map {prefs ->
+  val config=prefs[secretKey]?.let(::decrypt)
+  AuthSelection(config,prefs[replicaKey] ?: config?.replicaId ?: "legacy",if(config?.hosted==true) prefs[roleKey] ?: config.workspaceRole else null)
+ }.distinctUntilChanged()
+ val config: Flow<AuthConfig?> = selection.map {it.config}.distinctUntilChanged()
+ suspend fun updateWorkspaceRole(expected:AuthConfig,role:String) {
+  require(expected.hosted && role in setOf("owner","editor","viewer"))
+  store.edit {if(it[secretKey]?.let(::decrypt)==expected) it[roleKey]=role}
+ }
  private fun key(): SecretKey {
   val keys=KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
   (keys.getKey("spunto.device",null) as? SecretKey)?.let { return it }
@@ -54,14 +65,14 @@ class AuthStore(context: Context) {
   val cipher=Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE,key()) }
   val encrypted=cipher.doFinal(Json.encodeToString(config.copy(serverUrl=url)).toByteArray())
   val blob=Base64.encodeToString(cipher.iv+encrypted,Base64.NO_WRAP)
-  store.edit { it[secretKey]=blob;it[replicaKey]=config.replicaId }
+  store.edit { it[secretKey]=blob;it[replicaKey]=config.replicaId;it.remove(roleKey) }
  }
  private fun decrypt(blob: String): AuthConfig? = runCatching {
   val bytes=Base64.decode(blob,Base64.NO_WRAP); require(bytes.size>28)
   val cipher=Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE,key(),GCMParameterSpec(128,bytes.copyOfRange(0,12))) }
   Json.decodeFromString<AuthConfig>(String(cipher.doFinal(bytes.copyOfRange(12,bytes.size)),Charsets.UTF_8))
  }.getOrNull()
- suspend fun clear() { store.edit { val old=it[secretKey]?.let(::decrypt);it.remove(secretKey);if(old?.hosted==true || it[replicaKey]?.startsWith("account-")==true) it[replicaKey]="signed-out" } }
+ suspend fun clear() { store.edit { val old=it[secretKey]?.let(::decrypt);it.remove(secretKey);it.remove(roleKey);if(old?.hosted==true || it[replicaKey]?.startsWith("account-")==true) it[replicaKey]="signed-out" } }
 }
 
 fun replicaDatabaseName(replicaId:String):String {

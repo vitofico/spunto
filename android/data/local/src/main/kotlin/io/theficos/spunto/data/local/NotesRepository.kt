@@ -170,14 +170,31 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  fun outputs() = dao.outputs()
  suspend fun saveDraft(id: String = "capture", body: String) = editorMutex.withLock { dao.putDraft(DraftEntity(id,body,System.currentTimeMillis())) }
  suspend fun clearDraft(id: String, body: String) = editorMutex.withLock {dao.clearDraft(id,body)}
- /** A capture closes only after its words, image markers and exact draft acknowledgement commit together. */
- suspend fun capture(body:String,draftId:String,images:List<Pair<String,String>> = emptyList(),sourceRef:String?=null):String = editorMutex.withLock {
-  db.withTransaction {
-   val id=create(body,sourceRef=sourceRef)
-   images.forEach { (path,mime) -> queueImage(id,path,mime) }
-   dao.clearDraft(draftId,body)
-   id
+ private suspend fun <T> inCaptureTransaction(lease:EditorLease,edit:suspend (String)->T):T {
+  fun requireCurrent() {requireLocal(synchronized(editors) {lease.active && lease in editors && lease.noteId==null},LocalOperationProblem.EditorChanged)}
+  requireCurrent()
+  return db.withTransaction {
+   val result=edit(lease.draftId)
+   requireCurrent()
+   result
   }
+ }
+ internal suspend fun <T> editCaptureImages(lease:EditorLease,edit:suspend (String)->T):T=editorMutex.withLock {inCaptureTransaction(lease,edit)}
+ /** A capture closes only after its words, image markers and exact draft acknowledgement commit together. */
+ suspend fun capture(write:EditorWrite,sourceRef:String?=null):String = editorMutex.withLock {
+  val id=inCaptureTransaction(write.lease) {draftId ->
+   requireLocal(write.body.isNotBlank() || dao.draftImageSnapshots(draftId).isNotEmpty(),LocalOperationProblem.EditorChanged)
+   val saved=create(write.body,sourceRef=sourceRef)
+   transferDraftImages(draftId,saved)
+   dao.clearDraft(draftId,write.body)
+   saved
+  }
+  write.lease.accepted=maxOf(write.lease.accepted,write.sequence)
+  id
+ }
+ internal suspend fun transferDraftImages(draftId:String,noteId:String) {
+  for(image in dao.draftImageSnapshots(draftId)) queueImage(noteId,image.localPath,image.mime)
+  dao.clearDraftImages(draftId)
  }
  suspend fun create(body: String, sourceUrl: String? = null, sourceKind: String = "android", sourceRef: String? = null): String = save(body,sourceUrl=sourceUrl,sourceKind=sourceKind,sourceRef=sourceRef)
  suspend fun update(id: String,body: String) { save(body,id) }

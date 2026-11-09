@@ -701,6 +701,129 @@ describe("review and result safety", () => {
     );
     await waitFor(() => expect(revoke).toHaveBeenCalledWith("other"));
   });
+  it("starts a fresh token after a cancelled or completed privileged form", async () => {
+    vi.spyOn(api, "credentials").mockResolvedValue([]);
+    const create = vi
+      .spyOn(api, "createToken")
+      .mockResolvedValue({ id: "pat", token: "private_one_time_value" });
+    wrap(<SettingsPage section="tokens" />);
+    const open = () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create token" }));
+      return within(
+        screen.getByRole("dialog", { name: "Create an access token" }),
+      );
+    };
+    const fillPrivileged = (dialog: ReturnType<typeof within>) => {
+      fireEvent.change(dialog.getByLabelText("Name"), {
+        target: { value: "Privileged agent" },
+      });
+      fireEvent.change(dialog.getByLabelText("Scope"), {
+        target: { value: "write" },
+      });
+      fireEvent.click(dialog.getByLabelText("Include private notes"));
+      fireEvent.click(dialog.getByLabelText("Include external-origin notes"));
+      fireEvent.change(dialog.getByLabelText(/Expires at/), {
+        target: { value: "2099-01-01T00:00" },
+      });
+    };
+    const checkDefaults = (dialog: ReturnType<typeof within>) => {
+      expect((dialog.getByLabelText("Name") as HTMLInputElement).value).toBe(
+        "",
+      );
+      expect((dialog.getByLabelText("Scope") as HTMLSelectElement).value).toBe(
+        "read",
+      );
+      expect(
+        (dialog.getByLabelText("Include private notes") as HTMLInputElement)
+          .checked,
+      ).toBe(false);
+      expect(
+        (
+          dialog.getByLabelText(
+            "Include external-origin notes",
+          ) as HTMLInputElement
+        ).checked,
+      ).toBe(false);
+      expect(
+        (dialog.getByLabelText(/Expires at/) as HTMLInputElement).value,
+      ).toBe("");
+    };
+    const first = open();
+    fillPrivileged(first);
+    fireEvent.click(first.getByRole("button", { name: "Cancel" }));
+    const second = open();
+    checkDefaults(second);
+    fillPrivileged(second);
+    fireEvent.click(second.getByRole("button", { name: "Create token" }));
+    await screen.findByText("private_one_time_value");
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: "write",
+        private_ok: true,
+        external_ok: true,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    const third = open();
+    checkDefaults(third);
+    fireEvent.change(third.getByLabelText("Name"), {
+      target: { value: "Reader" },
+    });
+    fireEvent.click(third.getByRole("button", { name: "Create token" }));
+    await waitFor(() =>
+      expect(create).toHaveBeenLastCalledWith({
+        name: "Reader",
+        scope: "read",
+        client: "script",
+        private_ok: false,
+        external_ok: false,
+        expires_at: null,
+      }),
+    );
+  });
+
+  it("connects a status monitor with scoped instructions even when MCP is off", async () => {
+    vi.spyOn(api, "meta").mockResolvedValue({
+      public_url: "https://notes.test",
+      mcp_url: null,
+    } as Awaited<ReturnType<typeof api.meta>>);
+    const create = vi
+      .spyOn(api, "createToken")
+      .mockResolvedValue({ id: "monitor", token: "monitor_secret" });
+    wrap(<SettingsPage section="agents" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect an agent" }),
+    );
+    const form = within(
+      screen.getByRole("dialog", { name: "Connect an agent" }),
+    );
+    expect(form.queryByRole("option", { name: "Codex" })).toBeNull();
+    fireEvent.change(form.getByLabelText("Client"), {
+      target: { value: "monitor" },
+    });
+    fireEvent.change(form.getByLabelText("Name"), {
+      target: { value: "Health checker" },
+    });
+    fireEvent.click(form.getByRole("button", { name: "Create token" }));
+    const receipt = within(
+      await screen.findByRole("dialog", { name: "Copy your token now" }),
+    );
+    expect(receipt.getByText("monitor_secret")).toBeTruthy();
+    const instructions = receipt.getByText(
+      /curl.*api\/v1\/status/s,
+    ).textContent;
+    expect(instructions).toContain("$SPUNTO_TOKEN");
+    expect(instructions).not.toContain("monitor_secret");
+    expect(create).toHaveBeenCalledWith({
+      name: "Health checker",
+      client: "monitor",
+      scope: "status",
+      private_ok: false,
+      external_ok: false,
+      expires_at: null,
+    });
+  });
+
   it("holds the one-time token outside QueryClient mutation data", async () => {
     vi.spyOn(api, "credentials").mockResolvedValue([]);
     vi.spyOn(api, "createToken").mockResolvedValue({

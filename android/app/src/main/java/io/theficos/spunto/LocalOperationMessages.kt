@@ -12,6 +12,7 @@ internal fun localOperationMessage(resources:Resources,error:LocalOperationExcep
  LocalOperationProblem.OriginalUnavailable -> R.string.local_problem_original_unavailable
  LocalOperationProblem.NoteTooLarge -> R.string.local_problem_note_too_large
  LocalOperationProblem.ImageTooLarge -> R.string.local_problem_image_too_large
+ LocalOperationProblem.DraftImageLimit -> R.string.local_problem_draft_image_limit
  LocalOperationProblem.RecordingJournalRequired -> R.string.local_problem_recording_journal_required
  LocalOperationProblem.RecordingPathInvalid -> R.string.local_problem_recording_path_invalid
  LocalOperationProblem.VoiceMemosDisabled -> R.string.local_problem_voice_memos_disabled

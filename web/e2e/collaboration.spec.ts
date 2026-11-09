@@ -177,8 +177,7 @@ test("workspace selection survives reload while labels, drafts and viewer contro
   const state = await fixture(page);
   await page.goto("/");
   await page.getByLabel("New note").fill("Private personal capture");
-  await page.goto("/settings/spaces");
-  await page.getByLabel("Current space").selectOption(team.id);
+  await page.getByLabel("Switch space").selectOption(team.id);
   await expect(page.getByText("Studio note", { exact: true })).toBeVisible();
   await expect(page.getByLabel("New note")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Actions for/ })).toHaveCount(

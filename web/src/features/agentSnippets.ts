@@ -30,9 +30,15 @@ export function agentSnippets(publicUrl: string, mcpUrl: string) {
     null,
     2,
   );
-  const script = [
-    `curl ${shellQuote(publicUrl + "/api/v1/notes")} \\`,
-    `  --header 'Authorization: Bearer '"$SPUNTO_TOKEN"`,
-  ].join("\n");
-  return { codex, claude, script };
+  const request = (path: string) =>
+    [
+      `curl ${shellQuote(publicUrl + path)} \\`,
+      `  --header 'Authorization: Bearer '"$SPUNTO_TOKEN"`,
+    ].join("\n");
+  return {
+    codex,
+    claude,
+    script: request("/api/v1/notes"),
+    monitor: request("/api/v1/status"),
+  };
 }

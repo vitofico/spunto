@@ -20,7 +20,7 @@ class RecordingRepositoryTest {
  private lateinit var folder:File
  private lateinit var recordings:RecordingRepository
  @Before fun setup() {db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(),SpuntoDatabase::class.java).allowMainThreadQueries().build();notes=NotesRepository(db);folder=kotlin.io.path.createTempDirectory("synthetic-recordings").toFile();recordings=RecordingRepository(notes,folder)}
- @After fun close() {db.close();folder.listFiles()?.forEach {it.delete()};folder.delete()}
+ @After fun close() {db.close();folder.deleteRecursively()}
  private fun waitingCatalog()=File(System.getProperty("spunto.fixtures")?:"/spec/fixtures","recording-waiting-catalog.json").readText()
  private suspend fun enabled(value:Boolean=true) {notes.dao.putState(SyncStateEntity(epoch="e",serverUrl="https://recording.example",maxUploadBytes=20_000_000,manifest="{\"plugins\":[]}",catalog=if(value) waitingCatalog() else "{\"plugins\":[]}"))}
  private suspend fun ready(captured:Boolean=false):RecordingDraftEntity {enabled();val row=recordings.begin();File(row.localPath).writeBytes(syntheticOgg());return recordings.complete(row.id,captured)}
@@ -33,6 +33,29 @@ class RecordingRepositoryTest {
   val note=notes.dao.get(id)!!;assertTrue(note.privateNote);assertEquals("android",note.sourceKind);assertEquals("dictation",note.sourceRef);assertTrue(note.body.contains("[recording:${row.id}]"));assertNull(notes.dao.draftSnapshot("capture"))
   val attachment=notes.dao.attachment(row.id)!!;assertEquals("recording",attachment.kind);assertEquals("https://recording.example",attachment.serverUrl);assertEquals(row.sha256,attachment.sha256)
   val outbox=notes.dao.outbox();assertEquals(id,recordings.retain(row.id,"Ignored retry"));assertEquals(outbox,notes.dao.outbox());assertEquals(note,notes.dao.get(id))
+ }
+ @Test fun capturingARecordingTransfersItsDraftImagesOrRollsBackEverything()=runBlocking {
+  val row=ready()
+  val lease=notes.beginEditor(null)
+  val images=DraftImageStore(notes,File(folder,"draft-images"))
+  val body="Recording with an image"
+  notes.persistEditor(notes.editorWrite(lease,body))
+  images.add(lease,"image/png") {byteArrayOf(1,2,3).inputStream()}
+  val staged=images.observe("capture").first().single()
+  val file=File(staged.localPath)
+  assertTrue(file.delete())
+  assertTrue(runCatching {recordings.retain(row.id,body,editorWrite=notes.editorWrite(lease,body))}.isFailure)
+  assertEquals("ready",notes.dao.recording(row.id)!!.state)
+  assertEquals(staged,images.observe("capture").first().single())
+  assertTrue(notes.dao.all().isEmpty());assertTrue(notes.dao.attachmentSnapshots().isEmpty())
+  file.writeBytes(byteArrayOf(1,2,3))
+  val saved=recordings.retain(row.id,body,editorWrite=notes.editorWrite(lease,body))
+  val attachments=notes.dao.attachments(saved).first()
+  val savedBody=notes.dao.get(saved)!!.body
+  assertEquals(setOf("image","recording"),attachments.map {it.kind}.toSet())
+  assertTrue(attachments.all {it.marker in savedBody})
+  assertTrue(images.observe("capture").first().isEmpty())
+  assertNull(notes.dao.draftSnapshot("capture"))
  }
  @Test fun processDeathRecoversValidatedBytesWithoutMicNetworkOrAutomaticAttachment()=runBlocking {
   enabled();val complete=recordings.begin();File(complete.localPath).writeBytes(syntheticOgg())

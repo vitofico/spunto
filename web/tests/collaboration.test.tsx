@@ -36,7 +36,13 @@ import SharedNotesPage from "../src/pages/SharedNotes";
 import NotePage from "../src/pages/Note";
 import { Palette } from "../src/components/core/Palette";
 import { NoteCard } from "../src/components/core/NoteCard";
-import type { Note, Session, SharedNote } from "../src/lib/types";
+import type {
+  AccessGrant,
+  Note,
+  Session,
+  SharedNote,
+  Workspace,
+} from "../src/lib/types";
 const ownerSession: Session = {
   owner_id: "alice",
   user_id: "alice",
@@ -584,11 +590,127 @@ it("adds and revokes a note grant by exact email, without an account directory",
   await waitFor(() =>
     expect(add).toHaveBeenCalledWith(note.id, "bob@example.test", "editor"),
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "Remove access for bob@example.test" }),
-  );
+  const revoke = screen.getByRole("button", {
+    name: "Remove access for bob@example.test",
+  }) as HTMLButtonElement;
+  await waitFor(() => expect(revoke.disabled).toBe(false));
+  fireEvent.click(revoke);
   await waitFor(() => expect(remove).toHaveBeenCalledWith(note.id, "bob"));
 });
+it("keeps a new shared space open for member setup", async () => {
+  seed();
+  window.history.replaceState(null, "", "/settings/spaces");
+  const personal: Workspace = {
+    id: "personal-alice",
+    name: "Personal",
+    personal: true,
+    role: "owner",
+  };
+  const newSpace: Workspace = {
+    id: "new-space",
+    name: "Workshop",
+    personal: false,
+    role: "owner",
+  };
+  const workspaces = [personal];
+  vi.spyOn(api, "workspaces").mockImplementation(async () => ({
+    workspaces: [...workspaces],
+    active_workspace_id: currentSession()!.workspace_id!,
+  }));
+  const create = vi
+    .spyOn(api, "createWorkspace")
+    .mockImplementation(async () => {
+      workspaces.push(newSpace);
+      return newSpace;
+    });
+  vi.mocked(api.workspaceSession).mockResolvedValue({
+    ...ownerSession,
+    workspace_id: newSpace.id,
+  });
+  const members = vi
+    .spyOn(api, "workspaceMembers")
+    .mockResolvedValue({ members: [] });
+  render(
+    <IdentityHarness>
+      <SpacesPanel />
+    </IdentityHarness>,
+    { wrapper: Wrapper },
+  );
+  fireEvent.change(await screen.findByLabelText("Space name"), {
+    target: { value: newSpace.name },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create shared space" }));
+  await screen.findByLabelText("Username or verified email");
+  expect(create).toHaveBeenCalledWith(newSpace.name);
+  expect(members).toHaveBeenCalledWith(newSpace.id);
+  expect(window.location.pathname).toBe("/settings/spaces");
+  expect(
+    (screen.getByLabelText("Current space") as HTMLSelectElement).value,
+  ).toBe(newSpace.id);
+  expect(
+    screen.getByRole("link", { name: "All notes" }).getAttribute("href"),
+  ).toBe("/");
+});
+it.each(["note", "workspace"])(
+  "changes an existing %s grant by account ID",
+  async (kind) => {
+    seed({ ...ownerSession, workspace_id: "studio" });
+    vi.spyOn(api, "workspaces").mockResolvedValue({
+      workspaces: [
+        { id: "studio", name: "Studio", personal: false, role: "owner" },
+      ],
+      active_workspace_id: "studio",
+    });
+    const recipient: AccessGrant = {
+      user_id: "bob-account",
+      username: "bob.local",
+      email: null,
+      display_name: "Bob",
+      role: "viewer",
+    };
+    const owner: AccessGrant = {
+      user_id: "alice",
+      username: "alice",
+      email: null,
+      display_name: "Alice",
+      role: "owner",
+    };
+    vi.spyOn(api, "workspaceMembers").mockImplementation(async () => ({
+      members: [owner, { ...recipient }],
+    }));
+    vi.spyOn(api, "noteShares").mockImplementation(async () => ({
+      shares: [{ ...recipient }],
+    }));
+    const edit = vi
+      .spyOn(
+        api,
+        kind === "note" ? "changeNoteShareRole" : "changeWorkspaceMemberRole",
+      )
+      .mockImplementation(async (_id, _userId, role) => {
+        recipient.role = role;
+      });
+    render(
+      <IdentityHarness>
+        {kind === "note" ? <ShareNote id={note.id} /> : <SpacesPanel />}
+      </IdentityHarness>,
+      { wrapper: Wrapper },
+    );
+    if (kind === "note")
+      fireEvent.click(await screen.findByRole("button", { name: "Share" }));
+    const access = (await screen.findByLabelText(
+      "Access for bob.local",
+    )) as HTMLSelectElement;
+    expect(access.value).toBe("viewer");
+    expect(screen.queryByLabelText("Access for alice")).toBeNull();
+    fireEvent.change(access, { target: { value: "editor" } });
+    await waitFor(() => expect(access.value).toBe("editor"));
+    expect(edit).toHaveBeenCalledWith(
+      kind === "note" ? note.id : "studio",
+      recipient.user_id,
+      "editor",
+    );
+  },
+);
 it("gives viewers read-only note surfaces and no member-management controls", async () => {
   seed({ ...ownerSession, workspace_id: "team", workspace_role: "viewer" });
   vi.spyOn(api, "note").mockResolvedValue(note);
@@ -603,6 +725,12 @@ it("gives viewers read-only note surfaces and no member-management controls", as
         email: "alice@example.test",
         display_name: "Alice",
         role: "owner",
+      },
+      {
+        user_id: "bob",
+        email: "bob@example.test",
+        display_name: "Bob",
+        role: "viewer",
       },
     ],
   });
@@ -620,6 +748,7 @@ it("gives viewers read-only note surfaces and no member-management controls", as
   expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Pin" })).toBeNull();
   expect(screen.queryByLabelText("Username or verified email")).toBeNull();
+  expect(screen.queryByLabelText("Access for bob@example.test")).toBeNull();
 });
 it.each(["note", "workspace"])(
   "grants %s access to an existing local username without requiring an email",

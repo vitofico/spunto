@@ -217,14 +217,17 @@ class Notes:
                 continue
             counts = {}
             for proposal in proposals[row["id"]]:
-                from spunto.core.suggestions import references_visible
+                from spunto.core.suggestions import visible_payload
 
                 count = counts.get(proposal["plugin_id"], 0)
-                if count >= 3 or not await references_visible(conn, self, proposal):
+                if count >= 3:
+                    continue
+                payload = await visible_payload(conn, self, proposal, source=row)
+                if payload is None:
                     continue
                 counts[proposal["plugin_id"]] = count + 1
                 item = dict(proposal)
-                item["payload"] = json.loads(item["payload"])
+                item["payload"] = payload
                 item["created_at"] = iso(item["created_at"])
                 result["suggestions"].append(item)
             meta = False

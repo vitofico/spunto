@@ -245,7 +245,11 @@ export function Palette({
             <CommandResult
               value={result}
               origin={origin}
-              onDismiss={() => setResult(null)}
+              onDismiss={
+                result === true && origin?.plugin === "links"
+                  ? onClose
+                  : () => setResult(null)
+              }
             />
           </div>
         ) : (

@@ -29,7 +29,15 @@ import { ApiError } from "../lib/errors";
 import { MoreMenu } from "../components/core/Menu";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
-import { SuggestionLine, NotePanel } from "../features/Slots";
+import {
+  SuggestionLine,
+  NotePanel,
+  usePlugins,
+  activePlugins,
+  supportsNotePicker,
+} from "../features/Slots";
+import { Dialog } from "../features/Dialog";
+import { LinkPicker } from "../features/LinkPicker";
 /** App marks whether the history entry before this one is inside Spunto. */
 function cameFromApp() {
   try {
@@ -222,6 +230,18 @@ function NoteEditor({ note }: { note: Note }) {
       !trashed && (history.state as { edit?: boolean } | null)?.edit === true,
   );
   const [caret, setCaret] = useState<number>();
+  const [linkOpen, setLinkOpen] = useState(false);
+  const manifest = usePlugins();
+  const role = useWorkspaceRole();
+  const canLink =
+    role !== "viewer" &&
+    !trashed &&
+    !editing &&
+    navigator.onLine &&
+    activePlugins(manifest.data?.plugins).some(
+      (plugin) => plugin.id === "links" && supportsNotePicker(plugin),
+    );
+  const closeLink = () => setLinkOpen(false);
   const [everSaved, setEverSaved] = useState(false);
   const [, navigate] = useLocation();
   const draft = useDraftEditor({
@@ -229,6 +249,8 @@ function NoteEditor({ note }: { note: Note }) {
     draftKey: "note:" + note.id,
     enabled: !trashed,
   });
+  const linkDraftBlocked =
+    draft.dirty || !!draft.conflict || draft.state === "saving";
   const [reviewBase, setReviewBase] = useState<Note | null>(null);
   const flag = useNoteFlag();
   const toast = useToast();
@@ -310,6 +332,14 @@ function NoteEditor({ note }: { note: Note }) {
         },
       ]
     : [
+        ...(canLink && !linkDraftBlocked
+          ? [
+              {
+                label: t("plugin.links.commands.link.title"),
+                onSelect: () => setLinkOpen(true),
+              },
+            ]
+          : []),
         {
           label: note.pinned ? t("note.unpin") : t("slots.pin"),
           onSelect: () => void flag(note, "pinned", !note.pinned),
@@ -351,7 +381,10 @@ function NoteEditor({ note }: { note: Note }) {
         },
       ];
   return (
-    <div className="note-page">
+    <div
+      className="note-page"
+      data-link-draft-blocked={linkDraftBlocked || undefined}
+    >
       <Back />
       <header className="note-header">
         <div className="note-meta">
@@ -385,6 +418,15 @@ function NoteEditor({ note }: { note: Note }) {
           <MoreMenu label={t("note.more_actions")} items={menu} />
         </div>
       </header>
+      {linkOpen && canLink && (
+        <Dialog
+          title={t("plugin.links.commands.link.title")}
+          onClose={closeLink}
+          footer={<></>}
+        >
+          <LinkPicker sourceId={note.id} onClose={closeLink} />
+        </Dialog>
+      )}
       {trashed && (
         <p className="notice">
           {t("note.in_trash")}{" "}

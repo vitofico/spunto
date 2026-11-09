@@ -41,6 +41,14 @@ class NotesRepositoryTest {
   repo.dao.putOutput(PluginOutputEntity("suggestion","append",id,"""{"action":"append_text","payload":{"text":"Added words"},"status":"pending"}"""));repo.decideSuggestion("append","accept")
   assertTrue(repo.dao.get(id)!!.body.endsWith("\n\nAdded words"));assertEquals(3,repo.dao.outbox().size)
  }
+ @Test fun cachedLinkCaptionNeverEntersTheNoteBeforeServerAcceptance() = runBlocking {
+  val id=uuidV7()
+  repo.putNote(Note(id,"Original text",serverRev=2))
+  repo.dao.putOutput(PluginOutputEntity("suggestion","link",id,"""{"plugin":"links","action":"append_text","payload":{"text":"[Old title](/n/synthetic)"},"status":"pending"}"""))
+  repo.decideSuggestion("link","accept")
+  assertEquals("Original text",repo.dao.get(id)!!.body)
+  assertEquals("suggestion.decide",Json.decodeFromString<OutboxOperation>(repo.dao.outbox().single().payload).type)
+ }
  @Test fun latestAgentActorPersistsAndOwnerWritesClearIt()=runBlocking { val id=uuidV7();repo.putNote(Note(id,"owner originally",serverRev=2,updatedViaAgent=true));assertTrue(repo.dao.get(id)!!.note().updatedViaAgent);repo.update(id,"owner edits");assertFalse(repo.dao.get(id)!!.updatedViaAgent);repo.putNote(repo.dao.get(id)!!.note().copy(updatedViaAgent=true));repo.setFlags(id,pinned=true);assertFalse(repo.dao.get(id)!!.updatedViaAgent) }
  @Test fun editsNeverMutateSentOperation() = runBlocking {
   val id=repo.create("first"); val sent=repo.dao.outbox().single();repo.dao.markSent(listOf(sent.opId));repo.update(id,"second")

@@ -305,4 +305,17 @@
     <string name="core_plugin">Plugin</string>
     <string name="core_only_original">Nur im Original: %1$s</string>
     <string name="core_only_copy">Nur in dieser Kopie: %1$s</string>
+    <string name="core_link_insert">Link einfügen</string>
+    <string name="core_link_inserting">Wird eingefügt…</string>
+    <string name="core_link_inserted">Link eingefügt</string>
+    <string name="core_link_already_inserted">Diese Notiz enthält bereits einen Link zur ausgewählten Notiz.</string>
+    <string name="core_picker_recent_notes">Letzte Notizen</string>
+    <string name="core_link_unsaved">Speichere deinen Entwurf, bevor du einen Link einfügst.</string>
+    <string name="core_link_source_changed">Diese Notiz wurde geändert. Öffne „Mit Notiz verlinken“ erneut.</string>
+    <string name="core_picker_no_notes">Keine weiteren Notizen gefunden.</string>
+    <string name="core_link_legacy_preview">Dieser Notiz wird ein Link hinzugefügt.</string>
+    <string name="core_picker_add_source">Quelle hinzufügen</string>
+    <string name="core_picker_source_limit">Entferne eine Quelle, bevor du eine weitere hinzufügst.</string>
+    <string name="core_link_upgrade_server">Aktualisiere deinen Spunto-Server, um Notizlinks sicher einzufügen.</string>
+    <string name="core_link_waiting_to_sync">Link auf dem Server eingefügt. Synchronisierung steht noch aus.</string>
 </resources>

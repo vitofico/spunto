@@ -408,7 +408,7 @@ async def pull(
                 row = (
                     await conn.execute_fetchall("SELECT * FROM suggestion WHERE id=?", (item_id,))
                 )[0]
-                data = suggestions.value(dict(row))
+                data = await suggestions.sync_value(conn, domain, row)
             elif kind == "annotation":
                 plugin_id, note_id, annotation_kind = item_id.split("/", 2)
                 row = (

@@ -411,6 +411,28 @@ def selected_choice(value, choices):
     return choices[int(match[1]) - 1]
 
 
+def picker_selection(picker, add_id, add_version):
+    if type(picker) is not bool:
+        raise ValueError("picker must be a boolean")
+    if add_id is None and add_version is None:
+        return None
+    if not picker:
+        raise ValueError("open the source picker before adding a note")
+    return identifier(add_id), revision(add_version)
+
+
+def picker_fields(data, maximum):
+    return {
+        "expected_revision": {"type": "integer", "default": data["revision"]},
+        "max_sources": {"type": "integer", "default": maximum},
+        "selected_ids": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 36},
+            "default": [item["id"] for item in data["sources"]],
+        },
+    }
+
+
 @plugin.command("sources")
 async def sources(
     ctx: Ctx,
@@ -422,8 +444,16 @@ async def sources(
     refresh: bool = False,
     source_choices: list[str] | None = None,
     removal_choices: list[str] | None = None,
+    picker: bool = False,
+    add_id: str | None = None,
+    add_version: int | None = None,
 ):
     owner(ctx)
+    direct = picker_selection(picker, add_id, add_version)
+    if picker:
+        revision(expected_revision)
+        if remove is None:
+            remove = NONE
     old = await record(ctx, pack_id, expected_revision)
     query = string(query, 200)
     if (
@@ -434,15 +464,16 @@ async def sources(
         or type(refresh) is not bool
     ):
         raise ValueError("invalid source selection")
-    if int(add != NONE) + int(remove != NONE) + int(refresh) > 1:
+    if sum([direct is not None, add != NONE, remove != NONE, refresh]) > 1:
         raise ValueError("choose one source action at a time")
     additions = mappings(source_choices, 5)
     removals = mappings(removal_choices, 10)
     selected = list(old["sources"])
     private, external = old["private"], old.get("external", False)
-    if add != NONE:
+    source_versions = None
+    if direct is not None or add != NONE:
         match = re.fullmatch(r"([0-9a-f-]{36})@([1-9][0-9]*) — .{0,60}", add)
-        source_id, source_version = (
+        source_id, source_version = direct or (
             (identifier(match[1]), int(match[2]))
             if match is not None
             else selected_choice(add, additions)
@@ -457,11 +488,17 @@ async def sources(
         if len(selected) == 10:
             raise ValueError("context packs support at most ten source notes")
         selected.append(source(note))
+        if picker:
+            source_versions = {note["id"]: note["version"]}
         private |= bool(note["private"])
         external |= note["origin"] == "external"
     elif remove != NONE:
         if removals:
             remove, baseline_version = selected_choice(remove, removals)
+        elif picker and re.match(r"[1-9][0-9]?\. ", remove):
+            remove, baseline_version = selected_choice(
+                remove, [(item["id"], item["version"]) for item in selected]
+            )
         else:
             remove, baseline_version = identifier(remove), None
         if remove not in {item["id"] for item in selected}:
@@ -487,7 +524,9 @@ async def sources(
             selected.append(source(note))
             private |= baseline["private"] or bool(note["private"])
             external |= baseline["external"] or note["origin"] == "external"
-    if add != NONE or remove != NONE or refresh:
+        if picker and selected:
+            source_versions = {item["id"]: item["version"] for item in selected}
+    if direct is not None or add != NONE or remove != NONE or refresh:
         new = {
             **old,
             "sources": selected,
@@ -498,16 +537,19 @@ async def sources(
         }
         states = await provenance(ctx, new)
         markdown(new, states)
-        if not await ctx.storage.records.compare_and_set(COLLECTION, pack_id, old, new):
+        if not await ctx.storage.records.compare_and_set(
+            COLLECTION, pack_id, old, new, source_versions=source_versions
+        ):
             conflict()
+        if picker:
+            return await render_sources(ctx, pack_id, new, picker=True)
         return await render(ctx, pack_id)
-    hits = (
-        (await ctx.notes.search(query, limit=5))["hits"]
-        if query
-        else (await ctx.notes.query(limit=5, machine=True))["notes"]
-    )
-    candidates = [note for note in hits if note["id"] not in {item["id"] for item in selected}]
-    states = await provenance(ctx, old)
+    return await render_sources(ctx, pack_id, old, query=query, picker=picker)
+
+
+async def render_sources(ctx, pack_id, data, *, query="", picker=False):
+    selected = data["sources"]
+    states = await provenance(ctx, data)
     removal_captions = []
     for index, baseline in enumerate(selected, 1):
         note = await ctx.notes.get(baseline["id"])
@@ -516,6 +558,38 @@ async def sources(
         "; ".join(f"{index}: {item['status']}" for index, item in enumerate(states, 1))
         or "No source notes selected."
     )
+    actions = {
+        "remove": {
+            "type": "string",
+            "title": "Remove source",
+            "enum": [NONE, *removal_captions],
+            "default": NONE,
+        },
+        "refresh": {
+            "type": "boolean",
+            "title": "Acknowledge all current source revisions",
+            "default": False,
+        },
+    }
+    notes = {"type": "notes", "ids": [i["id"] for i in states if i["status"] != "unavailable"]}
+    back = command("packs", "Back to brief", pack_id=pack_id)
+    if picker:
+        return output(
+            text(
+                "Refresh acknowledges revisions without rewriting your brief "
+                "or clearing classifications."
+            ),
+            text(statuses),
+            notes,
+            form({**actions, **picker_fields(data, 10)}),
+            back,
+        )
+    hits = (
+        (await ctx.notes.search(query, limit=5, mode="keyword"))["hits"]
+        if query
+        else (await ctx.notes.query(limit=5, machine=True))["notes"]
+    )
+    candidates = [note for note in hits if note["id"] not in {item["id"] for item in selected}]
     return output(
         text(
             "Search or browse notes, then choose one source action. "
@@ -524,10 +598,7 @@ async def sources(
             "or clearing classifications."
         ),
         text(statuses),
-        {
-            "type": "notes",
-            "ids": [item["id"] for item in states if item["status"] != "unavailable"],
-        },
+        notes,
         {"type": "notes", "ids": [note["id"] for note in candidates]},
         form(
             {
@@ -541,17 +612,7 @@ async def sources(
                     ],
                     "default": NONE,
                 },
-                "remove": {
-                    "type": "string",
-                    "title": "Remove source",
-                    "enum": [NONE, *removal_captions],
-                    "default": NONE,
-                },
-                "refresh": {
-                    "type": "boolean",
-                    "title": "Acknowledge all current source revisions",
-                    "default": False,
-                },
+                **actions,
                 "source_choices": {
                     "type": "array",
                     "items": {"type": "string", "maxLength": 60},
@@ -564,7 +625,7 @@ async def sources(
                 },
             }
         ),
-        command("packs", "Back to brief", pack_id=pack_id),
+        back,
     )
 
 

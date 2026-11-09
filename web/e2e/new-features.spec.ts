@@ -129,6 +129,26 @@ function noteIds(output: Output): string[] {
   return [...(output.ids ?? []), ...(output.items ?? []).flatMap(noteIds)];
 }
 
+async function pickSource(
+  page: Page,
+  dialog: Locator,
+  plugin: string,
+  text: string,
+) {
+  const search = dialog.getByRole("searchbox", {
+    name: "Search notes",
+    exact: true,
+  });
+  await search.fill(text);
+  await dialog.getByRole("radio", { name: new RegExp(text) }).check();
+  await uiCommand(page, plugin, "sources", () =>
+    dialog.getByRole("button", { name: "Add source", exact: true }).click(),
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Add source", exact: true }),
+  ).toBeDisabled();
+}
+
 async function note(page: Page, id: string): Promise<Note> {
   const response = await page.request.get(`/api/v1/notes/${id}`);
   expect(response.status()).toBe(200);
@@ -153,6 +173,67 @@ async function selectStatus(dialog: Locator, value: "Open" | "Closed") {
     .getByRole("group", { name: "Status (open reopens)", exact: true })
     .getByRole("button", { name: value, exact: true })
     .click();
+}
+
+test("Link to note searches, disambiguates and inserts in one action", async ({
+  page,
+}, info) => {
+  await login(page, "links");
+  const title = `Target ${Date.now().toString(36)} ${info.project.name}`;
+  const create = async (body: string): Promise<Note> => {
+    const response = await page.request.post("/api/v1/notes", {
+      headers: { Origin: origin(), "Idempotency-Key": crypto.randomUUID() },
+      data: { body },
+    });
+    expect(response.status()).toBe(201);
+    return response.json();
+  };
+  const source = await create("Synthetic link source");
+  const first = await create(`# ${title}\nKeep the blue draft.`);
+  const second = await create(`# ${title}\nKeep the green draft.`);
+  await page.goto(`/n/${source.id}`);
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "Link to note", exact: true })
+    .click();
+  const picker = page.getByRole("dialog", {
+    name: "Link to note",
+    exact: true,
+  });
+  const search = picker.getByRole("searchbox", {
+    name: "Search notes",
+    exact: true,
+  });
+  const insert = picker.getByRole("button", {
+    name: "Insert link",
+    exact: true,
+  });
+  await search.fill(title);
+  const green = picker.getByRole("radio", { name: /green draft/ });
+  await expect(picker.getByRole("radio", { name: /blue draft/ })).toBeVisible();
+  await green.check();
+  await expect(insert).toBeEnabled();
+  await search.fill("no matching title ux regression sentinel");
+  await expect(insert).toBeDisabled();
+  await search.fill(title);
+  await green.check();
+  await uiCommand(page, "links", "link", () => insert.click());
+  await expect(picker).toBeHidden();
+  await expect(page.locator(`a[href="/n/${second.id}"]`)).toBeVisible();
+  const result = await note(page, source.id);
+  expect(result.body).toContain(`/n/${second.id}`);
+  expect(result.body).not.toContain(`/n/${first.id}`);
+});
+
+async function decisionPanelAction(page: Page, name: string) {
+  const panel = page.getByLabel("About this note");
+  const summary = panel
+    .locator("summary")
+    .filter({ hasText: "Decision journal" });
+  await expect(summary).toBeVisible({ timeout: 15_000 });
+  if (!(await summary.evaluate((element) => element.closest("details")?.open)))
+    await summary.click();
+  return panel.getByRole("button", { name, exact: true });
 }
 
 test("decision journal creates, reviews and reopens without rewriting the original", async ({
@@ -205,10 +286,14 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   );
 
   await page.goto(`/n/${rootId}`);
-  dialog = await palette(page, "Review decision");
+  const review = await decisionPanelAction(page, "Review or reopen");
   await uiCommand(page, "decision-journal", "review-decision", () =>
-    dialog.getByRole("option", { name: /^Review decision/ }).click(),
+    review.click(),
   );
+  dialog = page.getByRole("dialog", {
+    name: "Search and commands",
+    exact: true,
+  });
   await dialog
     .getByLabel("What happened, or why reopen?", { exact: true })
     .fill("The synthetic restore finished in three minutes.");
@@ -251,14 +336,8 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   expect((await note(page, outcomeId)).body).toBe(outcome.body);
   expect((await note(page, rootId)).body).toBe(edited.body);
   await page.goto(`/n/${rootId}`);
-  const panel = page.getByLabel("About this note");
-  await panel
-    .locator("summary")
-    .filter({ hasText: "Decision journal" })
-    .click();
-  await uiCommand(page, "decision-journal", "journal", () =>
-    panel.getByRole("button", { name: "Open decision", exact: true }).click(),
-  );
+  const open = await decisionPanelAction(page, "Open decision");
+  await uiCommand(page, "decision-journal", "journal", () => open.click());
   dialog = page.getByRole("dialog", {
     name: "Search and commands",
     exact: true,
@@ -328,24 +407,10 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await uiCommand(page, "context-packs", "sources", () =>
     dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
   );
-  await dialog
-    .getByLabel("Search source notes (blank browses recent)", { exact: true })
-    .fill(suffix);
-  await run(page, dialog, "context-packs", "sources");
-  const choices = dialog.getByRole("group", {
-    name: "Add source",
-    exact: true,
-  });
-  if (await choices.count()) {
-    await choices.getByRole("button", { name: new RegExp(suffix) }).click();
-  } else {
-    const select = dialog.getByLabel("Add source", { exact: true });
-    const labels = await select.getByRole("option").allTextContents();
-    const label = labels.find((value) => value.includes(suffix));
-    expect(label, "Search must return the real synthetic source").toBeDefined();
-    await select.selectOption({ label: label! });
-  }
-  await run(page, dialog, "context-packs", "sources");
+  await pickSource(page, dialog, "context-packs", suffix);
+  await uiCommand(page, "context-packs", "packs", () =>
+    dialog.getByRole("button", { name: "Back to brief", exact: true }).click(),
+  );
   await expect(
     dialog.getByText(/baseline 1 · current 1 · current/),
   ).toBeVisible();
@@ -380,7 +445,12 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await dialog
     .getByLabel("Acknowledge all current source revisions", { exact: true })
     .check();
-  await run(page, dialog, "context-packs", "sources");
+  await uiCommand(page, "context-packs", "sources", () =>
+    dialog.getByRole("button", { name: "Update sources", exact: true }).click(),
+  );
+  await uiCommand(page, "context-packs", "packs", () =>
+    dialog.getByRole("button", { name: "Back to brief", exact: true }).click(),
+  );
   await expect(
     dialog.getByText(/baseline 2 · current 2 · current/),
   ).toBeVisible();
@@ -448,32 +518,14 @@ test("thinking desk collision combines selected subjects and saves an authored p
     .getByRole("button", { name: "Collision", exact: true })
     .click();
   await run(page, dialog, "thinking-desk", "edit");
-  for (const source of sources) {
-    await uiCommand(page, "thinking-desk", "sources", () =>
-      dialog
-        .getByRole("button", { name: "Review sources", exact: true })
-        .click(),
-    );
-    await dialog
-      .getByLabel("Search notes (blank browses recent)", { exact: true })
-      .fill(source.body);
-    await run(page, dialog, "thinking-desk", "sources");
-    const group = dialog.getByRole("group", {
-      name: "Add source",
-      exact: true,
-    });
-    if (await group.count()) {
-      await group.getByRole("button", { name: new RegExp(suffix) }).click();
-    } else {
-      const select = dialog.getByLabel("Add source", { exact: true });
-      const label = (await select.getByRole("option").allTextContents()).find(
-        (value) => value.includes(suffix),
-      );
-      expect(label).toBeDefined();
-      await select.selectOption({ label: label! });
-    }
-    await run(page, dialog, "thinking-desk", "sources");
-  }
+  await uiCommand(page, "thinking-desk", "sources", () =>
+    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
+  );
+  for (const source of sources)
+    await pickSource(page, dialog, "thinking-desk", source.body);
+  await uiCommand(page, "thinking-desk", "desk", () =>
+    dialog.getByRole("button", { name: "Back to desk", exact: true }).click(),
+  );
   await expect(dialog.getByText(/surprising analogy/)).toBeVisible();
   await uiCommand(page, "thinking-desk", "edit", () =>
     dialog
@@ -546,33 +598,14 @@ test("thinking history exposes both desk modes and connects and removes selected
     .getByLabel("Topic or desk title", { exact: true })
     .fill(`History ${suffix}`);
   await run(page, dialog, "thinking-desk", "edit");
-  for (const source of sources) {
-    await uiCommand(page, "thinking-desk", "sources", () =>
-      dialog
-        .getByRole("button", { name: "Review sources", exact: true })
-        .click(),
-    );
-    await dialog
-      .getByLabel("Search notes (blank browses recent)", { exact: true })
-      .fill(source.body);
-    await run(page, dialog, "thinking-desk", "sources");
-    const group = dialog.getByRole("group", {
-      name: "Add source",
-      exact: true,
-    });
-    if (await group.count()) {
-      await group.getByRole("button", { name: new RegExp(suffix) }).click();
-    } else {
-      const select = dialog.getByLabel("Add source", { exact: true });
-      const label = (await select.getByRole("option").allTextContents()).find(
-        (value) => value.includes(suffix),
-      );
-      expect(label).toBeDefined();
-      await select.selectOption({ label: label! });
-    }
-    const output = await run(page, dialog, "thinking-desk", "sources");
-    expect(noteIds(output)).toContain(source.id);
-  }
+  await uiCommand(page, "thinking-desk", "sources", () =>
+    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
+  );
+  for (const source of sources)
+    await pickSource(page, dialog, "thinking-desk", source.body);
+  await uiCommand(page, "thinking-desk", "desk", () =>
+    dialog.getByRole("button", { name: "Back to desk", exact: true }).click(),
+  );
   await expect(
     dialog.getByRole("heading", {
       name: "Notes in creation order",

@@ -146,6 +146,13 @@ import kotlinx.serialization.json.*
  val online by model.online.collectAsState()
  val feedback=LocalFeedback.current
  val context=LocalContext.current
+ var linkSession by remember(note.id) {mutableStateOf<Pair<NotePickerSession,Int>?>(null)}
+ linkSession?.let {(session,version) ->
+  NoteLinkPickerSheet(model,note.id,version,session,onClose={linkSession=null},onInserted={
+   linkSession=null;onDismiss();feedback.show(context.getString(it))
+  })
+  return
+ }
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
   Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom=SpuntoSpacing.s16)) {
    NoteExportActions(model,note,enabled=true) {share,save,available ->
@@ -162,7 +169,8 @@ import kotlinx.serialization.json.*
       feedback.show(if(archived) context.getString(R.string.core_archived) else context.getString(R.string.core_unarchived),context.getString(R.string.core_undo)) {model.flags(note.id,archived=!archived)}
      }
     }
-    if(online && !note.trashed) NoteCommands(model,note.id,privateNote=note.privateNote) {onDismiss();onCommandResult(it)}
+    if(online && !note.trashed) NoteCommands(model,note.id,privateNote=note.privateNote,
+     onLink={linkSession=NotePickerSession.open(model,"links")?.let {it to note.serverRev}}) {onDismiss();onCommandResult(it)}
     HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
     Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
      Column(Modifier.weight(1f)) {Text(context.getString(R.string.core_private),style=MaterialTheme.typography.bodyLarge);Text(context.getString(R.string.core_private_hint),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}

@@ -315,7 +315,8 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
     }
     val body=when(action) {
      "add_label" -> note?.let { setLabels(it.body,listOf(text("path"))) }
-     "append_text" -> note?.body?.plus("\n\n"+text("text"))
+     // A cached link caption may no longer be visible. Only the server can resolve it for acceptance.
+     "append_text" -> if(data["plugin"]?.jsonPrimitive?.content=="links") null else note?.body?.plus("\n\n"+text("text"))
      "replace_body" -> text("body")
      "set_title" -> note?.body?.let { "# "+text("title")+"\n\n"+it }
      "merge_notes" -> { val source=mergeSource!!;val target=mergeTarget!!;affected+=source.id;affected+=target.id;val merged=target.body+"\n\n"+source.body;putNote(target.note().copy(body=merged,title=titleOf(merged),pending=true,updatedAt=actionAt,machine=false,updatedViaAgent=false),localEdit=true,historyKind="accept");putNote(source.note().copy(trashed=true,pending=true,updatedAt=actionAt,trashedAt=actionAt,updatedViaAgent=false),localEdit=true,historyKind="accept");null }

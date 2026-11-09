@@ -14,6 +14,10 @@ from spunto.plugins.context_packs import (
     identifier,
     output,
     owner,
+    picker_fields,
+    picker_selection,
+    revision,
+    selected_choice,
     source,
     string,
     text,
@@ -59,11 +63,16 @@ async def current(ctx, data):
     return result
 
 
-async def save(ctx, desk_id, old, new):
+async def save(ctx, desk_id, old, new, *, picker=False, source_versions=None):
     new = {**new, "revision": old["revision"] + 1 if old else 1}
-    summary(new, await current(ctx, new))
-    if not await ctx.storage.records.compare_and_set(COLLECTION, desk_id, old, new):
+    states = await current(ctx, new)
+    summary(new, states)
+    if not await ctx.storage.records.compare_and_set(
+        COLLECTION, desk_id, old, new, source_versions=source_versions
+    ):
         conflict()
+    if picker:
+        return await render_sources(ctx, desk_id, new, await current(ctx, new), picker=True)
     return await render(ctx, desk_id)
 
 
@@ -282,38 +291,52 @@ async def sources(
     to_note: str | None = None,
     kind: str = "builds-on",
     disconnect: bool = False,
+    picker: bool = False,
+    add_id: str | None = None,
+    add_version: int | None = None,
 ):
+    direct = picker_selection(picker, add_id, add_version)
     if action == "connect":
+        if picker:
+            raise ValueError("choose notes before connecting them")
         return await relate(ctx, desk_id, expected_revision, from_note, to_note, kind, disconnect)
     if action != "choose":
         raise ValueError("unknown source action")
     owner(ctx)
+    if picker:
+        revision(expected_revision)
+        if remove is None:
+            remove = NONE
     old = await load(ctx, desk_id, expected_revision)
     query = string(query, 200)
-    if type(refresh) is not bool or sum([add != NONE, remove != NONE, refresh]) > 1:
+    if (
+        type(refresh) is not bool
+        or sum([direct is not None, add != NONE, remove != NONE, refresh]) > 1
+    ):
         raise ValueError("choose one source action")
     selected = list(old["sources"])
     states = await current(ctx, old)
-    captions = [
-        caption(n, i) if n else f"{i}. Unavailable source" for i, (_, n) in enumerate(states, 1)
-    ]
-    if add != NONE:
-        if not source_choices or len(source_choices) > 5 or not isinstance(add, str):
-            raise ValueError("search again before selecting a source")
-        match = re.fullmatch(r"([1-5])\. .{1,60}", add)
-        if not match or int(match[1]) > len(source_choices):
-            raise ValueError("invalid source selection")
-        value = source_choices[int(match[1]) - 1]
-        note_id, version = value.split("@")
+    source_versions = None
+    if direct is not None or add != NONE:
+        if direct is None:
+            if not source_choices or len(source_choices) > 5 or not isinstance(add, str):
+                raise ValueError("search again before selecting a source")
+            note_id, version = selected_choice(add, source_choices).split("@")
+        else:
+            note_id, version = direct
         note = await ctx.notes.get(identifier(note_id))
-        if note is None or str(note["version"]) != version:
+        if note is None or str(note["version"]) != str(version):
             conflict()
         maximum = 5 if old["mode"] == "collision" else 10
         if len(selected) >= maximum or any(b["id"] == note_id for b in selected):
             raise ValueError("source already selected or desk source limit reached")
         selected.append({**source(note), "created_at": note["created_at"]})
+        if picker:
+            source_versions = {note["id"]: note["version"]}
     elif remove != NONE:
-        if remove in captions:
+        if picker and isinstance(remove, str) and re.match(r"[1-9][0-9]?\. ", remove):
+            remove = selected_choice(remove, [item["id"] for item in selected])
+        elif remove in (captions := source_captions(states)):
             remove = selected[captions.index(remove)]["id"]
         identifier(remove)
         if remove not in {b["id"] for b in selected}:
@@ -321,11 +344,13 @@ async def sources(
         selected = [b for b in selected if b["id"] != remove]
     elif refresh:
         selected = []
-        for _baseline, note in await current(ctx, old):
+        for _baseline, note in states:
             if note is None:
                 conflict()
             selected.append({**source(note), "created_at": note["created_at"]})
-    if add != NONE or remove != NONE or refresh:
+        if picker and selected:
+            source_versions = {item["id"]: item["version"] for item in selected}
+    if direct is not None or add != NONE or remove != NONE or refresh:
         ids = {b["id"] for b in selected}
         return await save(
             ctx,
@@ -336,13 +361,50 @@ async def sources(
                 "sources": selected,
                 "relations": [r for r in old["relations"] if r["from"] in ids and r["to"] in ids],
             },
+            picker=picker,
+            source_versions=source_versions,
+        )
+    return await render_sources(ctx, desk_id, old, states, query=query, picker=picker)
+
+
+def source_captions(states):
+    return [
+        caption(note, i) if note else f"{i}. Unavailable source"
+        for i, (_, note) in enumerate(states, 1)
+    ]
+
+
+async def render_sources(ctx, desk_id, data, states, *, query="", picker=False):
+    actions = {
+        "remove": {
+            "type": "string",
+            "title": "Remove source",
+            "enum": [NONE, *source_captions(states)],
+            "default": NONE,
+        },
+        "refresh": {
+            "type": "boolean",
+            "title": "Acknowledge current source revisions",
+            "default": False,
+        },
+    }
+    back = command("desk", "Back to desk", desk_id=desk_id)
+    if picker:
+        return output(
+            text(
+                "Removing a source also removes its connections. "
+                "Acknowledge revisions only after reviewing the current originals."
+            ),
+            {"type": "notes", "ids": [note["id"] for _, note in states if note]},
+            form({**actions, **picker_fields(data, 5 if data["mode"] == "collision" else 10)}),
+            back,
         )
     hits = (
-        (await ctx.notes.search(query, limit=5))["hits"]
+        (await ctx.notes.search(query, limit=5, mode="keyword"))["hits"]
         if query
         else (await ctx.notes.query(limit=5, machine=True))["notes"]
     )
-    hits = [n for n in hits if n["id"] not in {b["id"] for b in selected}]
+    hits = [n for n in hits if n["id"] not in {b["id"] for b in data["sources"]}]
     return output(
         text(
             "Search, then add one note. Removing a source also removes its connections. "
@@ -359,17 +421,7 @@ async def sources(
                     "enum": [NONE, *[caption(n, i) for i, n in enumerate(hits, 1)]],
                     "default": NONE,
                 },
-                "remove": {
-                    "type": "string",
-                    "title": "Remove source",
-                    "enum": [NONE, *captions],
-                    "default": NONE,
-                },
-                "refresh": {
-                    "type": "boolean",
-                    "title": "Acknowledge current source revisions",
-                    "default": False,
-                },
+                **actions,
                 "source_choices": {
                     "type": "array",
                     "items": {"type": "string", "maxLength": 60},
@@ -377,7 +429,7 @@ async def sources(
                 },
             }
         ),
-        command("desk", "Back to desk", desk_id=desk_id),
+        back,
     )
 
 

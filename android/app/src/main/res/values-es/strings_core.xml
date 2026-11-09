@@ -305,4 +305,17 @@
     <string name="core_plugin">complemento</string>
     <string name="core_only_original">Solo en el original: %1$s</string>
     <string name="core_only_copy">Solo en esta copia: %1$s</string>
+    <string name="core_link_insert">Insertar enlace</string>
+    <string name="core_link_inserting">Insertando…</string>
+    <string name="core_link_inserted">Enlace insertado</string>
+    <string name="core_link_already_inserted">Esta nota ya enlaza con la nota seleccionada.</string>
+    <string name="core_picker_recent_notes">Notas recientes</string>
+    <string name="core_link_unsaved">Guarda el borrador antes de insertar un enlace.</string>
+    <string name="core_link_source_changed">Esta nota ha cambiado. Vuelve a abrir «Enlazar con una nota».</string>
+    <string name="core_picker_no_notes">No se encontraron otras notas.</string>
+    <string name="core_link_legacy_preview">Se añadirá un enlace a esta nota.</string>
+    <string name="core_picker_add_source">Añadir fuente</string>
+    <string name="core_picker_source_limit">Elimina una fuente antes de añadir otra.</string>
+    <string name="core_link_upgrade_server">Actualiza tu servidor de Spunto para insertar enlaces a notas de forma segura.</string>
+    <string name="core_link_waiting_to_sync">Enlace insertado en el servidor. Pendiente de sincronizar.</string>
 </resources>

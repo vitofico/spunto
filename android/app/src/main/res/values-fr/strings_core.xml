@@ -305,4 +305,17 @@
     <string name="core_plugin">extension</string>
     <string name="core_only_original">Uniquement dans l’original : %1$s</string>
     <string name="core_only_copy">Uniquement dans cette copie : %1$s</string>
+    <string name="core_link_insert">Insérer le lien</string>
+    <string name="core_link_inserting">Insertion…</string>
+    <string name="core_link_inserted">Lien inséré</string>
+    <string name="core_link_already_inserted">Cette note contient déjà un lien vers la note sélectionnée.</string>
+    <string name="core_picker_recent_notes">Notes récentes</string>
+    <string name="core_link_unsaved">Enregistrez le brouillon avant d’insérer un lien.</string>
+    <string name="core_link_source_changed">Cette note a changé. Rouvrez « Lier à une note ».</string>
+    <string name="core_picker_no_notes">Aucune autre note trouvée.</string>
+    <string name="core_link_legacy_preview">Un lien sera ajouté à cette note.</string>
+    <string name="core_picker_add_source">Ajouter une source</string>
+    <string name="core_picker_source_limit">Retirez une source avant d’en ajouter une autre.</string>
+    <string name="core_link_upgrade_server">Mettez à jour votre serveur Spunto pour insérer des liens entre notes en toute sécurité.</string>
+    <string name="core_link_waiting_to_sync">Lien inséré sur le serveur. En attente de synchronisation.</string>
 </resources>

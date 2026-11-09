@@ -318,3 +318,65 @@ it("preserves typed entries after a stale form rejection and explains safe recov
     (screen.getByLabelText("Rationale") as HTMLTextAreaElement).value,
   ).toBe("Keep my unsaved reasoning");
 });
+
+it.each([true, false])(
+  "only applies a pending command proposal from the originating plugin (%s)",
+  async (matching) => {
+    manifest({ id: "title-summary" });
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+    };
+    const proposals = vi.spyOn(api, "suggestions").mockResolvedValue({
+      suggestions: [
+        {
+          id: "proposal",
+          plugin: matching ? "title-summary" : "link-enrichment",
+          note_id: "source",
+          note_version: 2,
+          action: "set_title",
+          status: "pending",
+          payload: { title: "A clearer title" },
+        },
+      ],
+    } as never);
+    vi.spyOn(api, "note").mockResolvedValue({ title: "Source note" } as never);
+    const decide = vi.spyOn(api, "decideSuggestion").mockResolvedValue({});
+    render(
+      wrap(
+        <CommandResult
+          value={{
+            type: "pill",
+            label: "Use title",
+            action: "accept",
+            suggestion_id: "proposal",
+          }}
+          origin={{
+            plugin: "title-summary",
+            command: "summarize",
+            args: { note_id: "source" },
+          }}
+        />,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Use title" }));
+    const apply = await screen.findByRole("button", {
+      name: "Apply",
+    });
+    expect(proposals).toHaveBeenCalledWith("note", "source");
+    if (matching) {
+      await waitFor(() =>
+        expect((apply as HTMLButtonElement).disabled).toBe(false),
+      );
+      fireEvent.click(apply);
+      await screen.findByText("Change applied.");
+      expect(decide).toHaveBeenCalledExactlyOnceWith("proposal", "accept");
+    } else {
+      await screen.findByText("This proposal is no longer available.");
+      expect((apply as HTMLButtonElement).disabled).toBe(true);
+      expect(decide).not.toHaveBeenCalled();
+    }
+  },
+);

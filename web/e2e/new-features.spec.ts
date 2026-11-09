@@ -285,7 +285,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
     original.body + "\n\nOwner clarification " + suffix,
   );
 
-  await page.goto(`/n/${rootId}`);
+  await dialog.locator(`a[href="/n/${rootId}"]`).click();
   const review = await decisionPanelAction(page, "Review or reopen");
   await uiCommand(page, "decision-journal", "review-decision", () =>
     review.click(),
@@ -314,7 +314,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   expect((await note(page, rootId)).body).toBe(edited.body);
 
   // Review can be reopened from an outcome note, retaining the earlier outcome.
-  await page.goto(`/n/${outcomeId}`);
+  await dialog.locator(`a[href="/n/${outcomeId}"]`).click();
   dialog = await palette(page, "Review decision");
   await uiCommand(page, "decision-journal", "review-decision", () =>
     dialog.getByRole("option", { name: /^Review decision/ }).click(),
@@ -335,7 +335,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   expect(noteIds(reopened)[0]).not.toBe(outcomeId);
   expect((await note(page, outcomeId)).body).toBe(outcome.body);
   expect((await note(page, rootId)).body).toBe(edited.body);
-  await page.goto(`/n/${rootId}`);
+  await dialog.locator(`a[href="/n/${rootId}"]`).click();
   const open = await decisionPanelAction(page, "Open decision");
   await uiCommand(page, "decision-journal", "journal", () => open.click());
   dialog = page.getByRole("dialog", {

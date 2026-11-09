@@ -205,6 +205,54 @@ it("selects inventory models explicitly, preserves other overrides and enables a
   expect(screen.getByText(/local: 1 of 5 notes indexed/)).toBeTruthy();
 });
 
+it("shows equivalent router choices once and preserves the selected profile", async () => {
+  current.profiles.unshift({
+    ...current.profiles[0],
+    name: "router-alias",
+  });
+  const sharedModels = [
+    {
+      id: "middle",
+      capabilities: ["chat" as const],
+      leaves_network: true,
+      route_group: 0,
+    },
+    {
+      id: "embed-only",
+      capabilities: ["embed" as const],
+      leaves_network: false,
+      route_group: 1,
+    },
+  ];
+  current.model_selection!.defaults.chat = {
+    profile: "router-alias",
+    model: "middle",
+  };
+  current.model_selection!.selections.chat = {
+    profile: "local",
+    model: "middle",
+  };
+  vi.mocked(api.aiModels).mockResolvedValue({
+    profiles: ["router-alias", "local"].map((profile) => ({
+      profile,
+      error: null,
+      models: sharedModels,
+    })),
+  });
+  wrap();
+  const chat = await screen.findByRole("combobox", { name: "Chat model" });
+  const middle = await within(chat).findByRole("option", { name: "middle" });
+  expect((middle as HTMLOptionElement).value).toBe(value("local", "middle"));
+  expect((chat as HTMLSelectElement).value).toBe(value("local", "middle"));
+  expect(within(chat).queryByRole("option", { name: "embed-only" })).toBeNull();
+  expect(within(chat).getAllByRole("group")).toHaveLength(1);
+  fireEvent.change(chat, { target: { value: "" } });
+  expect(
+    (within(chat).getByRole("option", { name: "middle" }) as HTMLOptionElement)
+      .value,
+  ).toBe(value("router-alias", "middle"));
+});
+
 it("recovers from discovery failure and marks unknown capability support without inventing it", async () => {
   vi.mocked(api.aiModels).mockRejectedValueOnce(
     new ApiError(503, "ai_inventory_unavailable"),

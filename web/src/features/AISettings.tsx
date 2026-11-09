@@ -9,6 +9,7 @@ import type {
   AICapability,
   AIHealth,
   AIModelChoice,
+  AIModelInventory,
   AIModelSelection,
   AIModelSelections,
   AIQuota,
@@ -33,6 +34,18 @@ function sameSelections(a: AIModelSelections, b: AIModelSelections) {
 }
 function modelValue(choice?: AIModelChoice) {
   return choice ? JSON.stringify([choice.profile, choice.model]) : "";
+}
+type InventoryModel = AIModelInventory["profiles"][number]["models"][number];
+function unverified(model: InventoryModel, capability: AICapability) {
+  return (
+    model.capabilities === null ||
+    (capability === "vision" && model.vision_unverified === true)
+  );
+}
+function supports(model: InventoryModel, capability: AICapability) {
+  return (
+    unverified(model, capability) || model.capabilities?.includes(capability)
+  );
 }
 function AIModelSettings({
   ai,
@@ -110,10 +123,7 @@ function AIModelSettings({
     return inventory.data?.profiles
       .find((profile) => profile.profile === choice.profile)
       ?.models.some(
-        (model) =>
-          model.id === choice.model &&
-          (model.capabilities === null ||
-            model.capabilities.includes(capability)),
+        (model) => model.id === choice.model && supports(model, capability),
       );
   });
   return (
@@ -172,10 +182,7 @@ function AIModelSettings({
           (item) => item.profile === effective?.profile,
         );
         const model = profileInventory?.models.find(
-          (item) =>
-            item.id === effective?.model &&
-            (item.capabilities === null ||
-              item.capabilities.includes(capability)),
+          (item) => item.id === effective?.model && supports(item, capability),
         );
         const currentModel =
           provider?.[`${capability}_model`] === effective?.model;
@@ -183,6 +190,32 @@ function AIModelSettings({
           model?.leaves_network ??
           (currentModel ? provider?.leaves_network?.[capability] : undefined);
         const inherited = selection.defaults[capability];
+        const seen = new Set<number>();
+        const preferred = (profile: AIStatus["profiles"][number]) =>
+          profile.name === effective?.profile
+            ? 0
+            : profile.name === inherited?.profile
+              ? 1
+              : profile[`${capability}_model`]
+                ? 2
+                : 3;
+        const groups = [...ai.profiles]
+          .sort((a, b) => preferred(a) - preferred(b))
+          .map((profile) => ({
+            profile,
+            models: (
+              inventory.data?.profiles.find(
+                (item) => item.profile === profile.name,
+              )?.models ?? []
+            ).filter((item) => {
+              if (!supports(item, capability)) return false;
+              if (item.route_group === undefined) return true;
+              if (seen.has(item.route_group)) return false;
+              seen.add(item.route_group);
+              return true;
+            }),
+          }))
+          .filter((group) => group.models.length > 0);
         const unlisted =
           !!effective &&
           !!profileInventory &&
@@ -233,32 +266,29 @@ function AIModelSettings({
                   )
                 </option>
               )}
-              {ai.profiles.map((profile) => (
+              {groups.map(({ profile, models }) => (
                 <optgroup
-                  label={`${profile.name} · ${profile.provider}`}
+                  label={
+                    profile.name === profile.provider
+                      ? profile.name
+                      : `${profile.name} · ${profile.provider}`
+                  }
                   key={profile.name}
                 >
-                  {inventory.data?.profiles
-                    .find((item) => item.profile === profile.name)
-                    ?.models.filter(
-                      (model) =>
-                        model.capabilities === null ||
-                        model.capabilities.includes(capability),
-                    )
-                    .map((model) => (
-                      <option
-                        key={model.id}
-                        value={modelValue({
-                          profile: profile.name,
-                          model: model.id,
-                        })}
-                      >
-                        {model.id}
-                        {model.capabilities === null
-                          ? t("aisettings.capability_unverified")
-                          : ""}
-                      </option>
-                    ))}
+                  {models.map((model) => (
+                    <option
+                      key={model.id}
+                      value={modelValue({
+                        profile: profile.name,
+                        model: model.id,
+                      })}
+                    >
+                      {model.id}
+                      {unverified(model, capability)
+                        ? t("aisettings.capability_unverified")
+                        : ""}
+                    </option>
+                  ))}
                 </optgroup>
               ))}
             </select>
@@ -271,7 +301,8 @@ function AIModelSettings({
                   : locality
                     ? t("aisettings.outside_your_network")
                     : t("aisettings.on_your_network")}
-                {model?.capabilities === null &&
+                {model &&
+                  unverified(model, capability) &&
                   t(
                     "aisettings.capability_not_reported_by_provider_check_providers_after",
                   )}

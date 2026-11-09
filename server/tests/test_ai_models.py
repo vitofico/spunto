@@ -135,6 +135,106 @@ async def test_inventory_capabilities_locality_and_no_provider_details(model_ser
     assert (await server.client.get("/api/v1/ai/models?profile=absent")).status_code == 422
 
 
+async def test_router_catalog_capabilities_grouping_and_save_validation(model_server):
+    server, _, settings = model_server
+    primary = Profile(
+        name="primary",
+        base_url="http://router.synthetic.svc.cluster.local/v1",
+        vision_model="high",
+        api_key=SecretStr("fixture-sentinel-key"),
+    )
+    profiles = {
+        "primary": primary,
+        "alias": primary.model_copy(
+            update={
+                "name": "alias",
+                "base_url": "http://router.synthetic/v1",
+                "vision_model": None,
+            }
+        ),
+        "other_key": primary.model_copy(
+            update={"name": "other_key", "api_key": SecretStr("another-fixture-key")}
+        ),
+        "public": primary.model_copy(
+            update={"name": "public", "base_url": "https://router.synthetic.test/v1"}
+        ),
+        "native": primary.model_copy(
+            update={
+                "name": "native",
+                "provider": "anthropic",
+                "base_url": "http://router.synthetic.svc/anthropic",
+            }
+        ),
+    }
+    data = [
+        ("embeddinggemma-2:270m", {"embeddings": "raw"}, "local"),
+        ("high", {"chat": "managed", "responses": "raw"}, "cloud"),
+        ("low", {"chat": "managed", "messages": "raw"}, "cloud"),
+        ("audio", {"transcriptions": "raw"}, "local"),
+        ("responses-only", {"responses": "raw"}, "cloud"),
+    ]
+
+    def router(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(404)
+        return httpx.Response(
+            200,
+            json={
+                "svincolo": {"api_version": 1},
+                "data": [
+                    {
+                        "id": name,
+                        "surfaces": surfaces,
+                        "locality": locality,
+                        "route_revision": "a" * 64,
+                    }
+                    for name, surfaces, locality in data
+                    if request.url.path == "/v1/models" or "messages" in surfaces
+                ],
+            },
+        )
+
+    gateway = Gateway(
+        server.services.store,
+        settings.model_copy(
+            update={"ai_profiles": profiles, "ai_chat_profile": None, "ai_embed_profile": None}
+        ),
+        transport=httpx.MockTransport(router),
+    )
+    try:
+        result = await gateway.selection.models()
+        models = {
+            row["profile"]: {model["id"]: model for model in row["models"]}
+            for row in result["profiles"]
+        }
+        assert models["primary"]["embeddinggemma-2:270m"]["capabilities"] == ["embed"]
+        assert models["primary"]["embeddinggemma-2:270m"]["leaves_network"] is False
+        assert models["public"]["embeddinggemma-2:270m"]["leaves_network"] is True
+        assert models["primary"]["high"]["capabilities"] == ["chat", "vision"]
+        assert models["alias"]["high"]["capabilities"] == ["chat", "vision"]
+        assert models["primary"]["low"]["vision_unverified"] is True
+        assert models["primary"]["embeddinggemma-2:270m"]["vision_unverified"] is False
+        assert models["primary"]["high"]["leaves_network"] is True
+        assert models["primary"]["audio"]["capabilities"] == ["transcribe"]
+        assert models["primary"]["responses-only"]["capabilities"] == []
+        group = models["primary"]["low"]["route_group"]
+        assert group == models["alias"]["low"]["route_group"]
+        assert all(
+            group != models[name]["low"]["route_group"]
+            for name in ("public", "other_key", "native")
+        )
+        assert models["native"]["low"]["capabilities"] == ["chat"]
+        assert "route_revision" not in json.dumps(result)
+        assert "fixture-sentinel-key" not in json.dumps(result)
+        with pytest.raises(AIError, match="ai_model_invalid"):
+            await gateway.selection.save(
+                gateway.selection.revision,
+                {"chat": {"profile": "alias", "model": "embeddinggemma-2:270m"}},
+            )
+    finally:
+        await gateway.close()
+
+
 async def test_hot_selection_persists_restart_binds_new_cap_and_resets_offline(model_server):
     server, provider, settings = model_server
     choice = {

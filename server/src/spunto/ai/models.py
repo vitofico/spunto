@@ -10,8 +10,39 @@ from spunto.ai.adapters import quiet_provider_logs
 from spunto.ai.errors import AIError
 
 MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}\Z")
+ROUTE_REVISION = re.compile(r"[a-f0-9]{64}\Z")
 MAX_MODELS = 128
 MAX_BYTES = 1_048_576
+
+
+def router_model(profile, row, name):
+    surfaces = row.get("surfaces")
+    revision = row.get("route_revision")
+    if (
+        not isinstance(surfaces, dict)
+        or not isinstance(revision, str)
+        or not (ROUTE_REVISION.fullmatch(revision))
+    ):
+        raise AIError("provider", "ai_inventory_unavailable")
+    capabilities = []
+    if ("messages" if profile.provider == "anthropic" else "chat") in surfaces:
+        capabilities.append("chat")
+        if name == profile.vision_model:
+            capabilities.append("vision")
+    if profile.provider == "openai":
+        if "embeddings" in surfaces:
+            capabilities.append("embed")
+        if "transcriptions" in surfaces:
+            capabilities.append("transcribe")
+    return {
+        "id": name,
+        "capabilities": capabilities,
+        # The catalog describes HTTP surfaces, not image input.
+        "vision_unverified": "chat" in capabilities and "vision" not in capabilities,
+        "route_revision": revision,
+        "leaves_network": row.get("locality") != "local"
+        or profile.with_model("chat", name).leaves_network("chat"),
+    }
 
 
 async def inventory(profile, *, transport=None):
@@ -115,10 +146,14 @@ async def inventory(profile, *, transport=None):
                     ):
                         raise AIError("provider", "ai_inventory_unavailable")
                     models = []
+                    router = value.get("svincolo")
                     for row in rows:
                         name = row.get("id") if isinstance(row, dict) else None
                         if not isinstance(name, str) or not MODEL_ID.fullmatch(name):
                             raise AIError("provider", "ai_inventory_unavailable")
+                        if isinstance(router, dict) and router.get("api_version") == 1:
+                            models.append(router_model(profile, row, name))
+                            continue
                         caps = None
                         if profile.provider == "anthropic":
                             caps = ["chat"]
@@ -132,10 +167,10 @@ async def inventory(profile, *, transport=None):
                 return sorted(
                     [
                         {
-                            **row,
                             "leaves_network": profile.with_model("chat", row["id"]).leaves_network(
                                 "chat"
                             ),
+                            **row,
                         }
                         for row in models
                     ],

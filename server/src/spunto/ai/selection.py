@@ -4,12 +4,22 @@ import asyncio
 import hashlib
 import json
 import uuid
+from urllib.parse import urlsplit
 
 from spunto.ai.errors import AIError
 from spunto.ai.models import inventory
 from spunto.ai.profiles import CAPABILITIES
 
 KEY = "ai_model_selection"
+
+
+def router_endpoint(base_url):
+    url = urlsplit(base_url)
+    host = url.hostname or ""
+    # Kubernetes lets in-cluster clients omit the service DNS suffix.
+    if url.scheme == "http" and host.count(".") == 4:
+        host = host.removesuffix(".svc.cluster.local")
+    return url.scheme, host, url.port, url.path
 
 
 class Selection:
@@ -104,7 +114,39 @@ class Selection:
             except AIError:
                 return {"profile": name, "models": [], "error": "ai_inventory_unavailable"}
 
-        return {"profiles": await asyncio.gather(*(one(name) for name in names))}
+        profiles = await asyncio.gather(*(one(name) for name in names))
+        routes = {}
+        vision_routes = set()
+        for result in profiles:
+            connection = self.environment.ai_profiles[result["profile"]]
+            for model in result["models"]:
+                revision = model.pop("route_revision", None)
+                if revision is not None:
+                    embedding = (
+                        connection.with_model("embed", model["id"])
+                        if "embed" in model["capabilities"]
+                        else None
+                    )
+                    # Keep distinct router destinations and embedding representations.
+                    route = (
+                        router_endpoint(connection.base_url),
+                        connection.provider,
+                        connection.api_key,
+                        model["id"],
+                        revision,
+                        embedding.embed_query_prefix if embedding else None,
+                        embedding.embed_document_prefix if embedding else None,
+                    )
+                    group = routes.setdefault(route, len(routes))
+                    model["route_group"] = group
+                    if "vision" in model["capabilities"]:
+                        vision_routes.add(group)
+        for result in profiles:
+            for model in result["models"]:
+                if model.get("vision_unverified") and model["route_group"] in vision_routes:
+                    model["capabilities"].append("vision")
+                    model["vision_unverified"] = False
+        return {"profiles": profiles}
 
     async def save(self, revision, selections):
         async with self.lock:
@@ -126,7 +168,9 @@ class Selection:
                         continue
                     model = available.get(choice["model"])
                     if model is None or (
-                        model["capabilities"] is not None and cap not in model["capabilities"]
+                        model["capabilities"] is not None
+                        and cap not in model["capabilities"]
+                        and not (cap == "vision" and model.get("vision_unverified"))
                     ):
                         raise AIError("validation", "ai_model_invalid")
                     if self.environment.ai_profiles[name].provider == "anthropic" and cap not in {

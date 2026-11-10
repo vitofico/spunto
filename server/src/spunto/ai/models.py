@@ -46,6 +46,9 @@ def router_model(profile, row, name):
     provider = row.get("provider")
     if isinstance(provider, str) and MODEL_ID.fullmatch(provider):
         model["router_provider"] = provider
+    upstream = row.get("upstream_model")
+    if isinstance(upstream, str) and upstream != name and MODEL_ID.fullmatch(upstream):
+        model["upstream_model"] = upstream
     return model
 
 

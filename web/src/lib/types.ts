@@ -225,6 +225,7 @@ export interface AIModelInventory {
       leaves_network: boolean;
       route_group?: number;
       router_provider?: string;
+      upstream_model?: string;
       vision_unverified?: boolean;
     }[];
     error: string | null;

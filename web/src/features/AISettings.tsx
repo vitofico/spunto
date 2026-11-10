@@ -36,6 +36,14 @@ function modelValue(choice?: AIModelChoice) {
   return choice ? JSON.stringify([choice.profile, choice.model]) : "";
 }
 type InventoryModel = AIModelInventory["profiles"][number]["models"][number];
+const providerLabels = new Map([
+  ["anthropic", "Anthropic"],
+  ["ollama", "Ollama"],
+  ["openai", "OpenAI"],
+]);
+function routerLabel(provider: string) {
+  return `${providerLabels.get(provider) ?? provider} · Svincolo`;
+}
 function unverified(model: InventoryModel, capability: AICapability) {
   return (
     model.capabilities === null ||
@@ -191,6 +199,17 @@ function AIModelSettings({
           (currentModel ? provider?.leaves_network?.[capability] : undefined);
         const inherited = selection.defaults[capability];
         const seen = new Set<number>();
+        const verifiedVision = new Set(
+          capability === "vision"
+            ? inventory.data?.profiles.flatMap(({ models }) =>
+                models.flatMap(({ route_group, capabilities }) =>
+                  route_group !== undefined && capabilities?.includes("vision")
+                    ? [route_group]
+                    : [],
+                ),
+              )
+            : [],
+        );
         const preferred = (profile: AIStatus["profiles"][number]) =>
           profile.name === effective?.profile
             ? 0
@@ -199,23 +218,40 @@ function AIModelSettings({
               : profile[`${capability}_model`]
                 ? 2
                 : 3;
-        const groups = [...ai.profiles]
-          .sort((a, b) => preferred(a) - preferred(b))
-          .map((profile) => ({
-            profile,
-            models: (
-              inventory.data?.profiles.find(
-                (item) => item.profile === profile.name,
-              )?.models ?? []
-            ).filter((item) => {
-              if (!supports(item, capability)) return false;
-              if (item.route_group === undefined) return true;
-              if (seen.has(item.route_group)) return false;
-              seen.add(item.route_group);
-              return true;
-            }),
-          }))
-          .filter((group) => group.models.length > 0);
+        const groups = new Map<
+          string,
+          { profile: string; model: InventoryModel }[]
+        >();
+        for (const profile of [...ai.profiles].sort(
+          (a, b) => preferred(a) - preferred(b),
+        )) {
+          const models = inventory.data?.profiles.find(
+            (item) => item.profile === profile.name,
+          )?.models;
+          for (const model of models ?? []) {
+            if (!supports(model, capability)) continue;
+            if (model.route_group !== undefined) {
+              if (
+                verifiedVision.has(model.route_group) &&
+                unverified(model, capability) &&
+                !sameModel(effective, {
+                  profile: profile.name,
+                  model: model.id,
+                })
+              )
+                continue;
+              if (seen.has(model.route_group)) continue;
+              seen.add(model.route_group);
+            }
+            const label = model.router_provider
+              ? routerLabel(model.router_provider)
+              : profile.name === profile.provider
+                ? profile.name
+                : `${profile.name} · ${profile.provider}`;
+            if (!groups.has(label)) groups.set(label, []);
+            groups.get(label)!.push({ profile: profile.name, model });
+          }
+        }
         const unlisted =
           !!effective &&
           !!profileInventory &&
@@ -266,24 +302,24 @@ function AIModelSettings({
                   )
                 </option>
               )}
-              {groups.map(({ profile, models }) => (
-                <optgroup
-                  label={
-                    profile.name === profile.provider
-                      ? profile.name
-                      : `${profile.name} · ${profile.provider}`
-                  }
-                  key={profile.name}
-                >
-                  {models.map((model) => (
+              {[...groups].map(([label, options]) => (
+                <optgroup label={label} key={label}>
+                  {options.map(({ profile, model }) => (
                     <option
-                      key={model.id}
+                      key={modelValue({ profile, model: model.id })}
                       value={modelValue({
-                        profile: profile.name,
+                        profile,
                         model: model.id,
                       })}
                     >
                       {model.id}
+                      {options.some(
+                        (other) =>
+                          other.profile !== profile &&
+                          other.model.id === model.id,
+                      )
+                        ? ` · ${profile}`
+                        : ""}
                       {unverified(model, capability)
                         ? t("aisettings.capability_unverified")
                         : ""}
@@ -295,7 +331,9 @@ function AIModelSettings({
             {effective && (
               <small>
                 {effective.model} {t("aisettings.at")}
-                {provider?.base_url ?? effective.profile}
+                {model?.router_provider
+                  ? routerLabel(model.router_provider)
+                  : (provider?.base_url ?? effective.profile)}
                 {locality === undefined
                   ? t("aisettings.network_locality_unavailable")
                   : locality

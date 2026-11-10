@@ -216,6 +216,7 @@ it("shows equivalent router choices once and preserves the selected profile", as
       capabilities: ["chat" as const],
       leaves_network: true,
       route_group: 0,
+      router_provider: "anthropic",
     },
     {
       id: "embed-only",
@@ -246,6 +247,9 @@ it("shows equivalent router choices once and preserves the selected profile", as
   expect((chat as HTMLSelectElement).value).toBe(value("local", "middle"));
   expect(within(chat).queryByRole("option", { name: "embed-only" })).toBeNull();
   expect(within(chat).getAllByRole("group")).toHaveLength(1);
+  expect(
+    within(chat).getByRole("group", { name: "Anthropic · Svincolo" }),
+  ).toBeTruthy();
   fireEvent.change(chat, { target: { value: "" } });
   expect(
     (within(chat).getByRole("option", { name: "middle" }) as HTMLOptionElement)

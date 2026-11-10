@@ -8,7 +8,7 @@ import kotlinx.serialization.json.*
 
 internal data class NoteTool(val pluginId:String,val pluginName:String,val id:String,val title:String,val description:String)
 
-/** A command is listed once, even if the manifest repeats a surface contribution. */
+/** A command is listed once, with the internal note-link action kept in reach. */
 internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap())):List<NoteTool> = plugins.filter {
  it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed","waiting","removed")
  && (!privateNote || (it["permissions"] as? JsonArray)?.all {permission ->
@@ -19,7 +19,7 @@ internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().take(3).filter {command ->
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true
  }.map {NoteTool(plugin.string("id"),localizedPluginName(resources,plugin,catalog),it.string("id"),localizedPluginCommand(resources,plugin,it,catalog),localizedPluginDescription(resources,plugin,catalog))}
-}.distinctBy {it.pluginId to it.id}
+}.distinctBy {it.pluginId to it.id}.sortedByDescending {it.pluginId=="links" && it.id=="link"}
 
 /** The server's own words for a refused request: its problem detail is safe owner guidance (docs/api.md), and it knows
  * what the web app and this phone can each do. A reply without one, from a proxy in front of it say, gets a line from its status. */

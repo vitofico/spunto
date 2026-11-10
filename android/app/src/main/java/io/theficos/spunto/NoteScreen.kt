@@ -197,10 +197,9 @@ import kotlinx.serialization.json.*
  }
 }
 /** One sheet row in Inter, 56 dp tall, text on the same 20 dp edge as the tiles and switch above it. */
-@Composable internal fun NoteSheetRow(label:String,trailing:String?=null,enabled:Boolean=true,destructive:Boolean=false,onClick:()->Unit) {
+@Composable internal fun NoteSheetRow(label:String,enabled:Boolean=true,destructive:Boolean=false,onClick:()->Unit) {
  Row(Modifier.fillMaxWidth().heightIn(min=56.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(horizontal=SpuntoSpacing.s20).alpha(if(enabled) 1f else .38f),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
   Text(label,Modifier.weight(1f),style=MaterialTheme.typography.bodyLarge,color=if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
-  trailing?.let {Text(it,style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
  }
 }
 

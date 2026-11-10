@@ -1,7 +1,10 @@
 """Real SQLite, fake ASGI providers and privacy/validation contract boundaries."""
 
 import asyncio
+import base64
+import struct
 import wave
+import zlib
 from importlib.resources import files
 from types import SimpleNamespace
 
@@ -306,6 +309,21 @@ async def test_health_exercises_each_bound_capability_without_notes(fixture_gate
         "/v1/audio/transcriptions",
     }
     assert all("<note" not in str(r["body"]) for r in fake.requests)
+    vision = next(
+        r["body"]["messages"][-1]["content"]
+        for r in fake.requests
+        if r["path"] == "/v1/chat/completions"
+        and isinstance(r["body"]["messages"][-1]["content"], list)
+    )
+    url = next(part["image_url"]["url"] for part in vision if part["type"] == "image_url")
+    assert url.startswith("data:image/png;base64,")
+    png = base64.b64decode(url.split(",", 1)[1], validate=True)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert struct.unpack_from(">II", png, 16) == (64, 64)
+    idat = png.index(b"IDAT")
+    size = struct.unpack_from(">I", png, idat - 4)[0]
+    end = idat + 4 + size
+    assert zlib.crc32(png[idat:end]) == struct.unpack_from(">I", png, end)[0]
 
 
 def test_packaged_transcription_health_probe_is_bounded_non_silent_pcm():

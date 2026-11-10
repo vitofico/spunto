@@ -670,8 +670,11 @@ class Gateway:
                 elif cap == "embed":
                     row["dimension"] = await self.dimension(profile=p)
                 elif cap == "vision":
+                    # A valid 64×64 RGB PNG exercises the same path as a note image.
                     image = base64.b64decode(
-                        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jiskAAAAASUVORK5CYII="
+                        "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAb0lEQVR4nO3PAQkAAAyEwO9feoshgnABdL"
+                        "ep8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I"
+                        "8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3IPanc8OLDQitxAAAAAElFTkSuQmCC"
                     )
                     await self.vision(
                         Probe,

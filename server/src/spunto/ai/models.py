@@ -34,7 +34,7 @@ def router_model(profile, row, name):
             capabilities.append("embed")
         if "transcriptions" in surfaces:
             capabilities.append("transcribe")
-    return {
+    model = {
         "id": name,
         "capabilities": capabilities,
         # The catalog describes HTTP surfaces, not image input.
@@ -43,6 +43,10 @@ def router_model(profile, row, name):
         "leaves_network": row.get("locality") != "local"
         or profile.with_model("chat", name).leaves_network("chat"),
     }
+    provider = row.get("provider")
+    if isinstance(provider, str) and MODEL_ID.fullmatch(provider):
+        model["router_provider"] = provider
+    return model
 
 
 async def inventory(profile, *, transport=None):

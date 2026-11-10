@@ -224,6 +224,7 @@ export interface AIModelInventory {
       capabilities: AICapability[] | null;
       leaves_network: boolean;
       route_group?: number;
+      router_provider?: string;
       vision_unverified?: boolean;
     }[];
     error: string | null;

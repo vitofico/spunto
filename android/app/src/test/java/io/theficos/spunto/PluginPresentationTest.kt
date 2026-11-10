@@ -12,12 +12,12 @@ class PluginPresentationTest {
   val plugins=Json.parseToJsonElement("""[
    {"id":"label-suggestions","name":"Label suggestions","state":"on","position":2,"contributes":{"commands":[{"id":"suggest-now","title":"Suggest labels","where":["note-actions","slash"]},{"id":"suggest-now","title":"Suggest labels","where":["note-actions"]}]}},
    {"id":"tidy","name":"Tidy text","state":"on","position":1,"contributes":{"commands":[{"id":"tidy","title":"Tidy text","where":["note-actions"]}]}},
+   {"id":"links","state":"on","position":10,"contributes":{"commands":[{"id":"link","title":"Link to note","where":["note-actions"]}]}},
    {"id":"off","enabled":false,"contributes":{"commands":[{"id":"off","where":["note-actions"]}]}},
    {"id":"waiting","state":"waiting","contributes":{"commands":[{"id":"waiting","where":["note-actions"]}]}}
   ]""").jsonArray.map {it.jsonObject}
   val tools=noteTools(settingsTestResources(),plugins)
-  assertEquals(listOf("Tidy text","Suggest labels"),tools.map {it.title})
-  assertEquals(2,tools.size)
+  assertEquals(listOf("Link to note","Tidy text","Suggest labels"),tools.map {it.title})
  }
  @Test fun failuresSayWhatTheServerSaysAndOnlyAProxysBareReplyGetsAStatusLine() {
   val said="Choose a model for this capability in Settings → AI."

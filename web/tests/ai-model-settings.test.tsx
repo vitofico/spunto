@@ -217,6 +217,7 @@ it("shows equivalent router choices once and preserves the selected profile", as
       leaves_network: true,
       route_group: 0,
       router_provider: "anthropic",
+      upstream_model: "fixture-sonnet",
     },
     {
       id: "embed-only",
@@ -242,7 +243,13 @@ it("shows equivalent router choices once and preserves the selected profile", as
   });
   wrap();
   const chat = await screen.findByRole("combobox", { name: "Chat model" });
-  const middle = await within(chat).findByRole("option", { name: "middle" });
+  const label = "middle · fixture-sonnet";
+  const middle = await within(chat).findByRole("option", { name: label });
+  expect(
+    within(chat).getByRole("option", {
+      name: "Server default (middle · fixture-sonnet · router-alias)",
+    }),
+  ).toBeTruthy();
   expect((middle as HTMLOptionElement).value).toBe(value("local", "middle"));
   expect((chat as HTMLSelectElement).value).toBe(value("local", "middle"));
   expect(within(chat).queryByRole("option", { name: "embed-only" })).toBeNull();
@@ -252,7 +259,7 @@ it("shows equivalent router choices once and preserves the selected profile", as
   ).toBeTruthy();
   fireEvent.change(chat, { target: { value: "" } });
   expect(
-    (within(chat).getByRole("option", { name: "middle" }) as HTMLOptionElement)
+    (within(chat).getByRole("option", { name: label }) as HTMLOptionElement)
       .value,
   ).toBe(value("router-alias", "middle"));
 });

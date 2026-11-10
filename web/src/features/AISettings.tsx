@@ -44,6 +44,9 @@ const providerLabels = new Map([
 function routerLabel(provider: string) {
   return `${providerLabels.get(provider) ?? provider} · Svincolo`;
 }
+function modelLabel(id: string, model?: InventoryModel) {
+  return model?.upstream_model ? `${id} · ${model.upstream_model}` : id;
+}
 function unverified(model: InventoryModel, capability: AICapability) {
   return (
     model.capabilities === null ||
@@ -198,6 +201,9 @@ function AIModelSettings({
           model?.leaves_network ??
           (currentModel ? provider?.leaves_network?.[capability] : undefined);
         const inherited = selection.defaults[capability];
+        const inheritedModel = inventory.data?.profiles
+          .find((item) => item.profile === inherited?.profile)
+          ?.models.find((item) => item.id === inherited?.model);
         const seen = new Set<number>();
         const verifiedVision = new Set(
           capability === "vision"
@@ -289,7 +295,7 @@ function AIModelSettings({
               <option value="">
                 {t("aisettings.server_default_choice", {
                   model: inherited
-                    ? `${inherited.model} · ${inherited.profile}`
+                    ? `${modelLabel(inherited.model, inheritedModel)} · ${inherited.profile}`
                     : t("aisettings.off"),
                 })}
               </option>
@@ -312,7 +318,7 @@ function AIModelSettings({
                         model: model.id,
                       })}
                     >
-                      {model.id}
+                      {modelLabel(model.id, model)}
                       {options.some(
                         (other) =>
                           other.profile !== profile &&
@@ -330,7 +336,7 @@ function AIModelSettings({
             </select>
             {effective && (
               <small>
-                {effective.model} {t("aisettings.at")}
+                {modelLabel(effective.model, model)} {t("aisettings.at")}
                 {model?.router_provider
                   ? routerLabel(model.router_provider)
                   : (provider?.base_url ?? effective.profile)}

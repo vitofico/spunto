@@ -31,7 +31,26 @@ internal fun aiCapabilityCards(resources:Resources,ai:JsonObject):List<AiCapabil
   val ok=(check?.get("ok") as? JsonPrimitive)?.booleanOrNull
   val outside=((profile?.get("leaves_network") as? JsonObject)?.get(cap) as? JsonPrimitive)?.booleanOrNull
   val host=profile?.pluginText("base_url")?.let {runCatching {URI(it).host}.getOrNull()}
-  AiCapabilityCard(cap,title,model.ifBlank {resources.getString(R.string.settings_no_model_selected)},host?.let {"$it · ${if(outside==true) resources.getString(R.string.settings_outside_your_network) else if(outside==false) resources.getString(R.string.settings_on_your_network) else resources.getString(R.string.settings_provider)}"}.orEmpty(),when {model.isBlank()->resources.getString(R.string.settings_not_configured);ok==true->resources.getString(R.string.settings_check_passed);ok==false->resources.getString(R.string.settings_needs_attention_a1267);else->resources.getString(R.string.settings_not_checked_yet)},when {model.isBlank()->resources.getString(R.string.settings_choose_a_model_in_ai_settings_on);ok==false->check?.pluginText("fix_hint") ?: resources.getString(R.string.settings_check_the_provider_connection_and_model_in);ok==true->resources.getString(R.string.settings_your_server_can_reach_this_model);else->resources.getString(R.string.settings_run_a_check_from_the_web_app)},ok)
+  val provider=if(host?.substringBefore('.')?.equals("svincolo",ignoreCase=true)==true) "Svincolo" else host
+  val locality=resources.getString(when(outside) {
+   true -> R.string.settings_outside_your_network
+   false -> R.string.settings_on_your_network
+   null -> R.string.settings_provider
+  })
+  val state=resources.getString(when {
+   model.isBlank() -> R.string.settings_not_configured
+   ok==true -> R.string.settings_check_passed
+   ok==false -> R.string.settings_needs_attention_a1267
+   else -> R.string.settings_not_checked_yet
+  })
+  val detail=resources.getString(when {
+   model.isBlank() -> R.string.settings_choose_a_model_in_ai_settings_on
+   ok==false -> R.string.settings_check_the_provider_connection_and_model_in
+   ok==true -> R.string.settings_your_server_can_reach_this_model
+   else -> R.string.settings_run_a_check_from_the_web_app
+  })
+  AiCapabilityCard(cap,title,model.ifBlank {resources.getString(R.string.settings_no_model_selected)},
+   provider?.let {"$it · $locality"}.orEmpty(),state,detail,ok)
  }
 }
 internal fun aiIndexDescription(resources:Resources,ai:JsonObject):String {

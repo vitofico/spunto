@@ -37,4 +37,13 @@ class StatusPresentationTest {
   val text=aiIndexDescription(settingsTestResources(),ai)
   assertTrue(text.startsWith("4 of 9"));assertFalse(text.contains("internal-key"))
  }
+ @Test fun svincoloUsesItsNameAndLocalizedHealthGuidance() {
+  val ai=Json.parseToJsonElement("""{"profiles":[{"name":"router","base_url":"http://svincolo.svincolo.svc.cluster.local/v1","chat_model":"low","embed_model":"embedding-model","leaves_network":{"chat":true,"embed":false}}],"bindings":{"chat":"router","embed":"router"},"health":[{"capability":"chat","profile":"router","model":"low","ok":false,"fix_hint":"Raw English diagnostic"}]}""").jsonObject
+  val resources=settingsTestResources()
+  val (chat,embed)=aiCapabilityCards(resources,ai)
+  assertEquals("Svincolo · outside your network",chat.destination)
+  assertEquals("Svincolo · on your network",embed.destination)
+  assertTrue(aiCardSummary(resources,chat).contains("Check the provider connection and model in AI settings."))
+  assertFalse(aiCardSummary(resources,chat).contains("Raw English diagnostic"))
+ }
 }

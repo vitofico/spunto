@@ -461,6 +461,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val locale=LocalConfiguration.current.locales[0]
  val commands=remember(manifest,catalog,privateNote,locale) {noteTools(resources,model.container.manifest.plugins(),privateNote,catalog)}
  if(commands.isEmpty()) return
+ val overflow=commands.drop(6)
  fun run(tool:NoteTool) {
   if(tool.pluginId=="links" && tool.id=="link") {
    if(supportsNotePicker(manifest,"links")) {expanded=false;onLink()}
@@ -469,20 +470,20 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
   }
   running=true;error="";attempt=runCommand(model,tool.pluginId,tool.id,buildJsonObject {put("note_id",noteId)},{expanded=false;onResult(it)},{running=false},scope,onError={error=it})
  }
- // 03 R9: plugin verbs between hairlines, each with its plugin's name in grey; six here, the rest under More.
+ // Keep the note link visible and give the quick actions room for their labels.
  HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
- commands.take(6).forEach {tool -> NoteSheetRow(tool.title,tool.pluginName,enabled=online && !running) {run(tool)}}
- if(commands.size>6) NoteSheetRow(resources.getString(R.string.settings_more),enabled=online && !running) {expanded=true;query="";error=""}
+ commands.take(6).forEach {tool -> NoteSheetRow(tool.title,enabled=online && !running) {run(tool)}}
+ if(overflow.isNotEmpty()) NoteSheetRow(resources.getString(R.string.settings_more),enabled=online && !running) {expanded=true;query="";error=""}
  if(running && !expanded) Text(resources.getString(R.string.settings_working_this_can_take_a_moment_with),Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
  if(error.isNotBlank() && !expanded) Text(error,Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
  if(expanded) ModalBottomSheet(onDismissRequest={attempt?.cancel();expanded=false}) {
   Column(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    Text(resources.getString(R.string.settings_note_tools),style=MaterialTheme.typography.titleLarge)
    if(!online) Text(resources.getString(R.string.settings_connect_to_the_server_to_use_tools),style=MaterialTheme.typography.bodySmall)
-   if(commands.size>5) OutlinedTextField(value=query,onValueChange={query=it},label={Text(resources.getString(R.string.settings_find_a_tool))},singleLine=true,modifier=Modifier.fillMaxWidth())
+   if(overflow.size>5) OutlinedTextField(value=query,onValueChange={query=it},label={Text(resources.getString(R.string.settings_find_a_tool))},singleLine=true,modifier=Modifier.fillMaxWidth())
    if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
    if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(R.string.settings_working_this_can_take_a_moment_with),style=MaterialTheme.typography.bodySmall)}
-   val visible=commands.filter {it.title.contains(query,true) || it.pluginName.contains(query,true)}
+   val visible=overflow.filter {it.title.contains(query,true) || it.pluginName.contains(query,true)}
    if(visible.isEmpty()) Text(resources.getString(R.string.settings_no_tools_match_your_search))
    LazyColumn(Modifier.weight(1f,false),contentPadding=PaddingValues(bottom=SpuntoSpacing.s24)) {
     items(visible,key={it.pluginId+"/"+it.id}) {tool ->

@@ -162,7 +162,7 @@ async def test_router_catalog_capabilities_grouping_and_save_validation(model_se
             update={
                 "name": "native",
                 "provider": "anthropic",
-                "base_url": "http://router.synthetic.svc/anthropic",
+                "base_url": "http://router.synthetic/anthropic",
             }
         ),
     }
@@ -187,6 +187,7 @@ async def test_router_catalog_capabilities_grouping_and_save_validation(model_se
                         "surfaces": surfaces,
                         "locality": locality,
                         "route_revision": "a" * 64,
+                        "provider": "anthropic" if "messages" in surfaces else "openai",
                     }
                     for name, surfaces, locality in data
                     if request.url.path == "/v1/models" or "messages" in surfaces
@@ -219,10 +220,9 @@ async def test_router_catalog_capabilities_grouping_and_save_validation(model_se
         assert models["primary"]["responses-only"]["capabilities"] == []
         group = models["primary"]["low"]["route_group"]
         assert group == models["alias"]["low"]["route_group"]
-        assert all(
-            group != models[name]["low"]["route_group"]
-            for name in ("public", "other_key", "native")
-        )
+        assert all(group != models[name]["low"]["route_group"] for name in ("public", "other_key"))
+        assert group == models["native"]["low"]["route_group"]
+        assert models["native"]["low"]["router_provider"] == "anthropic"
         assert models["native"]["low"]["capabilities"] == ["chat"]
         assert "route_revision" not in json.dumps(result)
         assert "fixture-sentinel-key" not in json.dumps(result)

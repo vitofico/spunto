@@ -13,13 +13,15 @@ from spunto.ai.profiles import CAPABILITIES
 KEY = "ai_model_selection"
 
 
-def router_endpoint(base_url):
-    url = urlsplit(base_url)
+def router_endpoint(connection):
+    url = urlsplit(connection.base_url)
     host = url.hostname or ""
     # Kubernetes lets in-cluster clients omit the service DNS suffix.
     if url.scheme == "http" and host.count(".") == 4:
         host = host.removesuffix(".svc.cluster.local")
-    return url.scheme, host, url.port, url.path
+    # Svincolo serves the same route through Chat Completions and native Messages.
+    suffix = "/anthropic" if connection.provider == "anthropic" else "/v1"
+    return url.scheme, host, url.port, url.path.removesuffix(suffix)
 
 
 class Selection:
@@ -129,8 +131,7 @@ class Selection:
                     )
                     # Keep distinct router destinations and embedding representations.
                     route = (
-                        router_endpoint(connection.base_url),
-                        connection.provider,
+                        router_endpoint(connection),
                         connection.api_key,
                         model["id"],
                         revision,
@@ -140,10 +141,14 @@ class Selection:
                     group = routes.setdefault(route, len(routes))
                     model["route_group"] = group
                     if "vision" in model["capabilities"]:
-                        vision_routes.add(group)
+                        vision_routes.add((group, connection.provider))
         for result in profiles:
+            provider = self.environment.ai_profiles[result["profile"]].provider
             for model in result["models"]:
-                if model.get("vision_unverified") and model["route_group"] in vision_routes:
+                if (
+                    model.get("vision_unverified")
+                    and (model["route_group"], provider) in vision_routes
+                ):
                     model["capabilities"].append("vision")
                     model["vision_unverified"] = False
         return {"profiles": profiles}

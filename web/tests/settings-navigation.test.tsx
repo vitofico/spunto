@@ -57,3 +57,41 @@ it("reveals the active settings tab on section changes and resize without moving
   expect(scrollPage).not.toHaveBeenCalled();
   focusTarget.remove();
 });
+
+it("keeps a newly released update unread until the page is opened and remembers it after remount", () => {
+  const key = "spunto:whats-new-seen";
+  localStorage.setItem(key, "2026-10-plain-background");
+  try {
+    const { rerender, unmount } = render(<SettingsPage section="profile" />);
+    expect(
+      screen
+        .getByRole("link", {
+          name: "What’s new",
+          description: "Unread updates",
+        })
+        .getAttribute("href"),
+    ).toBe("/settings/whats-new");
+    expect(localStorage.getItem(key)).toBe("2026-10-plain-background");
+
+    rerender(<SettingsPage section="whats-new" />);
+    expect(screen.getByRole("heading", { name: "What’s new" })).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Open Appearance" })
+        .getAttribute("href"),
+    ).toBe("/settings/appearance");
+    expect(localStorage.getItem(key)).toBe("2026-11-prugna");
+    unmount();
+
+    render(<SettingsPage section="profile" />);
+    expect(screen.getByRole("link", { name: "What’s new" })).toBeTruthy();
+    expect(
+      screen.queryByRole("link", {
+        name: "What’s new",
+        description: "Unread updates",
+      }),
+    ).toBeNull();
+  } finally {
+    localStorage.removeItem(key);
+  }
+});

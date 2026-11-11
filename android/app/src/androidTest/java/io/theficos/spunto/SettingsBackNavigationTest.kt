@@ -2,6 +2,7 @@ package io.theficos.spunto
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.espresso.Espresso.closeSoftKeyboard
 import androidx.test.espresso.Espresso.pressBack
 import kotlinx.coroutines.flow.first
@@ -32,7 +33,7 @@ class SettingsBackNavigationTest {
    compose.waitUntil(10_000) {compose.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty()}
    compose.onNodeWithContentDescription("Settings").performClick()
    settingsVisible()
-   // Devices, Profile and Export open the web app; only these two are pages on the phone.
+   // Devices, Profile and Export open the web app; Appearance and Plugins stay on the phone.
    listOf("Appearance","Plugins").forEach {section ->
     compose.onNode(hasScrollAction()).performScrollToNode(hasText(section) and hasClickAction())
     compose.onNodeWithText(section).performClick()
@@ -57,4 +58,34 @@ class SettingsBackNavigationTest {
 
  @Test fun toolbarBackReturnsEveryCategoryToSettingsThenNotes()=verifyParents(false)
  @Test fun systemBackReturnsEveryRestoredCategoryToSettingsThenNotes()=verifyParents(true)
+
+ @Test fun openingWhatsNewClearsUnreadAndLinksToAppearance() {
+  val appContainer=container
+  val authority=runBlocking {LocalFixtureAuthority.require(appContainer)}
+  val originalDraft=runBlocking {appContainer.repository.draft("capture").first()?.body}
+  val preferences=whatsNewPreferences(appContainer.context)
+  val originalSeen=preferences.getString(WhatsNewSeenKey,null)
+  check(preferences.edit().putString(WhatsNewSeenKey,"2026-10-plain-background").commit())
+  val row=hasText("What’s new") and hasClickAction()
+  val unread=SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Unread updates")
+  try {
+   compose.waitUntil(10_000) {compose.onAllNodesWithContentDescription("Settings").fetchSemanticsNodes().isNotEmpty()}
+   compose.onNodeWithContentDescription("Settings").performClick()
+   compose.onNode(hasScrollAction()).performScrollToNode(row)
+   compose.onNode(row and unread).assertIsDisplayed().performClick()
+   compose.onNodeWithText("Try the Prugna theme").assertIsDisplayed()
+   compose.onNodeWithText("Open Appearance").performClick()
+   compose.onNodeWithText("Plain").assertExists()
+   pressBack()
+   compose.onNodeWithContentDescription("Back").performClick()
+   compose.activityRule.scenario.recreate()
+   settingsVisible()
+   compose.onNode(hasScrollAction()).performScrollToNode(row)
+   compose.onNode(row).assertIsDisplayed()
+   compose.onNode(row and unread).assertDoesNotExist()
+  } finally {
+   check(preferences.edit().putString(WhatsNewSeenKey,originalSeen).commit())
+   authority.restoreCaptureDraft(originalDraft) {compose.activityRule.scenario.close()}
+  }
+ }
 }

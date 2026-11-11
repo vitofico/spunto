@@ -101,6 +101,7 @@ import kotlinx.serialization.json.*
    SettingsSection(resources.getString(R.string.settings_about))
    SettingsRow(resources.getString(R.string.settings_export),resources.getString(R.string.settings_download_all_synced_notes_as_a_zip),onClick={ownerPage("data")})
    SettingsRow(resources.getString(R.string.settings_show_the_guide),resources.getString(R.string.settings_the_four_first_run_steps_again),onClick={onRoute("guide")})
+   WhatsNewSettingsRow(onClick={onRoute(WhatsNewRoute)})
    SettingsRow("Spunto $version".trim(),resources.getString(R.string.settings_free_software_under_the_agpl_3_0))
   }
  }
@@ -116,9 +117,12 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
  Text(title.uppercase(),Modifier.fillMaxWidth().padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s24,bottom=SpuntoSpacing.s4).semantics {heading()},style=SpuntoType.overline,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }
 /** A title and a one-line summary in ink-2; tappable when [onClick] is set. [expanded] makes it a disclosure. */
-@Composable internal fun SettingsRow(title:String,summary:String?=null,enabled:Boolean=true,onClick:(()->Unit)?=null,expanded:Boolean?=null,trailing:(@Composable ()->Unit)?=null) {
+@Composable internal fun SettingsRow(title:String,summary:String?=null,enabled:Boolean=true,onClick:(()->Unit)?=null,expanded:Boolean?=null,description:String?=null,trailing:(@Composable ()->Unit)?=null) {
  val resources=LocalContext.current.resources
- val clickable=if(onClick==null) Modifier else Modifier.clickable(enabled=enabled,onClickLabel=null,onClick=onClick).semantics {if(expanded!=null) stateDescription=if(expanded) resources.getString(R.string.settings_expanded) else resources.getString(R.string.settings_collapsed)}
+ val clickable=if(onClick==null) Modifier else Modifier.clickable(enabled=enabled,onClickLabel=null,onClick=onClick).semantics {
+  if(description!=null) stateDescription=description
+  else if(expanded!=null) stateDescription=if(expanded) resources.getString(R.string.settings_expanded) else resources.getString(R.string.settings_collapsed)
+ }
  Row(Modifier.fillMaxWidth().heightIn(min=56.dp).then(clickable).padding(horizontal=SpuntoSpacing.s20,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
   Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
    val alpha=if(enabled) 1f else .5f

@@ -139,7 +139,7 @@ import kotlinx.serialization.json.*
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=modifier.semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=if(compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
    else routeTitle(context,route)?.let { Text(it,modifier=modifier,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis) }
   }
-  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable || route in setOf("settings","appearance","plugins","status")),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
+  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable || route in setOf("settings","appearance","plugins","status",WhatsNewRoute)),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
    if(brandedHeader) Column {
     val largeBrand=LocalDensity.current.fontScale>1.3f
     val narrowBrand=LocalConfiguration.current.screenWidthDp<360
@@ -178,6 +178,7 @@ import kotlinx.serialization.json.*
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="ask" -> if(writable) AskScreen(model,onNote=openNote)
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
+     route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
      route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote=openNote)
      route=="review" -> ReviewScreen(model,openNote)
      route=="appearance" -> AppearanceScreen(requestedTheme,mode,black,wallpaper,{ choice ->

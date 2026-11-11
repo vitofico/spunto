@@ -1,5 +1,5 @@
 import { t, useLanguage } from "../lib/i18n";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { Link } from "wouter";
 import { AppearancePanel } from "./AppearancePanel";
 import { ProfilePanel } from "./ProfilePanel";
@@ -12,12 +12,14 @@ import { PageTitle } from "./SettingsParts";
 import { PluginManager, PluginPage } from "./SettingsPlugins";
 import { Devices, Tokens, Agents } from "./SettingsAccess";
 import { Data } from "./SettingsData";
+import { useUnreadWhatsNew, WhatsNew } from "./WhatsNew";
 export { StatusPage } from "./SettingsStatus";
 const sections = () => [
   ["account", t("accountpanel.account")],
   ["spaces", t("collaboration.spaces")],
   ["profile", t("profilepanel.profile")],
   ["appearance", t("appearancepanel.appearance")],
+  ["whats-new", t("whatsnew.title")],
   ["plugins", t("settings.plugins")],
   ["devices", t("settings.devices")],
   ["tokens", t("settings.access_tokens")],
@@ -36,6 +38,8 @@ export function SettingsPage({
   const hosted = useHosted();
   const parts = section.replace(/^\//, "").split("/");
   const selected = parts[0] || "appearance";
+  const unreadWhatsNew = useUnreadWhatsNew(selected === "whats-new");
+  const unreadDescriptionId = useId();
   const visible = sections().filter(
     ([id]) => (id !== "account" && id !== "spaces") || hosted,
   );
@@ -71,9 +75,22 @@ export function SettingsPage({
           <Link
             href={`/settings/${id}`}
             aria-current={id === selected ? "page" : undefined}
+            aria-describedby={
+              id === "whats-new" && unreadWhatsNew
+                ? unreadDescriptionId
+                : undefined
+            }
             key={id}
           >
             {title}
+            {id === "whats-new" && unreadWhatsNew && (
+              <>
+                <span className={styles.unreadDot} aria-hidden="true" />
+                <span id={unreadDescriptionId} hidden>
+                  {t("whatsnew.unread")}
+                </span>
+              </>
+            )}
           </Link>
         ))}
       </nav>
@@ -86,6 +103,8 @@ export function SettingsPage({
           <ProfilePanel onShowGuide={onShowGuide} />
         ) : selected === "appearance" ? (
           <AppearancePanel />
+        ) : selected === "whats-new" ? (
+          <WhatsNew />
         ) : selected === "plugins" ? (
           parts[1] ? (
             <PluginPage id={parts[1]} />

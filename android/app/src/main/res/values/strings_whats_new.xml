@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="whats_new_title">What’s new</string>
+    <string name="whats_new_unread">Unread updates</string>
+    <string name="whats_new_latest">Latest</string>
+    <string name="whats_new_earlier">Earlier</string>
+    <string name="whats_new_prugna_title">Try the Prugna theme</string>
+    <string name="whats_new_prugna_body">Give your notes a plum palette in light or dark mode.</string>
+    <string name="whats_new_open_appearance">Open Appearance</string>
+    <string name="whats_new_plain_title">Keep the background plain</string>
+    <string name="whats_new_plain_body">Choose Plain in Appearance to hide the artwork behind your notes.</string>
+</resources>

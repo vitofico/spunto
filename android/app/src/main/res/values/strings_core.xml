@@ -100,6 +100,10 @@
     <string name="core_done">Done</string>
     <string name="core_edit_note">Edit note</string>
     <string name="core_about_note">About this note</string>
+    <string name="core_linked_notes">Linked notes</string>
+    <string name="core_links_to">Links to</string>
+    <string name="core_linked_from">Linked from</string>
+    <string name="core_show_all">Show all %1$d</string>
     <string name="core_restore_failed">Couldn\'t restore this version. Your note and draft stay on this phone.</string>
     <string name="core_copy">Copy</string>
     <string name="core_copied">Copied</string>

@@ -38,6 +38,7 @@ import {
 } from "../features/Slots";
 import { Dialog } from "../features/Dialog";
 import { LinkPicker } from "../features/LinkPicker";
+import { LinkedNotes, useNoteLinks } from "../features/LinkedNotes";
 /** App marks whether the history entry before this one is inside Spunto. */
 function cameFromApp() {
   try {
@@ -256,6 +257,7 @@ function NoteEditor({ note }: { note: Note }) {
   const toast = useToast();
   const [confirm, dialog] = useConfirm();
   const revisions = useHistory(note.id);
+  const links = useNoteLinks(note);
   const historyRef = useRef<HTMLDetailsElement>(null);
   const name = note.title || t("vocabulary.untitled_note");
   useDocumentTitle(name);
@@ -530,6 +532,7 @@ function NoteEditor({ note }: { note: Note }) {
         >
           <NoteBody
             note={note}
+            links={links}
             body={
               draft.body.length === note.body.length ? draft.body : undefined
             }
@@ -562,6 +565,7 @@ function NoteEditor({ note }: { note: Note }) {
           {t("note.private_notes_stay_out_of_ai_and_agent")}
         </p>
       )}
+      <LinkedNotes note={note} />
       <details className="history" ref={historyRef}>
         <summary>{t("note.revision_history")}</summary>
         {revisions.isPending ? (

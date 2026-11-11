@@ -100,6 +100,10 @@
     <string name="core_done">Listo</string>
     <string name="core_edit_note">Editar nota</string>
     <string name="core_about_note">Acerca de esta nota</string>
+    <string name="core_linked_notes">Notas enlazadas</string>
+    <string name="core_links_to">Enlaza a</string>
+    <string name="core_linked_from">Enlazada desde</string>
+    <string name="core_show_all">Mostrar las %1$d</string>
     <string name="core_restore_failed">No se pudo restaurar esta versión. La nota y el borrador siguen en este teléfono.</string>
     <string name="core_copy">Copiar</string>
     <string name="core_copied">Copiado</string>

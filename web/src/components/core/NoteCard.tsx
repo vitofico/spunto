@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useLocation } from "wouter";
+import { noteLinkIds } from "../../lib/text";
 import {
   api,
   invalidateContent,
@@ -45,6 +46,7 @@ export function failure(error: unknown) {
     ? t("notecard.can_t_reach_the_server_nothing_changed_try")
     : safe.message;
 }
+export type NoteLinks = Record<string, { name: string; excerpt: string }>;
 /**
  * Rendered Markdown. `body` (default: the note's own) decides which task boxes show ticked, so a
  * tick appears before the server answers; a toggle never shifts the offsets the server rendered.
@@ -56,6 +58,7 @@ export function NoteBody({
   clamp = false,
   preview = false,
   renderTitle,
+  links,
 }: {
   note: Note;
   body?: string;
@@ -63,21 +66,37 @@ export function NoteBody({
   clamp?: boolean;
   preview?: boolean;
   renderTitle?: (title: string | null) => ReactNode;
+  /** What each linked note is called now; without it a link keeps the caption it was saved with. */
+  links?: NoteLinks;
 }) {
   useLanguage();
   const content = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ticks = body ?? note.body;
+  const linked = useMemo(() => noteLinkIds(note.html), [note.html]);
+  const names = JSON.stringify(links ?? {});
   const { html, title } = useMemo(() => {
     const safe = note.html
       ? DOMPurify.sanitize(note.html, {
           ADD_ATTR: ["data-checkbox-index", "data-checkbox-offset"],
         })
       : "";
-    if (!preview || !safe) return { html: safe, title: null };
+    if (!safe || (!preview && !linked.length))
+      return { html: safe, title: null };
     const content = document.createElement("div");
     content.innerHTML = safe;
+    const summaries: NoteLinks = JSON.parse(names);
+    for (const link of content.querySelectorAll('a[href^="/n/"]')) {
+      const id = link.getAttribute("href")!.slice(3).toLowerCase();
+      if (!linked.includes(id)) continue;
+      link.classList.add("note-link");
+      const summary = summaries[id];
+      if (!summary) continue;
+      link.textContent = summary.name || t("vocabulary.untitled_note");
+      if (summary.excerpt) link.setAttribute("title", summary.excerpt);
+    }
+    if (!preview) return { html: content.innerHTML, title: null };
     const first = content.firstElementChild;
     const complete =
       first?.matches("h1,h2,h3,h4,h5,h6,p") &&
@@ -108,7 +127,7 @@ export function NoteBody({
         : null;
     if (title) first!.remove();
     return { html: content.innerHTML, title };
-  }, [note.html, note.title, note.labels, preview]);
+  }, [note.html, note.title, note.labels, preview, linked, names]);
   useLayoutEffect(() => {
     for (const box of content.current?.querySelectorAll<HTMLInputElement>(
       "input[data-checkbox-offset]",

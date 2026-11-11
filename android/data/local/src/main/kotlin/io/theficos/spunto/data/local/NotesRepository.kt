@@ -145,6 +145,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  }
  fun timeline() = notes
  fun observe(id: String) = dao.observe(id).map { it?.note() }
+ fun observeAll(ids: List<String>) = dao.observeAll(ids).map { rows -> rows.map { it.note() } }
  fun paging(spec:TimelineSpec=TimelineSpec()) = Pager(PagingConfig(pageSize=40,enablePlaceholders=false)) { dao.filteredPaging(timelineQuery(spec)) }.flow
  fun labels() = dao.labels()
  /** Conflicted copies the owner has not settled; settling one is an ordinary edit plus a trash flag, so it syncs like any change. */

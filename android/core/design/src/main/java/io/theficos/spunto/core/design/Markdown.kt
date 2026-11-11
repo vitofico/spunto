@@ -8,6 +8,13 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.material3.*
@@ -66,6 +73,18 @@ fun imageAttachmentReferences(body:String):List<Pair<String,Int>> {
  }
  walk(parser.parse(body));return result
 }
+private val noteTarget=Regex("^/n/([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$")
+private const val noteChip="note-link"
+/** The notes a body links to, in reading order, each once; code and images never count. */
+fun noteLinkIds(body:String):List<String> {
+ val result=linkedSetOf<String>()
+ fun walk(node:Node) {
+  if(node is Image || node is Code || node is FencedCodeBlock || node is IndentedCodeBlock || node is HtmlBlock || node is HtmlInline) return
+  if(node is Link) noteTarget.find(node.destination)?.let {result.add(it.groupValues[1].lowercase())}
+  var child=node.firstChild;while(child!=null) { walk(child);child=child.next }
+ }
+ walk(parser.parse(body));return result.toList()
+}
 internal fun internalMarkdownTarget(target:String):Boolean = target.startsWith("/n/") || attachmentTarget.matches(target)
 /** Only real list items may become checkboxes; code blocks retain their literal text. */
 internal fun checklistLines(body:String):List<Int> {
@@ -99,15 +118,15 @@ fun hasOpenTasks(body:String):Boolean {
  walk(parser.parse(body));return found
 }
 /** Native text renderer; raw HTML is never executed. Taps outside links and labels fall through to the caller (open or edit the note); [onText] hears where in the source a finger lands on the text first (null when unmapped). */
-@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, maxLines:Int?=null, hideLabels:Boolean=false, onToggle: ((Int)->Unit)? = null) {
+@Composable fun Markdown(body:String, machine:Boolean=false, onLink:((String)->Unit)?=null, onLabel:((String)->Unit)?=null, onText:((Int?)->Unit)?=null, maxLines:Int?=null, hideLabels:Boolean=false, onToggle: ((Int)->Unit)? = null, noteNames:Map<String,String> = emptyMap()) {
  val document=remember(body,hideLabels) { parser.parse(body).let {if(hideLabels) hidePreviewLabels(it,body) else it} }
  val tasks=remember(body) { checklistLines(body).toSet() }
  val uri=LocalUriHandler.current
- val links=MarkdownLinks(MaterialTheme.colorScheme.primary,SpuntoColors.ruleStrong,{ target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } },onLabel,onText,body)
+ val links=MarkdownLinks(MaterialTheme.colorScheme.primary,SpuntoColors.ruleStrong,{ target -> if(internalMarkdownTarget(target)) onLink?.invoke(target) else if(target.startsWith("https://") || target.startsWith("http://")) runCatching { uri.openUri(target) } },onLabel,onText,body,noteNames,MaterialTheme.colorScheme.onPrimaryContainer,icons=maxLines==null)
  if(maxLines!=null) {
   val resources=LocalContext.current.resources
   val excerpt=inline(document,links) {alt -> resources.getString(R.string.design_image,alt)}
-  Text(excerpt,style=markdownBodyStyle(machine,SpuntoType.reading).copy(color=MaterialTheme.colorScheme.onSurface),maxLines=maxLines,overflow=TextOverflow.Ellipsis)
+  TappableText(excerpt,markdownBodyStyle(machine,SpuntoType.reading).copy(color=MaterialTheme.colorScheme.onSurface),null,maxLines=maxLines)
   return
  }
  Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -118,12 +137,17 @@ fun hasOpenTasks(body:String):Boolean {
 internal fun markdownBodyStyle(machine:Boolean,ownerStyle:TextStyle):TextStyle =
  if(machine) ownerStyle.copy(fontFamily=uiFont(),fontSize=17.sp,lineHeight=26.sp) else ownerStyle
 /** Labels are accent and filter by that label; links are ink with a rule-strong underline (03 §5.1), so the two stay distinct. */
-internal class MarkdownLinks(val label:Color,val underline:Color,val open:(String)->Unit,val onLabel:((String)->Unit)?,val onText:((Int?)->Unit)?=null,val body:String="") {
+/** A link to another note is a chip: [chip] ink on a tint, named by [names] (what the target is called now) when the caller knows it, else by its saved caption. A clamped preview has no [icons]: Compose leaves inline content out past the first line of ellipsized text. */
+internal class MarkdownLinks(val label:Color,val underline:Color,val open:(String)->Unit,val onLabel:((String)->Unit)?,val onText:((Int?)->Unit)?=null,val body:String="",val names:Map<String,String> = emptyMap(),val chip:Color=Color.Unspecified,val icons:Boolean=true) {
  /** Maps a tap in [node]'s rendered text to the source, read from its [line]-th source line to its end. */
  fun tap(node:Node,line:Int=0):((CharSequence,Int)->Unit)? {
   val report=onText ?: return null;val start=node.sourceSpans.getOrNull(line)?.inputIndex ?: return null
   val end=node.sourceSpans.last().let { it.inputIndex+it.length }
-  return { text,offset -> report(sourceOffset(body,start,end,text,offset)) }
+  return { text,offset ->
+   // A chip shows the target's name, not the source, so the walk restarts where the last chip before the tap ends in the source.
+   val chip=(text as? AnnotatedString)?.getStringAnnotations(noteChip,0,offset)?.filter { it.end<=offset }?.maxByOrNull { it.end }
+   report(if(chip==null) sourceOffset(body,start,end,text,offset) else sourceOffset(body,chip.item.toInt(),end,text.subSequence(chip.end,text.length),offset-chip.end))
+  }
  }
 }
 /** AN-15: rendered text is the source minus its markup, so walk the source in order, as the web editor does; null when the text does not follow the source (an image caption). */
@@ -134,9 +158,22 @@ internal fun sourceOffset(body:String,start:Int,end:Int,rendered:CharSequence,of
  return rendered.getOrNull(offset)?.let { next -> body.indexOf(next,at).takeIf { it in at until end } } ?: at
 }
 /** Reports where a finger lands in the text without taking the tap: links, checkboxes and the caller's edit-in-place still get it. */
-@Composable private fun TappableText(text:AnnotatedString,style:TextStyle,tap:((CharSequence,Int)->Unit)?,modifier:Modifier=Modifier) {
+@Composable private fun TappableText(text:AnnotatedString,style:TextStyle,tap:((CharSequence,Int)->Unit)?,modifier:Modifier=Modifier,maxLines:Int=Int.MAX_VALUE) {
  var layout by remember { mutableStateOf<TextLayoutResult?>(null) };val current by rememberUpdatedState(tap)
- Text(text,if(tap==null) modifier else modifier.pointerInput(Unit) { awaitEachGesture { val down=awaitFirstDown(requireUnconsumed=false);layout?.let { current?.invoke(it.layoutInput.text,it.getOffsetForPosition(down.position)) } } },style=style,onTextLayout={ layout=it })
+ val chips=remember(text) { text.getStringAnnotations(noteChip,0,text.length) }
+ val tint=MaterialTheme.colorScheme.primaryContainer;val ink=MaterialTheme.colorScheme.onPrimaryContainer
+ // A span background is a hard-edged box that fills the line height, so each line of a note link gets its own rounded tint here.
+ val drawn=if(chips.isEmpty()) modifier else modifier.drawBehind { layout?.takeIf { it.layoutInput.text.length==text.length }?.let { shown ->
+  val pad=3.dp.toPx();val inset=2.dp.toPx()
+  chips.forEach { chip -> for(line in shown.getLineForOffset(chip.start)..shown.getLineForOffset(chip.end-1)) {
+   val from=maxOf(chip.start,shown.getLineStart(line));val end=shown.getLineEnd(line,visibleEnd=true);val to=minOf(chip.end,end)
+   if(to<=from) continue
+   val left=shown.getHorizontalPosition(from,true);val right=if(to==end) shown.getLineRight(line) else shown.getHorizontalPosition(to,true)
+   drawRoundRect(tint,Offset(minOf(left,right)-pad,shown.getLineTop(line)+inset),Size(kotlin.math.abs(right-left)+2*pad,shown.getLineBottom(line)-shown.getLineTop(line)-2*inset),CornerRadius(8.dp.toPx()))
+  } }
+ } }
+ val icons=if(chips.isEmpty()) emptyMap() else mapOf(noteChip to InlineTextContent(Placeholder(1.em,1.em,PlaceholderVerticalAlign.TextCenter)) { Icon(painterResource(R.drawable.ic_note_link),contentDescription=null,modifier=Modifier.fillMaxSize(),tint=ink) })
+ Text(text,if(tap==null) drawn else drawn.pointerInput(Unit) { awaitEachGesture { val down=awaitFirstDown(requireUnconsumed=false);layout?.let { current?.invoke(it.layoutInput.text,it.getOffsetForPosition(down.position)) } } },style=style,maxLines=maxLines,overflow=TextOverflow.Ellipsis,inlineContent=icons,onTextLayout={ layout=it })
 }
 @Composable private fun MarkdownText(text:AnnotatedString,machine:Boolean,color:Color=MaterialTheme.colorScheme.onSurface,modifier:Modifier=Modifier,tap:((CharSequence,Int)->Unit)?=null) {
  TappableText(text,markdownBodyStyle(machine,SpuntoType.reading).copy(color=color),tap,modifier)
@@ -197,7 +234,17 @@ private fun inline(node:Node,links:MarkdownLinks?,imageDescription:(String)->Str
    is Link -> {
     val style=TextLinkStyles(SpanStyle(textDecoration=TextDecoration.Underline,color=Color.Unspecified))
     val target=n.destination
-    if(links!=null && (internalMarkdownTarget(target) || target.startsWith("https://") || target.startsWith("http://"))) builder.withLink(LinkAnnotation.Clickable(target,style) { links.open(target) }) { children() }
+    val note=noteTarget.find(target)?.groupValues?.get(1)?.lowercase()
+    if(links!=null && note!=null) {
+     val start=builder.length
+     builder.withLink(LinkAnnotation.Clickable(target,TextLinkStyles(SpanStyle(color=links.chip))) { links.open(target) }) {
+      // Joined to the name by no-break spaces, so the icon never ends a line alone.
+      if(links.icons) { appendInlineContent(noteChip,"\u2060");append("\u202F") }
+      links.names[note]?.let { append(if(it.length>40) it.take(40)+"…" else it) } ?: children()
+     }
+     builder.addStringAnnotation(noteChip,(n.sourceSpans.lastOrNull()?.let { it.inputIndex+it.length } ?: 0).toString(),start,builder.length)
+    }
+    else if(links!=null && (internalMarkdownTarget(target) || target.startsWith("https://") || target.startsWith("http://"))) builder.withLink(LinkAnnotation.Clickable(target,style) { links.open(target) }) { children() }
     else builder.withStyle(SpanStyle(textDecoration=TextDecoration.Underline)) { children() }
    }
    is HtmlBlock,is HtmlInline -> Unit

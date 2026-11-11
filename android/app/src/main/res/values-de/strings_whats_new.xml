@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="whats_new_title">Neuigkeiten</string>
+    <string name="whats_new_unread">Ungelesene Neuigkeiten</string>
+    <string name="whats_new_latest">Aktuell</string>
+    <string name="whats_new_earlier">Früher</string>
+    <string name="whats_new_prugna_title">Das Prugna-Design ausprobieren</string>
+    <string name="whats_new_prugna_body">Verleihe deinen Notizen im hellen oder dunklen Modus eine pflaumenfarbene Palette.</string>
+    <string name="whats_new_open_appearance">Darstellung öffnen</string>
+    <string name="whats_new_plain_title">Den Hintergrund schlicht halten</string>
+    <string name="whats_new_plain_body">Wähle in der Darstellung den schlichten Hintergrund, um das Motiv hinter deinen Notizen auszublenden.</string>
+</resources>

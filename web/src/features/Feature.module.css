@@ -38,9 +38,36 @@
   color: var(--ink);
   font-weight: 500;
 }
+.unreadDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-inline-start: var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--accent);
+}
 .section {
   min-width: 0;
   overflow-wrap: break-word;
+}
+.updates article {
+  padding-block: var(--s-16) var(--s-24);
+}
+.updates article + article {
+  border-top: 1px solid var(--rule);
+}
+.updates article h2 {
+  margin: 0 0 var(--s-8);
+}
+.updates article h3 {
+  margin: 0;
+  font: var(--t-heading) var(--f-serif);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+}
+.updates article p {
+  margin-block: var(--s-4) var(--s-8);
 }
 /* Secondary buttons: the same pill as the rest of the app, with a field edge as their boundary.
    A file picker is its label drawn as one, around a visually hidden input. */

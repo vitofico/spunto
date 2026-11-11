@@ -40,6 +40,7 @@ val LocalNavigator=staticCompositionLocalOf<Navigator> { error("Navigator is pro
 /** Top bar title of a page; null for pages that show none (a note, search, a plugin page, which heads itself) and for the filter routes, whose title is the labels switcher. */
 fun routeTitle(context:Context,route:String):String?=when(route) {
  "settings" -> context.getString(R.string.core_settings); "appearance" -> context.getString(R.string.core_appearance); "plugins" -> context.getString(R.string.core_plugins); "ask" -> context.getString(R.string.core_ask_notes)
+ WhatsNewRoute -> context.getString(R.string.whats_new_title)
  else -> null
 }
 

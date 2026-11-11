@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="whats_new_title">Novedades</string>
+    <string name="whats_new_unread">Novedades sin leer</string>
+    <string name="whats_new_latest">Lo último</string>
+    <string name="whats_new_earlier">Anteriores</string>
+    <string name="whats_new_prugna_title">Prueba el tema Prugna</string>
+    <string name="whats_new_prugna_body">Dale a tus notas una paleta en tonos ciruela en modo claro u oscuro.</string>
+    <string name="whats_new_open_appearance">Abrir Apariencia</string>
+    <string name="whats_new_plain_title">Usa un fondo liso</string>
+    <string name="whats_new_plain_body">Elige el fondo liso en Apariencia para ocultar la ilustración detrás de tus notas.</string>
+</resources>

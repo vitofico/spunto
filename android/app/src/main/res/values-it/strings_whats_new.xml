@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="whats_new_title">Novità</string>
+    <string name="whats_new_unread">Novità non lette</string>
+    <string name="whats_new_latest">Ultime novità</string>
+    <string name="whats_new_earlier">In precedenza</string>
+    <string name="whats_new_prugna_title">Prova il tema Prugna</string>
+    <string name="whats_new_prugna_body">Dai alle tue note una palette color prugna in modalità chiara o scura.</string>
+    <string name="whats_new_open_appearance">Apri Aspetto</string>
+    <string name="whats_new_plain_title">Scegli uno sfondo semplice</string>
+    <string name="whats_new_plain_body">Scegli lo sfondo semplice in Aspetto per nascondere l’illustrazione dietro le note.</string>
+</resources>

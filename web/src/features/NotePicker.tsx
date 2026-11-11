@@ -60,8 +60,7 @@ export function NotePicker({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (target && !busy && !notes.isFetching && !notes.isError)
-          onSelect(target);
+        if (target && !busy && !notes.isError) onSelect(target);
       }}
     >
       <label htmlFor={id}>{t("notepicker.search")}</label>
@@ -141,10 +140,7 @@ export function NotePicker({
         </button>
       )}
       <div className={styles.row}>
-        <button
-          className="primary"
-          disabled={!target || busy || notes.isFetching || notes.isError}
-        >
+        <button className="primary" disabled={!target || busy || notes.isError}>
           {busy ? t("app.saving") : action}
         </button>
         {onCancel && (

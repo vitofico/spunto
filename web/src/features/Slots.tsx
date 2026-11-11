@@ -421,10 +421,12 @@ function PanelSection({
 export function NotePanel({ note }: { note: Note }) {
   useLanguage();
   const manifest = usePlugins();
+  // Backlinks live in the note's own Linked notes block, next to the links it makes.
   const plugins = activePlugins(manifest.data?.plugins).filter(
     (p) =>
-      p.contributes?.panel ||
-      note.annotations?.some((a) => a.plugin === p.id && a.kind === "panel"),
+      p.id !== "links" &&
+      (p.contributes?.panel ||
+        note.annotations?.some((a) => a.plugin === p.id && a.kind === "panel")),
   );
   if (!plugins.length) return null;
   return (

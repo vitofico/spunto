@@ -100,6 +100,10 @@
     <string name="core_done">Fertig</string>
     <string name="core_edit_note">Notiz bearbeiten</string>
     <string name="core_about_note">Über diese Notiz</string>
+    <string name="core_linked_notes">Verknüpfte Notizen</string>
+    <string name="core_links_to">Verweist auf</string>
+    <string name="core_linked_from">Verlinkt von</string>
+    <string name="core_show_all">Alle %1$d anzeigen</string>
     <string name="core_restore_failed">Diese Version konnte nicht wiederhergestellt werden. Notiz und Entwurf bleiben auf diesem Telefon.</string>
     <string name="core_copy">Kopieren</string>
     <string name="core_copied">Kopiert</string>

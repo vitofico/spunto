@@ -174,3 +174,32 @@ export function compactDiff(lines: DiffLine[], context = 2) {
   });
   return result;
 }
+/** The notes a rendered body links to, in reading order, each once. */
+export function noteLinkIds(html: string | null | undefined) {
+  const ids = new Set<string>();
+  for (const match of (html ?? "").matchAll(
+    /<a\b[^>]*\shref="\/n\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})"/gi,
+  ))
+    ids.add(match[1].toLowerCase());
+  return [...ids];
+}
+/** What to call a note where it is only listed, and one line of what it says. */
+export function noteSummary(note: { title: string; body: string }) {
+  const title = note.title.trim();
+  const text = note.body
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^\s*(?:#{1,6}\s+|>\s*|[-+*]\s+(?:\[[ xX]\]\s*)?)/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!title)
+    return {
+      name: text.length > 60 ? text.slice(0, 60) + "…" : text,
+      excerpt: "",
+    };
+  return {
+    name: title,
+    excerpt: (text.startsWith(title) ? text.slice(title.length) : text)
+      .trim()
+      .slice(0, 160),
+  };
+}

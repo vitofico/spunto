@@ -219,7 +219,12 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   await green.check();
   await uiCommand(page, "links", "link", () => insert.click());
   await expect(picker).toBeHidden();
-  await expect(page.locator(`a[href="/n/${second.id}"]`)).toBeVisible();
+  // The link shows twice: as a chip in the text, named by the target, and as a row under Links to.
+  const link = page.locator(`a[href="/n/${second.id}"]`);
+  await expect(page.locator(".note-body").locator(link)).toHaveText(title);
+  await expect(
+    page.getByRole("region", { name: "Linked notes" }).locator(link),
+  ).toContainText("Keep the green draft.");
   const result = await note(page, source.id);
   expect(result.body).toContain(`/n/${second.id}`);
   expect(result.body).not.toContain(`/n/${first.id}`);

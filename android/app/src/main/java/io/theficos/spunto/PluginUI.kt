@@ -107,6 +107,8 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
  val plugins=model.container.manifest.plugins().filter { model.container.manifest.enabled(it.string("id")) }.sortedBy { (it["position"] as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE }
  plugins.forEach { plugin ->
   val id=plugin.string("id")
+  // Backlinks sit under the note itself, in Linked notes, next to the links it makes.
+  if(id=="links") return@forEach
   val contribution=(plugin["contributes"] as? JsonObject)?.get("panel")
   val panel=(contribution as? JsonObject) ?: (contribution as? JsonArray)?.firstOrNull() as? JsonObject ?: return@forEach
   val stored=outputs.filter { it.noteId==note.id && it.kind=="annotation" }.map { payload(it.payload) }.filter { it.string("plugin")==id && it.string("kind")=="panel" }

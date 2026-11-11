@@ -65,6 +65,7 @@ interface SpuntoDao {
  @RawQuery(observedEntities=[NoteEntity::class,LabelEntity::class,ViewMembershipEntity::class]) suspend fun filteredNotes(query:SupportSQLiteQuery):List<NoteEntity>
  @Query("SELECT * FROM notes WHERE id=:id") fun observe(id: String): Flow<NoteEntity?>
  @Query("SELECT * FROM notes WHERE conflictOf IS NOT NULL AND trashed=0 ORDER BY updatedAt DESC") fun conflicts(): Flow<List<NoteEntity>>
+ @Query("SELECT * FROM notes WHERE id IN (:ids)") fun observeAll(ids: List<String>): Flow<List<NoteEntity>>
  @Query("SELECT * FROM notes WHERE id=:id") suspend fun get(id: String): NoteEntity?
  @Query("SELECT * FROM notes") suspend fun all(): List<NoteEntity>
  @Query("SELECT n.* FROM notes n WHERE NOT EXISTS (SELECT 1 FROM tombstones t WHERE t.id=n.id)") suspend fun reconcilableNotes():List<NoteEntity>

@@ -69,6 +69,11 @@ import kotlinx.serialization.json.*
  val writable by model.workspaceCanWrite.collectAsState()
  LaunchedEffect(writable) {if(!writable) {editing=false;commandResult=null}}
  val refused by model.repository.refused.collectAsState(emptyMap())
+ val outputs by model.outputs.collectAsState()
+ val linksTo=remember(value.body,id) {noteLinkIds(value.body)-id}
+ val linkedFrom=if(model.container.manifest.enabled("links")) backlinkIds(outputs,id) else emptyList()
+ val linked by remember(linksTo,linkedFrom) {model.repository.observeAll((linksTo+linkedFrom).distinct())}.collectAsState(emptyList())
+ val linkedById=linked.associateBy {it.id}
  fun finishEditing() {
   if(finishing || restoring) return
   val finish=finishEditor ?: return
@@ -104,11 +109,12 @@ import kotlinx.serialization.json.*
    // Tapping the text edits it in place with the caret where the finger landed (A5); links, labels and checkboxes keep their own taps.
    // Each touch first forgets the last place, so a tap beside the text opens the editor at the end.
    else Box(Modifier.fillMaxWidth().pointerInput(Unit) {awaitEachGesture {awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial);caret=null}}.clickable(enabled=writable && !value.trashed && !restoring,onClickLabel=context.getString(R.string.core_edit_note),interactionSource=remember {MutableInteractionSource()},indication=null) {editing=true}) {
-    Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")},onText={caret=it},onToggle=if(writable) ({model.toggleTask(value,it)}) else null)
+    Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")},onText={caret=it},onToggle=if(writable) ({model.toggleTask(value,it)}) else null,noteNames=linkedById.mapValues {it.value.title.ifBlank {context.getString(R.string.core_untitled)}})
    }
   }
   if(!editing && writable) item {Suggestions(model,id,onNote)}
   item {NoteAttachments(model,id,value.body)}
+  if(!editing && linked.isNotEmpty()) item {LinkedNotes(linksTo.mapNotNull(linkedById::get),linkedFrom.mapNotNull(linkedById::get),locale,onNote)}
   if(!editing) item {TextButton(onClick={about=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_about_note),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}}
  }
  if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={commandResult=it},onTrashed=onClose)

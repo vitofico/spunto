@@ -100,6 +100,10 @@
     <string name="core_done">Terminé</string>
     <string name="core_edit_note">Modifier la note</string>
     <string name="core_about_note">À propos de cette note</string>
+    <string name="core_linked_notes">Notes liées</string>
+    <string name="core_links_to">Renvoie à</string>
+    <string name="core_linked_from">Citée par</string>
+    <string name="core_show_all">Afficher les %1$d</string>
     <string name="core_restore_failed">Impossible de restaurer cette version. Votre note et votre brouillon restent sur ce téléphone.</string>
     <string name="core_copy">Copier</string>
     <string name="core_copied">Copié</string>

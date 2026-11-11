@@ -657,6 +657,29 @@ kbd {
 .note-body a {
   color: var(--accent);
 }
+.note-body a.note-link {
+  padding: 1px 8px 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  /* One line, so a long name shortens instead of leaving the icon behind on the line above. */
+  display: inline-block;
+  max-width: min(100%, 16em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.note-body a.note-link::before {
+  content: "";
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 4px;
+  vertical-align: -0.08em;
+  background: currentColor;
+  mask: url("/note-link.svg") center/contain no-repeat;
+}
 .note-body pre {
   max-width: 100%;
   overflow: auto;
@@ -877,6 +900,60 @@ kbd {
   font-size: var(--t-meta-size);
   color: var(--ink-3);
   margin: var(--s-12) 0;
+}
+.linked-notes {
+  margin-top: var(--s-32);
+  padding-top: var(--s-20);
+  border-top: 1px solid var(--rule);
+}
+.linked-notes h2 {
+  margin: 0;
+  font: inherit;
+  color: var(--ink-2);
+}
+.linked-notes h3 {
+  margin: var(--s-16) 0 var(--s-4);
+}
+.linked-notes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.linked-notes li a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--s-12);
+  padding: var(--s-8) 0;
+  color: var(--ink);
+}
+.linked-notes li + li a {
+  border-top: 1px solid var(--rule);
+}
+.linked-notes li a:hover {
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .linked-notes li a:hover .linked-note-name {
+    color: var(--accent);
+  }
+}
+.linked-note-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.linked-notes time {
+  font: var(--t-meta) var(--f-sans);
+  color: var(--ink-3);
+}
+.linked-note-excerpt {
+  grid-column: 1 / -1;
+  font: var(--t-meta) var(--f-sans);
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .history {
   margin-top: var(--s-32);

@@ -27,4 +27,9 @@ class MarkdownTest {
   val text="Plan #Project/Spunto, (#idea) and #2026 but not mail#b or #a/b/c/d/e/f #città"
   assertEquals(listOf("#Project/Spunto","#idea","#città"),inlineLabels(text).map {text.substring(it.first,it.last+1)})
  }
+ @Test fun noteLinksAreFoundOnceInReadingOrderOutsideCode() {
+  val a="019a0000-0000-7000-8000-000000000001";val b="019a0000-0000-7000-8000-000000000002"
+  val body="See [one](/n/$a), [site](https://example.org/n/$a), `[code](/n/$b)` and [two](/n/$b) then [again](/n/${a.uppercase()}) and [bad](/n/nope)"
+  assertEquals(listOf(a,b),noteLinkIds(body))
+ }
 }

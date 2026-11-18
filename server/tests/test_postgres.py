@@ -20,9 +20,9 @@ from spunto.core.notes import Notes
 from spunto.core.plugin_notes import PluginNotes
 from spunto.host import Ctx, Host
 from spunto.store.db import now_ms
-from spunto.store.postgres import PostgresStore, _qmarks, _translate
+from spunto.store.postgres import _COLUMNS, PostgresStore, _qmarks, _translate
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 
 
 async def test_commit_cancellation_preserves_data_and_dispatches_event(pg, monkeypatch):
@@ -679,6 +679,20 @@ async def test_cancelled_writer_rolls_back_and_pool_context_does_not_leak(pg):
 
 
 async def test_runtime_rejects_admin_role_and_direct_cross_workspace_writes(pg):
+    async with await psycopg.AsyncConnection.connect(
+        os.environ["SPUNTO_TEST_POSTGRES_ADMIN_URL"]
+    ) as conn:
+        for table, columns in _COLUMNS.items():
+            rows = await (
+                await conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='spunto' "
+                    "AND table_name=%s AND column_name NOT IN ('workspace_id','rowid') "
+                    "ORDER BY ordinal_position",
+                    (table,),
+                )
+            ).fetchall()
+            assert [row[0] for row in rows] == columns, table
     from spunto.errors import OperatorError
 
     _, bounds, users, spaces, runtime = pg

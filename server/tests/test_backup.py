@@ -1,14 +1,17 @@
+import asyncio
 import hashlib
 import shutil
 import sqlite3
 import uuid
 from contextlib import closing
 from datetime import UTC, datetime, time, timedelta
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from spunto.errors import OperatorError
+from spunto.jobs import backup
 from spunto.jobs.backup import PRE_MIGRATION, backup_now, prune, restore, seconds_until
 from spunto.store.db import DB_NAME, connect
 from spunto.store.lock import DataLock
@@ -123,12 +126,82 @@ def test_retention_keeps_daily_and_weekly_snapshots(tmp_path):
     assert new_pre.exists() and not old_pre.exists()
 
 
-def test_daily_time_is_local(monkeypatch):
+@pytest.mark.parametrize(
+    "keep_daily,keep_weekly,expected",
+    [(3, 0, 3), (1, 4, 4)],
+    ids=["snapshot-days", "snapshot-weeks"],
+)
+def test_retention_after_downtime_preserves_snapshot_days_and_weeks(
+    tmp_path, keep_daily, keep_weekly, expected
+):
+    paths = []
+    for index in range(10):
+        when = NOW - timedelta(days=10 * index)
+        snapshot = tmp_path / f"spunto-{when:%Y-%m-%dT%H%M}Z-s1.db"
+        snapshot.touch()
+        checksum_path(snapshot).touch()
+        paths.append(snapshot)
+
+    prune(tmp_path, keep_daily=keep_daily, keep_weekly=keep_weekly, now=NOW)
+
+    for index, snapshot in enumerate(paths):
+        assert snapshot.exists() == (index < expected)
+        assert checksum_path(snapshot).exists() == (index < expected)
+
+
+def test_daily_time_is_local():
     rome = ZoneInfo("Europe/Rome")  # UTC+2 until the end of October
     assert seconds_until(time(3, 30), rome, datetime(2026, 10, 13, 1, 0, tzinfo=UTC)) == 1800
     assert seconds_until(time(3, 30), rome, datetime(2026, 10, 13, 1, 30, tzinfo=UTC)) == 86400
     # The night the clocks go back has 25 hours.
     assert seconds_until(time(3, 30), rome, datetime(2026, 10, 24, 1, 30, tzinfo=UTC)) == 90000
+
+    class UTCHostClock(datetime):
+        def astimezone(self, tz=None):
+            return super().astimezone(UTC if tz is None else tz)
+
+    # The configured date is still yesterday when the host's UTC date rolls over.
+    now = UTCHostClock(2026, 10, 13, 3, 30, tzinfo=UTC)
+    assert seconds_until(time(18), ZoneInfo("Pacific/Honolulu"), now) == 1800
+
+
+@pytest.mark.anyio
+async def test_daily_backup_obeys_schedule_and_recovers_after_failure(
+    settings, db, monkeypatch, caplog
+):
+    settings.tz = "Europe/Rome"
+    settings.backup_time = time(6)
+    stalled = db.with_suffix(".held")
+    delays = []
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz is not None else NOW.replace(tzinfo=None)
+
+    async def next_schedule(delay):
+        delays.append(delay)
+        if len(delays) == 1:
+            db.rename(stalled)
+        elif len(delays) == 2:
+            stalled.rename(db)
+        else:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(backup, "datetime", FixedDatetime)
+    monkeypatch.setattr(
+        backup, "asyncio", SimpleNamespace(sleep=next_schedule, to_thread=asyncio.to_thread)
+    )
+    with caplog.at_level("INFO", logger=backup.__name__):
+        with pytest.raises(asyncio.CancelledError):
+            await backup.run_daily(settings)
+
+    assert delays == [1800, 1800, 1800]
+    assert "The daily snapshot failed" in caplog.messages
+    [snapshot] = settings.backup_dir.glob("spunto-*.db")
+    verify_checksum(snapshot)
+    assert rows(snapshot, "SELECT password_hash FROM owner") == [("first-hash",)]
+    assert f"Daily snapshot written to {snapshot}" in caplog.messages
 
 
 def test_restore_brings_back_the_snapshot_with_a_new_epoch(settings, db):
@@ -320,6 +393,26 @@ def test_restore_accepts_legacy_schema_one_and_upgrades_on_next_start(settings, 
     assert rows(db, "SELECT count(*) FROM note") == [(0,)]
 
 
+def test_restore_rejects_a_non_hex_attachment_digest(settings, db):
+    with closing(connect(db)) as conn:
+        note_id = seed_note(conn)
+        attachment_id = str(uuid.uuid7())
+        conn.execute(
+            "INSERT INTO attachment(id,sha256,mime,size,filename,created_at) VALUES (?,?,?,1,?,0)",
+            (attachment_id, "a" * 64, "image/png", "fixture.png"),
+        )
+        conn.execute("INSERT INTO note_attachment VALUES (?,?)", (note_id, attachment_id))
+
+    snapshot = backup_now(settings, NOW)
+    with closing(connect(snapshot)) as conn:
+        conn.execute("UPDATE attachment SET sha256=?", ("g" * 64,))
+    with pytest.raises(OperatorError, match="is not a Spunto snapshot"):
+        restore(settings, checksum(snapshot), NOW)
+    assert rows(db, "SELECT sha256 FROM attachment") == [("a" * 64,)]
+    assert rows(db, "SELECT password_hash FROM owner") == [("first-hash",)]
+    assert not list(db.parent.glob(f"{DB_NAME}.before-restore-*"))
+
+
 @pytest.mark.parametrize(
     "damage",
     [
@@ -334,12 +427,17 @@ def test_restore_accepts_legacy_schema_one_and_upgrades_on_next_start(settings, 
         "DELETE FROM meta WHERE key='change_seq'",
         "UPDATE meta SET value='invalid' WHERE key='plugins_rev'",
         "ALTER TABLE note DROP COLUMN private_clock",
+        "DELETE FROM meta WHERE key='instance_id'",
+        "DELETE FROM meta WHERE key='migrated_by'",
+        "UPDATE meta SET value='not-an-epoch' WHERE key='sync_epoch'",
+        "DROP TABLE note_fts; CREATE TABLE note_fts(title,body,extra)",
+        "PRAGMA foreign_keys=OFF; INSERT INTO note_label VALUES ('missing-note', 999)",
     ],
 )
 def test_restore_rejects_incomplete_claimed_schema_two(settings, db, damage):
     snapshot = backup_now(settings, NOW)
     with closing(sqlite3.connect(snapshot)) as conn:
-        conn.execute(damage)
+        conn.executescript(damage)
         conn.commit()
     with pytest.raises(OperatorError, match="is not a Spunto snapshot"):
         restore(settings, checksum(snapshot), NOW)

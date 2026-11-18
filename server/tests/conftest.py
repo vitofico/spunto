@@ -15,6 +15,22 @@ PUBLIC_URL = "http://spunto.test:8080"
 CLIENT = "203.0.113.7"  # a documentation address, standing in for a browser on the LAN
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items):
+    required = {"pg", "pg_admin_url", "hosted", "browsers", "operator_accounts"}
+    missing = [
+        item.nodeid
+        for item in items
+        if (
+            required.intersection(item.fixturenames)
+            or (item.path.name == "test_sqlite_import.py" and "target" in item.fixturenames)
+        )
+        and item.get_closest_marker("postgres") is None
+    ]
+    if missing:
+        raise pytest.UsageError("Missing @pytest.mark.postgres:\n" + "\n".join(missing))
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"

@@ -1,0 +1,44 @@
+name: Spunto trash and backup evidence
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - ".github/spunto-a3-evidence/**"
+      - ".github/workflows/spunto-a3-evidence.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spunto-a3-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: >-
+      github.event.pull_request.head.ref == 'test/safety-net' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          version: "0.13.0"
+      - run: uv sync --locked
+      - name: Verify trash and backup controls and functional mutations
+        run: uv run --locked python ../.github/spunto-a3-evidence/verify.py "$RUNNER_TEMP/spunto-a3"
+      - name: Retain JUnit and mutation logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: spunto-a3-junit
+          path: ${{ runner.temp }}/spunto-a3/
+          if-no-files-found: error
+          retention-days: 7

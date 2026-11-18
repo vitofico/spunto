@@ -31,7 +31,7 @@ class AppLockTest {
  private fun shell(command:String):String=ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use {it.readText()}
  @Before fun disposableAuthority() {
   assumeTrue(InstrumentationRegistry.getArguments().getString("spuntoAppLockDisposable")=="yes")
-  check(shell("getprop ro.boot.qemu.avd_name").trim()=="SpuntoBiometric") {"App lock tests require the dedicated disposable AVD."}
+  check(shell("getprop ro.boot.qemu.avd_name").trim() in setOf("SpuntoBiometric","spunto-ci")) {"App lock tests require the dedicated disposable AVD."}
   authority=runBlocking {LocalFixtureAuthority.require(app.container)}
   instrumentation.uiAutomation.serviceInfo=instrumentation.uiAutomation.serviceInfo.apply {flags=flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS}
  }

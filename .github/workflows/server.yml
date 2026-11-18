@@ -322,25 +322,6 @@ jobs:
             node node_modules/@playwright/test/cli.js test --output=/artifacts/results \
             --project=chromium --project=firefox --project=webkit \
             --global-timeout=1200000
-      - name: Replay slim browser presentation regressions
-        if: >-
-          matrix.architecture == 'amd64' && github.event_name == 'pull_request' &&
-          github.event.pull_request.head.ref == 'test/slim-suites' &&
-          github.event.pull_request.head.repo.full_name == github.repository
-        timeout-minutes: 12
-        run: python3 .github/scripts/spunto-r7-browser-evidence.py
-      - name: Retain slim browser JUnit evidence
-        if: >-
-          always() && matrix.architecture == 'amd64' && github.event_name == 'pull_request' &&
-          github.event.pull_request.head.ref == 'test/slim-suites' &&
-          github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: spunto-r7-browser-evidence
-          path: |
-            ${{ runner.temp }}/spunto-r7/*.xml
-            ${{ runner.temp }}/spunto-r7/*.log
-          retention-days: 7
       - name: Remove disposable browser server
         if: always() && matrix.architecture == 'amd64'
         timeout-minutes: 1

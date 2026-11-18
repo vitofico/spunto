@@ -32,7 +32,7 @@ web() (
   python3 ../scripts/check-translations.py
   python3 ../scripts/check-generated.py
   pnpm typecheck
-  pnpm test
+  pnpm test "$@"
   pnpm format:check
   pnpm build
 )
@@ -64,7 +64,7 @@ android() (
 
 case "${1:-all}" in
   --help|-h) usage ;;
-  web) web ;;
+  web) shift; web "$@" ;;
   server) server ;;
   android) shift; android "$@" ;;
   native) "$ROOT/scripts/check-android-native" ;;

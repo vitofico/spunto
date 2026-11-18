@@ -67,7 +67,14 @@ jobs:
           version: "0.13.0"
       - run: npm install --global pnpm@12.11.2
       - name: Local and hosted web preflight
-        run: ../scripts/check-ci web
+        run: ../scripts/check-ci web --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/web.xml"
+      - name: Retain web test results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: web-unit-results
+          path: ${{ runner.temp }}/web.xml
+          if-no-files-found: error
+          retention-days: 3
 
   test:
     if: github.event_name != 'schedule'
@@ -92,7 +99,16 @@ jobs:
           version: "0.13.0" # the uv in server/Dockerfile
           enable-cache: true # keyed on server/uv.lock
       - name: Local and hosted server preflight
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/sqlite.xml
         run: ../scripts/check-ci server
+      - name: Retain sqlite test results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sqlite-unit-results
+          path: ${{ runner.temp }}/sqlite.xml
+          if-no-files-found: error
+          retention-days: 3
 
   postgres:
     if: github.event_name != 'schedule'

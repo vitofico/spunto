@@ -153,6 +153,9 @@ export function SchemaForm({
   submitLabel = t("schemaform.save_settings"),
   hiddenFields = [],
   advancedField,
+  optionLabel,
+  optionalDetails,
+  submitDisabled = false,
 }: {
   schema: Schema;
   initial?: Args;
@@ -164,6 +167,9 @@ export function SchemaForm({
   submitLabel?: string;
   hiddenFields?: string[];
   advancedField?: string;
+  optionLabel?: (key: string, value: Json) => string | undefined;
+  optionalDetails?: { label: string; fields: readonly string[] };
+  submitDisabled?: boolean;
 }) {
   useLanguage();
   const id = useId();
@@ -193,22 +199,23 @@ export function SchemaForm({
         {t("schemaform.this_settings_schema_is_unavailable")}
       </p>
     );
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const issue = validateSettings(schema, values);
-        setError(issue);
-        if (!issue) onSave(values);
-      }}
-    >
-      {Object.entries(schema.properties ?? {}).map(([key, prop]) => {
+  const entries = Object.entries(schema.properties ?? {});
+  const optional = (key: string) =>
+    optionalDetails?.fields.includes(key) &&
+    !schema.required?.includes(key) &&
+    !hiddenFields.includes(key);
+  const renderFields = (rows: [string, Schema][]) => (
+    <>
+      {rows.map(([key, prop]) => {
         if (hiddenFields.includes(key)) return null;
         const quietMode =
           key === "change_mode" &&
-          ["label-suggestions", "title-summary", "voice-memos"].includes(
-            pluginId,
-          );
+          [
+            "label-suggestions",
+            "title-summary",
+            "voice-memos",
+            "link-enrichment",
+          ].includes(pluginId);
         const label = quietMode
           ? t("quiet.behavior")
           : (prop.title ?? humanize(key));
@@ -257,7 +264,7 @@ export function SchemaForm({
                       {quietMode &&
                       (choice === "ask_first" || choice === "automatic")
                         ? t(`quiet.mode.${choice}`)
-                        : choiceLabel(choice)}
+                        : (optionLabel?.(key, choice) ?? choiceLabel(choice))}
                     </button>
                   ))}
                 </div>
@@ -274,7 +281,7 @@ export function SchemaForm({
                       {quietMode &&
                       (choice === "ask_first" || choice === "automatic")
                         ? t(`quiet.mode.${choice}`)
-                        : choiceLabel(choice)}
+                        : (optionLabel?.(key, choice) ?? choiceLabel(choice))}
                     </option>
                   ))}
                 </select>
@@ -321,8 +328,8 @@ export function SchemaForm({
                 className="field"
                 id={fieldId}
                 type={
-                  extra.format === "time"
-                    ? "time"
+                  extra.format === "time" || extra.format === "date"
+                    ? extra.format
                     : prop.type === "number" || prop.type === "integer"
                       ? "number"
                       : "text"
@@ -361,6 +368,25 @@ export function SchemaForm({
           field
         );
       })}
+    </>
+  );
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (disabled || busy || submitDisabled) return;
+        const issue = validateSettings(schema, values);
+        setError(issue);
+        if (!issue) onSave(values);
+      }}
+    >
+      {renderFields(entries.filter(([key]) => !optional(key)))}
+      {optionalDetails && entries.some(([key]) => optional(key)) && (
+        <details className={styles.formDetails}>
+          <summary>{optionalDetails.label}</summary>
+          {renderFields(entries.filter(([key]) => optional(key)))}
+        </details>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -369,7 +395,10 @@ export function SchemaForm({
       {Object.values(schema.properties ?? {}).some(
         (prop) => !prop["x-secret"],
       ) && (
-        <button className="primary" disabled={disabled || busy}>
+        <button
+          className="primary"
+          disabled={disabled || busy || submitDisabled}
+        >
           {busy ? t("app.saving") : submitLabel}
         </button>
       )}

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, type ComponentType } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -21,6 +22,7 @@ afterEach(() => {
   queryClient.clear();
   localStorage.clear();
   sessionStorage.clear();
+  document.querySelector("[data-test-entry]")?.remove();
 });
 
 function failingPage() {
@@ -33,11 +35,143 @@ function failingPage() {
   );
 }
 
-it("turns a failed page chunk into a calm retry state and reloads at most once", async () => {
+function currentEntry() {
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = "/assets/index-current.js";
+  script.dataset.testEntry = "";
+  document.head.append(script);
+}
+
+function failedPage() {
+  const Page = failingPage();
+  return render(
+    <LoadBoundary location="/n/1" onRetry={vi.fn()}>
+      <Suspense fallback="Opening…">
+        <Page />
+      </Suspense>
+    </LoadBoundary>,
+  );
+}
+
+it("automatically reloads at most once when the server has a new entry", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  currentEntry();
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(
+      async () =>
+        new Response(
+          '<script type="module" src="/assets/index-new.js"></script>',
+        ),
+    );
+  const page = failedPage();
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  await waitFor(() =>
+    expect(
+      Number(sessionStorage.getItem("spunto:chunk-reload")),
+    ).toBeGreaterThan(0),
+  );
+  expect(fetch).toHaveBeenCalledWith(
+    "/",
+    expect.objectContaining({
+      cache: "no-store",
+      credentials: "omit",
+      mode: "same-origin",
+      referrerPolicy: "no-referrer",
+    }),
+  );
+  const marker = sessionStorage.getItem("spunto:chunk-reload");
+  page.unmount();
+  await act(async () => {
+    failedPage();
+  });
+  expect(sessionStorage.getItem("spunto:chunk-reload")).toBe(marker);
+});
+
+it.each(["same entry", "HTTP error", "unreachable"] as const)(
+  "keeps the retry button without taking over navigation on %s",
+  async (scenario) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    currentEntry();
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      if (scenario === "unreachable") throw new TypeError("Network failure");
+      const entry = scenario === "same entry" ? "current" : "new";
+      return new Response(
+        `<script type="module" src="/assets/index-${entry}.js"></script>`,
+        {
+          status: scenario === "same entry" ? 200 : 503,
+        },
+      );
+    });
+    await act(async () => {
+      failedPage();
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem("spunto:chunk-reload")).toBeNull();
+    expect(screen.getByText("Something didn’t load.")).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Try again" })
+        .disabled,
+    ).toBe(false);
+  },
+);
+
+it.each(["unmount", "route change", "online retry"] as const)(
+  "discards a delayed build check after %s",
+  async (scenario) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    currentEntry();
+    let finish!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+    const fetch = vi.spyOn(globalThis, "fetch").mockReturnValue(response);
+    const Page = failingPage();
+    const view = (location: string, failed: boolean): ReactNode => (
+      <LoadBoundary
+        location={location}
+        onRetry={() => page.rerender(view(location, false))}
+      >
+        <Suspense fallback="Opening…">
+          {failed ? <Page /> : "Note opened"}
+        </Suspense>
+      </LoadBoundary>
+    );
+    const page = render(view("/n/1", true));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(fetch).toHaveBeenCalledOnce();
+
+    if (scenario === "unmount") {
+      page.unmount();
+    } else if (scenario === "route change") {
+      page.rerender(view("/n/2", false));
+      page.rerender(view("/n/1", false));
+    } else {
+      fireEvent(window, new Event("online"));
+    }
+    expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    if (scenario !== "unmount")
+      expect(screen.getByText("Note opened")).toBeTruthy();
+
+    await act(async () => {
+      finish(
+        new Response(
+          '<script type="module" src="/assets/index-new.js"></script>',
+        ),
+      );
+    });
+    expect(sessionStorage.getItem("spunto:chunk-reload")).toBeNull();
+  },
+);
+
+it("retries an ordinary failed view without reloading the document", async () => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   const retry = vi.fn();
   function Harness() {
-    const [Page, setPage] = useState<ComponentType>(failingPage);
+    const [Page, setPage] = useState<ComponentType>(() =>
+      lazy(() => Promise.reject(new Error("View failed"))),
+    );
     return (
       <LoadBoundary
         location="/n/1"
@@ -53,15 +187,9 @@ it("turns a failed page chunk into a calm retry state and reloads at most once",
     );
   }
   render(<Harness />);
-  expect(await screen.findByRole("alert")).toBeTruthy();
-  expect(screen.getByText("Something didn’t load.")).toBeTruthy();
-  // The one automatic reload is recorded so a second failure cannot loop.
-  const marker = sessionStorage.getItem("spunto:chunk-reload");
-  expect(Number(marker)).toBeGreaterThan(0);
-  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
   expect(retry).toHaveBeenCalledOnce();
   expect(await screen.findByText("Note opened")).toBeTruthy();
-  expect(sessionStorage.getItem("spunto:chunk-reload")).toBe(marker);
 });
 
 it("counts only this owner's saves that are still waiting for the server", () => {

@@ -1,10 +1,18 @@
 package io.theficos.spunto
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.database.DatabaseErrorHandler
+import android.database.sqlite.SQLiteDatabase
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,6 +21,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -22,12 +33,18 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.plugins.Vocabulary
 import io.theficos.spunto.core.plugins.outputComponents
+import io.theficos.spunto.data.local.ReplicaDatabaseCache
 import io.theficos.spunto.data.sync.ApiClient
 import io.theficos.spunto.data.sync.AuthConfig
+import io.theficos.spunto.data.sync.AuthStore
+import io.theficos.spunto.data.sync.SyncScheduler
+import java.io.File
+import java.util.Locale
 import java.net.URI
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -38,7 +55,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Real server workflows in an isolated Compose activity; no app account or replica access. */
+/** Real server workflows with isolated test credentials and a dedicated synthetic replica. */
 @RunWith(AndroidJUnit4::class)
 class NewFeatureWorkflowTest {
     @get:Rule val compose = createComposeRule()
@@ -46,6 +63,7 @@ class NewFeatureWorkflowTest {
 
     private val empty = JsonObject(emptyMap())
     private lateinit var api: ApiClient
+    private lateinit var testConfig: AuthConfig
     private val suffix = java.lang.Long.toUnsignedString(System.nanoTime(), 36)
 
     @Before fun requireDisposableLoopbackServer() = runBlocking {
@@ -68,8 +86,9 @@ class NewFeatureWorkflowTest {
             arguments.getString("spunto.workflow.password") ?: "browser acceptance password",
             "Synthetic workflow $suffix",
         )
-        // The token exists only in this test's memory, never AuthStore or the local replica.
-        api = ApiClient(AuthConfig(address, credential.token, credential.id, credential.name, true))
+        // The UI smoke test copies this credential only into its isolated cache and replica.
+        testConfig = AuthConfig(address, credential.token, credential.id, credential.name, true)
+        api = ApiClient(testConfig)
     }
 
     private fun enable(plugin: String) = runBlocking {
@@ -77,6 +96,7 @@ class NewFeatureWorkflowTest {
         val declaration = catalog.map { it.jsonObject }.single { it["id"]!!.jsonPrimitive.content == plugin }
         api.post("/api/v1/plugins/$plugin/enable", buildJsonObject {
             put("permissions", declaration["permissions"]!!)
+            declaration["review_token"]?.let { put("review_token", it) }
         })
     }
 
@@ -116,7 +136,11 @@ class NewFeatureWorkflowTest {
                         Column(viewport.verticalScroll(rememberScrollState()).padding(16.dp)) {
                             key(current.generation) {
                                 outputComponents(current.output).forEach { component ->
-                                    Vocabulary(
+                                    if (plugin == DecisionJournalId && component["type"]?.jsonPrimitive?.content == "form") {
+                                        DecisionForm(component["schema"]!!.jsonObject, current.command, current.args, online = true, running = false) { values ->
+                                            send(current.command, JsonObject(current.args + values))
+                                        }
+                                    } else Vocabulary(
                                         component,
                                         onCommand = send,
                                         onForm = { values -> send(current.command, JsonObject(current.args + values)) },
@@ -330,19 +354,128 @@ class NewFeatureWorkflowTest {
         assertTrue(saved["body"]!!.jsonPrimitive.content.contains("## Constraints"))
     }
 
+    @Test fun italianAppLocaleLocalizesARealPluginFormAndKeepsTheWireValues() {
+        enable("context-packs")
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val configuration = Configuration(base.resources.configuration).apply { setLocale(Locale.ITALIAN) }
+        val context = base.createConfigurationContext(configuration)
+        val result = runBlocking {
+            pluginApi(testConfig, context.resources).requestPayload("/api/v1/plugins/context-packs/commands/edit", "POST", empty)
+        }
+        assertEquals("it", result.contentLanguage)
+        val form = outputComponents(result.body).single { it["type"]?.jsonPrimitive?.content == "form" }
+        val fields = form["schema"]!!.jsonObject["properties"]!!.jsonObject
+        assertEquals("Titolo della scheda", fields["title"]!!.jsonObject["title"]!!.jsonPrimitive.content)
+        assertEquals("save", fields["action"]!!.jsonObject["enum"]!!.jsonArray[0].jsonPrimitive.content)
+        var submitted: JsonObject? = null
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration) {
+                SpuntoTheme("carta", "light") {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        Text(context.getString(R.string.settings_plugin_context_packs_name), style = MaterialTheme.typography.titleLarge)
+                        Vocabulary(form, onForm = { submitted = it },
+                            choiceLabel = { field, value -> pluginFormChoice(context.resources, "context-packs", field, value) })
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Titolo della scheda").assertIsDisplayed()
+        compose.onNodeWithText("Brief title").assertDoesNotExist()
+        if (InstrumentationRegistry.getArguments().getString("spunto.workflow.screenshot") == "yes") {
+            val directory = requireNotNull(base.getExternalFilesDir(null))
+            File(directory, "plugin-form-it.png").outputStream().use {
+                check(compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        }
+        compose.onNodeWithText("Esegui").performScrollTo().performClick()
+        compose.onNodeWithText("Scegli un valore per «Titolo della scheda».").assertExists()
+        fill("Titolo della scheda", "Synthetic native plugin form")
+        compose.onNodeWithText("Salva").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Esegui").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("save", submitted?.get("action")?.jsonPrimitive?.content) }
+    }
+
+    @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {
+        runBlocking { api.post("/api/v1/plugins/decision-journal/disable", empty) }
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-decision-$suffix-"
+        val files = File(app.cacheDir, prefix).apply { mkdirs() }
+        val context = object : ContextWrapper(app) {
+            private fun databaseName(name: String) = File(name).name.let { if (it.startsWith(prefix)) it else prefix + it }
+            override fun getApplicationContext(): Context = this
+            override fun getFilesDir(): File = files
+            override fun getDatabasePath(name: String): File = app.getDatabasePath(databaseName(name))
+            override fun openOrCreateDatabase(name: String, mode: Int, factory: SQLiteDatabase.CursorFactory?): SQLiteDatabase =
+                app.openOrCreateDatabase(databaseName(name), mode, factory)
+            override fun openOrCreateDatabase(name: String, mode: Int, factory: SQLiteDatabase.CursorFactory?, errorHandler: DatabaseErrorHandler?): SQLiteDatabase =
+                app.openOrCreateDatabase(databaseName(name), mode, factory, errorHandler)
+            override fun getSharedPreferences(name: String, mode: Int) = app.getSharedPreferences(prefix + name, mode)
+        }
+        val auth = AuthStore(context)
+        val connected = MutableStateFlow(true)
+        runBlocking { auth.save(testConfig) }
+        val container = ReplicaContainer(context, testConfig.replicaId, 1, auth, AppLock(context), connected,
+            SyncScheduler(context), ReplicaDatabaseCache(context), publishesPlugins = false)
+        lateinit var model: SpuntoViewModel
+        val mounted = mutableStateOf(true)
+        fun updateManifest() {
+            val manifest = runBlocking { api.manifest() }
+            compose.runOnIdle { container.manifest.store(manifest); model.manifest.value = manifest }
+        }
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        try {
+            updateManifest()
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
+            compose.waitUntil(15_000) { model.online.value }
+            compose.onNodeWithText("Record decision").assertDoesNotExist()
+
+            enable(DecisionJournalId)
+            updateManifest()
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText("Record decision") and hasClickAction())
+            compose.onNodeWithText("Record decision").assertIsDisplayed().performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("What did you decide?").fetchSemanticsNodes().isNotEmpty() }
+            val decision = "Keep the synthetic launch reversible $suffix."
+            fill("What did you decide?", decision)
+            compose.runOnIdle { connected.value = false }
+            compose.waitUntil(5_000) { !model.online.value }
+            compose.onNodeWithText("Save decision").assertIsNotEnabled()
+            compose.onNodeWithText(decision).assertExists()
+            compose.runOnIdle { connected.value = true }
+            compose.waitUntil(10_000) { model.online.value }
+            compose.onNodeWithText("Save decision").performScrollTo().performClick()
+            compose.waitUntil(20_000) { compose.onAllNodesWithText("Open decision note").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Decision saved.").assertExists()
+            compose.onNodeWithText("Open decision note").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Review decision").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("View outcomes").assertIsDisplayed()
+            compose.runOnIdle { connected.value = false }
+            compose.waitUntil(5_000) { !model.online.value }
+            compose.onNodeWithText("Review decision").assertDoesNotExist()
+            compose.onNodeWithText("View outcomes").assertDoesNotExist()
+            assertTrue(compose.onAllNodesWithText(decision, substring = true).fetchSemanticsNodes().isNotEmpty())
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
     @Test fun decisionFormsReviewAndReopenPreserveOriginalOwnerWords() {
         enable("decision-journal")
         val flow = Workflow("decision-journal", "record-decision")
-        fill("Decision title", "Native decision $suffix")
         fill("What did you decide?", "Use one local SQLite file.")
-        fill("Alternatives considered", "Run a separate database service.")
+        compose.onNodeWithText("Decision title (optional)").assertDoesNotExist()
+        compose.onNodeWithText("Add details").performScrollTo().performClick()
+        fill("Decision title (optional)", "Native decision $suffix")
+        fill("Alternatives considered (optional)", "Run a separate database service.")
         val rationale = "One owner needs predictable operations.\nRetain these original owner words."
         val expected = "Restore the synthetic library in five minutes."
-        fill("Why this choice?", rationale)
-        fill("Expected outcome", expected)
-        fill("Review date (YYYY-MM-DD, optional)", "2030-02-01")
+        fill("Why this choice? (optional)", rationale)
+        fill("Expected outcome (optional)", expected)
+        fill("Review date (optional)", "2030-02-01")
         compose.onNodeWithText("Request ID", substring = false).assertDoesNotExist()
-        flow.submit()
+        flow.click("Save decision")
         val rootId = ids(flow.output()).single()
         val original = note(rootId)
         val originalBody = original["body"]!!.jsonPrimitive.content
@@ -352,10 +485,10 @@ class NewFeatureWorkflowTest {
         assertFalse(original["machine"]!!.jsonPrimitive.boolean)
 
         flow.open("review-decision", buildJsonObject { put("note_id", rootId) })
-        fill("What happened, or why reopen?", "The synthetic restore took three minutes.")
+        fill("What happened or why reopen?", "The synthetic restore took three minutes.")
         fill("What did you learn? (optional)", "Keep a second backup copy.")
-        compose.onNodeWithText("closed", substring = false).performScrollTo().performClick()
-        flow.submit()
+        compose.onNodeWithText("Closed", substring = false).performScrollTo().performClick()
+        flow.click("Record outcome")
         val outcomeId = ids(flow.output()).first()
         val outcomeBody = note(outcomeId)["body"]!!.jsonPrimitive.content
         assertTrue(outcomeBody.contains("/n/$rootId"))
@@ -364,14 +497,14 @@ class NewFeatureWorkflowTest {
 
         // The outcome note also resolves its original journal entry when reopening.
         flow.open("review-decision", buildJsonObject { put("note_id", outcomeId) })
-        fill("What happened, or why reopen?", "A new storage constraint requires another review.")
-        fill("Next review date (YYYY-MM-DD, optional)", "2030-03-01")
-        compose.onNodeWithText("open", substring = false).performScrollTo().performClick()
-        flow.submit()
+        fill("What happened or why reopen?", "A new storage constraint requires another review.")
+        fill("Next review date (optional)", "2030-03-01")
+        compose.onNodeWithText("Open for follow-up", substring = false).performScrollTo().performClick()
+        flow.click("Record outcome")
         assertNotEquals(outcomeId, ids(flow.output()).first())
         assertEquals(originalBody, note(rootId)["body"]!!.jsonPrimitive.content)
         assertEquals(outcomeBody, note(outcomeId)["body"]!!.jsonPrimitive.content)
         flow.open("journal", buildJsonObject { put("note_id", rootId) })
-        assertTrue(resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output()).contains("Open · revision 3 · review 2030-03-01"))
+        assertTrue(resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output()).contains("Open · Review on 2030-03-01"))
     }
 }

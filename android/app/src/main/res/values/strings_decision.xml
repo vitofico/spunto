@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="decision_empty">No decisions recorded yet.</string>
+    <string name="decision_outcomes">View outcomes</string>
+    <string name="decision_opening">Opening…</string>
+    <string name="decision_conflict">This decision changed. Open the latest review before recording an outcome.</string>
+    <string name="decision_title">Decision title</string>
+    <string name="decision_choice">What did you decide?</string>
+    <string name="decision_alternatives">Alternatives considered</string>
+    <string name="decision_reason">Why this choice?</string>
+    <string name="decision_expected">Expected outcome</string>
+    <string name="decision_optional_field">%1$s (optional)</string>
+    <string name="decision_actual">What happened or why reopen?</string>
+    <string name="decision_reflection">What did you learn? (optional)</string>
+    <string name="decision_status">After this review</string>
+    <string name="decision_next_review">Next review date (optional)</string>
+    <string name="decision_review_date">Review date (optional)</string>
+    <string name="decision_date_hint">Use YYYY-MM-DD.</string>
+    <string name="decision_invalid_date">Enter a valid date in YYYY-MM-DD format.</string>
+    <string name="decision_open">Open for follow-up</string>
+    <string name="decision_reviewed">Reviewed</string>
+    <string name="decision_closed">Closed</string>
+    <string name="decision_inherited_privacy">This decision will be private because the source note is private.</string>
+    <string name="decision_connect_to_save">Connect to the server to save. You can keep editing here.</string>
+    <string name="decision_check_fields">Complete the required fields and check their length.</string>
+    <string name="decision_record_outcome">Record outcome</string>
+    <string name="decision_save">Save decision</string>
+    <string name="decision_resume_review">Resume review</string>
+    <string name="decision_more_outcomes">More outcomes</string>
+    <string name="decision_more_decisions">More decisions</string>
+    <string name="decision_saved">Decision saved.</string>
+    <string name="decision_outcome_saved">Outcome recorded.</string>
+    <string name="decision_open_outcome">Open outcome note</string>
+    <string name="decision_open_original">Open decision note</string>
+    <string name="decision_saved_sync">Sync to open the saved note on this device.</string>
+    <string name="decision_sync">Sync now</string>
+    <string name="decision_add_details">Add details</string>
+    <string name="decision_hide_details">Hide details</string>
+    <string name="decision_privacy_hint">Private keeps this note out of AI and network plugins. Space access still applies.</string>
+    <string name="decision_status_open">Open</string>
+    <string name="decision_status_reopened">Reopened</string>
+    <string name="decision_review_on">Review on %1$s</string>
+    <string name="decision_review_due">Review due %1$s</string>
+</resources>

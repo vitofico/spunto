@@ -17,6 +17,7 @@ from spunto.api.errors import Problem
 from spunto.core.text import label_key, search_query
 from spunto.core.text import labels as label_tokens
 from spunto.host import ContextError, Ctx, Plugin
+from spunto.host.language import answer_language, tr
 
 plugin = Plugin("ask")
 ABSTENTION = "Nothing in your notes covers this"
@@ -136,7 +137,7 @@ def conversation(ctx, key):
     value = memory(ctx)[0].get(key) if isinstance(key, str) else None
     if value is None or value["owner"] != binding(ctx) or value["generation"] != ctx.generation:
         raise Problem(
-            404, "ask_conversation_expired", "That conversation expired. Start a new one."
+            404, "ask_conversation_expired", tr("That conversation expired. Start a new one.")
         )
     return value
 
@@ -146,13 +147,13 @@ def controls(key, value):
         {
             "type": "command",
             "id": "ask",
-            "title": "Ask a follow-up",
+            "title": tr("Ask a follow-up"),
             "args": {"conversation_id": key, "after_turn": value["turn"]},
         },
         {
             "type": "command",
             "id": "clear-conversation",
-            "title": "New conversation",
+            "title": tr("New conversation"),
             "args": {"conversation_id": key},
         },
     ]
@@ -169,7 +170,7 @@ async def clear_conversation(ctx: Ctx, conversation_id: str) -> dict:
     value = conversations.get(conversation_id) if isinstance(conversation_id, str) else None
     if value is not None and value["owner"] == binding(ctx):
         forget(conversations, pending, conversation_id)
-    return {"type": "text", "text": "Conversation cleared."}
+    return {"type": "text", "text": tr("Conversation cleared.")}
 
 
 def without_labels(text):
@@ -218,7 +219,7 @@ def question_form():
             "properties": {
                 "question": {
                     "type": "string",
-                    "title": "Question",
+                    "title": tr("Question"),
                     "minLength": 1,
                     "maxLength": MAX_QUESTION,
                 }
@@ -259,9 +260,11 @@ async def ask(
         conversation_id, current = new_conversation(ctx, note_actions=note_actions)
         after_turn = 0
     if current["turn"] != after_turn:
-        raise Problem(409, "ask_conversation_changed", "The conversation changed. Start a new one.")
+        raise Problem(
+            409, "ask_conversation_changed", tr("The conversation changed. Start a new one.")
+        )
     if current["active"] is not None:
-        raise Problem(409, "ask_question_in_progress", "A question is already being answered.")
+        raise Problem(409, "ask_question_in_progress", tr("A question is already being answered."))
     request = object()
     current["active"] = request
     try:
@@ -274,7 +277,9 @@ async def ask(
                 or current["active"] is not request
             ):
                 raise Problem(
-                    409, "ask_conversation_changed", "The conversation changed. Start a new one."
+                    409,
+                    "ask_conversation_changed",
+                    tr("The conversation changed. Start a new one."),
                 )
 
         proposed = (
@@ -289,7 +294,7 @@ async def ask(
         ctx.check()
         if conversation(ctx, conversation_id) is not current or current["active"] is not request:
             raise Problem(
-                409, "ask_conversation_changed", "The conversation changed. Start a new one."
+                409, "ask_conversation_changed", tr("The conversation changed. Start a new one.")
             )
         citations = answer.citations if answer is not None else []
         fingerprints = {
@@ -318,7 +323,7 @@ async def ask(
                 {
                     "type": "command",
                     "id": "save-answer",
-                    "title": "Save as note",
+                    "title": tr("Save as note"),
                     "args": {"answer_id": key},
                 }
             )
@@ -395,13 +400,13 @@ async def answer_question(ctx, question, current):
         if len(sources) == 8:
             break
     closest = {"type": "notes", "ids": [note["id"] for note in sources]}
-    empty = RETRIEVAL_UNAVAILABLE if unavailable else ABSTENTION
+    empty = tr(RETRIEVAL_UNAVAILABLE if unavailable else ABSTENTION)
     if not sources:
         return [{"type": "text", "text": empty}], None, [], labels
     hints = {hit["id"]: hit["chunks"] for hit in meaning if hit.get("chunks")}
     answer = await ctx.ai.chat(
         Answer,
-        prompt=PROMPT + question,
+        prompt=answer_language() + PROMPT + question,
         notes=sources,
         purpose="ask",
         max_note_chars=MAX_CONTEXT,
@@ -423,7 +428,7 @@ async def answer_question(ctx, question, current):
             or current_note["private"]
             or current_note["archived"]
         ):
-            return [{"type": "text", "text": SOURCE_CHANGED}], None, [], labels
+            return [{"type": "text", "text": tr(SOURCE_CHANGED)}], None, [], labels
     if not answer.found or not answer.citations:
         return [{"type": "text", "text": empty}, closest], None, [], labels
     return (
@@ -456,7 +461,7 @@ async def save_answer(
         or answer["generation"] != ctx.generation
         or answer["owner"] != binding(ctx)
     ):
-        return {"type": "text", "text": "That answer expired. Ask again."}
+        return {"type": "text", "text": tr("That answer expired. Ask again.")}
     if answer["saved"]:
         return {"type": "notes", "ids": [answer["saved"]]}
     for note_id in answer["citations"]:
@@ -468,9 +473,13 @@ async def save_answer(
             or note["version"] != answer["versions"][note_id]
             or note["evidence_fingerprint"] != answer["fingerprints"][note_id]
         ):
-            return {"type": "text", "text": "A source changed. Ask again."}
-    sources = "\n\nSources: " + ", ".join(
-        f"[Note {index}](/n/{note_id})" for index, note_id in enumerate(answer["citations"], 1)
+            return {"type": "text", "text": tr("A source changed. Ask again.")}
+    sources = "\n\n" + tr(
+        "Sources: {sources}",
+        sources=", ".join(
+            f"[{tr('Note {number}', number=index)}](/n/{note_id})"
+            for index, note_id in enumerate(answer["citations"], 1)
+        ),
     )
     note = await ctx.notes.create(
         "# "

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_capture_conflict">Ce formulaire a déjà été envoyé avec d’autres informations. Consultez les décisions avant de réessayer.</string>
+    <string name="plugin_review_details">Consultez les informations actuelles de l’extension.</string>
+    <string name="plugin_owner_required">Seul le propriétaire de l’espace peut effectuer cette action.</string>
+    <string name="plugin_command_denied">Cette action de l’extension n’est pas autorisée.</string>
+    <string name="plugin_reads_notes">Lit vos notes</string>
+    <string name="plugin_needs_attachments">Nécessite un espace de stockage pour les pièces jointes.</string>
+    <string name="plugin_check_secrets">Les secrets de l’extension sont indisponibles. Vérifiez l’environnement.</string>
+    <string name="plugin_needs_index">L’index de recherche des notes est indisponible. Vérifiez l’indexation dans les paramètres d’IA.</string>
+    <string name="plugin_last_run_failed">La dernière exécution a échoué.</string>
+    <string name="plugin_working">Traitement en cours…</string>
+    <string name="plugin_collision">Combiner des idées</string>
+    <string name="plugin_builds_on">S’appuie sur</string>
+    <string name="plugin_challenges">Remet en question</string>
+    <string name="plugin_replaces">Remplace</string>
+    <string name="plugin_action">Action</string>
+    <string name="plugin_translate_to">Traduire en</string>
+    <string name="plugin_choose_note">Choisir une note</string>
+    <string name="plugin_auto_language">Détection automatique</string>
+    <string name="plugin_delete">Supprimer</string>
+    <string name="plugin_accept_title">Utiliser le titre</string>
+    <string name="plugin_minutes_read">%1$d min de lecture</string>
+</resources>

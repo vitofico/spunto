@@ -1,5 +1,6 @@
 import { t } from "../lib/i18n";
-import type { Suggestion } from "../lib/types";
+import { isBundledPlugin } from "../lib/localizePlugins";
+import type { Plugin, Suggestion } from "../lib/types";
 export function requiresSuggestionPreview(s: Suggestion) {
   if (s.one_tap === true) return false;
   return (
@@ -67,4 +68,13 @@ export function appliedSuggestionTitle(s: Suggestion) {
     default:
       return t("commandproposal.applied");
   }
+}
+
+export function suggestionReason(s: Suggestion, plugin?: Plugin) {
+  return s.plugin === "duplicates" &&
+    s.action === "merge_notes" &&
+    plugin &&
+    isBundledPlugin(plugin)
+    ? t("pluginui.compare_duplicates")
+    : s.reason;
 }

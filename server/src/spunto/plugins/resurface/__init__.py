@@ -4,6 +4,7 @@ import random
 from datetime import datetime
 
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._notes import iter_notes
 
 plugin = Plugin("resurface")
@@ -55,7 +56,10 @@ async def daily(ctx: Ctx) -> None:
         {
             "type": "notes",
             "items": [
-                {"id": picked["id"], "reason": "On this day" if anniversary else "From your notes"}
+                {
+                    "id": picked["id"],
+                    "reason": tr("On this day") if anniversary else tr("From your notes"),
+                }
             ],
         },
     )

@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 
 from spunto.api.errors import Problem
+from spunto.host.language import tr
 
 MAX_SINGLE = 20_000
 MAX_CONTEXT = 50_000
@@ -36,7 +37,7 @@ async def unchanged(ctx, notes):
     for old in notes:
         current = await eligible(ctx, old["id"], maximum=1_000_000)
         if not current or current["version"] != old["version"]:
-            raise Problem(409, "version_conflict", "A source changed; run the command again.")
+            raise Problem(409, "version_conflict", tr("A source changed; run the command again."))
 
 
 def excerpts(notes, maximum=MAX_CONTEXT):
@@ -57,8 +58,14 @@ def cited_body(body, citations):
         raise ValueError("undeclared_citation")
     return (
         body
-        + "\n\nSources: "
-        + ", ".join(f"[Note {index}](/n/{note_id})" for index, note_id in enumerate(citations, 1))
+        + "\n\n"
+        + tr(
+            "Sources: {sources}",
+            sources=", ".join(
+                f"[{tr('Note {number}', number=index)}](/n/{note_id})"
+                for index, note_id in enumerate(citations, 1)
+            ),
+        )
     )
 
 
@@ -100,13 +107,13 @@ async def save_receipt(ctx, key, receipt):
     if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key):
         raise ValueError("invalid result id")
     if receipt is None or receipt["expires"] <= ctx.clock():
-        return text("That result expired. Run the command again.")
+        return text(tr("That result expired. Run the command again."))
     if receipt.get("saved"):
         note = await ctx.notes.get(receipt["saved"])
         return (
             {"type": "notes", "ids": [note["id"]]}
             if note
-            else text("The saved note is unavailable.")
+            else text(tr("The saved note is unavailable."))
         )
     note = await ctx.notes.create(
         receipt["body"],

@@ -14,6 +14,7 @@ from spunto.ai.passages import evidence, passages
 from spunto.api.errors import Problem
 from spunto.core.notes import MAX_BODY
 from spunto.core.reviewed_notes import metadata, replacement, transact
+from spunto.host.language import tr
 from spunto.host.plugin import ContextError
 
 MAX_ACTIONS = 32
@@ -141,7 +142,7 @@ def clarify():
     return [
         {
             "type": "text",
-            "text": "Choose one note and describe the change, or describe a new note to draft.",
+            "text": tr("Choose one note and describe the change, or describe a new note to draft."),
         }
     ]
 
@@ -297,7 +298,7 @@ def store(ctx, action_id, action):
     action["bytes"] = len(json.dumps(action, ensure_ascii=False).encode())
     if action["bytes"] > MAX_ACTION_BYTES:
         raise Problem(
-            422, "ask_preview_too_large", "That preview is too large. Use the note editor."
+            422, "ask_preview_too_large", tr("That preview is too large. Use the note editor.")
         )
     pending[action_id] = action
     while True:
@@ -345,7 +346,7 @@ async def propose(ctx, question, current, conversation_id, *, check):
         return [
             {
                 "type": "text",
-                "text": "A writable session or device is required to review note changes.",
+                "text": tr("A writable session or device is required to review note changes."),
             }
         ]
     ctx.check("notes.review")
@@ -402,7 +403,7 @@ async def propose(ctx, question, current, conversation_id, *, check):
             or receipt["conversation"] != conversation_id
         ):
             return [
-                {"type": "text", "text": "That authoring action expired. Open the note editor."}
+                {"type": "text", "text": tr("That authoring action expired. Open the note editor.")}
             ]
     expected_authoring = dict(current["authoring_state"]) if authoring else None
     inherited = (
@@ -485,7 +486,8 @@ async def propose(ctx, question, current, conversation_id, *, check):
         if not plan.body.strip():
             return clarify()
         action.update(body=plan.body)
-        previews = ["Create this note?\n\n" + code(plan.body)]
+        previews = [tr("Create this note?") + "\n\n" + code(plan.body)]
+        # Installed clients recognize this marker and display their own translated controls.
         title = "Create note"
     else:
         if authoring:
@@ -539,7 +541,7 @@ async def propose(ctx, question, current, conversation_id, *, check):
             if row["version"] != note["version"] or row["body"] != note["body"]:
                 return [{"type": "text", "text": ask.SOURCE_CHANGED}]
             meta = metadata(row)
-            target_title = row["title"] or "Untitled"
+            target_title = row["title"] or tr("Untitled")
         action.update(
             note_id=note["id"],
             version=note["version"],
@@ -552,13 +554,14 @@ async def propose(ctx, question, current, conversation_id, *, check):
         if authoring:
             action["created_receipt"] = current["authoring_receipt"]
         current["action_target"] = note["id"]
-        previews = ["Before:\n\n" + code(before)]
+        previews = [tr("Before:") + "\n\n" + code(before)]
         previews.extend(
-            "After:\n\n" + code(after[start : start + 3000]) for start in range(0, len(after), 3000)
+            tr("After:") + "\n\n" + code(after[start : start + 3000])
+            for start in range(0, len(after), 3000)
         )
         if not after:
-            previews.append("After:\n\n(empty text)")
-        title = "Apply change"
+            previews.append(tr("After:") + "\n\n" + tr("(empty text)"))
+        title = tr("Apply change")
     if any(len(preview) > 4000 for preview in previews):
         return clarify()
     check()
@@ -570,7 +573,7 @@ async def propose(ctx, question, current, conversation_id, *, check):
         {"type": "text", "text": "Preview only. Nothing changes until you confirm."},
     ]
     if action.get("note_id"):
-        result.append({"type": "text", "text": "Target note: " + target_title})
+        result.append({"type": "text", "text": tr("Target note: {title}", title=target_title)})
     result.extend({"type": "markdown", "text": preview} for preview in previews)
     references = list(
         dict.fromkeys([*([action["note_id"]] if action.get("note_id") else []), *factual])
@@ -587,7 +590,7 @@ async def confirm(ctx, action_id, stage):
         raise ValueError("invalid reviewed action receipt")
     action = ask.receipts(ctx).get(action_id)
     if action is None or action.get("kind") != "review":
-        return {"type": "text", "text": "That action expired. Ask again."}
+        return {"type": "text", "text": tr("That action expired. Ask again.")}
 
     def check():
         if (
@@ -595,7 +598,7 @@ async def confirm(ctx, action_id, stage):
             or action["generation"] != ctx.generation
             or action["owner"] != ask.binding(ctx)
         ):
-            raise Problem(404, "ask_action_expired", "That action expired. Ask again.")
+            raise Problem(404, "ask_action_expired", tr("That action expired. Ask again."))
         ask.conversation(ctx, action["conversation"])
 
     check()
@@ -627,10 +630,12 @@ async def confirm(ctx, action_id, stage):
         "created_receipt"
     ):
         current["authoring_state"] = result
-    title = "Undo" if result["state"] == "undo" else "Undo complete"
-    text = "Note created." if result["kind"] == "create" else "Change applied."
+    title = tr("Undo" if result["state"] == "undo" else "Undo complete")
+    text = tr("Note created." if result["kind"] == "create" else "Change applied.")
     if result["state"] == "done":
-        text = "Created note moved to Trash." if result["kind"] == "create" else "Change undone."
+        text = tr(
+            "Created note moved to Trash." if result["kind"] == "create" else "Change undone."
+        )
     items = [{"type": "text", "text": text}]
     if result["state"] != "done" or result["kind"] != "create":
         # A receipt can acknowledge an earlier operation without exposing a note

@@ -31,13 +31,15 @@ import java.util.concurrent.TimeUnit
 @Serializable data class PushResponse(val epoch:String,val results:List<PushResult>)
 @Serializable data class ReconcileResponse(val epoch:String,@SerialName("restore_ids") val restoreIds:List<String>,@SerialName("workspace_role") val workspaceRole:String?=null)
 /** [detail] is the problem document's safe sentence; [retryAfter] the seconds a rate limit asks to wait. */
-class ApiException(val status:Int,val code:String,val detail:String="",val retryAfter:Long?=null):Exception("HTTP $status: $code")
+class ApiException(val status:Int,val code:String,val detail:String="",val retryAfter:Long?=null,val contentLanguage:String?=null):Exception("HTTP $status: $code")
 internal val ApiException.readOnlyWorkspace get()=status==403 && code=="read_only_space"
 private val defaultApiHttpClient=OkHttpClient.Builder().callTimeout(40,TimeUnit.SECONDS).readTimeout(35,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
 // Generation can outlive an ordinary sync request, including operator-installed tools.
 private val pluginCommandPath=Regex("/api/v1/plugins/[a-z][a-z0-9-]{1,23}/commands/[a-z][a-z0-9-]{0,127}")
-class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,private val authority:suspend ()->Boolean={true}) {
- fun guarded(check:suspend ()->Boolean)=ApiClient(config,client,check)
+data class ApiPayload(val body:JsonElement,val contentLanguage:String?)
+class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
+ private val language:()->String?={null},private val authority:suspend ()->Boolean={true}) {
+ fun guarded(check:suspend ()->Boolean)=ApiClient(config,client,language,check)
  private suspend fun checkAuthority() {check(authority()) {"credentials_changed"}}
  private val client=client.newBuilder().followRedirects(false).followSslRedirects(false).build()
  private val extendedCommandClient by lazy { this.client.newBuilder().readTimeout(240,TimeUnit.SECONDS).callTimeout(240,TimeUnit.SECONDS).build() }
@@ -46,19 +48,22 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  private fun problem(response:Response,text:String,fallback:String):ApiException {
   val data=runCatching {json.parseToJsonElement(text).jsonObject}.getOrNull()
   fun field(name:String)=(data?.get(name) as? JsonPrimitive)?.contentOrNull
-  return ApiException(response.code,field("code")?:fallback,field("detail").orEmpty(),response.header("Retry-After")?.toLongOrNull())
+  return ApiException(response.code,field("code")?:fallback,field("detail").orEmpty(),response.header("Retry-After")?.toLongOrNull(),response.header("Content-Language"))
  }
  init { val url=config.serverUrl.toHttpUrl(); requireLocal(url.scheme=="https" || config.httpConsent,LocalOperationProblem.UnencryptedConnectionConsentRequired) { "Confirm the unencrypted connection before connecting." }; requireLocal(url.encodedPath=="/" && url.username.isEmpty() && url.password.isEmpty(),LocalOperationProblem.ServerRootRequired) { "Use the server's root URL." } }
- suspend fun request(path:String, method:String="GET", body:JsonElement?=null, query:Map<String,String> = emptyMap()):JsonElement = withContext(Dispatchers.IO) {
+ suspend fun request(path:String, method:String="GET", body:JsonElement?=null, query:Map<String,String> = emptyMap()):JsonElement =
+  requestPayload(path,method,body,query).body
+ suspend fun requestPayload(path:String, method:String="GET", body:JsonElement?=null, query:Map<String,String> = emptyMap()):ApiPayload = withContext(Dispatchers.IO) {
   checkAuthority()
   val url=(config.serverUrl.trimEnd('/')+path).toHttpUrl().newBuilder().apply { query.forEach { (k,v)->addQueryParameter(k,v) } }.build()
   val builder=Request.Builder().url(url)
+  language()?.let {builder.header("Accept-Language",it)}
   if(config.token.isNotEmpty()) builder.header("Authorization","Bearer ${config.token}")
   if(method!="GET") builder.method(method,(body?:JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
   val result=requestClient(path,method).newCall(builder.build()).awaitDecodedResponse { response ->
    val text=response.body?.string().orEmpty()
    if(!response.isSuccessful) throw problem(response,text,"request_failed")
-   if(text.isBlank()) JsonObject(emptyMap()) else json.parseToJsonElement(text)
+   ApiPayload(if(text.isBlank()) JsonObject(emptyMap()) else json.parseToJsonElement(text),response.header("Content-Language"))
   }
   checkAuthority();result
  }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_capture_conflict">Este formulario ya se envió con otros datos. Consulta Decisiones antes de volver a intentarlo.</string>
+    <string name="plugin_review_details">Revisa los datos actuales del complemento.</string>
+    <string name="plugin_owner_required">Solo la persona propietaria del espacio puede ejecutar esta acción.</string>
+    <string name="plugin_command_denied">Esta acción del complemento no está permitida.</string>
+    <string name="plugin_reads_notes">Lee tus notas</string>
+    <string name="plugin_needs_attachments">Necesita almacenamiento para archivos adjuntos.</string>
+    <string name="plugin_check_secrets">Los secretos del complemento no están disponibles. Comprueba el entorno.</string>
+    <string name="plugin_needs_index">El índice de búsqueda de notas no está disponible. Comprueba la indexación en los ajustes de IA.</string>
+    <string name="plugin_last_run_failed">La última ejecución falló.</string>
+    <string name="plugin_working">Procesando…</string>
+    <string name="plugin_collision">Combinar ideas</string>
+    <string name="plugin_builds_on">Se basa en</string>
+    <string name="plugin_challenges">Cuestiona</string>
+    <string name="plugin_replaces">Reemplaza</string>
+    <string name="plugin_action">Acción</string>
+    <string name="plugin_translate_to">Traducir a</string>
+    <string name="plugin_choose_note">Elegir una nota</string>
+    <string name="plugin_auto_language">Detección automática</string>
+    <string name="plugin_delete">Eliminar</string>
+    <string name="plugin_accept_title">Usar título</string>
+    <string name="plugin_minutes_read">%1$d min de lectura</string>
+</resources>

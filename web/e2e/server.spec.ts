@@ -1,5 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { signInOwner } from "./owner-session";
 
 // This suite uses the packaged app and real API. Fixture-only suites also run
 // against Vite when working on individual components.
@@ -8,21 +9,12 @@ test.skip(
   "Set SPUNTO_E2E_URL to the local server image",
 );
 
-async function login(page: Page) {
-  await page.goto("/");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.SPUNTO_E2E_PASSWORD ?? "browser acceptance password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByLabel("New note")).toBeVisible();
-}
-
 test("real server capture, image, checkbox, edit history, search and label rewrite", async ({
   page,
 }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await login(page);
+  await signInOwner(page);
   const suffix = Date.now().toString(36) + info.project.name;
   const label = "acceptance/" + suffix;
   const title = "Browser capture " + suffix;
@@ -128,7 +120,7 @@ test("real server capture, image, checkbox, edit history, search and label rewri
 test("real plugin switches and all-off mobile layout survive reload", async ({
   page,
 }, info) => {
-  await login(page);
+  await signInOwner(page);
   type CatalogPlugin = {
     id: string;
     permissions: string[];
@@ -336,7 +328,7 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
 test("production server applies device theme cookie before paint", async ({
   page,
 }) => {
-  await login(page);
+  await signInOwner(page);
   await page.context().addCookies([
     {
       name: "theme",
@@ -361,7 +353,7 @@ test("production server applies device theme cookie before paint", async ({
 });
 
 test("long label titles fit a compact screen", async ({ page }) => {
-  await login(page);
+  await signInOwner(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/l/layout/" + "x".repeat(110));
   await expect(page.getByLabel("Label actions")).toBeVisible();
@@ -382,7 +374,7 @@ test("real owner profile retains identity and exports portable Markdown", async 
     ["127.0.0.1", "localhost", "[::1]"],
     "Use a disposable loopback server",
   ).toContain(new URL(origin).hostname);
-  await login(page);
+  await signInOwner(page);
   const originalResponse = await page.request.get("/api/v1/settings");
   expect(originalResponse.ok()).toBe(true);
   const original = await originalResponse.json();

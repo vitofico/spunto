@@ -19,6 +19,7 @@ from spunto.api.errors import Problem
 from spunto.core.notes import Notes
 from spunto.core.plugin_notes import PluginNotes
 from spunto.host import Ctx, Host, ManifestError, validate_manifest
+from spunto.host.language import use_language
 from spunto.plugins import ask
 from spunto.plugins.ask import writes
 
@@ -76,7 +77,15 @@ async def test_create_empty_library_preview_confirm_replay_undo_and_terminal_rep
     domain = Notes(host.store, OWNER)
     provider.action_plan = plan("create", body="Call Luca Monday at 18:00.")
     before = await snapshot(host.store)
-    preview = await request(host, "Create a note: Call Luca Monday at 18:00.", note_actions=True)
+    with use_language("it"):
+        preview = await request(
+            host, "Create a note: Call Luca Monday at 18:00.", note_actions=True
+        )
+    assert any(item.get("title") == "Create note" for item in preview["items"])
+    assert any(
+        item.get("text") == "Preview only. Nothing changes until you confirm."
+        for item in preview["items"]
+    )
     assert await snapshot(host.store) == before
     assert action(preview)["stage"] == "preview"
     assert (

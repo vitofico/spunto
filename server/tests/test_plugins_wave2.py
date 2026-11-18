@@ -20,6 +20,7 @@ from spunto.core.notes import MAX_BODY, Notes
 from spunto.core.plugin_notes import PluginNotes
 from spunto.core.suggestions import decide, pending
 from spunto.host import ContextError, Ctx, Host, validate_output
+from spunto.host.language import use_language
 from spunto.plugins import (
     develop,
     digest,
@@ -310,7 +311,8 @@ async def test_direct_link_insert_guards_versions_and_retries_concurrently(wave)
     args["target_version"] = destination["version"]
     assert (await notes.get(source["id"]))["version"] == source["version"]
 
-    results = await asyncio.gather(insert(), insert())
+    with use_language("it"):
+        results = await asyncio.gather(insert(), insert())
     assert {item["text"] for item in results} == {
         "Link inserted.",
         "This note already links to the selected note.",

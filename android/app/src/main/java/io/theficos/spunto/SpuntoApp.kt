@@ -68,6 +68,7 @@ import kotlinx.serialization.json.*
  LaunchedEffect(manifestRaw) { validatedManifest=manifestFingerprint to withContext(Dispatchers.Default) { decodeThemeManifest(manifestRaw) } }
  val online by model.online.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
+ val owner by model.workspaceIsOwner.collectAsState()
  LaunchedEffect(manifest) {
   model.container.manifest.withCurrentPublication {
   val quick=model.container.manifest.enabled("quick-capture"); val dictate=model.container.manifest.enabled("dictation")
@@ -157,7 +158,7 @@ import kotlinx.serialization.json.*
      Box {
       IconButton(onClick={more=true},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
       DropdownMenu(expanded=more,onDismissRequest={more=false}) {
-       if(writable && globalToolPlugins(catalog).isNotEmpty()) DropdownMenuItem(text={Text(context.getString(R.string.plugin_global_tools))},onClick={more=false;nav.open("tools")})
+       if(owner && online && globalTools(catalog,manifest).isNotEmpty()) DropdownMenuItem(text={Text(context.getString(R.string.plugin_global_tools))},onClick={more=false;nav.open("tools")})
        DropdownMenuItem(text={Text(context.getString(R.string.core_filter_notes))},onClick={more=false;filtersOpen=true})
        if(writable && model.container.manifest.enabled("ask")) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
       }
@@ -177,7 +178,7 @@ import kotlinx.serialization.json.*
      route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo)
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
-     route=="tools" -> if(writable) GlobalToolsScreen(model,{nav.open("ask")})
+     route=="tools" -> if(owner) GlobalToolsScreen(model,{nav.open("ask")})
      route=="ask" -> if(writable) AskScreen(model,onNote=openNote)
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
@@ -197,8 +198,14 @@ import kotlinx.serialization.json.*
      route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))
     }
     val remote by model.remote.collectAsState()
-    LaunchedEffect(writable) {if(!writable) model.remote.value=JsonObject(emptyMap())}
-    if(writable && online && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})
+    val epoch by model.pluginReplicaEpochState.collectAsState()
+    val decisionAccess=owner && auth?.serverUrl==remote.string("authority") && remote.string("replica_epoch")==epoch &&
+     model.container.manifest.enabled(DecisionJournalId)
+    val journal=journalResult(remote)
+    LaunchedEffect(writable,decisionAccess,journal) {
+     if(!writable || journal && !decisionAccess) model.remote.value=JsonObject(emptyMap())
+    }
+    if(writable && (if(journal) decisionAccess else online) && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})
     if(writable && remote.string("suggestion_preview").isNotBlank()) {
      val outputs by model.outputs.collectAsState()
      outputs.firstOrNull { it.id==remote.string("suggestion_preview") && it.kind=="suggestion" && model.container.manifest.enabled(payload(it.payload).string("plugin")) }?.let { item -> SuggestionDecisionDialog(model,proposalData(item),openNote,{model.remote.value=JsonObject(emptyMap())}) }

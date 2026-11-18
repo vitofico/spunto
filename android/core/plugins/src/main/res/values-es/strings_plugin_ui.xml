@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_ui_no_notes">Todavía no hay notas que mostrar.</string>
+    <string name="plugin_ui_open_note">Abrir nota</string>
+    <string name="plugin_ui_connection">Los cambios requieren conexión.</string>
+    <string name="plugin_ui_web">Abrir en la aplicación web</string>
+    <string name="plugin_ui_run">Ejecutar</string>
+    <string name="plugin_ui_save_settings">Guardar ajustes</string>
+    <string name="plugin_ui_version">Basado en la versión %1$s</string>
+    <string name="plugin_ui_environment">Definido en el entorno</string>
+    <string name="plugin_ui_device">Solo en este dispositivo</string>
+    <string name="plugin_ui_choose_field">Elige un valor para «%1$s».</string>
+    <string name="plugin_ui_choose_label">Elegir un valor para «%1$s»</string>
+    <string name="plugin_ui_choose">Elegir…</string>
+    <string name="plugin_ui_find_option">Buscar una opción</string>
+    <string name="plugin_ui_no_matches">Sin resultados. Prueba otra búsqueda.</string>
+    <string name="plugin_ui_cancel">Cancelar</string>
+    <string name="plugin_ui_check">Comprueba los campos del formulario.</string>
+    <string name="plugin_ui_check_field">Comprueba «%1$s».</string>
+    <string name="plugin_ui_whole_number">Introduce un número entero para «%1$s».</string>
+    <string name="plugin_ui_number">Introduce un número para «%1$s».</string>
+    <string name="plugin_ui_range">«%1$s» está fuera del intervalo permitido.</string>
+    <string name="plugin_ui_length">Comprueba la longitud de «%1$s».</string>
+    <string name="plugin_ui_time">Utiliza HH:MM para «%1$s».</string>
+    <string name="plugin_ui_upgrade">Este formulario requiere una versión más reciente de la aplicación.</string>
+    <string name="plugin_ui_no_changes">Sin cambios de redacción.</string>
+    <string name="plugin_ui_removed">− Eliminado</string>
+    <string name="plugin_ui_added">+ Añadido</string>
+    <string name="plugin_ui_changes_only">Mostrar solo los cambios</string>
+    <string name="plugin_ui_comparison">Mostrar la comparación completa</string>
+    <string name="plugin_ui_proposed_text">Texto propuesto</string>
+    <string name="plugin_ui_unchanged">… texto sin cambios …</string>
+    <plurals name="plugin_ui_added_break">
+        <item quantity="one">Se añadió %d salto de línea</item>
+        <item quantity="other">Se añadieron %d saltos de línea</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_break">
+        <item quantity="one">Se eliminó %d salto de línea</item>
+        <item quantity="other">Se eliminaron %d saltos de línea</item>
+    </plurals>
+    <plurals name="plugin_ui_added_space">
+        <item quantity="one">Se añadió %d espacio</item>
+        <item quantity="other">Se añadieron %d espacios</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_space">
+        <item quantity="one">Se eliminó %d espacio</item>
+        <item quantity="other">Se eliminaron %d espacios</item>
+    </plurals>
+    <plurals name="plugin_ui_added_tab">
+        <item quantity="one">Se añadió %d tabulación</item>
+        <item quantity="other">Se añadieron %d tabulaciones</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_tab">
+        <item quantity="one">Se eliminó %d tabulación</item>
+        <item quantity="other">Se eliminaron %d tabulaciones</item>
+    </plurals>
+</resources>

@@ -172,5 +172,5 @@ internal class NativePluginManagerActions(
   }
  }
  fun closePage() {pageGeneration++;pageJob?.cancel();pageJob=null;page.value=PluginPageState()}
- private fun errorCode(error:Exception)=if(error is ApiException) error.detail.ifBlank {resources.getString(R.string.settings_the_server_couldn_t_update_plugins_try)} else resources.getString(R.string.settings_couldn_t_reach_your_server_cached_plugin)
+ private fun errorCode(error:Exception)=if(error is ApiException) if(error.detail.isBlank() && error.code !in setOf("plugin_review_changed","permissions_changed","pinned_by_environment","owner_required","read_only_space")) resources.getString(R.string.settings_the_server_couldn_t_update_plugins_try) else pluginApiError(resources,error) else resources.getString(R.string.settings_couldn_t_reach_your_server_cached_plugin)
 }

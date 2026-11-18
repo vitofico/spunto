@@ -92,6 +92,7 @@ beforeEach(() => {
   >);
   vi.spyOn(api, "session").mockResolvedValue(session);
   vi.spyOn(api, "manifest").mockResolvedValue({ plugins: [] } as never);
+  vi.spyOn(api, "catalog").mockResolvedValue({ plugins: [] } as never);
   vi.spyOn(api, "history").mockResolvedValue([]);
 });
 afterEach(() => {
@@ -310,4 +311,44 @@ describe("the note page", () => {
     expect(within(current).getByText("old", { selector: "del" })).toBeTruthy();
     expect(within(current).getByText("new", { selector: "ins" })).toBeTruthy();
   });
+});
+
+it("reaches the missing-model explanation from Note tools when the only tool is waiting", async () => {
+  const note = fixture();
+  vi.spyOn(api, "note").mockResolvedValue(note);
+  vi.mocked(api.catalog).mockResolvedValue({
+    plugins_rev: 1,
+    plugins: [
+      {
+        id: "tidy",
+        name: "Tidy text",
+        version: "1.0.0",
+        description: "",
+        category: "organize",
+        kind: "server",
+        permissions: ["ai.chat"],
+        state: "waiting",
+        position: 0,
+        contributes: {
+          commands: [
+            { id: "tidy", title: "Tidy text", where: ["note-actions"] },
+          ],
+        },
+      },
+    ],
+  });
+  render(<NotePage id={note.id} />, { wrapper: Wrapper });
+  await waitFor(() =>
+    expect(queryClient.getQueryData(["catalog"])).toBeDefined(),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Note tools" }));
+  const tools = screen.getByRole("dialog", { name: "Note tools" });
+  expect(within(tools).getByText(/Tidy text/)).toBeTruthy();
+  expect(
+    within(tools)
+      .getByRole("link", { name: "AI settings" })
+      .getAttribute("href"),
+  ).toBe("/settings/ai");
+  expect(within(tools).queryByRole("button", { name: "Tidy text" })).toBeNull();
 });

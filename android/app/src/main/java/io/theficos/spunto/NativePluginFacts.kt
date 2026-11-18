@@ -49,7 +49,18 @@ internal data class NativePluginFacts(val raw:JsonObject,private val manifestAct
  fun origin(resources:Resources)=when(raw.pluginText("origin")) { "bundled" -> resources.getString(R.string.settings_built_in); "operator" -> resources.getString(R.string.settings_third_party); else -> resources.getString(R.string.settings_origin_unavailable) }
  val contribution=if(removed) JsonObject(emptyMap()) else raw["contributes"] as? JsonObject ?: JsonObject(emptyMap())
  fun facts(resources:Resources):List<String> =pluginDestinationFacts(resources,this,pluginMissingModel(this).takeIf {state=="waiting"})+pluginScheduleFacts(resources,this)
- fun permissionLines(resources:Resources):List<String> = if(raw.pluginText("origin")=="bundled") permissions.orEmpty().map {pluginPermissionSentence(resources,it)} + (if(permissions.orEmpty().any {it.startsWith("ai.") || it.startsWith("net.")}) listOf(resources.getString(R.string.settings_never_reads_private_notes)) else emptyList()) else raw.pluginStrings("permission_sentences")?.takeIf {it.isNotEmpty()} ?: permissions.orEmpty().map {pluginPermissionSentence(resources,it)}
+ fun permissionLines(resources:Resources):List<String> {
+  val permissions=permissions.orEmpty()
+  if(raw.pluginText("origin")!="bundled") return raw.pluginStrings("permission_sentences")?.takeIf {it.isNotEmpty()}
+   ?: permissions.map {pluginPermissionSentence(resources,it)}
+  val usesExternalProcessing=permissions.any {it.startsWith("ai.") || it.startsWith("net.")}
+  val lines=permissions.map {permission ->
+   if(permission=="notes.read" && usesExternalProcessing) resources.getString(R.string.settings_reads_non_private_notes)
+   else pluginPermissionSentence(resources,permission)
+  }
+  return if(usesExternalProcessing) lines+resources.getString(R.string.settings_never_reads_private_notes) else lines
+ }
+
  fun slots(resources:Resources):List<String> =contribution.keys.mapNotNull { when(it) {
   "suggestions" -> resources.getString(R.string.settings_suggestions_under_notes_and_in_review); "review" -> resources.getString(R.string.settings_review); "panel" -> resources.getString(R.string.settings_about_this_note); "meta" -> resources.getString(R.string.settings_note_details); "slip" -> resources.getString(R.string.settings_daily_slip); "commands" -> resources.getString(R.string.settings_commands); "views" -> resources.getString(R.string.settings_views); "ranking" -> resources.getString(R.string.settings_search_ranking); "mcp_tools" -> resources.getString(R.string.settings_agent_tools); "schedules" -> resources.getString(R.string.settings_scheduled_runs); else -> null
  } }.distinct()
@@ -71,7 +82,7 @@ internal fun pluginPermissionSentence(resources:Resources,permission:String):Str
  "search.text" -> resources.getString(R.string.settings_attaches_searchable_text)
  "routes" -> resources.getString(R.string.settings_adds_plugin_routes)
  "mic" -> resources.getString(R.string.settings_uses_device_microphone)
- "notes.read" -> resources.getString(R.string.settings_reads_non_private_notes); "notes.create" -> resources.getString(R.string.settings_creates_notes); "notes.private" -> resources.getString(R.string.settings_reads_private_notes); "attachments.read" -> resources.getString(R.string.settings_reads_attachments); "attachments.write" -> resources.getString(R.string.settings_writes_attachments); "suggest" -> resources.getString(R.string.settings_proposes_edits_for_your_review); "annotate" -> resources.getString(R.string.settings_adds_note_details); "net.fetch" -> resources.getString(R.string.settings_fetches_the_pages_you_link_to); "schedule" -> resources.getString(R.string.settings_runs_on_its_declared_schedule_when_enabled); "mcp" -> resources.getString(R.string.settings_exposes_its_declared_agent_tools); else -> when {
+ "notes.read" -> resources.getString(R.string.plugin_reads_notes); "notes.create" -> resources.getString(R.string.settings_creates_notes); "notes.private" -> resources.getString(R.string.settings_reads_private_notes); "attachments.read" -> resources.getString(R.string.settings_reads_attachments); "attachments.write" -> resources.getString(R.string.settings_writes_attachments); "suggest" -> resources.getString(R.string.settings_proposes_edits_for_your_review); "annotate" -> resources.getString(R.string.settings_adds_note_details); "net.fetch" -> resources.getString(R.string.settings_fetches_the_pages_you_link_to); "schedule" -> resources.getString(R.string.settings_runs_on_its_declared_schedule_when_enabled); "mcp" -> resources.getString(R.string.settings_exposes_its_declared_agent_tools); else -> when {
  permission.startsWith("ai.") -> resources.getString(R.string.settings_uses_ai ,aiCapabilityName(resources,permission.removePrefix("ai."))); permission.startsWith("net.out:") -> resources.getString(R.string.settings_talks_to ,permission.removePrefix("net.out:")); else -> permission
  }
 }
@@ -102,12 +113,29 @@ internal fun pluginDestinationFacts(resources:Resources,plugin:NativePluginFacts
  if(result.isEmpty() && said==null) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") resources.getString(R.string.settings_recognition_uses_this_phone_or_its_speech) else if(plugin.raw.pluginText("kind")=="device") resources.getString(R.string.settings_stays_on_the_phone) else resources.getString(R.string.settings_stays_on_your_server)
  return result
 }
+internal fun pluginWeekday(resources:Resources,value:String):String? = java.time.DayOfWeek.entries
+ .firstOrNull {it.name.equals(value,ignoreCase=true)}?.getDisplayName(java.time.format.TextStyle.FULL,resources.configuration.locales[0])
+internal fun pluginAvailabilityText(resources:Resources,plugin:NativePluginFacts):String? = plugin.availabilityReason?.let {reason ->
+ when {
+  reason=="Needs attachment storage." -> resources.getString(R.string.plugin_needs_attachments)
+  reason=="Plugin secrets are unavailable; check the environment." -> resources.getString(R.string.plugin_check_secrets)
+  reason=="Needs the note search index. Check indexing in Settings → AI." -> resources.getString(R.string.plugin_needs_index)
+  reason.endsWith("AI is off.") || reason.endsWith("Choose one in Settings → AI.") -> pluginWaitingLine(resources,plugin)
+  reason.startsWith("The ") && " model failed its connection check." in reason -> resources.getString(R.string.settings_check_the_provider_connection_and_model_in)
+  else -> reason
+ }
+}
+internal fun pluginActivityError(resources:Resources,plugin:NativePluginFacts):String? = plugin.raw.pluginText("last_error")
+ ?.takeIf {it.isNotBlank() && it!="plugin_removed"}?.let {reason ->
+  if(Regex("[a-z][a-z0-9]*(?:_[a-z0-9]+)+").matches(reason)) resources.getString(R.string.plugin_last_run_failed) else reason
+ }
+
 internal fun pluginScheduleFacts(resources:Resources,plugin:NativePluginFacts):List<String> {
  val settings=plugin.raw["settings"] as? JsonObject ?: JsonObject(emptyMap())
  fun resolve(value:String?):String?=value?.let { if(Regex("\\{[a-z][a-z0-9_]*\\}").matches(it)) settings.pluginText(it.substring(1,it.length-1)) else it }
  return (plugin.contribution["schedules"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.map {schedule ->
-  val day=resolve(schedule.pluginText("weekday"));val time=resolve(schedule.pluginText("time"))
-  if(day in setOf("monday","tuesday","wednesday","thursday","friday","saturday","sunday") && time!=null && Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(time)) resources.getString(R.string.settings_server_time_pauses_while_off_or_waiting ,java.time.DayOfWeek.valueOf(day!!.uppercase(java.util.Locale.ROOT)).getDisplayName(java.time.format.TextStyle.FULL,resources.configuration.locales[0]),time) else resources.getString(R.string.settings_schedule_details_unavailable)
+  val day=resolve(schedule.pluginText("weekday"))?.let {pluginWeekday(resources,it)};val time=resolve(schedule.pluginText("time"))
+  if(day!=null && time!=null && Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(time)) resources.getString(R.string.settings_server_time_pauses_while_off_or_waiting ,day,time) else resources.getString(R.string.settings_schedule_details_unavailable)
  }
 }
 internal data class NativePluginPage(val schema:JsonObject=JsonObject(emptyMap()),val values:JsonObject=JsonObject(emptyMap()),val secrets:JsonObject=JsonObject(emptyMap())) {

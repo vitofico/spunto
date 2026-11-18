@@ -4,22 +4,89 @@ import android.content.res.Resources
 
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.ApiException
+import io.theficos.spunto.data.sync.ApiClient
+import io.theficos.spunto.data.sync.AuthConfig
+import java.util.Locale
 import kotlinx.serialization.json.*
 
 internal data class NoteTool(val pluginId:String,val pluginName:String,val id:String,val title:String,val description:String)
 
 /** A command is listed once, with the internal note-link action kept in reach. */
-internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap())):List<NoteTool> = plugins.filter {
+internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap()),allowDecisionJournal:Boolean=true):List<NoteTool> = plugins.filter {
  it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed","waiting","removed")
+ && (allowDecisionJournal || it.string("id")!=DecisionJournalId)
  && (!privateNote || (it["permissions"] as? JsonArray)?.all {permission ->
   val name=(permission as? JsonPrimitive)?.takeIf {value ->value.isString}?.content
   name!=null && !name.startsWith("ai.") && !name.startsWith("net.")
  }==true)
 }.sortedBy {(it["position"] as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE}.flatMap {plugin ->
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().take(3).filter {command ->
-  (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true
+  (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
+  (plugin.string("id")!=DecisionJournalId || command.string("id")!="review-decision")
  }.map {NoteTool(plugin.string("id"),localizedPluginName(resources,plugin,catalog),it.string("id"),localizedPluginCommand(resources,plugin,it,catalog),localizedPluginDescription(resources,plugin,catalog))}
 }.distinctBy {it.pluginId to it.id}.sortedByDescending {it.pluginId=="links" && it.id=="link"}
+
+internal fun pluginApi(config:AuthConfig,resources:Resources)=ApiClient(config,language={resources.configuration.locales[0].toLanguageTag()})
+
+internal fun pluginApiError(resources:Resources,error:ApiException,command:String=""):String {
+ if(!error.contentLanguage.isNullOrBlank() && Locale.forLanguageTag(error.contentLanguage).language==resources.configuration.locales[0].language && error.detail.isNotBlank()) return error.detail
+ val message=when(error.code) {
+  "decision_conflict" -> if(command=="record-decision") R.string.plugin_capture_conflict else R.string.decision_conflict
+  "not_found" -> R.string.settings_this_command_is_unavailable
+  "validation_failed" -> R.string.settings_check_the_tool_inputs
+  "plugin_call_failed" -> R.string.settings_the_server_couldn_t_finish_this_try
+  "plugin_review_changed", "permissions_changed" -> R.string.plugin_review_details
+  "pinned_by_environment" -> R.string.settings_set_in_the_environment_81d85
+  "read_only_space" -> R.string.workspace_read_only
+  "owner_required" -> R.string.plugin_owner_required
+  "plugin_call_denied", "permission_denied" -> R.string.plugin_command_denied
+  else -> null
+ }
+ return message?.let(resources::getString) ?: apiErrorMessage(resources,error)
+}
+
+internal fun pluginPillCaption(resources:Resources,plugin:String,caption:String):String {
+ val label=when(plugin to caption) {
+  "title-summary" to "Use title", "link-enrichment" to "Use page title" -> R.string.plugin_accept_title
+  "tidy" to "Apply changes" -> R.string.settings_apply_changes
+  "links" to "Link to note" -> R.string.settings_bundled_title_11
+  else -> null
+ }
+ return label?.let(resources::getString) ?: caption
+}
+
+/** These presentation labels leave the submitted enum value and note captions intact. */
+internal fun pluginFormChoice(resources:Resources,plugin:String,field:String,value:JsonElement):String? {
+ val option=(value as? JsonPrimitive)?.takeIf {it.isString}?.content ?: return null
+ val label=when {
+  plugin in setOf("context-packs","thinking-desk") && field=="action" -> when(option) {
+   "save" -> R.string.core_save;"delete" -> R.string.plugin_delete;else -> null
+  }
+  plugin in setOf("context-packs","thinking-desk") && field in setOf("add","remove") && option=="None" -> R.string.settings_none
+  plugin=="thinking-desk" && field=="mode" -> when(option) {"history" -> R.string.core_history;"collision" -> R.string.plugin_collision;else -> null}
+  plugin=="thinking-desk" && field=="kind" -> when(option) {"builds-on" -> R.string.plugin_builds_on;"challenges" -> R.string.plugin_challenges;"replaces" -> R.string.plugin_replaces;else -> null}
+  plugin=="links" && field=="target" && option=="Choose a note" -> R.string.plugin_choose_note
+  else -> null
+ }
+ return label?.let(resources::getString)
+}
+
+/** Older servers send these fixed field labels as English. Field values remain server-owned. */
+internal fun pluginFormComponent(resources:Resources,plugin:String,component:JsonObject):JsonObject {
+ if(component.string("type")!="form") return component
+ val schema=component["schema"] as? JsonObject ?: return component
+ val fields=schema["properties"] as? JsonObject ?: return component
+ val localized=fields.mapValues { (key,value) ->
+  val spec=value as? JsonObject ?: return@mapValues value
+  val label=when {
+   plugin=="translate" && key=="language" && spec.string("title")=="Translate to" -> R.string.plugin_translate_to
+   plugin in setOf("context-packs","thinking-desk") && key=="action" && spec.string("title")=="Action" -> R.string.plugin_action
+   else -> null
+  }
+  label?.let {JsonObject(spec+("title" to JsonPrimitive(resources.getString(it))))} ?: value
+ }
+ return JsonObject(component+("schema" to JsonObject(schema+("properties" to JsonObject(localized)))))
+}
 
 /** The server's own words for a refused request: its problem detail is safe owner guidance (docs/api.md), and it knows
  * what the web app and this phone can each do. A reply without one, from a proxy in front of it say, gets a line from its status. */
@@ -171,6 +238,9 @@ internal fun localizedPluginSettingTitle(resources:Resources,plugin:JsonObject,k
   "email-in" to "allow_senders" -> R.string.settings_metadata_email_in_settings_allow_senders_title
   "label-gardener" to "weekday" -> R.string.settings_metadata_label_gardener_settings_weekday_title
   "label-gardener" to "time" -> R.string.settings_metadata_label_gardener_settings_time_title
+  "label-suggestions" to "change_mode" -> R.string.plugin_change_behavior
+  "title-summary" to "change_mode" -> R.string.plugin_change_behavior
+  "voice-memos" to "change_mode" -> R.string.plugin_change_behavior
   "label-suggestions" to "auto_accept_existing" -> R.string.settings_metadata_label_suggestions_settings_auto_accept_existing_title
   "label-suggestions" to "confidence_threshold" -> R.string.settings_metadata_label_suggestions_settings_confidence_threshold_title
   "resurface" to "time" -> R.string.settings_metadata_resurface_settings_time_title

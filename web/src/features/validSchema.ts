@@ -32,7 +32,7 @@ export function validSchema(value: unknown, root = true): value is Schema {
     return false;
   if (
     schema.format !== undefined &&
-    !["time", "label"].includes(String(schema.format))
+    !["time", "label", "date"].includes(String(schema.format))
   )
     return false;
   if (root) {

@@ -112,6 +112,7 @@ import kotlinx.serialization.json.*
   item {
    val meta=listOfNotNull(noteDay(value.createdAt,locale),if(value.privateNote) context.getString(R.string.core_private) else null,if(value.archived) context.getString(R.string.core_archived) else null,if(value.trashed) context.getString(R.string.core_in_trash) else null).joinToString(" · ")
    Text(meta.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {contentDescription=meta})
+   if(!editing && isJournalNote(value)) DecisionNoteActions(model,value)
   }
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
   refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code)}}
@@ -129,7 +130,7 @@ import kotlinx.serialization.json.*
   if(!editing && linked.isNotEmpty()) item {LinkedNotes(linksTo.mapNotNull(linkedById::get),linkedFrom.mapNotNull(linkedById::get),locale,onNote)}
   if(!editing) item {TextButton(onClick={about=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_about_note),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}}
  }
- if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={commandResult=it},onTrashed=onClose)
+ if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={if(journalResult(it)) model.remote.value=it else commandResult=it},onTrashed=onClose)
  if(history) ModalBottomSheet(onDismissRequest={history=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
   LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
    revisionHistoryItems(context,revisions,online,historyResult,editing || finishing || restoring,value.body,canRestore=writable) {revision ->

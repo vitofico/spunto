@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_ui_no_notes">Non ci sono ancora note da mostrare.</string>
+    <string name="plugin_ui_open_note">Apri nota</string>
+    <string name="plugin_ui_connection">Per modificare serve una connessione.</string>
+    <string name="plugin_ui_web">Apri nell’app web</string>
+    <string name="plugin_ui_run">Esegui</string>
+    <string name="plugin_ui_save_settings">Salva impostazioni</string>
+    <string name="plugin_ui_version">Dalla versione %1$s</string>
+    <string name="plugin_ui_environment">Impostato nell’ambiente</string>
+    <string name="plugin_ui_device">Solo su questo dispositivo</string>
+    <string name="plugin_ui_choose_field">Scegli un valore per «%1$s».</string>
+    <string name="plugin_ui_choose_label">Scegli un valore per «%1$s»</string>
+    <string name="plugin_ui_choose">Scegli…</string>
+    <string name="plugin_ui_find_option">Cerca un’opzione</string>
+    <string name="plugin_ui_no_matches">Nessun risultato. Prova un’altra ricerca.</string>
+    <string name="plugin_ui_cancel">Annulla</string>
+    <string name="plugin_ui_check">Controlla i campi del modulo.</string>
+    <string name="plugin_ui_check_field">Controlla «%1$s».</string>
+    <string name="plugin_ui_whole_number">Inserisci un numero intero per «%1$s».</string>
+    <string name="plugin_ui_number">Inserisci un numero per «%1$s».</string>
+    <string name="plugin_ui_range">«%1$s» non rientra nell’intervallo consentito.</string>
+    <string name="plugin_ui_length">Controlla la lunghezza di «%1$s».</string>
+    <string name="plugin_ui_time">Usa il formato HH:MM per «%1$s».</string>
+    <string name="plugin_ui_upgrade">Per questo modulo serve una versione più recente dell’app.</string>
+    <string name="plugin_ui_no_changes">Nessuna modifica al testo.</string>
+    <string name="plugin_ui_removed">− Rimosso</string>
+    <string name="plugin_ui_added">+ Aggiunto</string>
+    <string name="plugin_ui_changes_only">Mostra solo le modifiche</string>
+    <string name="plugin_ui_comparison">Mostra il confronto completo</string>
+    <string name="plugin_ui_proposed_text">Testo proposto</string>
+    <string name="plugin_ui_unchanged">… testo invariato …</string>
+    <plurals name="plugin_ui_added_break">
+        <item quantity="one">Aggiunta %d interruzione di riga</item>
+        <item quantity="other">Aggiunte %d interruzioni di riga</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_break">
+        <item quantity="one">Rimossa %d interruzione di riga</item>
+        <item quantity="other">Rimosse %d interruzioni di riga</item>
+    </plurals>
+    <plurals name="plugin_ui_added_space">
+        <item quantity="one">Aggiunto %d spazio</item>
+        <item quantity="other">Aggiunti %d spazi</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_space">
+        <item quantity="one">Rimosso %d spazio</item>
+        <item quantity="other">Rimossi %d spazi</item>
+    </plurals>
+    <plurals name="plugin_ui_added_tab">
+        <item quantity="one">Aggiunta %d tabulazione</item>
+        <item quantity="other">Aggiunte %d tabulazioni</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_tab">
+        <item quantity="one">Rimossa %d tabulazione</item>
+        <item quantity="other">Rimosse %d tabulazioni</item>
+    </plurals>
+</resources>

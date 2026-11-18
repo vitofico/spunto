@@ -33,8 +33,11 @@ async def prune(store: Store, settings: Settings, now: int | None = None) -> dic
             ),
             (now - settings.revision_days * DAY_MS,),
         )
+        # Journal receipts contain only creation metadata and prevent old submissions
+        # from recreating notes that have been permanently deleted.
         operations = await conn.execute(
-            "DELETE FROM applied_op WHERE applied_at<?", (now - 30 * DAY_MS,)
+            "DELETE FROM applied_op WHERE applied_at<? AND credential_id!=?",
+            (now - 30 * DAY_MS, "plugin:decision-journal"),
         )
         expired = await conn.execute_fetchall(
             "SELECT id FROM suggestion WHERE status='pending' AND created_at<?",

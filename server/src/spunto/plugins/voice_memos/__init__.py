@@ -4,6 +4,7 @@ import re
 
 from spunto.core.quiet_changes import finish_recordings
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.host.manifest import ManifestError
 from spunto.host.storage import encoded
 from spunto.plugins._capture import (
@@ -79,7 +80,7 @@ async def process(
                 notes=[note],
             )
             if not await current(ctx, note, attachment):
-                return text("The recording source changed.")
+                return text(tr("The recording source changed."))
             words = clean(transcript.text, 100000).strip()
             if not words:
                 continue
@@ -118,10 +119,10 @@ async def process(
     words = [value["words"] for value in values]
     proposed = "\n\n".join(part for part in (body, *words) if part)
     if len(proposed) > 100000:
-        return text("The transcripts are too long to append; recordings are kept.")
+        return text(tr("The transcripts are too long to append; recordings are kept."))
     if await finish_recordings(ctx, note, proposed, values, pending):
-        return text("Transcript added; recordings are kept.")
-    return text("Transcript proposals are ready; recordings are kept.")
+        return text(tr("Transcript added; recordings are kept."))
+    return text(tr("Transcript proposals are ready; recordings are kept."))
 
 
 @plugin.command("transcribe")

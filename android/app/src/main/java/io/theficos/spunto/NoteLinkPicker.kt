@@ -59,7 +59,7 @@ internal class NotePickerSession private constructor(private val config:AuthConf
    state.replicaId==config.replicaId && state.serverUrl==config.serverUrl.trimEnd('/') && current(model)
  }
 
- fun api(model:SpuntoViewModel)=ApiClient(config).guarded {authorized(model)}
+ fun api(model:SpuntoViewModel)=pluginApi(config,model.container.context.resources).guarded {authorized(model)}
 
  suspend fun reportError(model:SpuntoViewModel,resources:Resources,error:Exception):String {
   if(!authorized(model)) throw CancellationException()
@@ -273,7 +273,7 @@ internal suspend fun searchPickerNotes(api:ApiClient,query:String,cursor:String?
 }
 
 private fun notePickerError(resources:Resources,error:Exception):String=when(error) {
- is ApiException -> apiErrorMessage(resources,error)
+ is ApiException -> pluginApiError(resources,error)
  is IllegalArgumentException -> error.message ?: resources.getString(R.string.settings_check_the_tool_inputs)
  else -> resources.getString(R.string.settings_couldn_t_reach_the_server_check_your)
 }

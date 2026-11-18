@@ -7,7 +7,7 @@ import { lazy, Suspense } from "react";
 const SchemaForm = lazy(() =>
   import("./SchemaForm").then((module) => ({ default: module.SchemaForm })),
 );
-import type { Args, Schema } from "../lib/types";
+import type { Args, Json, Schema } from "../lib/types";
 import type { Vocabulary } from "./types";
 import styles from "./Feature.module.css";
 import { record, validComponent } from "./vocabularyData";
@@ -77,6 +77,12 @@ export function NoteReference({ id, reason }: { id: string; reason?: string }) {
 }
 export type Callbacks = {
   formLabel?: string;
+  formSchema?: (schema: Schema) => Schema;
+  formChoices?: (key: string, value: Json) => string | undefined;
+  formDetails?: { label: string; fields: readonly string[] };
+  formSubmitDisabled?: boolean;
+  commandLabel?: (id: string, title: string, args: Args) => string;
+  displayText?: (text: string) => string;
   onSuggestion?: (id: string) => void;
   onCommand?: (id: string, args: Args) => void;
   onForm?: (args: Args) => void;
@@ -101,7 +107,9 @@ export function VocabularyItem({
   if (actions.allow && !actions.allow.includes(value.type)) return null;
   switch (value.type) {
     case "text":
-      return <p>{String(value.text)}</p>;
+      return (
+        <p>{actions.displayText?.(String(value.text)) ?? String(value.text)}</p>
+      );
     case "markdown":
       return typeof value.html === "string" ? (
         <div dangerouslySetInnerHTML={{ __html: safePluginHtml(value.html) }} />
@@ -111,17 +119,18 @@ export function VocabularyItem({
     case "notes":
       return (
         <div>
-          {((value.ids ?? value.items) as unknown[]).map((item, index) =>
-            typeof item === "string" ? (
-              <NoteReference key={`${item}-${index}`} id={item} />
-            ) : (
+          {((value.ids ?? value.items) as unknown[]).map((item, index) => {
+            if (typeof item === "string")
+              return <NoteReference key={`${item}-${index}`} id={item} />;
+            const { id, reason } = item as { id: string; reason?: string };
+            return (
               <NoteReference
                 key={index}
-                id={String((item as Record<string, unknown>).id)}
-                reason={(item as { reason?: string }).reason}
+                id={id}
+                reason={reason && (actions.displayText?.(reason) ?? reason)}
               />
-            ),
-          )}
+            );
+          })}
         </div>
       );
     case "pill":
@@ -142,14 +151,24 @@ export function VocabularyItem({
             actions.onCommand?.(String(value.id), (value.args ?? {}) as Args)
           }
         >
-          {String(value.title)}
+          {actions.commandLabel?.(
+            String(value.id),
+            String(value.title),
+            (value.args ?? {}) as Args,
+          ) ?? String(value.title)}
         </button>
       );
     case "form":
       return (
         <Suspense fallback={null}>
           <SchemaForm
-            schema={value.schema as Schema}
+            schema={
+              actions.formSchema?.(value.schema as Schema) ??
+              (value.schema as Schema)
+            }
+            optionLabel={actions.formChoices}
+            optionalDetails={actions.formDetails}
+            submitDisabled={actions.formSubmitDisabled}
             hiddenFields={Object.entries(
               (value.schema as Schema).properties ?? {},
             )

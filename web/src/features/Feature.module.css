@@ -136,6 +136,16 @@
   cursor: pointer;
   font: 500 var(--t-ui-lg-size) / var(--t-ui-lg-line) var(--f-sans);
 }
+.formDetails {
+  margin: var(--s-12) 0;
+  border-top: 1px solid var(--rule);
+}
+.formDetails summary {
+  padding: var(--s-12) 0;
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 500;
+}
 .section h3,
 .panel summary,
 .railGroup h3 {
@@ -942,4 +952,17 @@
 .suggestions > .overflow,
 .suggestions > .dismiss {
   flex: none;
+}
+.decisionTools {
+  display: grid;
+  gap: var(--s-8);
+  margin-block: var(--s-16);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s-12);
+}
+.decisionTools p {
+  margin: 0;
+}
+.decisionTools a {
+  padding: var(--s-8);
 }

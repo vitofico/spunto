@@ -5,7 +5,7 @@ api = "0.9"
 kind = "server"
 runtime = "in-process"
 category = "organize"
-description = "Review sampled tag usage and propose renames, removals or new clusters."
+description = "Review suggestions to rename, merge or remove labels across your notes."
 entry = "spunto.plugins.label_gardener:plugin"
 requires = ["ai.chat", "ai.embed"]
 default = "off"
@@ -14,7 +14,7 @@ permissions = ["notes.read", "suggest", "ai.chat", "ai.embed", "schedule"]
 
 [[contributes.commands]]
 id = "review-now"
-title = "Review tags now"
+title = "Review labels"
 where = ["palette", "slash"]
 online = true
 

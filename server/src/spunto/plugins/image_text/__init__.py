@@ -4,6 +4,7 @@ from pydantic import Field
 
 from spunto.ai.output import Output
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._capture import bounded, current, identity, markdown, markdown_output, text
 
 plugin = Plugin("image-text")
@@ -57,7 +58,7 @@ async def process(
             purpose="image-text",
         )
         if not await current(ctx, note, attachment):
-            return text("The image source changed.")
+            return text(tr("The image source changed."))
         value = {
             "attachment_id": attachment["id"],
             "sha256": attachment["sha256"],
@@ -74,7 +75,7 @@ async def process(
             note["version"],
             "\n\n".join(value["text"] + "\n" + value["description"] for value in values)[:20000],
         )
-    return text("Image text is ready.")
+    return text(tr("Image text is ready."))
 
 
 @plugin.command("read")

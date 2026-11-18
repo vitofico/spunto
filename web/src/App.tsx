@@ -80,29 +80,79 @@ function reloadOnce() {
   location.reload();
   return true;
 }
+const moduleEntry = 'script[type="module"][src]';
+
+// Browsers also report canceled imports during normal navigation as chunk failures.
+// Only an updated entry confirms that a deployment changed the asset names.
+async function reloadIfBuildChanged(boundarySignal: AbortSignal) {
+  const current = document.querySelector(moduleEntry)?.getAttribute("src");
+  if (!current) return;
+  const originalUrl = location.href;
+  try {
+    const signal = AbortSignal.any([boundarySignal, AbortSignal.timeout(3000)]);
+    const response = await fetch("/", {
+      cache: "no-store",
+      credentials: "omit",
+      mode: "same-origin",
+      referrerPolicy: "no-referrer",
+      redirect: "error",
+      signal,
+    });
+    if (!response.ok) return;
+    const fresh = new DOMParser()
+      .parseFromString(await response.text(), "text/html")
+      .querySelector(moduleEntry)
+      ?.getAttribute("src");
+    if (
+      !signal.aborted &&
+      fresh &&
+      fresh !== current &&
+      location.href === originalUrl
+    )
+      reloadOnce();
+  } catch {
+    // The explicit retry remains available when the build could not be checked.
+  }
+}
+
 export class LoadBoundary extends Component<
   { children: ReactNode; location: string; onRetry: () => void },
-  { failed: boolean }
+  { failed: boolean; failedChunk: boolean }
 > {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+  state = { failed: false, failedChunk: false };
+  private chunkProbe?: AbortController;
+  private cancelChunkProbe() {
+    this.chunkProbe?.abort();
+    this.chunkProbe = undefined;
+  }
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, failedChunk: chunkFailure(error) };
   }
   componentDidCatch(error: unknown) {
-    if (chunkFailure(error) && navigator.onLine) reloadOnce();
+    this.cancelChunkProbe();
+    if (chunkFailure(error) && navigator.onLine) {
+      this.chunkProbe = new AbortController();
+      void reloadIfBuildChanged(this.chunkProbe.signal);
+    }
   }
   componentDidMount() {
     window.addEventListener("online", this.retry);
   }
   componentWillUnmount() {
+    this.cancelChunkProbe();
     window.removeEventListener("online", this.retry);
   }
   componentDidUpdate(previous: { location: string }) {
-    if (this.state.failed && previous.location !== this.props.location)
-      this.setState({ failed: false });
+    if (previous.location !== this.props.location) {
+      this.cancelChunkProbe();
+      if (this.state.failed) this.setState({ failed: false });
+    } else if (!this.state.failed) {
+      this.cancelChunkProbe();
+    }
   }
   retry = () => {
     if (!this.state.failed) return;
+    this.cancelChunkProbe();
     this.props.onRetry();
     this.setState({ failed: false });
   };
@@ -112,7 +162,15 @@ export class LoadBoundary extends Component<
       <div className="empty" role="alert">
         <h1>{t("app.something_didn_t_load")}</h1>
         <p>{t("app.anything_you_typed_is_kept_on_this_device")}</p>
-        <button className="button primary" onClick={this.retry}>
+        <button
+          className="button primary"
+          onClick={() => {
+            if (this.state.failedChunk && navigator.onLine) {
+              this.cancelChunkProbe();
+              location.reload();
+            } else this.retry();
+          }}
+        >
           {t("app.try_again")}
         </button>
       </div>

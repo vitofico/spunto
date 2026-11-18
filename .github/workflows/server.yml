@@ -4,19 +4,6 @@ name: Server
 # architectures, starts, backs up and restores. The release workflow calls this
 # too, so nothing ships that fails it.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "server/**"
-      - "web/**"
-      - ".dockerignore"
-      - "scripts/smoke-selfhost.sh"
-      - "scripts/check-image-size.py"
-      - "scripts/check-ci"
-      - "scripts/check-generated.py"
-      - ".github/workflows/server.yml"
-      - "android/core/design/generate-tokens.py"
-      - "android/core/design/src/main/java/io/theficos/spunto/core/design/Tokens.kt"
   pull_request:
     paths:
       - "server/**"
@@ -55,6 +42,7 @@ concurrency:
 
 jobs:
   web:
+    if: github.event_name != 'schedule'
     name: Web types, tests and budgets
     runs-on: ubuntu-24.04
     defaults:
@@ -82,6 +70,7 @@ jobs:
         run: ../scripts/check-ci web
 
   test:
+    if: github.event_name != 'schedule'
     name: Lint and test
     runs-on: ubuntu-24.04
     defaults:
@@ -106,6 +95,7 @@ jobs:
         run: ../scripts/check-ci server
 
   postgres:
+    if: github.event_name != 'schedule'
     name: PostgreSQL 18 isolation, hosted auth and recovery
     runs-on: ubuntu-24.04
     defaults:
@@ -222,6 +212,7 @@ jobs:
           platforms: arm64
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Export gzip OCI image
+        if: github.event_name != 'schedule'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -231,6 +222,7 @@ jobs:
           cache-from: type=gha,scope=server-${{ matrix.architecture }}
           cache-to: type=gha,mode=max,scope=server-${{ matrix.architecture }}
       - name: Enforce 150 MB compressed image budget
+        if: github.event_name != 'schedule'
         run: >-
           python3 scripts/check-image-size.py "$RUNNER_TEMP/spunto.oci.tar"
           --platform linux/${{ matrix.architecture }}
@@ -257,19 +249,20 @@ jobs:
           format: table
           timeout: 10m0s
       - run: scripts/smoke-selfhost.sh spunto:ci
+        if: github.event_name != 'schedule'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         with:
           node-version: "26.9.0"
       - name: Install pinned browser tooling
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 5
         working-directory: web
         run: |
           npm install --global pnpm@12.11.2
           pnpm install --frozen-lockfile
       - name: Install browser system dependencies
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 10
         working-directory: web
         run: |
@@ -302,12 +295,12 @@ jobs:
           PYAPT
           pnpm exec playwright install-deps chromium firefox webkit
       - name: Install browser engines
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 10
         working-directory: web
         run: pnpm exec playwright install chromium firefox webkit
       - name: Start disposable browser server
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 2
         run: |
           docker run -d --name spunto-browser --read-only --tmpfs /tmp \
@@ -323,7 +316,7 @@ jobs:
           '
       - name: Chromium, Firefox and WebKit acceptance including collaboration
         id: browser_acceptance
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 22
         working-directory: web
         run: |
@@ -332,7 +325,7 @@ jobs:
             --project=chromium --project=firefox --project=webkit \
             --global-timeout=1200000
       - name: Remove disposable browser server
-        if: always() && matrix.architecture == 'amd64'
+        if: always() && github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 1
         run: timeout 30s docker rm -f spunto-browser || true
       - name: Retain browser failure evidence

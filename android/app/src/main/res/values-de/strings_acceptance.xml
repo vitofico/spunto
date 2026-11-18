@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accept_note">Notiz annehmen</string>
+    <string name="accept_changes">Änderungen annehmen</string>
+    <string name="accept_agent_note">Notiz des Agenten annehmen</string>
+    <string name="accept_agent_changes">Änderungen des Agenten annehmen</string>
+    <string name="accept_use_as_mine">Als eigene Notiz verwenden</string>
+    <string name="accept_machine_heading">Maschinell erstellte Notiz</string>
+    <string name="accept_agent_heading">Ein Agent hat diese Notiz geschrieben</string>
+    <string name="accept_agent_changes_heading">Ein Agent hat diese Notiz geändert</string>
+    <string name="accept_machine_body">Verwende diese Notiz wie deine anderen Notizen. Sie kann als Erinnerung erscheinen und von aktiven KI-Funktionen verwendet werden.</string>
+    <string name="accept_machine_private">Verwende diese Notiz wie deine anderen Notizen. Sie bleibt privat und ist von KI- und Netzwerk-Plug-ins ausgeschlossen.</string>
+    <string name="accept_agent_body">Behalte den aktuellen Text und die Urheberschaft bei und schließe die Prüfung unter „Von Agenten“ ab.</string>
+    <string name="accept_note_done">Notiz angenommen</string>
+    <string name="accept_changes_done">Änderungen angenommen</string>
+    <string name="accept_note_stale">Diese Notiz wurde geändert. Prüfe die aktuelle Version vor der Annahme.</string>
+    <string name="accept_note_connect">Verbinde dich mit dem Server, um diese Version anzunehmen.</string>
+    <string name="accept_note_wait_sync">Synchronisiere die Notiz, bevor du diese Version annimmst.</string>
+    <string name="accept_note_working">Wird angenommen…</string>
+</resources>

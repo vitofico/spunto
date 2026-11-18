@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router, useLocation } from "wouter";
@@ -180,24 +181,91 @@ it.each([
 it("offers Save as note for a plugin that creates no notes and links to the new note", async () => {
   manifest({ id: "summary" });
   vi.mocked(api.createNote).mockResolvedValue({ id: "fresh" } as never);
+  const open = vi.fn();
+  const memory = memoryLocation();
   render(
     wrap(
-      <CommandResult
-        value={{ type: "text", text: "Plain result" }}
-        origin={{ plugin: "summary", command: "show" }}
-      />,
+      <Router hook={memory.hook}>
+        <CommandResult
+          value={{ type: "text", text: "Plain result" }}
+          origin={{ plugin: "summary", command: "show" }}
+          onOpenNote={open}
+        />
+      </Router>,
     ),
   );
   fireEvent.keyDown(document, { key: "s", ctrlKey: true });
-  expect(
-    (await screen.findByRole("link", { name: "Open note" })).getAttribute(
-      "href",
-    ),
-  ).toBe("/n/fresh");
+  const link = await screen.findByRole("link", { name: "Open note" });
+  expect(link.getAttribute("href")).toBe("/n/fresh");
+  fireEvent.click(link, { metaKey: true });
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(link);
+  expect(open).toHaveBeenCalledOnce();
   expect(api.createNote).toHaveBeenCalledWith(
     "Plain result",
     expect.any(String),
   );
+});
+
+it("focuses the result and presents visible note references as a navigable list", async () => {
+  manifest({
+    id: "context-packs",
+    name: "Context packs",
+    contributes: {
+      commands: [{ id: "show", title: "Open context pack", where: [] }],
+    },
+  });
+  const memory = memoryLocation();
+  function Location() {
+    const [location] = useLocation();
+    return <output>{location}</output>;
+  }
+  vi.spyOn(api, "note").mockImplementation(async (id) => {
+    if (id === "missing") throw new Error("Unavailable");
+    return { id, title: "Source note" } as never;
+  });
+  const open = vi.fn();
+  render(
+    wrap(
+      <Router hook={memory.hook}>
+        <Location />
+        <CommandResult
+          value={{
+            ui: 1,
+            items: [
+              { type: "text", text: "Sources selected" },
+              {
+                type: "notes",
+                items: [
+                  { id: "source", reason: "Referenced context" },
+                  "missing",
+                ],
+              },
+            ],
+          }}
+          onOpenNote={open}
+          onDismiss={() => {}}
+          surroundingTitle="Context pack"
+          origin={{ plugin: "context-packs", command: "show" }}
+        />
+      </Router>,
+    ),
+  );
+  const result = screen.getByRole("region", { name: "Open context pack" });
+  expect(document.activeElement).toBe(within(result).getByRole("heading"));
+  expect(within(result).getByText("Sources selected")).toBeTruthy();
+  const notes = within(result).getByRole("list", { name: "Notes" });
+  const source = await within(notes).findByRole("link", {
+    name: /Source note/,
+  });
+  expect(within(notes).getByText("Referenced context")).toBeTruthy();
+  await within(notes).findByText("Note unavailable");
+  expect(within(notes).getAllByRole("link")).toHaveLength(1);
+  fireEvent.click(source, { ctrlKey: true });
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(source);
+  expect(open).toHaveBeenCalledOnce();
+  expect(screen.getByText("/n/source")).toBeTruthy();
 });
 
 it("runs the highlighted slash command on Enter and moves with the arrows", () => {

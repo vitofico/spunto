@@ -34,6 +34,7 @@ import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.plugins.Vocabulary
 import io.theficos.spunto.core.plugins.outputComponents
 import io.theficos.spunto.data.local.ReplicaDatabaseCache
+import io.theficos.spunto.data.local.viewMembership
 import io.theficos.spunto.data.sync.ApiClient
 import io.theficos.spunto.data.sync.AuthConfig
 import io.theficos.spunto.data.sync.AuthStore
@@ -395,12 +396,9 @@ class NewFeatureWorkflowTest {
         compose.runOnIdle { assertEquals("save", submitted?.get("action")?.jsonPrimitive?.content) }
     }
 
-    @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {
-        runBlocking { api.post("/api/v1/plugins/decision-journal/disable", empty) }
-        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
-        val prefix = "native-decision-$suffix-"
+    private fun isolatedPluginReplica(app: SpuntoApplication, prefix: String, displayContext: Context = app): ReplicaContainer {
         val files = File(app.cacheDir, prefix).apply { mkdirs() }
-        val context = object : ContextWrapper(app) {
+        val context = object : ContextWrapper(displayContext) {
             private fun databaseName(name: String) = File(name).name.let { if (it.startsWith(prefix)) it else prefix + it }
             override fun getApplicationContext(): Context = this
             override fun getFilesDir(): File = files
@@ -414,8 +412,119 @@ class NewFeatureWorkflowTest {
         val auth = AuthStore(context)
         val connected = MutableStateFlow(true)
         runBlocking { auth.save(testConfig) }
-        val container = ReplicaContainer(context, testConfig.replicaId, 1, auth, AppLock(context), connected,
+        return ReplicaContainer(context, testConfig.replicaId, 1, auth, AppLock(context), connected,
             SyncScheduler(context), ReplicaDatabaseCache(context), publishesPlugins = false)
+    }
+
+    @Test fun italianReaderAcceptsMachineAndAgentNotesAndNavigatesThroughAPluginResult() {
+        val arguments = InstrumentationRegistry.getArguments()
+        val machineId = arguments.getString("spunto.acceptance.machine")
+        val agentId = arguments.getString("spunto.acceptance.agent")
+        assumeTrue("Needs isolated acceptance fixtures", machineId != null && agentId != null)
+        requireNotNull(machineId)
+        requireNotNull(agentId)
+        val machine = note(machineId)
+        val agent = note(agentId)
+        require(machine["body"]!!.jsonPrimitive.content.startsWith("# Sintetica dal plugin"))
+        require(agent["body"]!!.jsonPrimitive.content.startsWith("# Sintetica da un agente"))
+        assertTrue(machine["machine"]!!.jsonPrimitive.boolean)
+        assertTrue(machine["private"]!!.jsonPrimitive.boolean)
+        assertEquals("agent", agent["origin"]!!.jsonPrimitive.content)
+        runBlocking { api.post("/api/v1/plugins/agent-inbox/disable", empty) }
+
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val configuration = Configuration(app.resources.configuration).apply { setLocale(Locale.ITALIAN) }
+        val context = app.createConfigurationContext(configuration)
+        val prefix = "native-note-acceptance-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, context)
+        lateinit var model: SpuntoViewModel
+        val mounted = mutableStateOf(true)
+        val screenshots = arguments.getString("spunto.workflow.screenshot") == "yes"
+        fun screenshot(name: String) {
+            if (!screenshots) return
+            compose.waitForIdle()
+            val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+            automation.waitForIdle(600, 5_000)
+            val image = requireNotNull(automation.takeScreenshot())
+            val directory = requireNotNull(app.getExternalFilesDir(null))
+            File(directory, name).outputStream().use {
+                check(image.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        }
+        fun updateManifest() {
+            val state = runBlocking { api.manifest() }
+            val catalog = runBlocking { api.get("/api/v1/plugins") }
+            compose.runOnIdle { container.manifest.store(state); model.manifest.value = state; model.catalog.value = catalog }
+        }
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        try {
+            updateManifest()
+            compose.setContent {
+                CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration) {
+                    if (mounted.value) SpuntoApp(model, initialNoteId = machineId)
+                }
+            }
+            compose.waitUntil(20_000) { model.online.value && compose.onAllNodesWithText("Accetta nota").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Usa questa nota come le altre. Resterà privata e fuori dai plugin di IA e di rete.").assertIsDisplayed()
+            screenshot("android-note-accept-machine-it.png")
+            compose.onNodeWithText("Accetta nota").performClick()
+            compose.waitUntil(20_000) { runBlocking { model.repository.dao.get(machineId)?.machine == false } }
+            compose.onNodeWithText("Accetta nota").assertDoesNotExist()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Nota accettata").fetchSemanticsNodes().isNotEmpty() }
+            val adopted = note(machineId)
+            assertFalse(adopted["machine"]!!.jsonPrimitive.boolean)
+            for (field in listOf("body", "source", "origin", "private")) assertEquals(machine[field], adopted[field])
+            assertTrue(adopted["version"]!!.jsonPrimitive.int > machine["version"]!!.jsonPrimitive.int)
+
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Nota accettata").fetchSemanticsNodes().isEmpty() }
+            enable(AgentInboxId)
+            updateManifest()
+            val agentTitle = agent["title"]!!.jsonPrimitive.content
+            compose.runOnIdle {
+                model.remote.value = commandEnvelope(AgentInboxId, "preview", empty, buildJsonObject {
+                    put("ui",1)
+                    put("items",buildJsonArray {
+                        add(buildJsonObject {put("type","markdown");put("text","# Dagli agenti\n\nApri la nota per leggerla prima di accettarla.")})
+                        add(buildJsonObject {put("type","notes");put("items",buildJsonArray {
+                            add(buildJsonObject {put("id",agentId);put("reason","Scritta da un agente. Da controllare.")})
+                        })})
+                    })
+                })
+            }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText(agentTitle).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Chiudi").assertIsDisplayed().assertHasClickAction()
+            val noteRow=compose.onNode(hasText(agentTitle) and hasClickAction())
+            noteRow.assertIsDisplayed()
+            val header=compose.onNodeWithText("Dagli agenti").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val footer=compose.onNodeWithText("Copia").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue("Short results keep their actions near the content",footer.bottom-header.top<context.resources.displayMetrics.heightPixels/2f)
+            screenshot("android-plugin-result-it.png")
+            noteRow.performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Accetta nota").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Un agente ha scritto questa nota").assertIsDisplayed()
+            compose.onNodeWithText("Accetta nota").performClick()
+            compose.waitUntil(20_000) { model.outputs.value.any { it.noteId==agentId && viewMembership(it)?.let { member ->
+                member.pluginId==AgentInboxId && member.viewId=="reviewed"
+            }==true } }
+            compose.onNodeWithText("Accetta nota").assertDoesNotExist()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Nota accettata").fetchSemanticsNodes().isNotEmpty() }
+            val accepted=note(agentId)
+            for (field in listOf("body", "source", "origin", "version", "machine")) assertEquals(agent[field],accepted[field])
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
+    @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {
+        runBlocking { api.post("/api/v1/plugins/decision-journal/disable", empty) }
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-decision-$suffix-"
+        val container = isolatedPluginReplica(app, prefix)
+        val auth = container.auth
+        val connected = container.connected
         lateinit var model: SpuntoViewModel
         val mounted = mutableStateOf(true)
         fun updateManifest() {

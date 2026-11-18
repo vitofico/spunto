@@ -13,7 +13,9 @@ import pytest
 
 from spunto.auth import sessions
 from spunto.auth.oidc import OIDCIdentity
+from spunto.auth.tokens import Principal
 from spunto.config import Settings
+from spunto.core.notes import Notes
 from spunto.hosted import create_hosted_app, hosted_startup
 from spunto.jobs.maintenance import DAY_MS, prune
 from spunto.store.db import now_ms
@@ -123,6 +125,78 @@ async def test_hosted_link_insert_serializes_retries_and_obeys_workspace_visibil
     saved = (await client.get(f"/api/v1/notes/{source['id']}", headers=headers(alice))).json()
     assert saved["version"] == source["version"] + 1
     assert saved["body"] == f"Synthetic source\n\n[Linked note](/n/{target['id']})"
+
+
+async def test_hosted_note_acceptance_checks_roles_and_preserves_provenance(hosted):
+    client, manager, (alice, bob, carol), _ = hosted
+    created = await client.post(
+        "/api/v1/workspaces", headers=headers(alice), json={"name": "Synthetic review"}
+    )
+    assert created.status_code == 201, created.text
+    space = created.json()["id"]
+    owner, editor, viewer = (headers(member, space) for member in (alice, bob, carol))
+    for member, role in ((bob, "editor"), (carol, "viewer")):
+        added = await client.post(
+            f"/api/v1/workspaces/{space}/members",
+            headers=owner,
+            json={"user_id": member["account"]["id"], "role": role},
+        )
+        assert added.status_code == 200, added.text
+    owner_notes = Notes(
+        manager._runtimes[space].store,
+        Principal("plugin:ask", "plugin", "Ask", "plugin", user_id=alice["account"]["id"]),
+    )
+    async with owner_notes.store.write() as conn:
+        machine = await owner_notes._insert(
+            conn,
+            "Synthetic Ask answer",
+            str(uuid.uuid7()),
+            now_ms(),
+            {"kind": "plugin", "ref": "ask"},
+            True,
+            origin="plugin",
+            machine=True,
+        )
+    adoption = f"/api/v1/notes/{machine['id']}/adopt"
+    base = {"base_version": machine["version"]}
+    denied = await client.post(adoption, headers=viewer, json=base)
+    assert denied.status_code == 403 and denied.json()["code"] == "read_only_space"
+    accepted = await client.post(adoption, headers=editor, json=base)
+    assert accepted.status_code == 200, accepted.text
+    assert not accepted.json()["machine"] and accepted.json()["private"]
+    assert accepted.json()["origin"] == "plugin" and accepted.json()["body"] == machine["body"]
+
+    token = await client.post(
+        "/api/v1/tokens", headers=owner, json={"name": "Review fixture", "scope": "write"}
+    )
+    assert token.status_code == 201, token.text
+    pat = {"Authorization": "Bearer " + token.json()["token"], "X-Spunto-Workspace": space}
+    denied = await client.post(adoption, headers=pat, json=base)
+    assert denied.status_code == 403 and denied.json()["code"] == "owner_required"
+    note = await client.post("/api/v1/notes", headers=pat, json={"body": "Synthetic agent draft"})
+    assert note.status_code == 201, note.text
+    draft = note.json()
+    plugin = "/api/v1/plugins/agent-inbox"
+    enabled = await client.post(
+        plugin + "/enable", headers=owner, json={"permissions": ["notes.read", "annotate"]}
+    )
+    assert enabled.status_code == 200, enabled.text
+    command = plugin + "/commands/mark-reviewed"
+    review = {"note_id": draft["id"], "base_version": draft["version"]}
+    denied = await client.post(command, headers=editor, json=review)
+    assert denied.status_code == 403 and denied.json()["code"] == "owner_required"
+    receipt = await client.post(command, headers=owner, json=review)
+    assert receipt.status_code == 200 and receipt.json()["text"] == "Note accepted"
+    view = "/api/v1/notes?view=agent-inbox/reviewed"
+    assert (await client.get(view, headers=owner)).json()["notes"] == []
+    changed = await client.post(
+        f"/api/v1/notes/{draft['id']}/append", headers=pat, json={"text": "New agent revision"}
+    )
+    assert changed.status_code == 200, changed.text
+    [pending] = (await client.get(view, headers=owner)).json()["notes"]
+    assert pending["id"] == draft["id"] and pending["origin"] == "agent"
+    stale = await client.post(command, headers=owner, json=review)
+    assert stale.status_code == 409 and stale.json()["code"] == "version_conflict"
 
 
 async def test_hosted_decision_journal_owner_privacy_and_purge_replay(hosted):
@@ -790,6 +864,10 @@ async def test_individual_share_does_not_grant_library_or_settings_access(hosted
     assert shared.status_code == 200, shared.text
     assert [n["id"] for n in shared.json()["notes"]] == [a["id"]]
     assert (await client.get("/api/v1/notes/" + a["id"], headers=headers(bob))).status_code == 404
+    adoption = await client.post(
+        f"/api/v1/notes/{a['id']}/adopt", headers=headers(bob), json={"base_version": a["version"]}
+    )
+    assert adoption.status_code == 404
     assert (
         await client.get("/api/v1/shared-notes/" + b["id"], headers=headers(bob))
     ).status_code == 404

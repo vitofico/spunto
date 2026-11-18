@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accept_note">Accepter la note</string>
+    <string name="accept_changes">Accepter les modifications</string>
+    <string name="accept_agent_note">Accepter la note de l’agent</string>
+    <string name="accept_agent_changes">Accepter les modifications de l’agent</string>
+    <string name="accept_use_as_mine">Utiliser comme ma note</string>
+    <string name="accept_machine_heading">Note générée automatiquement</string>
+    <string name="accept_agent_heading">Un agent a rédigé cette note</string>
+    <string name="accept_agent_changes_heading">Un agent a modifié cette note</string>
+    <string name="accept_machine_body">Utilisez cette note comme vos autres notes. Elle peut réapparaître dans vos souvenirs et être utilisée par les fonctions d’IA actives.</string>
+    <string name="accept_machine_private">Utilisez cette note comme vos autres notes. Elle restera privée et exclue des extensions d’IA et de réseau.</string>
+    <string name="accept_agent_body">Conservez le texte et son attribution actuels et retirez cet examen de « Des agents ».</string>
+    <string name="accept_note_done">Note acceptée</string>
+    <string name="accept_changes_done">Modifications acceptées</string>
+    <string name="accept_note_stale">Cette note a changé. Examinez la dernière version avant de l’accepter.</string>
+    <string name="accept_note_connect">Connectez-vous au serveur pour accepter cette version.</string>
+    <string name="accept_note_wait_sync">Synchronisez la note avant d’accepter cette version.</string>
+    <string name="accept_note_working">Acceptation en cours…</string>
+</resources>

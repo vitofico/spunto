@@ -260,7 +260,7 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
    NativePluginSettingsValues(plugin,page.page,online && owner,{mode -> actions.changeMode(id,mode)},page.loading,model::pluginWeb)
   }}
   // Facts read as quiet body text under their headings; buttons keep their own colour.
-  item {CompositionLocalProvider(LocalContentColor provides quiet) {ProvideTextStyle(MaterialTheme.typography.bodyMedium) {Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {NativePluginDetailFacts(plugin,online,commandPending,{command ->
+  item {CompositionLocalProvider(LocalContentColor provides quiet) {ProvideTextStyle(MaterialTheme.typography.bodyMedium) {Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {NativePluginDetailFacts(plugin,online,commandPending,supportsVersionedAgentReview(manifest),{command ->
    if(online && plugin.activeContribution) commandOwner.start({deliver,complete ->
     runCommand(model,plugin.id,command.pluginText("id").orEmpty(),JsonObject(emptyMap()),deliver,onComplete=complete,scope=commandScope)
    },{model.remote.value=it})

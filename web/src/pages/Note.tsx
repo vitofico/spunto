@@ -30,6 +30,7 @@ import { NotFound } from "../components/core/NotFound";
 import { ApiError } from "../lib/errors";
 import { MoreMenu } from "../components/core/Menu";
 import { DecisionNoteActions } from "../features/DecisionJournal";
+import { NoteAcceptance } from "../features/NoteAcceptance";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
 import {
@@ -191,6 +192,9 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
                 ? t("note.current_version")
                 : t("note.version_value1", { value1: revision.version })}{" "}
               · {new Date(revision.changed_at).toLocaleString(getLanguage())}
+              {revision.change_kind === "adopt" && (
+                <> · {t("note.note_accepted")}</>
+              )}
             </span>
             {revision.version !== note.version && (
               <button
@@ -259,7 +263,17 @@ function NoteEditor({ note }: { note: Note }) {
   });
   const linkDraftBlocked =
     draft.dirty || !!draft.conflict || draft.state === "saving";
-  const skipCommands = ["links/link", "decision-journal/review-decision"];
+  const versionedAgentReview = manifest.data?.features?.includes(
+    "agent_review_versioned",
+  );
+  const agentInbox = activePlugins(manifest.data?.plugins).find(
+    (plugin) => plugin.id === "agent-inbox" && plugin.origin !== "operator",
+  );
+  const skipCommands = [
+    "links/link",
+    "decision-journal/review-decision",
+    ...(versionedAgentReview ? ["agent-inbox/mark-reviewed"] : []),
+  ];
   const toolsAllowed =
     role === "owner" && !trashed && !editing && !linkDraftBlocked && online;
   const waiting = useWaitingCommandPlugins(
@@ -469,6 +483,7 @@ function NoteEditor({ note }: { note: Note }) {
             noteId={note.id}
             note={note}
             skipCommands={skipCommands}
+            onOpenNote={() => setToolsOpen(false)}
           />
         </Dialog>
       )}
@@ -611,6 +626,24 @@ function NoteEditor({ note }: { note: Note }) {
           {t("note.device_storage_is_full_or_unavailable_keep_this")}
         </p>
       )}
+      <NoteAcceptance
+        note={note}
+        machine={
+          role !== "viewer" &&
+          note.machine &&
+          manifest.data?.features?.includes("note_adoption") === true
+        }
+        agent={
+          !!(
+            versionedAgentReview &&
+            role === "owner" &&
+            agentInbox &&
+            canRunOnNote(agentInbox, "mark-reviewed", note)
+          )
+        }
+        blocked={trashed || editing || linkDraftBlocked}
+        online={online}
+      />
       {!trashed && <SuggestionLine note={note} />}
       <DecisionNoteActions note={note} editing={editing || linkDraftBlocked} />
       {note.private && (

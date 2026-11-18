@@ -464,6 +464,7 @@ class Host:
         return {
             "ui": 1,
             "plugins_rev": self.plugins_rev,
+            "features": self._manifest_features(),
             "plugins": [
                 {
                     **copy.deepcopy(self.manifests[item["id"]]),
@@ -474,6 +475,12 @@ class Host:
                 if item["state"] == "enabled"
             ],
         }
+
+    def _manifest_features(self):
+        features = ["note_adoption"]
+        if self.catalog_metadata.get("agent-inbox", {}).get("origin") == "bundled":
+            features.append("agent_review_versioned")
+        return features
 
     def get_settings(self, plugin_id):
         return settings_values(self.manifests[plugin_id], self.states[plugin_id]["settings"])
@@ -772,6 +779,7 @@ class Host:
                         "removed": self.removed_manifests,
                         "origins": self.catalog_metadata,
                         "themes": self.themes.catalog(),
+                        "features": self._manifest_features(),
                     },
                     sort_keys=True,
                     allow_nan=False,

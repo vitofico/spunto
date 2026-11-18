@@ -17,7 +17,7 @@ import { ApiError } from "../src/lib/errors";
 import { NoteCard } from "../src/components/core/NoteCard";
 import { ToastProvider } from "../src/components/core/Toast";
 import NotePage from "../src/pages/Note";
-import type { Note, Revision, Session } from "../src/lib/types";
+import type { Manifest, Note, Revision, Session } from "../src/lib/types";
 
 const session: Session = {
   owner_id: "alice",
@@ -351,4 +351,169 @@ it("reaches the missing-model explanation from Note tools when the only tool is 
       .getAttribute("href"),
   ).toBe("/settings/ai");
   expect(within(tools).queryByRole("button", { name: "Tidy text" })).toBeNull();
+});
+
+const adoptionManifest: Manifest = {
+  ui: 1,
+  plugins_rev: 1,
+  features: ["note_adoption", "agent_review_versioned"],
+  plugins: [],
+};
+
+it("accepts a private machine-written note without editing and focuses the receipt", async () => {
+  let note = fixture({
+    machine: true,
+    private: true,
+    origin: "plugin",
+    source: { kind: "plugin", ref: "ask" },
+    version: 7,
+  });
+  vi.mocked(api.manifest).mockResolvedValue(adoptionManifest);
+  vi.spyOn(api, "note").mockImplementation(async () => note);
+  const adoption = vi.spyOn(api, "adoptNote").mockImplementation(async () => {
+    note = { ...note, machine: false, version: 8 };
+    return note;
+  });
+  const edit = vi.spyOn(api, "updateNote");
+  render(<NotePage id={note.id} />, { wrapper: Wrapper });
+  const button = await screen.findByRole("button", { name: "Accept note" });
+  expect(
+    screen.getByText("Keep the text as written. The note stays private."),
+  ).toBeTruthy();
+  button.focus();
+  fireEvent.click(button);
+  const receipt = await screen.findByText("Note accepted");
+  expect(document.activeElement).toBe(receipt);
+  expect(adoption).toHaveBeenCalledWith(note.id, 7);
+  expect(edit).not.toHaveBeenCalled();
+  expect(screen.getByText("original")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Accept note" })).toBeNull();
+});
+
+it("lets acceptance and adoption run independently and removes older receipts on a new edit", async () => {
+  let note = fixture({
+    machine: true,
+    origin: "owner",
+    source: { kind: "web" },
+    updated_via_agent: true,
+    version: 4,
+  });
+  vi.mocked(api.manifest).mockResolvedValue({
+    ...adoptionManifest,
+    plugins: [
+      {
+        id: "agent-inbox",
+        name: "From agents",
+        version: "1.0.0",
+        description: "",
+        category: "agents",
+        kind: "server",
+        permissions: ["notes.read", "annotate"],
+        state: "enabled",
+        position: 0,
+        contributes: {
+          commands: [
+            {
+              id: "mark-reviewed",
+              title: "Accept as is",
+              where: ["note-actions"],
+            },
+          ],
+        },
+      },
+    ],
+  });
+  vi.spyOn(api, "note").mockImplementation(async () => note);
+  const adopt = vi.spyOn(api, "adoptNote").mockImplementation(async () => {
+    note = { ...note, machine: false, version: 5 };
+    return note;
+  });
+  const review = vi.spyOn(api, "command").mockImplementation(async () => {
+    note = {
+      ...note,
+      annotations: [
+        {
+          id: "reviewed",
+          plugin: "agent-inbox",
+          kind: "member:reviewed",
+          payload: [],
+        },
+      ],
+    };
+    return { type: "text", text: "Note accepted" };
+  });
+  render(<NotePage id={note.id} />, { wrapper: Wrapper });
+  expect(
+    await screen.findByRole("button", { name: "Accept agent changes" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Use as my note" }));
+  await screen.findByText("Note accepted");
+  expect(adopt).toHaveBeenCalledWith(note.id, 4);
+  expect(review).not.toHaveBeenCalled();
+  const changes = screen.getByRole<HTMLButtonElement>("button", {
+    name: "Accept changes",
+  });
+  await waitFor(() => expect(changes.disabled).toBe(false));
+  fireEvent.click(changes);
+  await screen.findByText("Changes accepted");
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Accept changes" })).toBeNull(),
+  );
+  expect(review).toHaveBeenCalledWith("agent-inbox", "mark-reviewed", {
+    note_id: note.id,
+    base_version: 5,
+  });
+  expect(screen.getByText("Edited by an agent")).toBeTruthy();
+
+  note = { ...note, annotations: [], version: 6, body: "New agent edit" };
+  await act(
+    async () =>
+      void (await queryClient.invalidateQueries({
+        queryKey: ["note", note.id],
+      })),
+  );
+  expect(
+    await screen.findByRole("button", { name: "Accept changes" }),
+  ).toBeTruthy();
+  expect(screen.queryByText("Changes accepted")).toBeNull();
+  expect(screen.getByText("New agent edit")).toBeTruthy();
+});
+
+it("does not offer adoption in a read-only workspace", async () => {
+  const viewer = { ...session, workspace_role: "viewer" as const };
+  queryClient.setQueryData(["session"], viewer);
+  vi.mocked(api.session).mockResolvedValue(viewer);
+  vi.mocked(api.manifest).mockResolvedValue(adoptionManifest);
+  const note = fixture({ machine: true });
+  vi.spyOn(api, "note").mockResolvedValue(note);
+  render(<NotePage id={note.id} />, { wrapper: Wrapper });
+  expect(await screen.findByText("original")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Accept note" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+});
+
+it("asks for review again if the displayed revision became stale", async () => {
+  const note = fixture({ machine: true });
+  const latest = deferred<Note>();
+  vi.mocked(api.manifest).mockResolvedValue(adoptionManifest);
+  vi.spyOn(api, "note")
+    .mockResolvedValueOnce(note)
+    .mockReturnValue(latest.promise);
+  const adopt = vi
+    .spyOn(api, "adoptNote")
+    .mockRejectedValue(new ApiError(409, "version_conflict"));
+  render(<NotePage id={note.id} />, { wrapper: Wrapper });
+  fireEvent.click(await screen.findByRole("button", { name: "Accept note" }));
+  expect(
+    await screen.findByText(
+      "The note changed. Read the latest version before accepting.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText("Note accepted")).toBeNull();
+  await act(async () =>
+    latest.resolve({ ...note, version: 2, body: "Updated text" }),
+  );
+  expect(await screen.findByText("Updated text")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(adopt).toHaveBeenCalledTimes(1);
 });

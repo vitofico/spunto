@@ -20,6 +20,49 @@ class PluginPresentationTest {
   val tools=noteTools(settingsTestResources(),plugins)
   assertEquals(listOf("Link to note","Tidy text","Suggest labels"),tools.map {it.title})
  }
+ @Test fun decisionCaptureAndReviewRequireAnEnabledPluginAndWritableOwner() {
+  val plugin=Json.parseToJsonElement("""{"id":"decision-journal","enabled":true,"origin":"bundled","contributes":{"commands":[
+   {"id":"record-decision","where":["palette","note-actions"]},{"id":"review-decision","where":["note-actions"]},{"id":"journal","where":["palette"]}
+  ]}}""").jsonObject
+  fun manifest(row:JsonObject)=buildJsonObject {put("plugins",JsonArray(listOf(row)))}
+  assertEquals(setOf("record-decision","review-decision","journal"),decisionActionIds(manifest(plugin),owner=true,online=true))
+  assertTrue(decisionActionIds(manifest(plugin),owner=true,online=false).isEmpty())
+  assertTrue(decisionActionIds(manifest(plugin),owner=false,online=true).isEmpty())
+  assertTrue(decisionActionIds(manifest(JsonObject(plugin+("enabled" to JsonPrimitive(false)))),owner=true,online=true).isEmpty())
+  assertEquals(listOf("record-decision"),noteTools(settingsTestResources(),listOf(plugin)).map {it.id})
+  assertTrue(noteTools(settingsTestResources(),listOf(plugin),allowDecisionJournal=false).isEmpty())
+  val ordinary=Note("note","Owner's decision words")
+  val journal=ordinary.copy(sourceKind="plugin",sourceRef="decision-journal")
+  assertFalse(isJournalNote(ordinary))
+  assertTrue(isJournalNote(journal))
+  assertFalse(isJournalNote(journal.copy(trashed=true)))
+  assertFalse(isJournalNote(journal.copy(conflictOf="other-note")))
+ }
+ @Test fun toolsExposePrimaryGlobalCommandsAndLeaveJournalInItsOwnViews() {
+  fun tool(id:String,command:String,state:String="enabled")=Json.parseToJsonElement("""{
+    "id":"$id","switch":"on","state":"$state","contributes":{"commands":[
+     {"id":"internal","where":[]},{"id":"$command","where":["palette"]},{"id":"$command","where":["palette"]}
+    ]}
+   }""").jsonObject
+  val plugins=listOf(tool("ask","ask"),tool("context-packs","packs"),tool("thinking-desk","desk"),tool("label-gardener","review-now"),
+   tool("digest","digest","waiting"),tool("library-stats","summary"),tool("decision-journal","record-decision"))
+  val catalog=buildJsonObject {put("plugins",JsonArray(plugins))}
+  val manifest=buildJsonObject {put("plugins",JsonArray(plugins.filterNot {it["id"]==JsonPrimitive("library-stats")}))}
+  assertEquals(listOf("ask","packs","desk","review-now"),globalTools(catalog,manifest).map {it.second["id"]!!.jsonPrimitive.content})
+ }
+ @Test fun journalStatusAndOutcomeDatesUseTheAppLocaleWithoutRewritingOtherText() {
+  val de=settingsTestResources("de")
+  val due=localizedJournalLabel(de,"Reviewed · Review due 2030-02-01")
+  assertTrue(due.startsWith("Geprüft · Prüfung fällig am "))
+  assertTrue(due.contains("2030"))
+  val outcome=localizedJournalLabel(de,"Reopened · 1 February 2030, 12:30 UTC")
+  assertTrue(outcome.startsWith("Wieder geöffnet · "))
+  assertTrue(outcome.endsWith("UTC"))
+  assertFalse(outcome.contains("February"))
+  val unknown="Reviewed since we changed the user-owned note."
+  assertEquals(unknown,localizedJournalLabel(de,unknown))
+  assertEquals("Open · Review due 2030-02-30",localizedJournalLabel(de,"Open · Review due 2030-02-30"))
+ }
  @Test fun tidyCommandsRequireTheDisplayedSuggestionAndExactRevisionWithAndWithoutInlineDiff() {
   val proposal=Json.parseToJsonElement("""{"id":"suggestion","plugin":"tidy","status":"pending","action":"replace_body","note_id":"note","note_version":7}""").jsonObject
   val pill=Json.parseToJsonElement("""{"type":"pill","action":"accept","label":"Apply changes","suggestion_id":"suggestion"}""").jsonObject

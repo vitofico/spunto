@@ -100,10 +100,10 @@ async function uiCommand(
   return response.json();
 }
 
-// A returned form submits with its command's manifest title.
+// These are the actions the user takes after filling in each form.
 const formTitles: Record<string, string> = {
-  "record-decision": "Record decision",
-  "review-decision": "Review decision",
+  "record-decision": "Save decision",
+  "review-decision": "Record outcome",
   edit: "Edit context pack",
   sources: "Pack sources",
   "thinking-desk:edit": "Edit thinking desk",
@@ -170,9 +170,12 @@ async function editNote(
   return response.json();
 }
 
-async function selectStatus(dialog: Locator, value: "Open" | "Closed") {
+async function selectStatus(
+  dialog: Locator,
+  value: "Open for follow-up" | "Closed",
+) {
   await dialog
-    .getByRole("group", { name: "Status (open reopens)", exact: true })
+    .getByRole("group", { name: "Decision status", exact: true })
     .getByRole("button", { name: value, exact: true })
     .click();
 }
@@ -232,17 +235,6 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   expect(result.body).not.toContain(`/n/${first.id}`);
 });
 
-async function decisionPanelAction(page: Page, name: string) {
-  const panel = page.getByLabel("About this note");
-  const summary = panel
-    .locator("summary")
-    .filter({ hasText: "Decision journal" });
-  await expect(summary).toBeVisible({ timeout: 15_000 });
-  if (!(await summary.evaluate((element) => element.closest("details")?.open)))
-    await summary.click();
-  return panel.getByRole("button", { name, exact: true });
-}
-
 test("decision journal creates, reviews and reopens without rewriting the original", async ({
   page,
 }, info) => {
@@ -250,27 +242,45 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   page.on("pageerror", (error) => errors.push(error.message));
   await login(page, "decision-journal");
   const suffix = `${Date.now().toString(36)}-${info.project.name}`;
-  let dialog = await palette(page, "Record decision");
+  const composer = page.getByLabel("New note");
+  await composer.fill("Ordinary draft stays separate.");
+  const capture = page.getByRole("button", {
+    name: "Record decision",
+    exact: true,
+  });
+  await capture.click();
+  let dialog = page.getByRole("dialog", {
+    name: "Record decision",
+    exact: true,
+  });
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(capture).toBeFocused();
+  await expect(composer).toHaveValue("Ordinary draft stays separate.");
+  await page.getByRole("link", { name: "Decisions", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Decisions", exact: true }),
+  ).toBeVisible();
   await uiCommand(page, "decision-journal", "record-decision", () =>
-    dialog.getByRole("option", { name: /^Record decision/ }).click(),
+    capture.click(),
   );
+  await dialog.locator("summary").filter({ hasText: "Add details" }).click();
   await dialog
-    .getByLabel("Decision title", { exact: true })
+    .getByLabel("Title (optional)", { exact: true })
     .fill(`Decision ${suffix}`);
   await dialog
     .getByLabel("What did you decide?", { exact: true })
     .fill("Use a single SQLite file.");
   await dialog
-    .getByLabel("Alternatives considered", { exact: true })
+    .getByLabel("Alternatives considered (optional)", { exact: true })
     .fill("A separate database service.");
   await dialog
-    .getByLabel("Why this choice?", { exact: true })
+    .getByLabel("Why this choice? (optional)", { exact: true })
     .fill("One owner needs simple operations.\nKeep backups easy to restore.");
   await dialog
-    .getByLabel("Expected outcome", { exact: true })
+    .getByLabel("Expected outcome (optional)", { exact: true })
     .fill("Recover the synthetic library in under five minutes.");
   await dialog
-    .getByLabel("Review date (YYYY-MM-DD, optional)", { exact: true })
+    .getByLabel("Review date (optional)", { exact: true })
     .fill("2030-02-01");
   const created = await run(
     page,
@@ -278,6 +288,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
     "decision-journal",
     "record-decision",
   );
+  await expect(dialog.getByRole("status")).toHaveText("Decision saved");
   const rootId = noteIds(created)[0];
   expect(rootId).toBeTruthy();
   const original = await note(page, rootId);
@@ -293,16 +304,23 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   );
 
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
-  const review = await decisionPanelAction(page, "Review or reopen");
+  const decision = page.getByRole("region", {
+    name: "Decision journal",
+    exact: true,
+  });
+  await expect(
+    decision.getByText(/Open for follow-up.*Review on/),
+  ).toBeVisible();
+  const review = decision.getByRole("button", {
+    name: "Review decision",
+    exact: true,
+  });
   await uiCommand(page, "decision-journal", "review-decision", () =>
     review.click(),
   );
-  dialog = page.getByRole("dialog", {
-    name: "Search and commands",
-    exact: true,
-  });
+  dialog = page.getByRole("dialog", { name: "Review decision", exact: true });
   await dialog
-    .getByLabel("What happened, or why reopen?", { exact: true })
+    .getByLabel("What happened or changed?", { exact: true })
     .fill("The synthetic restore finished in three minutes.");
   await dialog
     .getByLabel("What did you learn? (optional)", { exact: true })
@@ -314,6 +332,7 @@ test("decision journal creates, reviews and reopens without rewriting the origin
     "decision-journal",
     "review-decision",
   );
+  await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
   const outcomeId = noteIds(reviewed)[0];
   const outcome = await note(page, outcomeId);
   expect(outcome.body).toContain(`/n/${rootId}`);
@@ -322,17 +341,19 @@ test("decision journal creates, reviews and reopens without rewriting the origin
 
   // Review can be reopened from an outcome note, retaining the earlier outcome.
   await dialog.locator(`a[href="/n/${outcomeId}"]`).click();
-  dialog = await palette(page, "Review decision");
+  await expect(
+    decision.getByRole("link", { name: "Open original decision", exact: true }),
+  ).toBeVisible();
   await uiCommand(page, "decision-journal", "review-decision", () =>
-    dialog.getByRole("option", { name: /^Review decision/ }).click(),
+    review.click(),
   );
   await dialog
-    .getByLabel("What happened, or why reopen?", { exact: true })
+    .getByLabel("What happened or changed?", { exact: true })
     .fill("A new storage constraint needs another review.");
   await dialog
-    .getByLabel("Next review date (YYYY-MM-DD, optional)", { exact: true })
+    .getByLabel("Next review date (optional)", { exact: true })
     .fill("2030-03-01");
-  await selectStatus(dialog, "Open");
+  await selectStatus(dialog, "Open for follow-up");
   const reopened = await run(
     page,
     dialog,
@@ -343,21 +364,103 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   expect((await note(page, outcomeId)).body).toBe(outcome.body);
   expect((await note(page, rootId)).body).toBe(edited.body);
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
-  const open = await decisionPanelAction(page, "Open decision");
-  await uiCommand(page, "decision-journal", "journal", () => open.click());
-  dialog = page.getByRole("dialog", {
-    name: "Search and commands",
+  const open = decision.getByRole("button", {
+    name: "Review history",
     exact: true,
   });
-  await expect(
-    dialog.getByText("Open · revision 3 · review 2030-03-01", { exact: true }),
-  ).toBeVisible();
+  await open.click();
+  dialog = page.getByRole("dialog", { name: "Review history", exact: true });
+  await expect(dialog.getByText(/Open for follow-up.*Review on/)).toBeVisible();
   await expect(dialog.locator(`a[href="/n/${outcomeId}"]`)).toBeVisible();
   await page.screenshot({
     path: info.outputPath("decision-journal.png"),
     fullPage: true,
   });
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(open).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: "Open navigation", exact: true })
+    .click();
+  const navigation = page.getByRole("dialog", {
+    name: "Navigation",
+    exact: true,
+  });
+  await navigation
+    .getByRole("link", { name: "Decisions", exact: true })
+    .click();
+  await expect(navigation).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Decisions", exact: true }),
+  ).toBeVisible();
+  await capture.focus();
+  await page.keyboard.press("Enter");
+  dialog = page.getByRole("dialog", { name: "Record decision", exact: true });
+  await dialog
+    .getByLabel("What did you decide?", { exact: true })
+    .fill("Keep the weekly planning slot.");
+  await expect(
+    dialog.getByLabel("Title (optional)", { exact: true }),
+  ).not.toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Save decision", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: info.outputPath("decision-capture-mobile.png"),
+  });
   expect(errors).toEqual([]);
+});
+
+test("a source note offers decision capture with inherited privacy", async ({
+  page,
+}) => {
+  await login(page, "decision-journal");
+  const response = await page.request.post("/api/v1/notes", {
+    headers: { Origin: origin() },
+    data: { body: "# Synthetic architecture discussion", private: true },
+  });
+  expect(response.status()).toBe(201);
+  const source = (await response.json()) as Note;
+  await page.goto(`/n/${source.id}`);
+  await expect(
+    page.getByRole("button", { name: "Review decision", exact: true }),
+  ).toHaveCount(0);
+  const commands = await palette(page, "Review decision");
+  await expect(
+    commands.getByRole("option", { name: /^Review decision/ }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Note tools", exact: true }).click();
+  const tools = page.getByRole("dialog", { name: "Note tools", exact: true });
+  await uiCommand(page, "decision-journal", "record-decision", () =>
+    tools.getByRole("button", { name: /^Record decision/ }).click(),
+  );
+  await expect(
+    tools.getByRole("switch", { name: "Private", exact: true }),
+  ).toBeChecked();
+  await tools
+    .getByLabel("What did you decide?", { exact: true })
+    .fill("Store the backup in a separate directory.");
+  await page.context().setOffline(true);
+  await expect(
+    tools.getByLabel("What did you decide?", { exact: true }),
+  ).toHaveValue("Store the backup in a separate directory.");
+  await expect(
+    tools.getByRole("button", { name: "Save decision", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    tools.getByLabel("What did you decide?", { exact: true }),
+  ).toBeEditable();
+  await page.context().setOffline(false);
+  const saved = await run(page, tools, "decision-journal", "record-decision");
+  const decision = await note(page, noteIds(saved)[0]);
+  expect(decision.private).toBe(true);
+  expect(decision.body).toContain(`/n/${source.id}`);
+  expect((await note(page, source.id)).body).toBe(source.body);
 });
 
 test("context packs curate sources, expose staleness and keep a private note copy", async ({

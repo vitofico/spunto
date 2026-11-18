@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="decision_empty">Aucune décision consignée pour le moment.</string>
+    <string name="decision_outcomes">Voir les résultats</string>
+    <string name="decision_opening">Ouverture…</string>
+    <string name="decision_conflict">Cette décision a changé. Ouvrez la version actuelle avant de consigner un résultat.</string>
+    <string name="decision_title">Titre de la décision</string>
+    <string name="decision_choice">Qu’avez-vous décidé ?</string>
+    <string name="decision_alternatives">Autres options envisagées</string>
+    <string name="decision_reason">Pourquoi ce choix ?</string>
+    <string name="decision_expected">Résultat attendu</string>
+    <string name="decision_optional_field">%1$s (facultatif)</string>
+    <string name="decision_actual">Que s’est-il passé ou pourquoi rouvrir la décision ?</string>
+    <string name="decision_reflection">Qu’avez-vous appris ? (facultatif)</string>
+    <string name="decision_status">Après cet examen</string>
+    <string name="decision_next_review">Date du prochain examen (facultatif)</string>
+    <string name="decision_review_date">Date de réexamen (facultatif)</string>
+    <string name="decision_date_hint">Utilisez AAAA-MM-JJ.</string>
+    <string name="decision_invalid_date">Saisissez une date valide au format AAAA-MM-JJ.</string>
+    <string name="decision_open">Ouverte pour le suivi</string>
+    <string name="decision_reviewed">Examinée</string>
+    <string name="decision_closed">Clôturée</string>
+    <string name="decision_inherited_privacy">Cette décision sera privée, car la note source est privée.</string>
+    <string name="decision_connect_to_save">Connectez-vous au serveur pour enregistrer. Vous pouvez continuer à modifier le texte ici.</string>
+    <string name="decision_check_fields">Remplissez les champs obligatoires et vérifiez la longueur du texte.</string>
+    <string name="decision_record_outcome">Consigner le résultat</string>
+    <string name="decision_save">Enregistrer la décision</string>
+    <string name="decision_resume_review">Reprendre l’examen</string>
+    <string name="decision_more_outcomes">Autres résultats</string>
+    <string name="decision_more_decisions">Autres décisions</string>
+    <string name="decision_saved">Décision enregistrée.</string>
+    <string name="decision_outcome_saved">Résultat consigné.</string>
+    <string name="decision_open_outcome">Ouvrir la note du résultat</string>
+    <string name="decision_open_original">Ouvrir la note de la décision</string>
+    <string name="decision_saved_sync">Synchronisez pour ouvrir la note enregistrée sur cet appareil.</string>
+    <string name="decision_sync">Synchroniser maintenant</string>
+    <string name="decision_add_details">Ajouter des détails</string>
+    <string name="decision_hide_details">Masquer les détails</string>
+    <string name="decision_privacy_hint">Le mode privé exclut cette note des extensions d’IA et de réseau. Les droits d’accès à l’espace continuent de s’appliquer.</string>
+    <string name="decision_status_open">Ouverte</string>
+    <string name="decision_status_reopened">Rouverte</string>
+    <string name="decision_review_on">Examen le %1$s</string>
+    <string name="decision_review_due">Examen à échéance le %1$s</string>
+</resources>

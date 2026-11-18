@@ -225,7 +225,7 @@ function Rail({
             </Link>
           </nav>
         )}
-        {!collapsed && <PluginRailViews />}
+        {(!collapsed || open) && <PluginRailViews close={close} />}
         <div className="label-tree">
           <div className="overline">{t("app.labels")}</div>
           <nav>

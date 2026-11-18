@@ -212,24 +212,46 @@ function pluginNeedsReview(plugin: Plugin) {
     )
   );
 }
-function slotSentences(plugin: Plugin) {
-  const c = plugin.contributes ?? {};
-  return (
-    [
-      c.views ? t("settingsplugins.a_view_in_the_rail") : null,
-      c.commands
-        ? t("settingsplugins.commands_in_the_palette_or_note_actions")
-        : null,
-      c.panel ? t("settingsplugins.a_section_in_about_this_note") : null,
-      c.meta ? t("settingsplugins.one_fact_in_the_note_s_meta_line") : null,
-      c.slip ? t("settingsplugins.one_daily_slip") : null,
-      plugin.permissions.includes("suggest")
-        ? t("settingsplugins.pills_under_notes_and_the_shared_review_queue")
-        : null,
-    ]
-      .filter(Boolean)
-      .join(". ") || t("settingsplugins.settings_only")
-  );
+function pluginLocations(plugin: Plugin) {
+  const contributions = plugin.contributes ?? {};
+  const commands =
+    contributions.commands?.flatMap(
+      (command) => command.where ?? command.surfaces ?? [],
+    ) ?? [];
+  return [
+    ...(contributions.views ?? []).map((view) => ({
+      title: view.title,
+      href: `/v/${encodeURIComponent(plugin.id)}/${encodeURIComponent(view.id)}`,
+    })),
+    commands.includes("palette")
+      ? { title: t("app.search_and_commands") }
+      : null,
+    commands.includes("slash")
+      ? { title: t("plugins.in_composer_commands") }
+      : null,
+    commands.includes("note-actions")
+      ? { title: t("plugins.in_note_tools") }
+      : null,
+    contributions.panel ? { title: t("plugins.on_the_note") } : null,
+    contributions.meta ? { title: t("plugins.in_note_details") } : null,
+    contributions.slip ? { title: t("app.all_notes"), href: "/" } : null,
+    contributions.search_source
+      ? { title: t("plugins.in_search_results") }
+      : null,
+    plugin.permissions.includes("suggest")
+      ? { title: t("review.review"), href: "/review" }
+      : null,
+    plugin.id === "markdown-import"
+      ? { title: t("markdownimport.import_markdown"), href: "/settings/data" }
+      : null,
+    plugin.kind === "device" ? { title: t("plugins.on_android") } : null,
+    plugin.creates === "external"
+      ? { title: t("app.all_notes"), href: "/" }
+      : null,
+    plugin.id === "webhooks"
+      ? { title: t("plugins.at_webhook_destinations") }
+      : null,
+  ].filter((location) => location !== null);
 }
 export function usePluginActions() {
   const client = useQueryClient();
@@ -333,7 +355,11 @@ export function PermissionDialog({
       <p className="muted">{pluginFacts(plugin)}</p>
       {destinationDisclosure(plugin) && <p>{destinationDisclosure(plugin)}</p>}
       <h3>{t("settingsplugins.where_it_shows_up")}</h3>
-      <p className="muted">{slotSentences(plugin)}</p>
+      <p className="muted">
+        {pluginLocations(plugin)
+          .map(({ title }) => title)
+          .join(" · ") || t("settingsplugins.settings_only")}
+      </p>
       <ErrorLine error={error} />
     </Dialog>
   );
@@ -768,6 +794,10 @@ export function PluginPage({ id }: { id: string }) {
   });
   const plugin = catalog.data?.plugins.find((p) => p.id === id);
   const removed = plugin?.state === "removed";
+  const locations = plugin ? pluginLocations(plugin) : [];
+  const canRun = plugin?.contributes?.commands?.some((command) =>
+    (command.where ?? command.surfaces ?? []).includes("palette"),
+  );
   const query = useQuery({
     queryKey: ["plugin-settings", id],
     queryFn: () => api.pluginSettings(id),
@@ -995,12 +1025,9 @@ export function PluginPage({ id }: { id: string }) {
           <AIRouting plugin={plugin} />
         </>
       )}
-      {plugin.state === "enabled" && !!plugin.contributes?.commands?.length && (
+      {plugin.state === "enabled" && canRun && (
         <>
           <h2>{t("settingsplugins.run")}</h2>
-          <p className="muted">
-            {t("settingsplugins.note_commands_appear_in_the_palette_while_a")}
-          </p>
           <PluginCommands
             pluginId={id}
             where="palette"
@@ -1052,7 +1079,23 @@ export function PluginPage({ id }: { id: string }) {
             <p>{destinationDisclosure(plugin)}</p>
           )}
           <h2>{t("settingsplugins.where_it_shows_up")}</h2>
-          <p className="muted">{slotSentences(plugin)}</p>
+          {locations.length ? (
+            <ul>
+              {locations.map((location) => (
+                <li key={location.title}>
+                  {plugin.state === "enabled" &&
+                  "href" in location &&
+                  location.href ? (
+                    <Link href={location.href}>{location.title}</Link>
+                  ) : (
+                    location.title
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">{t("settingsplugins.settings_only")}</p>
+          )}
         </>
       )}
       {!removed &&

@@ -443,6 +443,22 @@ class PluginNotes:
                 (label_key(path), path, created),
             )
 
+    async def _creation_receipt(self, conn, request_id):
+        rows = await conn.execute_fetchall(
+            "SELECT result FROM applied_op WHERE credential_id=? AND op_id=?",
+            (self.core.principal.id, request_id),
+        )
+        return json.loads(rows[0][0]) if rows else None
+
+    async def creation_acknowledged(self, request_id):
+        """Check the plugin's own creation receipt without looking up the note."""
+        self._write_allowed()
+        self.ctx.check("notes.create")
+        async with self.store.read() as conn:
+            receipt = await self._creation_receipt(conn, request_id)
+        self.ctx.check("notes.create")
+        return receipt is not None
+
     async def create(
         self,
         body,
@@ -510,16 +526,10 @@ class PluginNotes:
             raise ValueError("invalid citation references")
         async with self.store.write() as conn:
             self.ctx.check("notes.create")
-            prior = []
-            if request_id:
-                prior = await conn.execute_fetchall(
-                    "SELECT result FROM applied_op WHERE credential_id=? AND op_id=?",
-                    (self.core.principal.id, request_id),
-                )
-            if prior:
+            receipt = await self._creation_receipt(conn, request_id) if request_id else None
+            if receipt is not None:
                 # The receipt acknowledges the original creation; it never
                 # reads a note the owner may since have edited or hidden.
-                receipt = json.loads(prior[0][0])
                 result = {
                     **{
                         key: receipt[key]

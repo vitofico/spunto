@@ -857,6 +857,27 @@ class Notes:
     async def _delete(self, conn, row) -> None:
         from spunto.ai.vectors import purge_note_vectors
 
+        if row["source_kind"] == "plugin" and row["source_ref"] == "decision-journal":
+            # Older installations could prune the original creation receipt while
+            # the linked record still existed. Preserve the acknowledgement before
+            # deleting the record and its prose via the note's foreign key.
+            journal_records = await conn.execute_fetchall(
+                "SELECT collection,id FROM plugin_record WHERE plugin_id='decision-journal' "
+                "AND note_id=? AND collection IN ('decisions','outcomes')",
+                (row["id"],),
+            )
+            for record in journal_records:
+                prefix = "decision:" if record["collection"] == "decisions" else "outcome:"
+                await conn.execute(
+                    "INSERT INTO applied_op VALUES (?,?,?,?) "
+                    "ON CONFLICT(credential_id,op_id) DO NOTHING",
+                    (
+                        "plugin:decision-journal",
+                        prefix + record["id"],
+                        json.dumps({"id": row["id"]}),
+                        now_ms(),
+                    ),
+                )
         await purge_note_vectors(conn, row["id"])
         copies = await conn.execute_fetchall(
             "SELECT *,rowid AS fts_id FROM note WHERE conflict_of=?", (row["id"],)

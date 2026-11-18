@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.contentDescription
@@ -104,32 +108,50 @@ fun validSchema(value:JsonElement?):Boolean {
  }
 }
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable fun SchemaForm(schema:JsonObject,initial:JsonObject=JsonObject(emptyMap()),readOnly:Boolean=false,pluginId:String="",readOnlyMessage:String="Changes need a connection.",saveLabel:String="Save settings",hiddenFields:Set<String> = emptySet(),preferDefaults:Boolean=false,onSave:(JsonObject)->Unit={}) {
- val fields=(schema["properties"] as? JsonObject).orEmpty()
- val values=remember(schema,initial,preferDefaults) { mutableStateMapOf<String,JsonElement>().apply { putAll(formInitialValues(schema,initial,preferDefaults)) } }
+@Composable fun SchemaForm(schema:JsonObject,initial:JsonObject=JsonObject(emptyMap()),readOnly:Boolean=false,pluginId:String="",readOnlyMessage:String="Changes need a connection.",saveLabel:String="Save settings",hiddenFields:Set<String> = emptySet(),preferDefaults:Boolean=false,
+ submitEnabled:Boolean=true,retainEdits:Boolean=false,choiceLabel:((String,JsonElement)->String?)?=null,invalidInputMessage:String?=null,validateInput:((JsonObject)->String?)?=null,detailsFields:Set<String> = emptySet(),detailsLabels:Pair<String,String>?=null,onSave:(JsonObject)->Unit={}) {
+ val fields=(schema["properties"] as? JsonObject).orEmpty().filterKeys {it !in hiddenFields}
+ val details=fields.filterKeys {it in detailsFields && detailsLabels!=null}
+ var expanded by rememberSaveable(schema,initial) {mutableStateOf(false)}
+ var values by if(retainEdits) rememberSaveable(schema,initial,preferDefaults,stateSaver=Saver<JsonObject,String>(
+  save={it.toString()},restore={Json.parseToJsonElement(it).jsonObject},
+ )) { mutableStateOf(formInitialValues(schema,initial,preferDefaults)) }
+ else remember(schema,initial,preferDefaults) { mutableStateOf(formInitialValues(schema,initial,preferDefaults)) }
+ fun update(key:String,value:JsonElement) {values=JsonObject(values+(key to value))}
  var error by remember(schema,initial) { mutableStateOf("") }
  Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-  if(readOnly) Text(readOnlyMessage)
+  if(readOnly && readOnlyMessage.isNotEmpty()) Text(readOnlyMessage)
   schema.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
-  fields.forEach { (key,raw) ->
+  (fields.filterKeys {it !in details}+details).forEach { (key,raw) ->
+   if(key==details.keys.firstOrNull() && detailsLabels!=null) {
+    TextButton(onClick={expanded=!expanded}) {Text(if(expanded) detailsLabels.second else detailsLabels.first)}
+   }
+   if(key in details && !expanded) return@forEach
    val field=raw as? JsonObject ?: return@forEach
-   if(key in hiddenFields) return@forEach
    val label=field.string("title").ifEmpty { key.replace('_',' ').replaceFirstChar { it.uppercase() } }
    val value=values[key] ?: field["default"] ?: JsonPrimitive("")
    if(field.bool("x-secret")) { Text("$label · Set in the environment"); Text("SPUNTO_PLUGIN_${pluginId.replace('-','_').uppercase()}_${key.uppercase()}"); return@forEach }
    if(field.string("x-scope")=="device") Text("This phone only",style=MaterialTheme.typography.labelSmall)
    val choices=field["enum"] as? JsonArray
    when {
-    choices!=null -> {FormChoiceField(label,choices,value,!readOnly,language=key=="language") {values[key]=it};field.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}}
+    choices!=null -> {FormChoiceField(label,choices,value,!readOnly,language=key=="language",choiceLabel=choiceLabel?.let { localize -> { localize(key,it) } }) {update(key,it)};field.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}}
     field.string("type")=="boolean" -> Row(Modifier.fillMaxWidth().heightIn(min=48.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-     Text(label,modifier=Modifier.weight(1f))
-     Switch(checked=value.jsonPrimitive.booleanOrNull ?: false,onCheckedChange={values[key]=JsonPrimitive(it)},enabled=!readOnly,modifier=Modifier.sizeIn(minWidth=48.dp,minHeight=48.dp).semantics {contentDescription=label})
+     Column(Modifier.weight(1f)) {
+      Text(label)
+      field.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
+     }
+     Switch(checked=value.jsonPrimitive.booleanOrNull ?: false,onCheckedChange={update(key,JsonPrimitive(it))},enabled=!readOnly,modifier=Modifier.sizeIn(minWidth=48.dp,minHeight=48.dp).semantics {contentDescription=label})
     }
-    else -> OutlinedTextField(value=if(value is JsonArray) value.joinToString(", ") { it.jsonPrimitive.content } else value.jsonPrimitive.content,onValueChange={text -> values[key]=JsonPrimitive(text)},label={Text(label)},enabled=!readOnly,minLines=if(field.string("type")=="string" && ((field["maxLength"] as? JsonPrimitive)?.intOrNull ?: 0)>280) 3 else 1,modifier=Modifier.fillMaxWidth(),supportingText={Text(field.string("description"))})
+    else -> OutlinedTextField(value=if(value is JsonArray) value.joinToString(", ") { it.jsonPrimitive.content } else value.jsonPrimitive.content,onValueChange={text -> update(key,JsonPrimitive(text))},label={Text(label)},enabled=!readOnly,minLines=if(field.string("type")=="string" && ((field["maxLength"] as? JsonPrimitive)?.intOrNull ?: 0)>280) 3 else 1,modifier=Modifier.fillMaxWidth(),supportingText=field.string("description").takeIf(String::isNotBlank)?.let {description -> {Text(description)}})
    }
   }
-  if(error.isNotEmpty()) Text(error,color=MaterialTheme.colorScheme.error)
-  if(!readOnly && fields.isNotEmpty()) Button(onClick={runCatching { formArguments(schema,JsonObject(values.toMap())) }.onSuccess { error="";onSave(it) }.onFailure { error=it.message ?: "Check the form fields." }}) { Text(saveLabel) }
+  if(error.isNotEmpty()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+  if((!readOnly || retainEdits) && (schema["properties"] as? JsonObject).orEmpty().isNotEmpty()) Button(enabled=submitEnabled && !readOnly,onClick={
+   runCatching { formArguments(schema,values) }.onSuccess {args ->
+    error=validateInput?.invoke(args).orEmpty()
+    if(error.isEmpty()) onSave(args)
+   }.onFailure { error=invalidInputMessage ?: it.message ?: "Check the form fields.";if(details.isNotEmpty()) expanded=true }
+  }) { Text(saveLabel) }
  }
 }
 data class ViewNote(val id:String,val body:String,val createdAt:Long,val pinned:Boolean=false,val archived:Boolean=false,val trashed:Boolean=false,val source:String="owner",val latestAgent:Boolean=false,val sourceRef:String="",val members:Set<String> = emptySet(),val labels:Set<String> = emptySet(),val origin:String="owner")

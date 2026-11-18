@@ -10,6 +10,7 @@ import {
   invalidateContent,
   type Note,
   type Revision,
+  useBrowserOnline,
   useWorkspaceRole,
 } from "../lib";
 import { compactDiff, diffLines } from "../lib/text";
@@ -27,13 +28,17 @@ import { Icon } from "../components/core/Icon";
 import { NotFound } from "../components/core/NotFound";
 import { ApiError } from "../lib/errors";
 import { MoreMenu } from "../components/core/Menu";
+import { DecisionNoteActions } from "../features/DecisionJournal";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
 import {
   SuggestionLine,
   NotePanel,
   usePlugins,
+  useWaitingCommandPlugins,
   activePlugins,
+  PluginCommands,
+  canRunOnNote,
   supportsNotePicker,
 } from "../features/Slots";
 import { Dialog } from "../features/Dialog";
@@ -232,13 +237,15 @@ function NoteEditor({ note }: { note: Note }) {
   );
   const [caret, setCaret] = useState<number>();
   const [linkOpen, setLinkOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const manifest = usePlugins();
   const role = useWorkspaceRole();
+  const online = useBrowserOnline();
   const canLink =
-    role !== "viewer" &&
+    role === "owner" &&
     !trashed &&
     !editing &&
-    navigator.onLine &&
+    online &&
     activePlugins(manifest.data?.plugins).some(
       (plugin) => plugin.id === "links" && supportsNotePicker(plugin),
     );
@@ -252,6 +259,25 @@ function NoteEditor({ note }: { note: Note }) {
   });
   const linkDraftBlocked =
     draft.dirty || !!draft.conflict || draft.state === "saving";
+  const skipCommands = ["links/link", "decision-journal/review-decision"];
+  const toolsAllowed =
+    role === "owner" && !trashed && !editing && !linkDraftBlocked && online;
+  const waiting = useWaitingCommandPlugins(
+    toolsAllowed && !note.private && !note.machine,
+  );
+  const canUseTools =
+    toolsAllowed &&
+    [...activePlugins(manifest.data?.plugins), ...(waiting.data ?? [])].some(
+      (plugin) =>
+        plugin.contributes?.commands?.some(
+          (command) =>
+            (command.where ?? command.surfaces ?? []).includes(
+              "note-actions",
+            ) &&
+            !skipCommands.includes(`${plugin.id}/${command.id}`) &&
+            canRunOnNote(plugin, command.id, note),
+        ),
+    );
   const [reviewBase, setReviewBase] = useState<Note | null>(null);
   const flag = useNoteFlag();
   const toast = useToast();
@@ -353,6 +379,14 @@ function NoteEditor({ note }: { note: Note }) {
               },
             ]
           : []),
+        ...(canUseTools
+          ? [
+              {
+                label: t("plugins.note_tools"),
+                onSelect: () => setToolsOpen(true),
+              },
+            ]
+          : []),
         {
           label: note.pinned ? t("note.unpin") : t("slots.pin"),
           onSelect: () => void flag(note, "pinned", !note.pinned),
@@ -425,6 +459,19 @@ function NoteEditor({ note }: { note: Note }) {
           <MoreMenu label={t("note.more_actions")} items={menu} />
         </div>
       </header>
+      {toolsOpen && role === "owner" && (
+        <Dialog
+          title={t("plugins.note_tools")}
+          onClose={() => setToolsOpen(false)}
+        >
+          <PluginCommands
+            where="note-actions"
+            noteId={note.id}
+            note={note}
+            skipCommands={skipCommands}
+          />
+        </Dialog>
+      )}
       {linkOpen && canLink && (
         <Dialog
           title={t("plugin.links.commands.link.title")}
@@ -565,6 +612,7 @@ function NoteEditor({ note }: { note: Note }) {
         </p>
       )}
       {!trashed && <SuggestionLine note={note} />}
+      <DecisionNoteActions note={note} editing={editing || linkDraftBlocked} />
       {note.private && (
         <p className="muted">
           {t("note.private_notes_stay_out_of_ai_and_agent")}

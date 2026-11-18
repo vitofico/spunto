@@ -9,15 +9,17 @@ import kotlinx.serialization.json.*
 internal data class NoteTool(val pluginId:String,val pluginName:String,val id:String,val title:String,val description:String)
 
 /** A command is listed once, with the internal note-link action kept in reach. */
-internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap())):List<NoteTool> = plugins.filter {
+internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap()),allowDecisionJournal:Boolean=true):List<NoteTool> = plugins.filter {
  it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed","waiting","removed")
+ && (allowDecisionJournal || it.string("id")!=DecisionJournalId)
  && (!privateNote || (it["permissions"] as? JsonArray)?.all {permission ->
   val name=(permission as? JsonPrimitive)?.takeIf {value ->value.isString}?.content
   name!=null && !name.startsWith("ai.") && !name.startsWith("net.")
  }==true)
 }.sortedBy {(it["position"] as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE}.flatMap {plugin ->
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().take(3).filter {command ->
-  (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true
+  (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
+  (plugin.string("id")!=DecisionJournalId || command.string("id")!="review-decision")
  }.map {NoteTool(plugin.string("id"),localizedPluginName(resources,plugin,catalog),it.string("id"),localizedPluginCommand(resources,plugin,it,catalog),localizedPluginDescription(resources,plugin,catalog))}
 }.distinctBy {it.pluginId to it.id}.sortedByDescending {it.pluginId=="links" && it.id=="link"}
 

@@ -600,7 +600,17 @@ it.each(["owner", "editor", "viewer", "unknown", null, undefined])(
   },
 );
 
-it.each(["direct", "palette", "form"])(
+it.each(["editor", "viewer"] as const)(
+  "does not show the owner-only Ask command to a workspace %s",
+  (role) => {
+    vi.spyOn(queryState, "useWorkspaceRole").mockReturnValue(role);
+    render(wrap(<PaletteCommands query="What is my plan?" />));
+    expect(screen.queryByRole("button", { name: /Ask your notes/ })).toBeNull();
+    expect(api.command).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["direct", "form"])(
   "does not advertise or negotiate authoring for workspace viewers through %s",
   async (entry) => {
     vi.spyOn(queryState, "useWorkspaceRole").mockReturnValue("viewer");
@@ -636,9 +646,6 @@ it.each(["direct", "palette", "form"])(
         target: { value: "What is my plan?" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    } else if (entry === "palette") {
-      render(wrap(<PaletteCommands query="What is my plan?" />));
-      fireEvent.click(screen.getByRole("button", { name: /Ask your notes/ }));
     } else {
       render(
         wrap(

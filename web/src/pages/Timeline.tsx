@@ -1,5 +1,7 @@
 import { t, useLanguage } from "../lib/i18n";
 import {
+  lazy,
+  Suspense,
   useEffect,
   useId,
   useMemo,
@@ -34,6 +36,12 @@ import { NotFound } from "../components/core/NotFound";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
 import { groupedNotes, NoteCard } from "../components/core/NoteCard";
+
+const DecisionCapture = lazy(() =>
+  import("../features/DecisionJournal").then((module) => ({
+    default: module.DecisionCapture,
+  })),
+);
 
 const notesCount = (count: number) => t("count.note", { count });
 /** Mirrors the server's label rule, so the dialog can say what is wrong before sending. */
@@ -272,6 +280,8 @@ export default function Timeline({
         .find((plugin) => plugin.id === view.split("/")[0])
         ?.contributes?.views?.find((item) => item.id === view.split("/")[1])
     : undefined;
+  const journal = plugins.find((plugin) => plugin.id === "decision-journal");
+  const decisionsView = view === "decision-journal/journal";
   const notes = useNotes({ view, label, limit: 50 });
   const draft = useDraftEditor({
     draftKey: label ? "composer:" + label : "composer",
@@ -432,6 +442,14 @@ export default function Timeline({
         />
       )}
       {confirmDialog}
+      {decisionsView && journal && (
+        <div className="decision-capture">
+          <p className="muted">{t("decisions.view_description")}</p>
+          <Suspense fallback={null}>
+            <DecisionCapture plugin={journal} />
+          </Suspense>
+        </div>
+      )}
       {view === "timeline" && canEdit && (
         <>
           {label && addLabel && (
@@ -473,6 +491,13 @@ export default function Timeline({
               {t("note.device_storage_is_full_or_unavailable_keep_this")}
             </p>
           )}
+          {!label && journal && (
+            <div className="decision-capture">
+              <Suspense fallback={null}>
+                <DecisionCapture plugin={journal} />
+              </Suspense>
+            </div>
+          )}
           <ReviewLine />
           <DailySlip />
         </>
@@ -505,6 +530,8 @@ export default function Timeline({
           >
             {canEdit && <p>{t("timeline.automatic_label", { label })}</p>}
           </Empty>
+        ) : decisionsView ? (
+          <Empty heading={EmptyHeading} title={t("decisions.empty")} />
         ) : view === "archive" ? (
           <Empty heading={EmptyHeading} title={t("timeline.nothing_archived")}>
             <p>{t("timeline.archive_keeps_a_note_out_of_the_timeline")}</p>

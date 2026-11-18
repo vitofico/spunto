@@ -612,6 +612,15 @@ function subscribeSync(listener: () => void) {
       window.removeEventListener(event, listener);
   };
 }
+/** Commands can reach the API even when the live change feed is interrupted. */
+export function useBrowserOnline() {
+  return useSyncExternalStore(
+    subscribeSync,
+    () => navigator.onLine,
+    () => true,
+  );
+}
+
 /**
  * One sync state for the rail and the banner: offline when the browser says so or
  * the change feed keeps failing, plus the saves still waiting on this device.

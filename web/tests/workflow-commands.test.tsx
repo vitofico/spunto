@@ -8,6 +8,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Router, useLocation } from "wouter";
+import { memoryLocation } from "wouter/memory-location";
 import { api } from "../src/lib/api";
 import {
   CommandResult,
@@ -264,7 +266,19 @@ it("lists a command that is both a note action and a palette command once, on th
     },
   });
   const run = vi.spyOn(api, "command").mockResolvedValue({});
-  render(wrap(<PaletteCommands noteId="note-1" onResult={() => {}} />));
+  const memory = memoryLocation();
+  function Location() {
+    const [location] = useLocation();
+    return <output>{location}</output>;
+  }
+  render(
+    wrap(
+      <Router hook={memory.hook}>
+        <Location />
+        <PaletteCommands noteId="note-1" onResult={() => {}} />
+      </Router>,
+    ),
+  );
   expect(
     screen.getAllByRole("button", { name: /Record decision/ }),
   ).toHaveLength(1);
@@ -284,9 +298,8 @@ it("lists a command that is both a note action and a palette command once, on th
     ).toBe(false),
   );
   fireEvent.click(screen.getByRole("button", { name: /Decision journal/ }));
-  await waitFor(() =>
-    expect(run).toHaveBeenLastCalledWith("decision-journal", "journal", {}),
-  );
+  expect(screen.getByText("/v/decision-journal/journal")).toBeTruthy();
+  expect(run).toHaveBeenCalledTimes(1);
 });
 
 it("preserves typed entries after a stale form rejection and explains safe recovery", async () => {

@@ -2021,3 +2021,6 @@ mark[data-match] {
 .account-identity p {
   margin-block: var(--s-8);
 }
+.decision-capture {
+  margin-block: var(--s-12) var(--s-20);
+}

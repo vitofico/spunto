@@ -139,7 +139,7 @@ class Records:
         key=None,
         source_versions=None,
     ):
-        """Replace exact JSON atomically; expected_data=None requires an absent row."""
+        """Replace exact JSON atomically, provided an associated note still exists."""
         self.ctx.check_write()
         collection, record_id = globals()["key"](collection), globals()["key"](record_id)
         payload = encoded(data)
@@ -160,6 +160,10 @@ class Records:
             if source_versions is not None:
                 self.ctx.check("notes.read")
                 await self.ctx.notes._guard_sources(conn, source_versions)
+            if note_id is not None and not await conn.execute_fetchall(
+                "SELECT 1 FROM note WHERE id=?", (note_id,)
+            ):
+                return False
             await conn.execute(
                 "INSERT INTO plugin_record(plugin_id,collection,id,note_id,key,data,updated_at) "
                 "VALUES(?,?,?,?,?,?,?) ON CONFLICT(plugin_id,collection,id) DO UPDATE SET "

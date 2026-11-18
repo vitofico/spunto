@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.serialization.json.*
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun FormChoiceField(title:String,choices:JsonArray,value:JsonElement,enabled:Boolean,language:Boolean=false,onChoose:(JsonElement)->Unit) {
- fun label(choice:JsonElement)=if(language) when(choice.jsonPrimitive.content) {"it" -> "Italian";"en" -> "English";else -> choice.jsonPrimitive.content} else choice.jsonPrimitive.content
+@Composable internal fun FormChoiceField(title:String,choices:JsonArray,value:JsonElement,enabled:Boolean,language:Boolean=false,choiceLabel:((JsonElement)->String?)?=null,onChoose:(JsonElement)->Unit) {
+ fun label(choice:JsonElement)=choiceLabel?.invoke(choice) ?: if(language) when(choice.jsonPrimitive.content) {"it" -> "Italian";"en" -> "English";else -> choice.jsonPrimitive.content} else choice.jsonPrimitive.content
  if(choices.size<=5 && choices.all {it.jsonPrimitive.content.length<=32}) {
   Column {Text(title);FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
    choices.forEach {choice -> FilterChip(selected=value==choice,onClick={onChoose(choice)},enabled=enabled,label={Text(label(choice))})}

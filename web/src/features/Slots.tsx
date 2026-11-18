@@ -1,6 +1,7 @@
 import {
   invalidateContentFor,
   useManifest,
+  useBrowserOnline,
   useWorkspaceRole,
 } from "../lib/query";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
@@ -14,8 +15,9 @@ import {
   useState,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { api } from "../lib/api";
+import { localizeCatalog } from "../lib/localizePlugins";
 import { safeError } from "../lib/errors";
 import { NoteBody } from "../components/core/NoteCard";
 import { useToast } from "../components/core/Toast";
@@ -47,6 +49,13 @@ import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
 import { requestGeneration } from "../lib/identity";
+import {
+  decisionsPath,
+  isDecisionNote,
+  decisionForm,
+  decisionStatus,
+  decisionCommandLabel,
+} from "./decisionJournalData";
 import {
   askContinuation,
   askItems,
@@ -514,6 +523,7 @@ export function NotePanel({ note }: { note: Note }) {
   const plugins = activePlugins(manifest.data?.plugins).filter(
     (p) =>
       p.id !== "links" &&
+      p.id !== "decision-journal" &&
       (p.contributes?.panel ||
         note.annotations?.some((a) => a.plugin === p.id && a.kind === "panel")),
   );
@@ -641,10 +651,11 @@ export function DailySlip() {
     </section>
   );
 }
-export function PluginRailViews() {
+export function PluginRailViews({ close }: { close?: () => void }) {
   useLanguage();
   const manifest = usePlugins();
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+  const [location] = useLocation();
   const client = useQueryClient();
   const [more, setMore] = useState(false);
   const pin = useMutation({
@@ -659,16 +670,32 @@ export function PluginRailViews() {
       .slice(0, 1)
       .map((v) => ({ ...v, plugin: p.id, key: `${p.id}/${v.id}` })),
   );
-  if (!views.length) return null;
+  const review = activePlugins(manifest.data?.plugins).some((plugin) =>
+    ["duplicates", "label-gardener"].includes(plugin.id),
+  );
+  if (!views.length && !review) return null;
+  const href = (v: (typeof views)[number]) =>
+    `/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`;
   return (
-    <section className={styles.railGroup}>
+    <nav className={styles.railGroup} aria-label={t("slots.views")}>
       <h3>{t("slots.views")}</h3>
+      {review && (
+        <Link
+          href="/review"
+          onClick={close}
+          aria-current={location === "/review" ? "page" : undefined}
+        >
+          {t("review.review")}
+        </Link>
+      )}
       {views
         .filter((v) => !settings.data?.hidden_views.includes(v.key))
         .map((v) => (
           <Link
             key={v.key}
-            href={`/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`}
+            href={href(v)}
+            onClick={close}
+            aria-current={location === href(v) ? "page" : undefined}
           >
             {v.title}
           </Link>
@@ -676,8 +703,7 @@ export function PluginRailViews() {
       {views.some((v) => settings.data?.hidden_views.includes(v.key)) && (
         <>
           <button onClick={() => setMore(!more)} aria-expanded={more}>
-            {t("settingsplugins.show")}
-            {more ? "fewer" : "more"} {t("slots.views_2")}
+            {t(more ? "plugins.show_fewer_views" : "plugins.show_more_views")}
           </button>
           {more &&
             views
@@ -685,7 +711,9 @@ export function PluginRailViews() {
               .map((v) => (
                 <div key={v.key} className={styles.row}>
                   <Link
-                    href={`/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`}
+                    href={href(v)}
+                    onClick={close}
+                    aria-current={location === href(v) ? "page" : undefined}
                   >
                     {v.title}
                   </Link>
@@ -699,7 +727,7 @@ export function PluginRailViews() {
               ))}
         </>
       )}
-    </section>
+    </nav>
   );
 }
 export type CommandOrigin = { plugin: string; command: string; args?: Args };
@@ -832,6 +860,7 @@ function PluginResult({
   const client = useQueryClient();
   const manifest = usePlugins();
   const workspaceRole = useWorkspaceRole();
+  const online = useBrowserOnline();
   const [display, setDisplay] = useState(value);
   const [currentOrigin, setCurrentOrigin] = useState(origin);
   const [responseId, setResponseId] = useState(0);
@@ -922,9 +951,27 @@ function PluginResult({
   const saveKey = useMemo(createIdempotencyKey, [display]);
   // Plugins that create notes save their own results; an unknown origin gets no save.
   const genericSave = !!plugin && !plugin.creates;
+  const id = currentOrigin?.command;
+  const decisionCommand =
+    plugin?.id === "decision-journal" &&
+    id &&
+    ["record-decision", "review-decision", "journal"].includes(id)
+      ? id
+      : undefined;
+  const decisionOffline = !!decisionCommand && !online;
   const formLabel =
-    plugin?.contributes?.commands?.find((c) => c.id === currentOrigin?.command)
-      ?.title ?? t("settingsplugins.run");
+    decisionCommand === "record-decision"
+      ? t("decisions.save_decision")
+      : decisionCommand === "review-decision"
+        ? t("decisions.record_outcome")
+        : (plugin?.contributes?.commands?.find(
+            (c) => c.id === currentOrigin?.command,
+          )?.title ?? t("settingsplugins.run"));
+  const decisionSaved =
+    !interactive &&
+    resultItems.some((item) => item.type === "notes") &&
+    (decisionCommand === "record-decision" ||
+      decisionCommand === "review-decision");
   useEffect(() => {
     if (appliedSession.current === session) return;
     appliedSession.current = session;
@@ -936,6 +983,7 @@ function PluginResult({
     setApplied([]);
   }, [value, origin, session]);
   const followup = useMutation({
+    networkMode: decisionCommand ? "always" : undefined,
     mutationFn: async ({
       plugin,
       id,
@@ -991,7 +1039,12 @@ function PluginResult({
       setCopied(false);
       setSaved(null);
       setApplied([]);
-      void client.invalidateQueries({ queryKey: ["notes"] });
+      if (
+        choice.plugin === "decision-journal" &&
+        ["record-decision", "review-decision"].includes(choice.id)
+      )
+        void invalidateContentFor(client);
+      else void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
   const conversationView =
@@ -1062,14 +1115,49 @@ function PluginResult({
         typeof currentOrigin?.args?.question === "string" && (
           <p>{currentOrigin.args.question}</p>
         )}
+      <p role="status" className={decisionSaved ? undefined : "sr-only"}>
+        {decisionSaved &&
+          t(
+            decisionCommand === "record-decision"
+              ? "decisions.decision_saved"
+              : "decisions.outcome_saved",
+          )}
+      </p>
+      {decisionOffline && <p role="status">{t("decisions.reconnect")}</p>}
       <VocabularyOutput
         key={responseId}
+        formSubmitDisabled={decisionOffline}
+        formSchema={
+          decisionCommand
+            ? (schema) => decisionForm(decisionCommand, schema)
+            : undefined
+        }
+        formDetails={
+          decisionCommand === "record-decision"
+            ? {
+                label: t("decisions.add_details"),
+                fields: ["title", "alternatives", "rationale", "expected"],
+              }
+            : undefined
+        }
+        formChoices={
+          decisionCommand === "review-decision"
+            ? (key, value) =>
+                key === "status" &&
+                typeof value === "string" &&
+                ["open", "reviewed", "closed"].includes(value)
+                  ? t(`decisions.status.${value}`)
+                  : undefined
+            : undefined
+        }
+        commandLabel={decisionCommand ? decisionCommandLabel : undefined}
+        displayText={decisionCommand === "journal" ? decisionStatus : undefined}
         value={visibleResult}
         formLabel={
           sourcePickerArgs ? t("notepicker.update_sources") : formLabel
         }
         onCommand={
-          currentOrigin && !followup.isPending
+          currentOrigin && !followup.isPending && !decisionOffline
             ? (id, args) =>
                 followup.mutate({
                   plugin: currentOrigin.plugin,
@@ -1098,7 +1186,8 @@ function PluginResult({
         }
         onForm={
           currentOrigin?.command && !followup.isPending
-            ? (args) =>
+            ? (args) => {
+                if (decisionOffline) return;
                 followup.mutate({
                   plugin: currentOrigin.plugin,
                   id: currentOrigin.command,
@@ -1110,7 +1199,8 @@ function PluginResult({
                       }
                     : { ...currentOrigin.args, ...args },
                   session,
-                })
+                });
+              }
             : undefined
         }
       />
@@ -1147,9 +1237,7 @@ function PluginResult({
             />
           </Suspense>
         ))}
-      {followup.isPending && currentOrigin?.plugin === "ask" && (
-        <p role="status">{t("timeline.loading_notes")}</p>
-      )}
+      {followup.isPending && <p role="status">{t("timeline.loading_notes")}</p>}
       {review?.response === responseId &&
         typeof noteId === "string" &&
         plugin && (
@@ -1170,35 +1258,37 @@ function PluginResult({
           </Suspense>
         )}
       {applied.length > 0 && <p>{t("commandproposal.applied")}</p>}
-      <footer>
-        {!interactive && (
-          <button
-            disabled={!text}
-            onClick={() => void copyText(text).then(setCopied)}
-          >
-            {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
-          </button>
-        )}
-        {genericSave && !interactive && (
-          <button
-            className="primary"
-            disabled={!text || save.isPending || !!saved}
-            onClick={() => save.mutate()}
-          >
-            {saved
-              ? t("slots.saved_as_note")
-              : save.isPending
-                ? t("app.saving")
-                : t("slots.save_as_note")}
-          </button>
-        )}
-        {saved?.id && (
-          <Link href={`/n/${encodeURIComponent(saved.id)}`}>
-            {t("slots.open_note")}
-          </Link>
-        )}
-        {onDismiss && <button onClick={onDismiss}>{t("slots.back")}</button>}
-      </footer>
+      {(!decisionCommand || onDismiss) && (
+        <footer>
+          {!decisionCommand && !interactive && (
+            <button
+              disabled={!text}
+              onClick={() => void copyText(text).then(setCopied)}
+            >
+              {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
+            </button>
+          )}
+          {genericSave && !interactive && (
+            <button
+              className="primary"
+              disabled={!text || save.isPending || !!saved}
+              onClick={() => save.mutate()}
+            >
+              {saved
+                ? t("slots.saved_as_note")
+                : save.isPending
+                  ? t("app.saving")
+                  : t("slots.save_as_note")}
+            </button>
+          )}
+          {saved?.id && (
+            <Link href={`/n/${encodeURIComponent(saved.id)}`}>
+              {t("slots.open_note")}
+            </Link>
+          )}
+          {onDismiss && <button onClick={onDismiss}>{t("slots.back")}</button>}
+        </footer>
+      )}
       {save.isError && (
         <p role="alert" className="error">
           {save.error.message}
@@ -1234,10 +1324,12 @@ export function SlashCommands({
 export function PaletteCommands({
   query = "",
   noteId,
+  note,
   onResult,
 }: {
   query?: string;
   noteId?: string;
+  note?: Note;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
 }) {
   useLanguage();
@@ -1247,15 +1339,63 @@ export function PaletteCommands({
       query={query}
       where={noteId ? ["note-actions", "palette"] : ["palette"]}
       noteId={noteId}
+      note={note}
       onResult={onResult}
       inPalette
     />
   );
 }
+/** Source actions use the same scope in the palette and the note's tools list. */
+export function canRunOnNote(plugin: Plugin, command: string, note?: Note) {
+  if (plugin.id === "decision-journal" && command === "review-decision")
+    return !!note && !note.trashed && isDecisionNote(note);
+  if (!note) return true;
+  if (note.trashed) return false;
+  if (plugin.id === "agent-inbox" && command === "mark-reviewed")
+    return (
+      (note.origin === "agent" || note.updated_via_agent) &&
+      !note.annotations?.some(
+        (item) => item.plugin === plugin.id && item.kind === "member:reviewed",
+      )
+    );
+  if (
+    (note.private || note.machine) &&
+    plugin.permissions.some(
+      (permission) =>
+        permission.startsWith("ai.") || permission.startsWith("net."),
+    )
+  )
+    return false;
+  return true;
+}
+
+export function useWaitingCommandPlugins(enabled: boolean) {
+  useLanguage();
+  const online = useBrowserOnline();
+  const role = useWorkspaceRole();
+  return useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    enabled: enabled && online && role === "owner",
+    select: (catalog) =>
+      localizeCatalog(catalog).plugins.filter(
+        (plugin) =>
+          plugin.state === "waiting" &&
+          plugin.permissions.some(
+            (permission) =>
+              permission.startsWith("ai.") &&
+              !Object.hasOwn(plugin.ai_destinations ?? {}, permission.slice(3)),
+          ),
+      ),
+  });
+}
+
 export function PluginCommands({
   query = "",
   where = "palette",
   noteId,
+  note,
+  skipCommands = [],
   pluginId,
   onChoose,
   onResult,
@@ -1264,6 +1404,8 @@ export function PluginCommands({
   query?: string;
   where?: string | string[];
   noteId?: string;
+  note?: Note;
+  skipCommands?: string[];
   pluginId?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
@@ -1272,14 +1414,13 @@ export function PluginCommands({
 }) {
   useLanguage();
   const manifest = usePlugins();
-  const waitingCatalog = useQuery({
-    queryKey: ["catalog"],
-    queryFn: api.catalog,
-    enabled: navigator.onLine,
-  });
+  const online = useBrowserOnline();
   const workspaceRole = useWorkspaceRole();
+  const [, navigate] = useLocation();
+  const client = useQueryClient();
   const places = Array.isArray(where) ? where : [where];
   const slash = places.includes("slash");
+  const waitingPlugins = useWaitingCommandPlugins(!slash);
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [origin, setOrigin] = useState<CommandOrigin>();
@@ -1401,6 +1542,8 @@ export function PluginCommands({
         command: choice.id,
         args: choice.args,
       };
+      if (choice.args?.note_id && choice.plugin !== "decision-journal")
+        void invalidateContentFor(client);
       if (onResult) onResult(value, nextOrigin);
       else {
         setResult(value);
@@ -1414,7 +1557,7 @@ export function PluginCommands({
     question.split(/\s+/).length >= 3 &&
     [...question].length <= 500;
   const commands = (
-    navigator.onLine
+    online && workspaceRole === "owner"
       ? activePlugins(manifest.data?.plugins).filter(
           (p) => !pluginId || p.id === pluginId,
         )
@@ -1430,17 +1573,20 @@ export function PluginCommands({
         .filter(
           ({ command, at }) =>
             places.some((place) => at.includes(place)) &&
+            !skipCommands.includes(`${p.id}/${command.id}`) &&
+            (!(noteId && at.includes("note-actions")) ||
+              canRunOnNote(p, command.id, note)) &&
             (p.id !== "links" ||
               command.id !== "link" ||
               supportsNotePicker(p)) &&
             (!("online" in command) ||
               !(command as unknown as { online?: boolean }).online ||
-              navigator.onLine),
+              online),
         )
         .map(({ command, at }): CommandChoice & { name: string } => ({
           plugin: p.id,
           id: command.id,
-          title: [...command.title].slice(0, 24).join(""),
+          title: command.title,
           name: p.name,
           args:
             p.id === "ask" &&
@@ -1459,16 +1605,10 @@ export function PluginCommands({
         c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
   const waiting =
-    slash || !navigator.onLine
+    slash || !online || workspaceRole !== "owner"
       ? []
-      : (waitingCatalog.data?.plugins ?? []).flatMap((plugin) =>
-          plugin.state === "waiting" &&
-          (!pluginId || pluginId === plugin.id) &&
-          plugin.permissions.some(
-            (p) =>
-              p.startsWith("ai.") &&
-              !Object.hasOwn(plugin.ai_destinations ?? {}, p.slice(3)),
-          )
+      : (waitingPlugins.data ?? []).flatMap((plugin) =>
+          !pluginId || pluginId === plugin.id
             ? (plugin.contributes?.commands ?? [])
                 .slice(0, 3)
                 .filter(
@@ -1480,6 +1620,14 @@ export function PluginCommands({
                       !(command.where ?? command.surfaces ?? []).includes(
                         "note-actions",
                       )) &&
+                    !skipCommands.includes(`${plugin.id}/${command.id}`) &&
+                    (!(
+                      noteId &&
+                      (command.where ?? command.surfaces ?? []).includes(
+                        "note-actions",
+                      )
+                    ) ||
+                      canRunOnNote(plugin, command.id, note)) &&
                     command.title.toLowerCase().includes(query.toLowerCase()),
                 )
                 .map((command) => ({ plugin, command }))
@@ -1487,7 +1635,14 @@ export function PluginCommands({
         );
   const highlighted = Math.min(active, commands.length - 1);
   const choose = (c: CommandChoice) => {
-    if (onChoose) onChoose(c);
+    if (
+      !slash &&
+      inPalette &&
+      c.plugin === "decision-journal" &&
+      c.id === "journal"
+    )
+      navigate(decisionsPath);
+    else if (onChoose) onChoose(c);
     else if (
       c.plugin === "links" &&
       c.id === "link" &&
@@ -1569,9 +1724,7 @@ export function PluginCommands({
           <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
         </p>
       ))}
-      {command.isPending && command.variables?.plugin === "ask" && (
-        <p role="status">{t("timeline.loading_notes")}</p>
-      )}
+      {command.isPending && <p role="status">{t("timeline.loading_notes")}</p>}
       {command.isError && (
         <p role="alert" className="error">
           {command.error.message}

@@ -1167,6 +1167,10 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
     )
     assert blocked.status_code == 403 and blocked.json()["code"] == "read_only_space"
     epoch = metadata.json()["sync_epoch"]
+    # Hosted cursors start at a database-wide sequence, so pin the change relative
+    # to the preceding pull while retaining the response's actual epoch.
+    _, baseline_seq = pull.json()["cursor"].rsplit(".", 1)
+    wait_epoch, wait_seq = viewer_wait.json()["cursor"].rsplit(".", 1)
     hosted_contract = {
         "editor_meta": {**metadata.json(), "sync_epoch": "e"},
         "viewer_meta": {
@@ -1175,7 +1179,7 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
         },
         "viewer_wait": {
             **viewer_wait.json(),
-            "cursor": viewer_wait.json()["cursor"].replace(epoch, "e", 1),
+            "cursor": f"{wait_epoch.replace(epoch, 'e', 1)}.{int(wait_seq) - int(baseline_seq)}",
         },
         "viewer_reconcile": {
             **reconciled.json(),

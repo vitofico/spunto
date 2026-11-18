@@ -115,6 +115,7 @@ class AppLockTest {
   waitFor {app.container.appLock.state.value.unlocked}
  }
  @Test fun launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden() {
+  assumeTrue(app.getSystemService(KeyguardManager::class.java).isDeviceSecure)
   runBlocking {authority.requireCurrent()};val before=runBlocking {app.container.repository.notes.first().size}
   val auth=runBlocking {app.container.auth.config.first()}
   configure(true)

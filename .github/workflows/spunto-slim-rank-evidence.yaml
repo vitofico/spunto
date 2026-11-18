@@ -1,0 +1,142 @@
+name: Spunto slim ranking evidence
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - ".github/workflows/spunto-slim-rank-evidence.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spunto-slim-ranking-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  postgres:
+    name: PostgreSQL rank behaviour
+    timeout-minutes: 10
+    if: >-
+      github.event.pull_request.head.ref == 'test/slim-suites' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        # Match the operator composition; a major upgrade needs reviewed migrations.
+        image: pgvector/pgvector:pg18@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11
+        env:
+          POSTGRES_USER: spunto_admin
+          POSTGRES_DB: spunto_ci
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}-ci-postgres
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U spunto_admin -d spunto_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.13.0"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Create restricted fixture roles
+        env:
+          # Disposable fixture only. Requests use the two restricted roles.
+          SPUNTO_TEST_POSTGRES_ADMIN_URL: postgresql://spunto_admin:${{ github.run_id }}-${{ github.run_attempt }}-ci-postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/spunto_ci
+        run: |
+          uv run python - <<'PY'
+          import os
+          import secrets
+          from urllib.parse import quote, urlsplit, urlunsplit
+          import psycopg
+          from psycopg import sql
+
+          admin = os.environ["SPUNTO_TEST_POSTGRES_ADMIN_URL"]
+          parsed = urlsplit(admin)
+          with psycopg.connect(admin) as connection, open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"SPUNTO_TEST_POSTGRES_ADMIN_URL={admin}\n")
+              for role, variable in (
+                  ("spunto_runtime", "SPUNTO_TEST_POSTGRES_URL"),
+                  ("spunto_identity", "SPUNTO_TEST_IDENTITY_URL"),
+              ):
+                  password = secrets.token_urlsafe(32)
+                  print(f"::add-mask::{password}")
+                  connection.execute(sql.SQL(
+                      "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB "
+                      "NOCREATEROLE NOINHERIT NOBYPASSRLS"
+                  ).format(sql.Identifier(role), sql.Literal(password)))
+                  authority = f"{role}:{quote(password, safe='')}@{parsed.hostname}:{parsed.port}"
+                  url = urlunsplit((parsed.scheme, authority, parsed.path, "", ""))
+                  print(f"::add-mask::{url}")
+                  output.write(f"{variable}={url}\n")
+              connection.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
+              connection.execute("REVOKE ALL ON DATABASE spunto_ci FROM PUBLIC")
+              connection.execute("GRANT CONNECT ON DATABASE spunto_ci TO spunto_runtime,spunto_identity")
+              connection.execute("GRANT TEMPORARY ON DATABASE spunto_ci TO spunto_runtime")
+          PY
+      - name: Run operator migration and grant minimal access
+        env:
+          SPUNTO_DATABASE_ADMIN_URL: ${{ env.SPUNTO_TEST_POSTGRES_ADMIN_URL }}
+          SPUNTO_DATABASE_ROLE: spunto_runtime
+          SPUNTO_IDENTITY_DATABASE_ROLE: spunto_identity
+        run: uv run spunto database migrate
+      - name: Verify score direction and an equivalent scoring function
+        run: |
+          uv run --locked python - <<'PY'
+          import os
+          import shutil
+          import subprocess
+          import sys
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "spunto-slim-rank"
+          root.mkdir()
+          disposable = root / "src"
+          shutil.copytree("src", disposable)
+          source = disposable / "spunto/store/postgres.py"
+          original = source.read_text()
+          old = "-ts_rank_cd(note_fts.document,to_tsquery('simple',?)) AS score"
+          assert original.count(old) == 1
+          target = "tests/test_postgres.py::test_notes_create_edit_list_search_revisions_flags_and_delete"
+          env = {**os.environ, "PYTHONPATH": str(disposable)}
+
+          for label, new, expected in (
+              ("control", old, 0),
+              ("MRANK", old.removeprefix("-"), 1),
+              ("EquivalentRank", old.replace("ts_rank_cd", "ts_rank"), 0),
+          ):
+              source.write_text(original.replace(old, new))
+              xml = root / f"{label}.xml"
+              with (root / f"{label}.log").open("w") as log:
+                  result = subprocess.run(
+                      [sys.executable, "-m", "pytest", target, f"--junitxml={xml}"],
+                      env=env, stdout=log, stderr=subprocess.STDOUT, check=False, timeout=150,
+                  )
+              assert result.returncode == expected, (label, result.returncode)
+              suite = ET.parse(xml).getroot().find("testsuite")
+              assert suite is not None
+              assert (suite.attrib["tests"], suite.attrib["failures"],
+                      suite.attrib["errors"], suite.attrib["skipped"]) == ("1", str(expected), "0", "0")
+              if expected:
+                  failure = suite.find(".//failure")
+                  assert failure is not None and '[hit["id"] for hit in ranked["hits"]]' in failure.text
+              print(label, suite.attrib)
+          PY
+      - name: Retain rank JUnit results and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: spunto-slim-rank-junit
+          path: |
+            ${{ runner.temp }}/spunto-slim-rank/*.xml
+            ${{ runner.temp }}/spunto-slim-rank/*.log
+          if-no-files-found: error
+          retention-days: 7

@@ -107,12 +107,10 @@ async def test_manual_notes_keep_owner_provenance_and_idempotency(workflow, kind
     assert note["source"]["kind"] == "plugin" and note["source"]["ref"] == "manual-example"
 
 
-@pytest.mark.parametrize(
-    "operation", [None, "route:POST", "tool:create", "job:create", "hook:save"]
-)
-async def test_manual_note_creation_requires_an_actual_owner_command(workflow, operation):
-    with pytest.raises(ContextError, match="owner_command_required"):
-        await context(workflow, operation=operation).notes.create("Not a manual command")
+async def test_manual_note_creation_requires_an_actual_owner_command(workflow):
+    for operation in (None, "route:POST", "tool:create", "job:create", "hook:save"):
+        with pytest.raises(ContextError, match="owner_command_required"):
+            await context(workflow, operation=operation).notes.create("Not a manual command")
 
 
 async def test_manual_mode_refuses_agent_unattended_and_import_overrides(workflow):

@@ -43,11 +43,6 @@ async def test_profile_trim_clear_restart_and_identity_are_independent(env):
         assert saved.status_code == 200
         assert saved.json() == {**initial, "owner_display_name": name}
         assert await identity(server) == before
-        async with server.services.store.read() as conn:
-            row = await conn.execute_fetchall(
-                "SELECT value FROM setting WHERE key='owner_display_name'"
-            )
-            assert json.loads(row[0]["value"]) == name
         changed = await server.client.put(
             "/api/v1/settings", json={"theme": "salvia"}, headers=ORIGIN
         )

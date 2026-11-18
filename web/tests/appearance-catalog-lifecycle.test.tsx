@@ -106,27 +106,20 @@ it("fresh catalog with same pack ID reloads its changed CSS", async () => {
   ).toBe(true);
   client.clear();
 });
-it("runtime catalog cannot replace canonical builtin cards or accept duplicate custom IDs", () => {
-  const cards = appearanceCards(
-    manifest([
-      {
-        ...installed,
-        id: "ardesia",
-        status: "failed",
-        reason: "Synthetic malformed builtin",
-      },
-      installed,
-      { ...installed, name: "Collision" },
-    ]),
-  );
-  expect(cards.find((c) => c.id === "ardesia")?.status).toBe("available");
-  expect(cards.find((c) => c.id === "fixture-pack")?.status).toBe("failed");
-});
-it("duplicate custom IDs cannot resolve to an available palette", () => {
-  const cards = appearanceCards(
-    manifest([installed, { ...installed, name: "Collision" }]),
-  );
-  expect(cards.find((c) => c.id === "fixture-pack")?.status).toBe("failed");
+it("runtime catalog keeps builtins canonical and rejects duplicate custom IDs", () => {
+  const invalidBuiltin: ThemeCard = {
+    ...installed,
+    id: "ardesia",
+    status: "failed",
+    reason: "Synthetic malformed builtin",
+  };
+  for (const prefix of [[], [invalidBuiltin]]) {
+    const cards = appearanceCards(
+      manifest([...prefix, installed, { ...installed, name: "Collision" }]),
+    );
+    expect(cards.find((c) => c.id === "ardesia")?.status).toBe("available");
+    expect(cards.find((c) => c.id === "fixture-pack")?.status).toBe("failed");
+  }
 });
 it("more than twenty explicit accents disables a pack", () => {
   const card = {

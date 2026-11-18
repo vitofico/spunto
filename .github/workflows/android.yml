@@ -193,7 +193,8 @@ jobs:
           for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
             adb -s emulator-5554 shell settings put global "$setting" 0
           done
-          ./gradlew --no-daemon --max-workers=2 --no-parallel --no-watch-fs :app:connectedDebugAndroidTest
+          ./gradlew --no-daemon --max-workers=2 --no-parallel --no-watch-fs :app:connectedDebugAndroidTest \
+            -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.theficos.spunto.ManualFixture
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:

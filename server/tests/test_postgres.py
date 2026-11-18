@@ -173,6 +173,11 @@ async def test_notes_create_edit_list_search_revisions_flags_and_delete(pg):
     await domain.delete(created["id"])
     assert not (await domain.list(view="all"))["notes"]
 
+    strong = await domain.create("Synthetic budget plan plan plan")
+    weak = await domain.create("Synthetic budget plan beside unrelated filler words")
+    ranked = await domain.search("plan")
+    assert [hit["id"] for hit in ranked["hits"]] == [strong["id"], weak["id"]]
+
 
 async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, pg_admin_url, settings):
     root, bounds, users, spaces, _ = pg
@@ -491,7 +496,7 @@ def test_parameter_translation_preserves_literals():
     assert args == ["x", "X", 1]
 
 
-def test_ranked_search_translation_scores_without_fts5_rank():
+def test_ranked_search_translation_preserves_query_parameters():
     sql, args, _ = _translate(
         "SELECT id FROM (SELECT n.id,n.updated_at,note_fts.rank AS score FROM note n"
         " JOIN note_fts ON note_fts.rowid=n.rowid WHERE note_fts MATCH ? AND n.trashed_at IS NULL"
@@ -500,7 +505,6 @@ def test_ranked_search_translation_scores_without_fts5_rank():
         ["plan"],
     )
     assert "note_fts.rank" not in sql
-    assert "-ts_rank_cd(note_fts.document,to_tsquery('simple',%s)) AS score" in sql
     assert sql.count("%s") == len(args) == 3
     assert len(set(args)) == 1
 

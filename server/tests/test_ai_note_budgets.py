@@ -76,20 +76,16 @@ async def test_omitting_optional_limits_keeps_original_shared_budget_behavior(bo
     assert bodies(fake) == {first["id"]: "01234"}
 
 
-@pytest.mark.parametrize("limit", [0, -1, True, 1.5, "2", 20001])
-async def test_invalid_caps_fail_before_any_provider_request(bounded, limit):
+@pytest.mark.parametrize(
+    ("key", "limit"), [(None, v) for v in (0, -1, True, 1.5, "2", 20001)] + [("unknown", 5)]
+)
+async def test_invalid_caps_fail_before_any_provider_request(bounded, key, limit):
     gateway, fake, notes = bounded
     note = await notes.create("Synthetic budget note")
     with pytest.raises(AIError, match="ai_note_budget_invalid"):
-        await gateway.chat(Probe, "check", notes=[note], note_char_limits={note["id"]: limit})
-    assert not fake.requests
-
-
-async def test_unknown_note_budget_key_fails_before_provider(bounded):
-    gateway, fake, notes = bounded
-    note = await notes.create("Synthetic budget note")
-    with pytest.raises(AIError, match="ai_note_budget_invalid"):
-        await gateway.chat(Probe, "check", notes=[note], note_char_limits={"unknown": 5})
+        await gateway.chat(
+            Probe, "check", notes=[note], note_char_limits={key or note["id"]: limit}
+        )
     assert not fake.requests
 
 

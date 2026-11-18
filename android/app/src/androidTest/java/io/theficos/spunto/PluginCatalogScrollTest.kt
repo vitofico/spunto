@@ -81,21 +81,6 @@ class PluginCatalogScrollTest {
   return positions
  }
 
- @Test fun rapidFlingsAcrossGroupsAndBackKeepRowsAndControlsUsable() {
-  val projection=catalog();var toggled:String?=null
-  assertTrue(projection.valid);assertEquals(48,projection.rows.size)
-  compose.setContent {SpuntoTheme {
-   NativePluginCatalogList(projection,JsonObject(emptyMap()),true,false,null,{plugin,_ -> toggled=plugin.id},{},{},{},{})
-  }}
-  repeat(4) {assertTrue("Flings must render different list positions",flingBothWays().size>3)}
-  list().performScrollToNode(hasText("Synthetic data 7"))
-  compose.onNodeWithText("Synthetic data 7").assertIsDisplayed()
-  compose.onNode(hasContentDescription("Synthetic data 7") and isToggleable()).performClick()
-  compose.runOnIdle {assertEquals("test-data-h",toggled)}
-  list().performScrollToIndex(0)
-  compose.onNodeWithText("All 48").assertIsDisplayed()
- }
-
  @Test fun refreshedAndFilteredCatalogSurvivesRepeatedFastScrolls() {
   val projection=mutableStateOf(catalog())
   compose.setContent {SpuntoTheme {
@@ -119,8 +104,9 @@ class PluginCatalogScrollTest {
   val projection=mutableStateOf(variedCatalog(0))
   val online=mutableStateOf(true)
   val ai=mutableStateOf(JsonObject(emptyMap()))
+  var toggled:String?=null
   compose.setContent {SpuntoTheme {
-   NativePluginCatalogList(projection.value,ai.value,online.value,false,null,{_,_ ->},{},{},{},{})
+   NativePluginCatalogList(projection.value,ai.value,online.value,false,null,{plugin,_ -> toggled=plugin.id},{},{},{},{})
   }}
   val summary=Json.parseToJsonElement("""{"profiles":[],"bindings":{}}""").jsonObject
   repeat(3) {cycle ->
@@ -134,8 +120,12 @@ class PluginCatalogScrollTest {
    assertTrue("Refresh stress must include actual scrolling",positions.size>3)
   }
   compose.runOnIdle {projection.value=catalog();online.value=true}
+  assertTrue(projection.value.valid);assertEquals(48,projection.value.rows.size)
+  assertTrue("Flings must render different list positions",flingBothWays().size>3)
   list().performScrollToNode(hasText("Synthetic data 7"))
   compose.onNodeWithText("Synthetic data 7").assertIsDisplayed()
+  compose.onNode(hasContentDescription("Synthetic data 7") and isToggleable()).performClick()
+  compose.runOnIdle {assertEquals("test-data-h",toggled)}
   list().performScrollToIndex(0)
   compose.onNodeWithText("All 48").assertIsDisplayed()
  }

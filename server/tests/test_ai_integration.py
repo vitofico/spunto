@@ -79,9 +79,12 @@ async def test_bad_semantic_sources_preserve_keyword_results_and_owner_data(inte
     notes, _, target = await seed(host)
     before = await state(host)
 
+    if mode == "timeout":
+        host.search_source_timeout_s = 0.01
+
     async def bad_source(ctx, query):
         if mode == "timeout":
-            await asyncio.sleep(2.2)
+            await asyncio.Event().wait()
         if mode == "failure":
             raise AIError("provider", "fixture_failure")
         return [{"id": "' OR 1=1 --", "score": 0.99}]

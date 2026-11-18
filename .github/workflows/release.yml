@@ -257,7 +257,10 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
-          cache-from: type=gha
+          cache-from: |
+            type=gha,scope=server-amd64
+            type=gha,scope=server-arm64
+            type=gha
           provenance: mode=max
           sbom: true
       - name: Verify the index and source on both platforms

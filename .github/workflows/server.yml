@@ -272,6 +272,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
 
+      - name: Verify C8 scoped cleanup
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.head_ref == 'perf/ci-caches' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        run: uv run python ../.github/spunto-c8-evidence.py "$RUNNER_TEMP/spunto-c8"
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/spunto-c8-no-bytecode-cache
+      - name: Retain C8 cleanup evidence
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          github.head_ref == 'perf/ci-caches' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: spunto-c8-cleanup
+          path: ${{ runner.temp }}/spunto-c8
+          if-no-files-found: warn
+          retention-days: 3
+
   image:
     env:
       PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f

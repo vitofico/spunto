@@ -20,6 +20,7 @@ import java.io.File
 
 /** Original fictional notes, captured only on the named pristine, signed-out screenshot AVD. */
 @RunWith(AndroidJUnit4::class)
+@ManualFixture
 class DistributionScreenshotsTest {
  private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
  private val context get()=instrumentation.targetContext

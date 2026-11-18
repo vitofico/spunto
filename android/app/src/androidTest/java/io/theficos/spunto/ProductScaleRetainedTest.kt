@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit
 
 /** Verifies the retained disposable A replica without invoking a database writer. */
 @RunWith(AndroidJUnit4::class)
+@ManualFixture
 class ProductScaleRetainedTest {
  @get:Rule val timeout=Timeout(20,TimeUnit.MINUTES)
 

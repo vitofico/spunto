@@ -27,7 +27,8 @@ if [[ "${1:-}" == "--ci-app-lock" ]]; then
   results="$RUNNER_TEMP/spunto-native-junit"
   mkdir -p "$results"
   gradle=(./gradlew --no-daemon --max-workers=2 --no-parallel --no-watch-fs)
-  args=(-Pandroid.testInstrumentationRunnerArguments.spuntoAppLockDisposable=yes)
+  args=(-Pandroid.testInstrumentationRunnerArguments.spuntoAppLockDisposable=yes
+        -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.theficos.spunto.ManualFixture)
   "${gradle[@]}" "${args[@]}" :app:connectedDebugAndroidTest
   cp -R app/build/outputs/androidTest-results/connected "$results/no-pin"
   # This synthetic credential belongs only to the workflow's new emulator.

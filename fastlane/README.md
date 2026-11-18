@@ -9,7 +9,7 @@ The canonical captures are `images/phoneScreenshots/1.png` (timeline with settin
 To refresh them:
 
 1. Use a dedicated disposable Android emulator named `SpuntoVaderScreenshots` and explicitly select its serial. Install the debug app and its matching AndroidTest APK. The fixture requires an emulator (`ro.kernel.qemu=1`), a signed-out replica, and empty notes and outbox before seeding. Never clear or uninstall a retained app to make this fixture pass.
-2. Run only the screenshot test with its explicit opt-in argument. For example, replace the serial below with the chosen emulator's serial:
+2. Run the screenshot fixture explicitly. CI excludes tests marked `@ManualFixture`. For example, replace the serial below with the chosen emulator's serial:
 
    ```sh
    screenshot_serial=emulator-5588

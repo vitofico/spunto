@@ -876,6 +876,117 @@ async def test_latest_agent_actor_round_trips_rest_sync_and_owner_adoption(serve
     assert not (await server.client.get(f"/api/v1/notes/{note['id']}")).json()["updated_via_agent"]
 
 
+async def test_explicit_machine_adoption_preserves_private_text_authorship_and_syncs(server):
+    phone = await signed(server)
+    client, store = server.client, server.services.store
+    note_id = str(uuid.uuid7())
+    [restored] = await push(
+        server,
+        phone,
+        [
+            op(
+                "note.restore",
+                note_id,
+                body="# Synthetic generated note\n\n#example",
+                private=True,
+                source={"kind": "plugin", "ref": "ask"},
+                machine=True,
+                origin="plugin",
+            ),
+        ],
+    )
+    assert restored["status"] == "applied"
+    host_manifest = (await client.get("/api/v1/plugins/manifest", headers=phone)).json()
+    assert "note_adoption" in host_manifest["features"]
+    assert all(p["id"] != "agent-inbox" for p in host_manifest["plugins"])
+    _, token = await tokens.create(
+        store, name="Synthetic agent", client="script", scope="write", private_ok=True
+    )
+    pat = {"Authorization": f"Bearer {token}"}
+    note_path = f"/api/v1/notes/{note_id}"
+    appended = await client.post(note_path + "/append", headers=pat, json={"text": "Agent edit"})
+    assert appended.status_code == 200, appended.text
+    before = appended.json()
+    assert before["machine"] and before["updated_via_agent"]
+    seed = (await client.get("/api/v1/sync/pull", headers=phone)).json()
+    payload = {"base_version": before["version"]}
+    adopted = note_path + "/adopt"
+    assert (await client.post(adopted, headers=pat, json=payload)).status_code == 403
+    assert (await client.post(adopted, json=payload)).status_code == 403
+    assert (
+        await client.post(adopted, headers=phone, json={"base_version": True})
+    ).status_code == 422
+    stale = await client.post(adopted, headers=phone, json={"base_version": 1})
+    assert stale.status_code == 409 and stale.json()["code"] == "version_conflict"
+    response = await client.post(adopted, headers=phone, json=payload)
+    assert response.status_code == 200, response.text
+    after = response.json()
+    assert not after["machine"] and after["version"] == before["version"] + 1
+    for field in ("body", "title", "source", "origin", "updated_via_agent", "private"):
+        assert after[field] == before[field], field
+    assert (await client.post(adopted, headers=pat, json=payload)).status_code == 403
+    assert (await client.post(adopted, headers=phone, json=payload)).status_code == 409
+    repeated = await client.post(adopted, headers=phone, json={"base_version": after["version"]})
+    assert repeated.status_code == 409 and repeated.json()["code"] == "note_not_machine_written"
+    synced = (
+        await client.get("/api/v1/sync/pull", headers=phone, params={"cursor": seed["cursor"]})
+    ).json()
+    [item] = [item for item in synced["items"] if item["kind"] == "note"]
+    assert item["data"]["id"] == note_id and not item["data"]["machine"]
+    assert item["data"]["updated_via_agent"] and item["data"]["private"]
+    await client.post(note_path + "/append", headers=pat, json={"text": "Another agent edit"})
+    history = (await client.get(note_path + "/revisions", headers=phone)).json()
+    assert [entry["change_kind"] for entry in history] == ["append", "adopt", "append", "create"]
+    assert history[1]["body"] == history[2]["body"] == before["body"]
+    assert history[1]["changed_by"] != history[2]["changed_by"]
+
+
+async def test_agent_acceptance_syncs_membership_and_agent_edit_syncs_removal(server):
+    phone = await signed(server)
+    client, store = server.client, server.services.store
+    plugin = "/api/v1/plugins/agent-inbox"
+    origin = {"Origin": server.services.settings.public_url}
+    enabled = await client.post(
+        plugin + "/enable", headers=origin, json={"permissions": ["notes.read", "annotate"]}
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert (
+        "agent_review_versioned"
+        in (await client.get("/api/v1/plugins/manifest", headers=phone)).json()["features"]
+    )
+    _, token = await tokens.create(store, name="Synthetic agent", client="script", scope="write")
+    pat = {"Authorization": f"Bearer {token}"}
+    draft = await client.post("/api/v1/notes", headers=pat, json={"body": "Synthetic draft"})
+    assert draft.status_code == 201, draft.text
+    note = draft.json()
+    seed = (await client.get("/api/v1/sync/pull", headers=phone)).json()
+    receipt = await client.post(
+        plugin + "/commands/mark-reviewed",
+        headers={**phone, "Accept-Language": "it"},
+        json={"note_id": note["id"], "base_version": note["version"]},
+    )
+    assert receipt.status_code == 200 and receipt.json()["text"] == "Nota accettata"
+    reviewed = (
+        await client.get("/api/v1/sync/pull", headers=phone, params={"cursor": seed["cursor"]})
+    ).json()
+    [membership] = reviewed["items"]
+    identity = f"agent-inbox/{note['id']}/member:reviewed"
+    assert membership["kind"] == "annotation" and membership["data"]["id"] == identity
+    changed = await client.post(
+        f"/api/v1/notes/{note['id']}/append", headers=pat, json={"text": "New unreviewed text"}
+    )
+    assert changed.status_code == 200
+    pending = (
+        await client.get("/api/v1/sync/pull", headers=phone, params={"cursor": reviewed["cursor"]})
+    ).json()
+    assert any(
+        change["kind"] == "tombstone" and change["data"]["id"] == identity
+        for change in pending["items"]
+    )
+    inbox = await client.get("/api/v1/notes?view=agent-inbox/reviewed", headers=phone)
+    assert [n["id"] for n in inbox.json()["notes"]] == [note["id"]]
+
+
 @pytest.mark.parametrize("kind", ["note.create", "note.restore"])
 @pytest.mark.parametrize("clock_field", ["private_at", "at", "created_at"])
 async def test_private_offline_insertion_does_not_defeat_later_unprivate_action(

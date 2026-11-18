@@ -21,6 +21,25 @@ class PluginPresentationTest {
   val tools=noteTools(settingsTestResources(),plugins)
   assertEquals(listOf("Link to note","Tidy text","Suggest labels"),tools.map {it.title})
  }
+ @Test fun legacyAgentReviewRemainsInOrdinaryPluginMenusUntilVersionedCapabilityIsAdvertised() {
+  val plugin=Json.parseToJsonElement("""{"id":"agent-inbox","origin":"bundled","enabled":true,
+   "contributes":{"commands":[{"id":"mark-reviewed","title":"Mark reviewed","where":["note-actions"]}]}
+  }""").jsonObject
+  val cases=listOf(JsonObject(emptyMap()),buildJsonObject {put("features",JsonArray(listOf(JsonPrimitive("note_adoption"))))},
+   buildJsonObject {put("features",JsonArray(listOf(JsonPrimitive("agent_review_versioned"))))})
+  for((index,manifest) in cases.withIndex()) {
+   val versioned=supportsVersionedAgentReview(manifest)
+   val notes=noteTools(settingsTestResources("it"),listOf(plugin),versionedAgentReview=versioned)
+   val detail=pluginDetailCommands(NativePluginFacts(plugin),versioned)
+   if(index<2) {
+    assertEquals("Segna come controllato",notes.single().title)
+    assertEquals("mark-reviewed",detail.single()["id"]?.jsonPrimitive?.content)
+   } else {
+    assertTrue(notes.isEmpty())
+    assertTrue(detail.isEmpty())
+   }
+  }
+ }
  @Test fun decisionCaptureAndReviewRequireAnEnabledPluginAndWritableOwner() {
   val plugin=Json.parseToJsonElement("""{"id":"decision-journal","enabled":true,"origin":"bundled","contributes":{"commands":[
    {"id":"record-decision","where":["palette","note-actions"]},{"id":"review-decision","where":["note-actions"]},{"id":"journal","where":["palette"]}

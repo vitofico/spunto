@@ -1,6 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { api } from "../lib/api";
 import { createIdempotencyKey } from "../lib/drafts";
 import { safeError } from "../lib/errors";
@@ -31,7 +38,7 @@ import {
   type CommandOrigin,
 } from "./Slots";
 import { useCommandProposals } from "./suggestionFeedback";
-import { VocabularyOutput } from "./Vocabulary";
+import { ResultNoteLink, VocabularyOutput } from "./Vocabulary";
 import { outputText, validComponent } from "./vocabularyData";
 import styles from "./Feature.module.css";
 
@@ -133,6 +140,8 @@ function saveCommand(
 export default function CommandResult(props: {
   value: unknown;
   onDismiss?: () => void;
+  onOpenNote?: () => void;
+  surroundingTitle?: string;
   origin?: CommandOrigin;
 }) {
   const sourceId = props.origin?.args?.note_id;
@@ -211,13 +220,20 @@ function TidyResult({
 function PluginResult({
   value,
   onDismiss,
+  onOpenNote,
+  surroundingTitle,
   origin,
 }: {
   value: unknown;
   onDismiss?: () => void;
+  onOpenNote?: () => void;
+  surroundingTitle?: string;
   origin?: CommandOrigin;
 }) {
   useLanguage();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const headingId = useId();
+  const panel = useRef<HTMLElement>(null);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState<{ id?: string } | null>(null);
   const client = useQueryClient();
@@ -322,14 +338,19 @@ function PluginResult({
       ? id
       : undefined;
   const decisionOffline = !!decisionCommand && !online;
+  const commandName = plugin?.contributes?.commands?.find(
+    (command) => command.id === currentOrigin?.command,
+  )?.title;
+  const title = onDismiss
+    ? (commandName ?? plugin?.name ?? t("commandresult.title"))
+    : undefined;
+  const showHeading = title && title !== surroundingTitle;
   const formLabel =
     decisionCommand === "record-decision"
       ? t("decisions.save_decision")
       : decisionCommand === "review-decision"
         ? t("decisions.record_outcome")
-        : (plugin?.contributes?.commands?.find(
-            (c) => c.id === currentOrigin?.command,
-          )?.title ?? t("settingsplugins.run"));
+        : (commandName ?? t("settingsplugins.run"));
   const decisionSaved =
     !interactive &&
     resultItems.some((item) => item.type === "notes") &&
@@ -346,7 +367,7 @@ function PluginResult({
     setApplied([]);
   }, [value, origin, session]);
   const followup = useMutation({
-    networkMode: decisionCommand ? "always" : undefined,
+    networkMode: "always",
     mutationFn: async ({
       plugin,
       id,
@@ -420,6 +441,7 @@ function PluginResult({
         askItems(display).some((item) => item.type === "form"))
     );
   const save = useMutation({
+    networkMode: "always",
     mutationFn: () => api.createNote(text, saveKey),
     onSuccess: (note) => {
       setSaved({ id: note?.id });
@@ -427,12 +449,19 @@ function PluginResult({
     },
   });
   useEffect(() => {
+    if (!conversationView) (heading.current ?? panel.current)?.focus();
+  }, [responseId, conversationView]);
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !document.querySelector("dialog[open]"))
+      if (e.defaultPrevented) return;
+      if (
+        e.key === "Escape" &&
+        !document.querySelector('dialog[open], [role="dialog"]')
+      )
         onDismiss?.();
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
-        if (conversationView) return;
+        if (conversationView || !online) return;
         if (currentOrigin && providedSave && !followup.isPending)
           followup.mutate({
             ...providedSave,
@@ -456,6 +485,7 @@ function PluginResult({
     genericSave,
     session,
     conversationView,
+    online,
   ]);
   if (conversationView)
     return (
@@ -473,12 +503,26 @@ function PluginResult({
       </Suspense>
     );
   return (
-    <div className={styles.result}>
+    <section
+      ref={panel}
+      className={styles.resultPanel}
+      tabIndex={showHeading ? undefined : -1}
+      aria-labelledby={showHeading ? headingId : undefined}
+      aria-label={showHeading ? undefined : (title ?? t("commandresult.title"))}
+    >
+      {showHeading && (
+        <h2 id={headingId} ref={heading} tabIndex={-1}>
+          {title}
+        </h2>
+      )}
       {currentOrigin?.plugin === "ask" &&
         typeof currentOrigin?.args?.question === "string" && (
           <p>{currentOrigin.args.question}</p>
         )}
-      <p role="status" className={decisionSaved ? undefined : "sr-only"}>
+      <p
+        role="status"
+        className={decisionSaved ? styles.resultStatus : "sr-only"}
+      >
         {decisionSaved &&
           t(
             decisionCommand === "record-decision"
@@ -486,78 +530,89 @@ function PluginResult({
               : "decisions.outcome_saved",
           )}
       </p>
-      {decisionOffline && <p role="status">{t("decisions.reconnect")}</p>}
-      <VocabularyOutput
-        key={responseId}
-        formSubmitDisabled={decisionOffline}
-        formSchema={
-          decisionCommand
-            ? (schema) => decisionForm(decisionCommand, schema)
-            : undefined
-        }
-        formDetails={
-          decisionCommand === "record-decision"
-            ? {
-                label: t("decisions.add_details"),
-                fields: ["title", "alternatives", "rationale", "expected"],
-              }
-            : undefined
-        }
-        formChoices={(field, value) => pluginFormChoice(plugin, field, value)}
-        commandLabel={decisionCommand ? decisionCommandLabel : undefined}
-        displayText={decisionCommand === "journal" ? decisionStatus : undefined}
-        value={visibleResult}
-        formLabel={
-          sourcePickerArgs ? t("notepicker.update_sources") : formLabel
-        }
-        onCommand={
-          currentOrigin && !followup.isPending && !decisionOffline
-            ? (id, args) =>
-                followup.mutate({
-                  plugin: currentOrigin.plugin,
-                  id,
-                  args:
-                    id === "sources" &&
-                    !args.action &&
-                    plugin &&
-                    supportsNotePicker(plugin) &&
-                    ["context-packs", "thinking-desk"].includes(
-                      currentOrigin.plugin,
-                    )
-                      ? { ...args, picker: true }
-                      : args,
-                  session,
-                })
-            : undefined
-        }
-        onSuggestion={
-          typeof noteId === "string" &&
-          plugin &&
-          (plugin.id !== "links" || supportsNotePicker(plugin)) &&
-          !followup.isPending
-            ? (id) => setReview({ id, response: responseId })
-            : undefined
-        }
-        onForm={
-          currentOrigin?.command && !followup.isPending
-            ? (args) => {
-                if (decisionOffline) return;
-                followup.mutate({
-                  plugin: currentOrigin.plugin,
-                  id: currentOrigin.command,
-                  args: sourcePickerArgs
-                    ? {
-                        ...sourcePickerArgs,
-                        remove: args.remove ?? null,
-                        refresh: args.refresh === true,
-                      }
-                    : { ...currentOrigin.args, ...args },
-                  session,
-                });
-              }
-            : undefined
-        }
-      />
+      {decisionOffline && (
+        <p role="status" className={styles.resultStatus}>
+          {t("decisions.reconnect")}
+        </p>
+      )}
+      <div className={styles.resultBody} aria-busy={followup.isPending}>
+        <VocabularyOutput
+          key={responseId}
+          result
+          onOpenNote={onOpenNote}
+          primaryCommand={providedSave?.id}
+          formSubmitDisabled={!online}
+          formSchema={
+            decisionCommand
+              ? (schema) => decisionForm(decisionCommand, schema)
+              : undefined
+          }
+          formDetails={
+            decisionCommand === "record-decision"
+              ? {
+                  label: t("decisions.add_details"),
+                  fields: ["title", "alternatives", "rationale", "expected"],
+                }
+              : undefined
+          }
+          formChoices={(field, value) => pluginFormChoice(plugin, field, value)}
+          commandLabel={decisionCommand ? decisionCommandLabel : undefined}
+          displayText={
+            decisionCommand === "journal" ? decisionStatus : undefined
+          }
+          value={visibleResult}
+          formLabel={
+            sourcePickerArgs ? t("notepicker.update_sources") : formLabel
+          }
+          onCommand={
+            currentOrigin && online && !followup.isPending
+              ? (id, args) =>
+                  followup.mutate({
+                    plugin: currentOrigin.plugin,
+                    id,
+                    args:
+                      id === "sources" &&
+                      !args.action &&
+                      plugin &&
+                      supportsNotePicker(plugin) &&
+                      ["context-packs", "thinking-desk"].includes(
+                        currentOrigin.plugin,
+                      )
+                        ? { ...args, picker: true }
+                        : args,
+                    session,
+                  })
+              : undefined
+          }
+          onSuggestion={
+            typeof noteId === "string" &&
+            plugin &&
+            (plugin.id !== "links" || supportsNotePicker(plugin)) &&
+            !followup.isPending
+              ? (id) => setReview({ id, response: responseId })
+              : undefined
+          }
+          onForm={
+            currentOrigin?.command && !followup.isPending
+              ? (args) => {
+                  if (!online) return;
+                  followup.mutate({
+                    plugin: currentOrigin.plugin,
+                    id: currentOrigin.command,
+                    args: sourcePickerArgs
+                      ? {
+                          ...sourcePickerArgs,
+                          remove: args.remove ?? null,
+                          refresh: args.refresh === true,
+                        }
+                      : { ...currentOrigin.args, ...args },
+                    session,
+                  });
+                }
+              : undefined
+          }
+        />
+      </div>
       {sourcePickerArgs &&
         currentOrigin &&
         Array.isArray(selectedIds) &&
@@ -575,7 +630,7 @@ function PluginResult({
                 (id): id is string => typeof id === "string",
               )}
               action={t("notepicker.add_source")}
-              busy={followup.isPending}
+              busy={followup.isPending || !online}
               onSelect={(note) =>
                 followup.mutate({
                   plugin: currentOrigin.plugin,
@@ -591,7 +646,11 @@ function PluginResult({
             />
           </Suspense>
         ))}
-      {followup.isPending && <p role="status">{t("timeline.loading_notes")}</p>}
+      {(followup.isPending || save.isPending) && (
+        <p role="status" className={styles.resultStatus}>
+          {t("plugins.running")}
+        </p>
+      )}
       {review?.response === responseId &&
         typeof noteId === "string" &&
         plugin && (
@@ -611,21 +670,27 @@ function PluginResult({
             />
           </Suspense>
         )}
-      {applied.length > 0 && <p>{t("commandproposal.applied")}</p>}
-      {(!decisionCommand || onDismiss) && (
+      {applied.length > 0 && (
+        <p role="status" className={styles.resultStatus}>
+          {t("commandproposal.applied")}
+        </p>
+      )}
+      {((!decisionCommand && !interactive && text) ||
+        saved?.id ||
+        onDismiss) && (
         <footer>
-          {!decisionCommand && !interactive && (
+          {!decisionCommand && !interactive && text && (
             <button
-              disabled={!text}
+              className="button"
               onClick={() => void copyText(text).then(setCopied)}
             >
               {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
             </button>
           )}
-          {genericSave && !interactive && (
+          {genericSave && !interactive && text && (
             <button
               className="primary"
-              disabled={!text || save.isPending || !!saved}
+              disabled={!online || save.isPending || !!saved}
               onClick={() => save.mutate()}
             >
               {saved
@@ -636,11 +701,15 @@ function PluginResult({
             </button>
           )}
           {saved?.id && (
-            <Link href={`/n/${encodeURIComponent(saved.id)}`}>
+            <ResultNoteLink id={saved.id} onOpen={onOpenNote}>
               {t("slots.open_note")}
-            </Link>
+            </ResultNoteLink>
           )}
-          {onDismiss && <button onClick={onDismiss}>{t("slots.back")}</button>}
+          {onDismiss && (
+            <button className="button" onClick={onDismiss}>
+              {t("slots.back")}
+            </button>
+          )}
         </footer>
       )}
       {save.isError && (
@@ -656,6 +725,6 @@ function PluginResult({
           )}
         </p>
       )}
-    </div>
+    </section>
   );
 }

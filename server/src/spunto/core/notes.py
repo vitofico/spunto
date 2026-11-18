@@ -418,7 +418,9 @@ class Notes:
             version=row["version"] + 1,
             change_seq=await sequence(conn),
             updated_at=now_ms(),
-            updated_by=self.principal.id,
+            # Metadata-only changes still record their actor in history. Keep
+            # the author of the current text for attribution and From agents.
+            updated_by=previous_credential if body == previous_body else self.principal.id,
         )
         columns = [k for k in row if k not in {"id", "fts_id"}]
         await conn.execute(
@@ -440,6 +442,10 @@ class Notes:
         await self._revision(
             conn, row, kind, coalesce=coalesce and previous_credential == self.principal.id
         )
+        if self.principal.kind == "pat" and previous_body != body:
+            from spunto.core.agent_review import clear
+
+            await clear(conn, row["id"], row["updated_at"])
         await self._advance_proposals(conn, row, previous_body, kind)
         self.store.emit("note.saved", row["id"], row["version"])
         return await self._serialize(conn, row)
@@ -639,6 +645,20 @@ class Notes:
         async with self.store.read() as conn:
             return await self._serialize(
                 conn, await self._row(conn, id, include_trashed=include_trashed), render=render
+            )
+
+    async def adopt(self, id: str, base_version: int) -> dict:
+        if not self.principal.owner:
+            raise Problem(403, "owner_required", "Use an owner session or device.")
+        self._write_allowed()
+        async with self.store.write() as conn:
+            row = await self._row(conn, id)
+            if row["version"] != base_version:
+                raise Problem(409, "version_conflict", "The note changed. Review it again.")
+            if not row["machine"]:
+                raise Problem(409, "note_not_machine_written", "This note does not need adoption.")
+            return await self._update(
+                conn, row, row["body"], "adopt", changes={"machine": 0}, coalesce=False
             )
 
     async def edit(self, id: str, body: str, base_version: int) -> dict:

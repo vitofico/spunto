@@ -410,6 +410,13 @@ export const api = {
         body: { body },
       }),
     ),
+  adoptNote: (id: string, version: number) =>
+    result<Note>(
+      generatedClient.POST("/api/v1/notes/{id}/adopt", {
+        params: { path: { id } },
+        body: { base_version: version },
+      }),
+    ),
   flags: (id: string, body: Flags) =>
     result<Note>(
       generatedClient.POST("/api/v1/notes/{id}/flags", {

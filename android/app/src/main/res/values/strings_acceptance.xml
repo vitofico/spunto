@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accept_note">Accept note</string>
+    <string name="accept_changes">Accept changes</string>
+    <string name="accept_agent_note">Accept agent note</string>
+    <string name="accept_agent_changes">Accept agent changes</string>
+    <string name="accept_use_as_mine">Use as my note</string>
+    <string name="accept_machine_heading">Machine-written note</string>
+    <string name="accept_agent_heading">An agent wrote this note</string>
+    <string name="accept_agent_changes_heading">An agent changed this note</string>
+    <string name="accept_machine_body">Use this note like your other notes. It can appear in resurfacing and be used by enabled AI features.</string>
+    <string name="accept_machine_private">Use this note like your other notes. It stays private and out of AI and network plugins.</string>
+    <string name="accept_agent_body">Keep the current text and attribution and clear this review from From agents.</string>
+    <string name="accept_note_done">Note accepted</string>
+    <string name="accept_changes_done">Changes accepted</string>
+    <string name="accept_note_stale">This note changed. Review the latest version before accepting.</string>
+    <string name="accept_note_connect">Connect to the server to accept this version.</string>
+    <string name="accept_note_wait_sync">Sync the note before accepting this version.</string>
+    <string name="accept_note_working">Accepting…</string>
+</resources>

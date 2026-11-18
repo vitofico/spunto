@@ -12,7 +12,8 @@ from starlette.formparsers import MultiPartException
 from spunto.api.deps import PrincipalDep, ServicesDep
 from spunto.api.errors import Problem
 from spunto.core.attachments import path_for, write_attachment
-from spunto.core.notes import Notes
+from spunto.core.notes import Notes, _id
+from spunto.store.db import now_ms
 
 router = APIRouter(tags=["Attachments"])
 
@@ -46,6 +47,15 @@ async def download(id: str, principal: PrincipalDep, services: ServicesDep):
 @router.post(
     "/api/v1/attachments",
     openapi_extra={
+        "parameters": [
+            {
+                "in": "header",
+                "name": "X-Spunto-Recording-Note",
+                "required": False,
+                "schema": {"type": "string", "format": "uuid"},
+                "description": "Intended note for a newly captured Android recording.",
+            }
+        ],
         "requestBody": {
             "required": True,
             "content": {
@@ -57,7 +67,7 @@ async def download(id: str, principal: PrincipalDep, services: ServicesDep):
                     }
                 }
             },
-        }
+        },
     },
 )
 async def upload(request: Request, principal: PrincipalDep, services: ServicesDep):
@@ -106,12 +116,21 @@ async def upload(request: Request, principal: PrincipalDep, services: ServicesDe
                 raise Problem(422, "validation_failed", "Choose a non-empty file.")
             if len(data) > file_maximum:
                 raise Problem(413, "attachment_too_large", detail)
+            marker_note = request.headers.get("X-Spunto-Recording-Note")
+            capture_note = (
+                _id(marker_note, now_ms())
+                if marker_note
+                and principal.kind == "device"
+                and principal.workspace_role == "owner"
+                else None
+            )
             return await write_attachment(
                 services.store,
                 services.settings,
                 data,
                 filename=file.filename,
                 mime=file.content_type,
+                capture_note=capture_note,
             )
     except HTTPException:
         if oversized:

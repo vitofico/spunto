@@ -27,6 +27,7 @@ import type {
   SearchPage,
   Session,
   Suggestion,
+  SuggestionDecision,
   TokenInput,
   Label,
   AIStatus,
@@ -476,10 +477,10 @@ export const api = {
     }>(`/api/v1/plugins/${segment(id)}/settings`),
   savePluginSettings: (id: string, body: Args) =>
     request(`/api/v1/plugins/${segment(id)}/settings`, { method: "PUT", body }),
-  enablePlugin: (id: string, permissions: string[]) =>
+  enablePlugin: (id: string, permissions: string[], review_token?: string) =>
     request<Plugin>(`/api/v1/plugins/${segment(id)}/enable`, {
       method: "POST",
-      body: { permissions },
+      body: { permissions, review_token },
     }),
   disablePlugin: (id: string) =>
     request<Plugin>(`/api/v1/plugins/${segment(id)}/disable`, {
@@ -513,10 +514,13 @@ export const api = {
     request<{ suggestions: Suggestion[] }>(
       `/api/v1/suggestions?${new URLSearchParams({ scope, ...(noteId ? { note_id: noteId } : {}) })}`,
     ),
-  decideSuggestion: (id: string, decision: "accept" | "dismiss") =>
-    request(`/api/v1/suggestions/${segment(id)}/${decision}`, {
-      method: "POST",
-    }),
+  decideSuggestion: (id: string, decision: "accept" | "dismiss" | "undo") =>
+    request<SuggestionDecision>(
+      `/api/v1/suggestions/${segment(id)}/${decision}`,
+      {
+        method: "POST",
+      },
+    ),
   credentials: () => request<Credential[]>("/api/v1/credentials"),
   createPairing: () =>
     request<PairingCode>("/api/v1/auth/pairing", { method: "POST" }),

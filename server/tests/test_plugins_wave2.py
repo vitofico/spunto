@@ -861,3 +861,51 @@ async def test_existing_unsupplied_citations_fail_before_machine_creation(wave, 
         )
     assert len((await notes.list())["notes"]) == 2
     assert not await ctx(host, id).storage.kv.get("outside")
+
+
+@pytest.mark.parametrize(
+    "operation,automatic",
+    [("hook:note.saved", True), ("job:summarize", False), ("command:summarize", False)],
+)
+async def test_quiet_title_only_on_new_note_event(wave, operation, automatic):
+    from spunto.plugins import title_summary
+
+    host, provider, notes = wave
+    async with host.store.write() as conn:
+        await conn.execute(
+            "INSERT INTO credential(id,kind,name,scope,created_at) "
+            "VALUES (?,'session','Owner','full',0)",
+            (OWNER.id,),
+        )
+    await host.set_settings("title-summary", {"change_mode": "automatic"})
+    note = await notes.create("Opening words " * 180)
+    job = Ctx(host, "title-summary", operation=operation, capture_note_id=note["id"])
+    await title_summary.saved(job, note["id"], note["version"])
+    current = await notes.get(note["id"])
+    assert current["body"] == ("# Synthetic long note\n\n" if automatic else "") + note["body"]
+    assert len(current["suggestions"]) == 1
+    assert current["suggestions"][0]["status"] == ("accepted" if automatic else "pending")
+    await title_summary.saved(job, note["id"], current["version"])
+    if automatic:
+        await decide(host.store, OWNER, current["suggestions"][0]["id"], "undo")
+        restored = await notes.get(note["id"])
+        await title_summary.saved(job, note["id"], restored["version"])
+        assert (await notes.get(note["id"]))["body"] == note["body"]
+    assert len(provider.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        ("Heading\n=====\n\nwords", "# New\n\nwords"),
+        ("\nFirst\r\nsecond\r\n ===\r\nend", "\n# New\r\nend"),
+        ("#\nbody", "# New\nbody"),
+        ("\n  # Current\nbody", "\n  # New\nbody"),
+        ("quote\n---", "# New\n\nquote\n---"),
+        ("    code\n    ===", "# New\n\n    code\n    ==="),
+    ],
+)
+async def test_replace_only_leading_markdown_h1(body, expected):
+    from spunto.core.quiet_changes import titled_body
+
+    assert titled_body(body, "New") == expected

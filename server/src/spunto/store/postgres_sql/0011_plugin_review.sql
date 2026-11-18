@@ -1,0 +1,1 @@
+ALTER TABLE spunto.plugin ADD COLUMN review_pending INTEGER NOT NULL DEFAULT 0;

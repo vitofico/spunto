@@ -186,7 +186,18 @@ class SyncEngine internal constructor(private val repository:NotesRepository, pr
   if(effective.status=="rejected") {
    // A refused decision (decided elsewhere first) leaves the server's copies in charge. A refused note change keeps
    // its row, so pulls never overwrite the words, but leaves the waiting count until the owner settles it on the note.
-   if(sentOperation.type=="suggestion.decide") { dao.removeOutbox(sent.opId);(listOfNotNull(sent.noteId)+sentOperation.affectedNoteIds).distinct().forEach { dao.putRefresh(RefreshNoteEntity(it)) } }
+   if(sentOperation.type=="suggestion.decide") {
+    dao.removeOutbox(sent.opId)
+    (listOfNotNull(sent.noteId)+sentOperation.affectedNoteIds).distinct().forEach { dao.putRefresh(RefreshNoteEntity(it)) }
+    val refusalKind=when {
+     sentOperation.decision=="undo" -> "undo-refusal"
+     sentOperation.reviewedVersion!=null && effective.code in setOf("suggestion_stale","version_conflict") -> "review-refusal"
+     else -> null
+    }
+    if(refusalKind!=null && sent.noteId!=null) {
+     dao.putOutput(PluginOutputEntity(refusalKind,sentOperation.suggestionId ?: sent.opId,sent.noteId,"{}"))
+    }
+   }
    else { dao.reject(sent.opId,effective.code?:"rejected"); sent.noteId?.let { dao.get(it)?.note()?.let { note -> repository.putNote(note.copy(syncError=effective.code?:"rejected",pending=true)) } } }
    return@ownedTransaction
   }

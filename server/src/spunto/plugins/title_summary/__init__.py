@@ -3,6 +3,7 @@
 from pydantic import Field, model_validator
 
 from spunto.ai.output import Output
+from spunto.core.quiet_changes import finish_summary, title_event
 from spunto.host import Ctx, Plugin
 from spunto.plugins._wave2 import backfill, eligible, excerpts, text, unchanged
 
@@ -31,6 +32,8 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
         return text("Title and summary need a note of at least 300 words.")
     if note_version is not None and note["version"] != note_version:
         return text("The note changed.")
+    if not await title_event(ctx, note):
+        return text("No title change for this revision.")
     prior = await ctx.storage.records.get("processed", note_id)
     if prior and prior["version"] == note["version"]:
         return text("The stored summary is current.")
@@ -44,20 +47,13 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
         max_note_chars=20_000,
     )
     await unchanged(ctx, [note])
-    proposal = None
-    if not note["body"].startswith("# " + answer.title + "\n"):
-        proposal = await ctx.notes.suggest(
-            note_id, "set_title", {"title": answer.title}, note_version=note["version"]
-        )
     summary = answer.summary
     if len(note["body"]) > 20_000:
         summary += "\n\nCoverage: first 20,000 characters of this note."
     await ctx.notes.annotate(
         note_id, "panel", {"type": "markdown", "text": summary}, note_version=note["version"]
     )
-    await ctx.storage.records.put(
-        "processed", note_id, {"version": note["version"]}, note_id=note_id
-    )
+    proposal = await finish_summary(ctx, note, answer.title)
     if proposal is None:
         return text("The stored summary is current.")
     return {

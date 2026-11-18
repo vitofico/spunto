@@ -24,3 +24,14 @@ mode = "stored"
 
 [contributes.meta]
 title = "Reading time"
+
+[settings]
+type = "object"
+additionalProperties = false
+
+[settings.properties.change_mode]
+title = "Plugin changes"
+description = "Add the fetched page title to notes without an explicit title."
+type = "string"
+enum = ["ask_first", "automatic"]
+default = "ask_first"

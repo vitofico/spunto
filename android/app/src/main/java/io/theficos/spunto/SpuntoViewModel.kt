@@ -23,6 +23,7 @@ class SpuntoViewModel internal constructor(application:Application,val container
  val labels=repository.labels().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val noteCount=repository.dao.noteCount().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),null)
  val outputs=repository.outputs().stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val queuedSuggestionUndos=repository.queuedSuggestionUndos.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptySet())
  val pending=repository.pendingCount.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),0)
  private val keptConflicts=MutableStateFlow(container.preferences.getStringSet("conflicts-kept",null).orEmpty().toSet())
  /** Conflicted copies still waiting for a decision on this phone; "Keep both" settles one here only. */
@@ -40,6 +41,9 @@ class SpuntoViewModel internal constructor(application:Application,val container
  }
  val auth=container.auth.config.map {it?.takeIf {config ->config.replicaId==container.replicaId}}.stateIn(viewModelScope,SharingStarted.Eagerly,null)
  val workspaceCanWrite=container.auth.selection.map {it.canWrite(container.replicaId)}.distinctUntilChanged().stateIn(viewModelScope,SharingStarted.Eagerly,!container.replicaId.startsWith("account-"))
+ val workspaceIsOwner=container.auth.selection.map {
+  it.canWrite(container.replicaId) && it.workspaceRole in setOf(null,"owner")
+ }.distinctUntilChanged().stateIn(viewModelScope,SharingStarted.Eagerly,!container.replicaId.startsWith("account-"))
  internal suspend fun canWriteWorkspace()=container.auth.selection.first().canWrite(container.replicaId)
  internal suspend fun requireWorkspaceWrite() {require(canWriteWorkspace()) {container.context.getString(R.string.workspace_read_only)}}
  private val accountIdentityCache=AccountIdentityCache(container.preferences)
@@ -84,7 +88,16 @@ class SpuntoViewModel internal constructor(application:Application,val container
    override suspend fun manifest()=read {api.manifest()}
    override suspend fun ai()=read {api.ai()}
    override suspend fun settings(id:String)=read {api.get("/api/v1/plugins/$id/settings")}
-   override suspend fun toggle(id:String,on:Boolean,permissions:List<String>)=read {api.post("/api/v1/plugins/$id/${if(on) "enable" else "disable"}",if(on) buildJsonObject {put("permissions",JsonArray(permissions.map(::JsonPrimitive)))} else JsonObject(emptyMap()))}
+   override suspend fun toggle(id:String,on:Boolean,permissions:List<String>)=toggle(id,on,permissions,null)
+   override suspend fun toggle(id:String,on:Boolean,permissions:List<String>,reviewToken:String?)=read {
+    api.post("/api/v1/plugins/$id/${if(on) "enable" else "disable"}",if(on) buildJsonObject {
+     put("permissions",JsonArray(permissions.map(::JsonPrimitive)))
+     if(reviewToken!=null) put("review_token",reviewToken)
+    } else JsonObject(emptyMap()))
+   }
+   override suspend fun changeMode(id:String,mode:String)=read {
+    api.request("/api/v1/plugins/$id/settings","PATCH",buildJsonObject {put("change_mode",mode)}).jsonObject
+   }
   }},
   {nativePluginCatalog(catalog.value,manifest.value)},::publishPluginSnapshot,::acknowledgePlugin,
   {config,plugin -> safePluginPage(payload(container.preferences.getString(pluginPageCacheKey(config.serverUrl.trimEnd('/'),plugin),"{}")!!)).takeIf {it.schema.isNotEmpty()} ?: catalogPluginPage(plugin)},
@@ -159,7 +172,10 @@ class SpuntoViewModel internal constructor(application:Application,val container
  fun restoreHistory(id:String,revision:RevisionEntity)=task { requireWorkspaceWrite();repository.restoreHistory(id,revision) }
  fun flags(id:String,pinned:Boolean?=null,archived:Boolean?=null,trashed:Boolean?=null,privateNote:Boolean?=null)=task { requireWorkspaceWrite();repository.setFlags(id,pinned,archived,trashed,privateNote) }
  fun toggleTask(note:Note,line:Int)=task { requireWorkspaceWrite();val lines=note.body.lines().toMutableList(); lines[line]=lines[line].replaceFirst(Regex("\\[[ xX]]"),if(lines[line].contains("[ ]")) "[x]" else "[ ]"); repository.update(note.id,lines.joinToString("\n")) }
- fun decide(id:String,decision:String)=task { requireWorkspaceWrite();repository.decideSuggestion(id,decision) }
+ fun decide(id:String,decision:String,onQueued:suspend ()->Unit={})=task {
+  requireWorkspaceWrite()
+  if(repository.decideSuggestion(id,decision)) onQueued()
+ }
  /** The sign-in form's problem; sign-in failures never reach [message] or [reauthenticate]. */
  internal val signInProblem=MutableStateFlow<SignInProblem?>(null)
  fun login(server:String,password:String,code:String,name:String,consent:Boolean)=viewModelScope.launch { signInProblem.value=null; try { signIn(server,password,code,name,consent);message.value="" } catch(e:CancellationException) { throw e } catch(e:Exception) { signInProblem.value=signInProblem(container.context.resources,e,code.isNotBlank()) } }
@@ -200,6 +216,6 @@ class SpuntoViewModel internal constructor(application:Application,val container
  }
  fun fetch(path:String)=request(path) { remote.value=if(it is JsonObject) it else buildJsonObject { put("items",it) } }
  internal fun pluginToggle(plugin:NativePluginFacts,on:Boolean,accepted:List<String>?=null,onComplete:(PluginToggleResult)->Unit={})=
-  if(workspaceCanWrite.value) pluginManager.toggle(plugin.id,on,accepted,onComplete=onComplete) else null
+  if(workspaceCanWrite.value) pluginManager.toggle(plugin.id,on,accepted,reviewToken=plugin.reviewToken.takeIf {on},onComplete=onComplete) else null
  fun draft(id:String,text:String)=task { repository.saveDraft(id,text) }
 }

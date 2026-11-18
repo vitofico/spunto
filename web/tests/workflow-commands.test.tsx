@@ -342,8 +342,13 @@ it.each([true, false])(
         },
       ],
     } as never);
-    vi.spyOn(api, "note").mockResolvedValue({ title: "Source note" } as never);
-    const decide = vi.spyOn(api, "decideSuggestion").mockResolvedValue({});
+    vi.spyOn(api, "note").mockResolvedValue({
+      title: "Source note",
+      version: 2,
+    } as never);
+    const decide = vi
+      .spyOn(api, "decideSuggestion")
+      .mockResolvedValue({ applied: true } as never);
     render(
       wrap(
         <CommandResult
@@ -378,5 +383,98 @@ it.each([true, false])(
       expect((apply as HTMLButtonElement).disabled).toBe(true);
       expect(decide).not.toHaveBeenCalled();
     }
+  },
+);
+
+it.each(["inline", "long", "stale"] as const)(
+  "reviews Tidy’s %s comparison in the command result",
+  async (kind) => {
+    const long = kind === "long";
+    const before = long ? "a".repeat(4100) : "Before cleanup";
+    const after = long ? "b".repeat(4100) : "After cleanup";
+    vi.spyOn(api, "suggestions").mockResolvedValue({
+      suggestions: [
+        {
+          id: "tidy-proposal",
+          plugin: "tidy",
+          note_id: "source",
+          note_version: 2,
+          action: "replace_body",
+          status: "pending",
+          payload: { body: after },
+        },
+      ],
+    } as never);
+    vi.spyOn(api, "note").mockResolvedValue({
+      id: "source",
+      version: kind === "stale" ? 3 : 2,
+      body: before,
+    } as never);
+    const decide = vi.spyOn(api, "decideSuggestion").mockResolvedValue({
+      applied: true,
+    } as never);
+    const onDismiss = vi.fn();
+    render(
+      wrap(
+        <CommandResult
+          origin={{
+            plugin: "tidy",
+            command: "tidy",
+            args: { note_id: "source" },
+          }}
+          onDismiss={onDismiss}
+          value={{
+            ui: 1,
+            items: [
+              long
+                ? { type: "text", text: "Open Review to compare" }
+                : {
+                    type: "diff",
+                    base_version: 2,
+                    hunks: [
+                      {
+                        old_start: 1,
+                        new_start: 1,
+                        old_lines: [before],
+                        new_lines: [after],
+                      },
+                    ],
+                  },
+              {
+                type: "pill",
+                action: "accept",
+                label: "Apply changes",
+                suggestion_id: "tidy-proposal",
+              },
+            ],
+          }}
+        />,
+      ),
+    );
+    if (long) {
+      const review = await screen.findByRole<HTMLButtonElement>("button", {
+        name: "Review changes",
+      });
+      expect(
+        screen.queryByRole("button", { name: "Apply changes" }),
+      ).toBeNull();
+      await waitFor(() => expect(review.disabled).toBe(false));
+      fireEvent.click(review);
+    }
+    const apply = await screen.findByRole<HTMLButtonElement>("button", {
+      name: "Apply changes",
+    });
+    if (kind === "stale") {
+      await screen.findByText("This proposal is no longer available.");
+      expect(apply.disabled).toBe(true);
+      expect(decide).not.toHaveBeenCalled();
+      return;
+    }
+    await screen.findByText(after);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(apply.disabled).toBe(false);
+    fireEvent.click(apply);
+    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
+    expect(decide).toHaveBeenCalledExactlyOnceWith("tidy-proposal", "accept");
   },
 );

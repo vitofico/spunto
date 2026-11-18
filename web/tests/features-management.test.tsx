@@ -441,9 +441,13 @@ describe("quiet slots", () => {
     }));
     const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
     wrap(<SuggestionLine note={note} />);
-    expect(screen.getAllByRole("button", { name: /^#label/ })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^Add #label/ })).toHaveLength(
+      3,
+    );
     fireEvent.click(screen.getByRole("button", { name: "+3" }));
-    expect(screen.getAllByRole("button", { name: /^#label/ })).toHaveLength(6);
+    expect(screen.getAllByRole("button", { name: /^Add #label/ })).toHaveLength(
+      6,
+    );
   });
   it("names each pill's plugin for assistive tech and dismisses the whole row", async () => {
     const manifest = {
@@ -466,7 +470,7 @@ describe("quiet slots", () => {
     }));
     const note = { id: "n", suggestions, annotations: [] } as unknown as Note;
     wrap(<SuggestionLine note={note} />);
-    const pill = screen.getByRole("button", { name: "#label0" });
+    const pill = screen.getByRole("button", { name: "Add #label0" });
     expect(
       document.getElementById(pill.getAttribute("aria-describedby")!)
         ?.textContent,
@@ -508,7 +512,7 @@ describe("quiet slots", () => {
         <SuggestionLine note={note} />
       </ToastProvider>,
     );
-    const pill = screen.getByRole("button", { name: "#garden" });
+    const pill = screen.getByRole("button", { name: "Add #garden" });
     fireEvent.pointerDown(pill, { pointerType: "touch" });
     await act(() => new Promise((done) => setTimeout(done, 550)));
     expect(screen.getByRole("status").textContent).toContain(
@@ -949,3 +953,127 @@ describe("unavailable plugin prerequisites", () => {
     expect(enable).not.toHaveBeenCalled();
   });
 });
+
+it("shows a persisted applied receipt in the note and keeps other proposals usable", async () => {
+  const manifest = {
+    ui: 1,
+    plugins_rev: 1,
+    plugins: [{ ...plugin, state: "enabled" }],
+  };
+  client.setQueryData(["manifest"], manifest);
+  vi.spyOn(api, "manifest").mockResolvedValue(manifest);
+  const decide = vi
+    .spyOn(api, "decideSuggestion")
+    .mockResolvedValue({ applied: true } as never);
+  const note = {
+    id: "receipt-note",
+    suggestions: [
+      {
+        id: "recent",
+        plugin: "tasks",
+        status: "accepted",
+        action: "add_label",
+        receipt: { note_version: 3, undoable: true },
+        payload: { path: "garden" },
+      },
+      {
+        id: "pending",
+        plugin: "tasks",
+        status: "pending",
+        action: "add_label",
+        payload: { path: "recipes" },
+      },
+    ],
+  } as unknown as Note;
+  wrap(<SuggestionLine note={note} />);
+  expect(screen.getByText("Added #garden")).toBeTruthy();
+  expect(
+    screen.getByRole<HTMLButtonElement>("button", { name: "Add #recipes" })
+      .disabled,
+  ).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  await waitFor(() =>
+    expect(decide).toHaveBeenCalledExactlyOnceWith("recent", "undo"),
+  );
+});
+
+it("opens the details of an off bundled plugin and enables it with a separate one-tap switch", async () => {
+  vi.mocked(api.catalog).mockResolvedValue({
+    plugins: [
+      {
+        ...plugin,
+        origin: "bundled",
+        state: "disabled",
+        switch: "off",
+        review_required: false,
+        review_token: "fixture-review",
+      },
+    ],
+    plugins_rev: 1,
+  });
+  const enable = vi.spyOn(api, "enablePlugin").mockResolvedValue({
+    ...plugin,
+    state: "enabled",
+    switch: "on",
+  });
+  wrap(<SettingsPage section="plugins" />);
+  expect(
+    (await screen.findByRole("link", { name: "Tasks" })).getAttribute("href"),
+  ).toBe("/settings/plugins/tasks");
+  fireEvent.click(screen.getByRole("switch", { name: "Enable Tasks" }));
+  await waitFor(() =>
+    expect(enable).toHaveBeenCalledExactlyOnceWith(
+      "tasks",
+      plugin.permissions,
+      "fixture-review",
+    ),
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it.each(["plugins", "plugins/tasks"])(
+  "allows explicit review for an environment-pinned plugin forced off pending consent on %s",
+  async (section) => {
+    const changed = {
+      ...plugin,
+      pinned_by_env: true,
+      switch: "off",
+      state: "waiting",
+      review_required: true,
+      can_review_pinned: true,
+      review_token: "changed-review",
+    };
+    vi.mocked(api.catalog).mockResolvedValue({
+      plugins: [changed],
+      plugins_rev: 1,
+    });
+    vi.spyOn(api, "pluginSettings").mockResolvedValue({
+      schema: { type: "object", properties: {} },
+      values: {},
+      secrets: {},
+    });
+    const enable = vi.spyOn(api, "enablePlugin").mockResolvedValue({
+      ...changed,
+      state: "enabled",
+      switch: "on",
+      can_review_pinned: false,
+    });
+    wrap(<SettingsPage section={section} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Review Tasks" }),
+    );
+    expect(screen.queryByRole("switch", { name: "Enable Tasks" })).toBeNull();
+    expect(enable).not.toHaveBeenCalled();
+    const review = await screen.findByRole("dialog", {
+      name: "Turn on Tasks?",
+    });
+    fireEvent.click(within(review).getByRole("button", { name: "Turn on" }));
+    await waitFor(() =>
+      expect(enable).toHaveBeenCalledExactlyOnceWith(
+        "tasks",
+        changed.permissions,
+        "changed-review",
+      ),
+    );
+  },
+);

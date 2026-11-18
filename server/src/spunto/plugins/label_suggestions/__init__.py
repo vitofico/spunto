@@ -152,6 +152,8 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None, *, forc
         or (note_version is not None and note_version != note["version"])
     ):
         return
+    if not force and await ctx.notes.is_label_decision_revision(note_id, note["version"]):
+        return
     body_hash = hashlib.sha256(note["body"].encode()).hexdigest()
     prior = await ctx.storage.records.get("processed", note_id)
     if not force and prior and prior.get("body_hash") == body_hash:
@@ -219,8 +221,6 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None, *, forc
             for item in answer.labels
         ],
         note_version=note["version"],
-        auto_accept_existing=ctx.settings.get("auto_accept_existing", False),
-        threshold=ctx.settings.get("confidence_threshold", 0.9),
         source_versions={item["id"]: item["version"] for item in [note, *examples]},
     )
     await ctx.storage.records.put("processed", note_id, {"body_hash": body_hash}, note_id=note_id)

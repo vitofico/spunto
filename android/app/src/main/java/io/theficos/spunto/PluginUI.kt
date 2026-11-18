@@ -166,45 +166,126 @@ internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugin
     drawLine(accent,androidx.compose.ui.geometry.Offset(size.width*.18f,size.height*.84f),androidx.compose.ui.geometry.Offset(size.width*.72f,size.height*.30f),stroke)
     drawLine(accent,androidx.compose.ui.geometry.Offset(size.width*.58f,size.height*.19f),androidx.compose.ui.geometry.Offset(size.width*.84f,size.height*.45f),stroke)
    } else Text("+",color=accent)
-   Text(title,style=MaterialTheme.typography.labelLarge)
-   Box(Modifier.size(40.dp).clickable(onClickLabel=resources.getString(R.string.settings_dismiss_suggestion),onClick=onDismiss).clearAndSetSemantics {},contentAlignment=Alignment.Center) {Text("×",color=SpuntoColors.ink3)}
+   Text(title,Modifier.weight(1f,fill=false),style=MaterialTheme.typography.labelLarge,maxLines=2,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+   Box(Modifier.size(48.dp).clickable(onClickLabel=resources.getString(R.string.settings_dismiss_suggestion),onClick=onDismiss).clearAndSetSemantics {},contentAlignment=Alignment.Center) {Text("×",color=SpuntoColors.ink3)}
   }
  }
 }
 
 /** 03 §5.1: one line of dashed pills; what does not fit folds into "+N", which unfolds the rest for this note only. Each pill dismisses on × or long-press; the grey "Dismiss" ending the row dismisses them all. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable fun ProposalLine(proposals:List<JsonObject>,pluginNames:Map<String,String>,onSelect:(JsonObject)->Unit,onDismiss:(String)->Unit) {
+@Composable fun ProposalLine(proposals:List<JsonObject>,pluginNames:Map<String,String>,onSelect:(JsonObject)->Unit,onDismiss:(String)->Unit,receipts:List<JsonObject> = emptyList(),onUndo:(String)->Unit={}) {
  val resources=LocalContext.current.resources
  var expanded by remember { mutableStateOf(false) }
+ var previousOrder by remember {mutableStateOf(emptyList<String>())}
  FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(6.dp),itemVerticalAlignment=Alignment.CenterVertically) {
-  (if(expanded) proposals else proposals.take(3)).forEach { data ->
-   ProposedPill(data.string("title").ifEmpty { (data["payload"] as? JsonObject)?.string("path")?.takeIf(String::isNotBlank)?.let { resources.getString(R.string.settings_add ,it) } ?: resources.getString(R.string.settings_review_change) },pluginNames[data.string("plugin")] ?: data.string("plugin"),data.string("action") in setOf("replace_body","merge_notes"),{onSelect(data)},{onDismiss(data.string("id"))})
+  val entries=(proposals+receipts).let {items ->
+   if(receipts.isEmpty() || previousOrder.isEmpty()) items
+   else {
+    val order=previousOrder.withIndex().associate {it.value to it.index}
+    items.sortedBy {order[it.string("id")] ?: Int.MAX_VALUE}
+   }
   }
-  if(proposals.size>3 && !expanded) Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,modifier=Modifier.heightIn(min=40.dp).clickable(onClickLabel=resources.getQuantityString(R.plurals.settings_more_suggestions,proposals.size-3,proposals.size-3)) {expanded=true}) {
-   Box(Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8)) {Text("+${proposals.size-3}",style=MaterialTheme.typography.labelLarge)}
+  (if(expanded) entries else entries.take(3)).forEach { data ->
+   if(data.string("status")=="accepted") FlowRow(verticalArrangement=Arrangement.spacedBy(4.dp),itemVerticalAlignment=Alignment.CenterVertically) {
+    Text(receiptLabel(resources,data),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    TextButton(onClick={onUndo(data.string("id"))}) {Text(resources.getString(R.string.settings_undo))}
+    TextButton(onClick={onDismiss(data.string("id"))}) {Text(resources.getString(R.string.settings_dismiss))}
+   } else ProposedPill(proposalLabel(resources,data),pluginNames[data.string("plugin")] ?: data.string("plugin"),data.string("action") in setOf("replace_body","merge_notes") && !data.bool("one_tap",false),{previousOrder=entries.map {it.string("id")};onSelect(data)},{onDismiss(data.string("id"))})
   }
-  TextButton(onClick={proposals.forEach {onDismiss(it.string("id"))}},modifier=Modifier.semantics {contentDescription=resources.getQuantityString(R.plurals.settings_dismiss_suggestions,proposals.size,proposals.size)}) {Text(resources.getString(R.string.settings_dismiss),style=MaterialTheme.typography.labelLarge,color=SpuntoColors.ink3)}
+  if(entries.size>3 && !expanded) Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceVariant,contentColor=MaterialTheme.colorScheme.onSurface,modifier=Modifier.heightIn(min=48.dp).clickable(onClickLabel=resources.getQuantityString(R.plurals.settings_more_suggestions,entries.size-3,entries.size-3)) {expanded=true}) {
+   Box(Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8)) {Text("+${entries.size-3}",style=MaterialTheme.typography.labelLarge)}
+  }
+  if(proposals.isNotEmpty()) TextButton(onClick={proposals.forEach {onDismiss(it.string("id"))}},modifier=Modifier.semantics {contentDescription=resources.getQuantityString(R.plurals.settings_dismiss_suggestions,proposals.size,proposals.size)}) {Text(resources.getString(R.string.settings_dismiss),style=MaterialTheme.typography.labelLarge,color=SpuntoColors.ink3)}
  }
 }
 
-@Composable fun Suggestions(model:SpuntoViewModel,noteId:String,onNote:(String)->Unit) {
+@Composable fun Suggestions(model:SpuntoViewModel,note:Note,onNote:(String)->Unit,suppressedSuggestionId:String="") {
+ val noteId=note.id
  val canWrite by model.workspaceCanWrite.collectAsState()
  if(!canWrite) return
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
  val manifest=model.manifest.collectAsState().value
  val outputs by model.outputs.collectAsState()
+ val queued by model.queuedSuggestionUndos.collectAsState()
+ val remote by model.remote.collectAsState()
+ val online by model.online.collectAsState()
+ val masked=suppressedSuggestionId.ifBlank {if(online && model.container.manifest.enabled(remote.string("plugin_id"))) commandSuggestionId(remote) else ""}
+ val feedback=LocalFeedback.current
  var selected by remember(noteId) { mutableStateOf<String?>(null) }
  val plugins=model.container.manifest.plugins()
  val counts=mutableMapOf<String,Int>()
- val proposals=outputs.filter { it.noteId==noteId && it.kind=="suggestion" }.map(::proposalData).filter { data ->
+ val noteProposals=remember(outputs,noteId) {outputs.filter {it.noteId==noteId && it.kind=="suggestion"}.map(::proposalData)}
+ val proposals=noteProposals.filter { data ->
   val id=data.string("plugin");val count=(counts[id] ?: 0)+1
-  (data.string("status")=="pending" && model.container.manifest.enabled(id) && count<=3).also { if(it) counts[id]=count }
- }.sortedWith(compareBy<JsonObject> { data -> plugins.firstOrNull { it.string("id")==data.string("plugin") }?.get("position")?.jsonPrimitive?.intOrNull ?: Int.MAX_VALUE }.thenByDescending { (it["confidence"] as? JsonPrimitive)?.doubleOrNull ?: 0.0 })
- if(proposals.isEmpty()) return
- ProposalLine(proposals,plugins.associate { it.string("id") to localizedPluginName(resources,it,catalog) },{data -> if(data.string("action")=="add_label") model.decide(data.string("id"),"accept") else selected=data.string("id") },{model.decide(it,"dismiss")})
+  (data.string("id")!=masked && data.string("status")=="pending" && model.container.manifest.enabled(id) && count<=3).also { if(it) counts[id]=count }
+ }.sortedWith(compareByDescending<JsonObject> {it.string("action")=="set_title"}.thenBy { data -> plugins.firstOrNull { it.string("id")==data.string("plugin") }?.get("position")?.jsonPrimitive?.intOrNull ?: Int.MAX_VALUE }.thenByDescending { (it["confidence"] as? JsonPrimitive)?.doubleOrNull ?: 0.0 })
+ val undo:(String)->Unit={model.decide(it,"undo")}
+ val accept:(JsonObject)->Unit={data -> acknowledgeSuggestion(model,data,resources,feedback,undo)}
+ val receipts=if(note.trashed) emptyList() else noteProposals.filter { data ->
+  val receipt=data["receipt"] as? JsonObject ?: return@filter false
+  val current=if(receipt.pluginFlag("local")==true) receipt.pluginLong("local_applied_at")==note.updatedAt else !note.pending
+  current && data.string("status")=="accepted" && receipt.pluginFlag("undoable")==true && receipt.pluginLong("note_version")==note.serverRev.toLong()
+ }
+ if(proposals.isNotEmpty() || receipts.isNotEmpty()) ProposalLine(proposals,plugins.associate { it.string("id") to localizedPluginName(resources,it,catalog) },{data ->
+  if(isOneTapProposal(data)) accept(data) else selected=data.string("id")
+ },{model.decide(it,"dismiss")},receipts,undo)
+ if(noteId in queued) Text(resources.getString(R.string.plugin_undo_queued),style=MaterialTheme.typography.bodySmall,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+ outputs.firstOrNull {it.noteId==noteId && it.kind in setOf("undo-refusal","review-refusal")}?.let { failure ->
+  val scope=rememberCoroutineScope()
+  val nav=LocalNavigator.current
+  Column {
+   Text(resources.getString(if(failure.kind=="undo-refusal") R.string.plugin_undo_stale else R.string.plugin_review_stale),style=MaterialTheme.typography.bodySmall,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+   TextButton(onClick={
+    model.historyFor.value=noteId
+    if(nav.route!="note:$noteId") onNote(noteId)
+    scope.launch {model.repository.dao.removeOutput(failure.kind,failure.id)}
+   }) {Text(resources.getString(R.string.plugin_open_history))}
+  }
+ }
  selected?.let { id -> outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let { SuggestionDecisionDialog(model,proposalData(it),onNote) { selected=null } } }
+}
+
+private fun isOneTapProposal(data:JsonObject)=data.string("action") in setOf("add_label","set_title") || data.bool("one_tap",false)
+
+private fun proposalLabel(resources:Resources,data:JsonObject):String {
+ val proposed=data["payload"] as? JsonObject
+ return data.string("title").ifBlank {
+  when(data.string("action")) {
+   "add_label" -> resources.getString(R.string.settings_add,"#"+proposed?.string("path").orEmpty().removePrefix("#"))
+   "set_title" -> resources.getString(R.string.plugin_use_title,proposed?.string("title").orEmpty())
+   "append_text" -> if(data.string("plugin")=="links") {
+    val text=proposed?.string("text").orEmpty()
+    val label=text.takeIf {it.startsWith("[") && "](/n/" in it}?.substringBeforeLast("](/n/")?.removePrefix("[")
+    if(label.isNullOrBlank()) resources.getString(R.string.plugin_add_link) else resources.getString(R.string.plugin_add_link_to,label)
+   } else resources.getString(R.string.settings_review_change)
+   "replace_body" -> if(data.string("plugin")=="voice-memos" && data.bool("one_tap",false)) resources.getString(R.string.plugin_append_transcript) else resources.getString(R.string.settings_review_change)
+   else -> resources.getString(R.string.settings_review_change)
+  }
+ }
+}
+private fun receiptLabel(resources:Resources,data:JsonObject):String {
+ val proposed=data["payload"] as? JsonObject
+ return when(data.string("action")) {
+  "add_label" -> resources.getString(R.string.plugin_label_added,"#"+proposed?.string("path").orEmpty().removePrefix("#"))
+  "set_title" -> resources.getString(R.string.plugin_title_applied,proposed?.string("title").orEmpty())
+  "merge_notes" -> resources.getString(R.string.plugin_notes_merged)
+  "replace_body" -> resources.getString(if(data.string("plugin")=="voice-memos") R.string.plugin_transcript_added else R.string.plugin_note_updated)
+  "append_text" -> resources.getString(if(data.string("plugin")=="links") R.string.plugin_note_linked else R.string.plugin_text_added)
+  else -> resources.getString(R.string.plugin_changes_applied)
+ }
+}
+private fun acknowledgeSuggestion(model:SpuntoViewModel,data:JsonObject,resources:Resources,feedback:Feedback,onUndo:(String)->Unit) {
+ val id=data.string("id")
+ model.decide(id,"accept") {
+  val cached=model.repository.dao.output("suggestion",id)
+  val receipt=cached?.let {payload(it.payload)["receipt"] as? JsonObject}
+  val appliedInReplica=receipt?.pluginFlag("undoable")==true
+  if(appliedInReplica || data.string("action") !in setOf("add_label","set_title","replace_body")) {
+   feedback.show(receiptLabel(resources,data),if(appliedInReplica) resources.getString(R.string.settings_undo) else null) {onUndo(id)}
+  }
+ }
 }
 
 /** Suggestions waiting in Review: pending, from a plugin that is still on. */
@@ -251,7 +332,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
 }
 
 /** One renderer for bare arrays, stored payloads and live command envelopes. */
-@Composable fun RenderOutput(model:SpuntoViewModel,data:JsonElement,onNote:(String)->Unit,onResult:((JsonObject)->Unit)?=null,commandScope:CoroutineScope?=null,onProposalOpen:()->Unit={}) {
+@Composable fun RenderOutput(model:SpuntoViewModel,data:JsonElement,onNote:(String)->Unit,onResult:((JsonObject)->Unit)?=null,commandScope:CoroutineScope?=null,onProposalOpen:()->Unit={},hideSuggestion:String="") {
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
  val online by model.online.collectAsState()
@@ -293,7 +374,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value=resources.getString(R.string.settings_sync_to_review_this_suggestion) }
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   if(components.isEmpty() && command.isNotBlank()) Text(resources.getString(R.string.settings_this_result_has_no_preview_in_this),style=MaterialTheme.typography.bodySmall)
-  components.forEach { component ->
+  components.filterNot {it.string("type")=="pill" && hideSuggestion.isNotBlank() && it.string("suggestion_id")==hideSuggestion}.forEach { component ->
    if(component.string("type")=="form" && sourcePicker!=null && pickerSession!=null) {
     SourceNotePicker(model,sourcePicker,pickerSession,online,running,pickerRefresh,onQueryChanged={error=""}) {run(command,it)}
     if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
@@ -303,8 +384,22 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
     formInitial=if(sourcePicker!=null) sourcePicker.args else initial,
     formHidden=if(sourcePicker!=null) setOf("selected_ids","max_sources") else initial.keys.filter { it=="note_id" }.toSet(),
     noteReference={id,reason -> RoomReference(model,id,reason,onNote)},proposalPill=if(!canWrite) null else { pill ->
-     val id=pill.string("suggestion_id");val proposal=outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let(::proposalData)
-     ProposedPill(pill.string("label"),model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.let {localizedPluginName(resources,it,catalog)} ?: plugin,proposal?.string("action") in setOf("replace_body","merge_notes"),{review(id)},{model.decide(id,"dismiss")})
+     val id=pill.string("suggestion_id")
+     val proposal=outputs.firstOrNull {it.id==id && it.kind=="suggestion"}?.let(::proposalData)
+     val pending=proposal?.takeIf {it.string("status")=="pending" && it.string("plugin")==plugin}
+     val oneTap=pending?.takeIf(::isOneTapProposal)
+     if(proposal==null || pending!=null) {
+      val feedback=LocalFeedback.current
+      val label=oneTap?.let {proposalLabel(resources,it)} ?: pill.string("label")
+      val pluginName=model.container.manifest.plugins().firstOrNull {it.string("id")==plugin}?.let {localizedPluginName(resources,it,catalog)} ?: plugin
+      ProposedPill(label,pluginName,oneTap==null && pending?.string("action") in setOf("replace_body","merge_notes"),{
+       if(oneTap==null) review(id)
+       else {
+        acknowledgeSuggestion(model,oneTap,resources,feedback) {model.decide(it,"undo")}
+        onProposalOpen()
+       }
+      },{model.decide(id,"dismiss")})
+     }
     })
   }
   if(sourcePicker==null && error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
@@ -312,6 +407,22 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  }
 }
 
+internal fun commandSuggestionId(result:JsonObject):String =
+ if(result.string("plugin_id")=="tidy") outputComponents(result).singleOrNull {it.string("type")=="pill" && it.string("action")=="accept"}?.string("suggestion_id").orEmpty()
+ else ""
+
+internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:Note?,diff:JsonObject?):Boolean {
+ if(proposal==null || note==null || note.pending || note.trashed) return false
+ val args=result["command_args"] as? JsonObject ?: return false
+ val version=proposal.pluginLong("note_version") ?: return false
+ return proposal.string("id")==commandSuggestionId(result) &&
+   proposal.string("status")=="pending" && proposal.string("action")=="replace_body" &&
+   proposal.string("plugin")==result.string("plugin_id") &&
+   proposal.string("note_id")==note.id && note.id==args.string("note_id") &&
+   note.serverRev.toLong()==version && (diff==null || diff.pluginLong("base_version")==version)
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable fun CommandResultSheet(model:SpuntoViewModel,result:JsonObject,onNote:(String)->Unit,onResult:(JsonObject)->Unit,onClose:()->Unit) {
  val resources=LocalContext.current.resources
  val clipboard=LocalClipboardManager.current
@@ -321,21 +432,70 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val sheetScope=rememberCoroutineScope()
  var active by remember { mutableStateOf(true) }
  val close={active=false;sheetScope.cancel();onClose()}
+ val feedback=LocalFeedback.current
+ val outputs by model.outputs.collectAsState()
+ val suggestionId=commandSuggestionId(result)
+ val proposal=outputs.firstOrNull {it.id==suggestionId && it.kind=="suggestion"}?.let(::proposalData)
+ val noteId=proposal?.string("note_id").orEmpty()
+ val current by remember(noteId) {model.repository.observe(noteId)}.collectAsState(null)
+ val diff=outputComponents(result).singleOrNull {it.string("type")=="diff"}
+ val matching=commandReviewMatches(result,proposal,current,diff)
+ var fullReview by remember(result) {mutableStateOf(false)}
+ var applying by remember(result) {mutableStateOf(false)}
+ var applyError by remember(result) {mutableStateOf("")}
+ val focusManager=androidx.compose.ui.platform.LocalFocusManager.current
+ val canWrite by model.workspaceCanWrite.collectAsState()
  ModalBottomSheet(onDismissRequest=close,scrimColor=MaterialTheme.colorScheme.scrim) {
   if(result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null) {
    Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {TextButton(onClick=close) {Text(resources.getString(R.string.settings_close))};Box(Modifier.weight(1f)) {AskConversation(model,{id -> close();onNote(id)},result,(result["command_args"] as? JsonObject)?.string("question").orEmpty())}}
-  } else
-  Column(Modifier.padding(SpuntoSpacing.s20).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+  } else Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
    Text(if(plugin!=null && command!=null) localizedPluginCommand(resources,plugin,command,catalog) else plugin?.let {localizedPluginName(resources,it,catalog)} ?: resources.getString(R.string.settings_tool_result),style=MaterialTheme.typography.titleLarge)
-   RenderOutput(model,result,{id -> close();onNote(id)},{if(active) onResult(it)},commandScope=sheetScope,onProposalOpen=close)
-   (plugin?.get("ai_destinations") as? JsonObject)?.forEach { (_,raw) -> (raw as? JsonObject)?.let { destination -> Text(resources.getString(R.string.settings_at ,destination.string("model"),destination.string("host"),if(destination.bool("leaves_network")) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
+   Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+    if(fullReview && matching && proposal!=null) SuggestionPreview(model,proposal)
+    else RenderOutput(model,result,{id -> close();onNote(id)},{if(active) onResult(it)},commandScope=sheetScope,onProposalOpen=close,hideSuggestion=suggestionId)
+    (plugin?.get("ai_destinations") as? JsonObject)?.forEach { (_,raw) -> (raw as? JsonObject)?.let { destination -> Text(resources.getString(R.string.settings_at ,destination.string("model"),destination.string("host"),if(destination.bool("leaves_network")) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
+    if(suggestionId.isNotBlank() && !matching) Text(resources.getString(R.string.plugin_review_stale),style=MaterialTheme.typography.bodySmall)
+    if(applyError.isNotBlank()) Text(applyError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+   }
    val copied=resultCopyText(resources,result)
-   Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-    if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied))}) {Text(if(outputComponents(result).any {it.string("type")=="diff"}) resources.getString(R.string.settings_copy_changes) else resources.getString(R.string.settings_copy))}
+   FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+    if(matching && proposal!=null) {
+     if(diff==null && !fullReview) Button(onClick={fullReview=true}) {Text(resources.getString(R.string.plugin_review_changes))}
+     else Button(enabled=!applying && canWrite,onClick={
+      val auth=model.auth.value
+      if(active && !applying && auth!=null) {
+       applying=true
+       applyError=""
+       focusManager.clearFocus()
+       val epoch=model.pluginReplicaEpoch
+       fun current()=active && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.workspaceCanWrite.value
+       sheetScope.launch {
+        try {
+         val response=ApiClient(auth).guarded {current()}.post("/api/v1/suggestions/$suggestionId/accept",JsonObject(emptyMap()))
+         model.synchronize().join()
+         if(current()) {
+          if(response.pluginFlag("applied")==true) {
+           val receipt=(response["suggestion"] as? JsonObject)?.get("receipt") as? JsonObject
+           feedback.show(receiptLabel(resources,proposal),resources.getString(R.string.settings_undo).takeIf {receipt?.pluginFlag("undoable")==true}) {model.decide(suggestionId,"undo")}
+          }
+          close()
+         }
+        } catch(error:CancellationException) {throw error}
+        catch(error:Exception) {
+         if(current()) {
+          if(error is ApiException && error.status==401) model.reauthenticate.value=true
+          if(error is ApiException && error.status==409) model.synchronize().join()
+          applyError=if(error is ApiException) apiErrorMessage(resources,error) else resources.getString(R.string.sys_server_unreachable)
+         }
+        } finally {applying=false}
+       }
+      }
+     }) {Text(resources.getString(if(applying) R.string.settings_saving else R.string.settings_apply_changes))}
+    }
+    if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied))}) {Text(resources.getString(if(diff!=null) R.string.settings_copy_changes else R.string.settings_copy))}
     TextButton(onClick=close) { Text(resources.getString(R.string.settings_close)) }
    }
-   Spacer(Modifier.height(SpuntoSpacing.s24))
   }
  }
 }
@@ -364,6 +524,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val action=data.string("action")
  val proposed=data["payload"] as? JsonObject ?: JsonObject(emptyMap())
  val noteId=if(action=="merge_notes") proposed.string("target_id") else data.string("note_id")
+ val feedback=LocalFeedback.current
  val suggestionId=data.string("id")
  val link=action=="append_text" && data.string("plugin")=="links"
  val linkSupported=link && supportsNotePicker(model.manifest.collectAsState().value,"links")
@@ -433,6 +594,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
       // A legacy proposal still needs the server to validate its current link and visibility.
       linkSession.api(model).request("/api/v1/suggestions/$suggestionId/accept","POST")
       linkSession.refresh(model)
+      feedback.show(receiptLabel(resources,data))
       onClose()
      } catch(error:CancellationException) {throw error}
      catch(error:Exception) {
@@ -443,7 +605,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
     }
    }
   }) {Text(resources.getString(if(acceptingLink) R.string.core_link_inserting else R.string.settings_apply))}
-  else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);model.decide(suggestionId,"accept");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_apply_changes) else resources.getString(R.string.settings_apply)) }
+  else TextButton(enabled=canApply,onClick={if(action=="open") proposed.string("note_id").takeIf(String::isNotBlank)?.let(onNote);acknowledgeSuggestion(model,data,resources,feedback) {model.decide(it,"undo")};onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_apply_changes) else resources.getString(R.string.settings_apply)) }
  },dismissButton={TextButton(enabled=canWrite && !acceptingLink && (action!="label_change" || online),onClick={model.decide(suggestionId,"dismiss");onClose()}) { Text(if(action=="replace_body") resources.getString(R.string.settings_keep_original) else resources.getString(R.string.settings_dismiss)) }})
 }
 
@@ -462,7 +624,16 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val scope=rememberCoroutineScope()
  val locale=LocalConfiguration.current.locales[0]
  val commands=remember(manifest,catalog,privateNote,locale) {noteTools(resources,model.container.manifest.plugins(),privateNote,catalog)}
- if(commands.isEmpty()) return
+ val waiting=remember(catalog,privateNote) {
+  if(privateNote) emptyList() else catalog.objects("plugins").map {NativePluginFacts(it)}.filter {plugin ->
+   plugin.wantedOn && plugin.state=="waiting" && plugin.contribution.objects("commands").any {"note-actions" in it.pluginStrings("where").orEmpty()}
+  }
+ }
+ if(commands.isEmpty() && waiting.isEmpty()) return
+ waiting.forEach {plugin ->
+  Text(localizedPluginName(resources,plugin.raw,catalog),Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.titleSmall)
+  WaitingTool(model,plugin,online)
+ }
  val overflow=commands.drop(6)
  fun run(tool:NoteTool) {
   if(tool.pluginId=="links" && tool.id=="link") {
@@ -501,3 +672,44 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
 internal fun suggestionStatus(resources:Resources,status:String)=resources.getString(when(status) {
  "pending" -> R.string.settings_suggestion_pending;"accepted" -> R.string.settings_suggestion_accepted;"dismissed" -> R.string.settings_suggestion_dismissed;else -> R.string.settings_suggestion_unavailable
 })
+
+internal fun globalToolPlugins(catalog:JsonObject)=catalog.objects("plugins").map {NativePluginFacts(it)}.filter {
+ it.id in setOf("ask","digest","library-stats") && it.wantedOn && it.state in setOf("enabled","waiting")
+}
+
+@Composable internal fun GlobalToolsScreen(model:SpuntoViewModel,onAsk:()->Unit) {
+ val resources=LocalContext.current.resources
+ val catalog by model.catalog.collectAsState()
+ val online by model.online.collectAsState()
+ val manifest by model.manifest.collectAsState()
+ val tools=globalToolPlugins(catalog)
+ val scope=rememberCoroutineScope()
+ var running by remember {mutableStateOf(false)}
+ var error by remember {mutableStateOf("")}
+ LazyColumn(contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+  items(tools,key={it.id}) {plugin ->
+   val command=plugin.contribution.objects("commands").firstOrNull {it.pluginStrings("where").orEmpty().any {slot -> slot in setOf("global","palette")}}
+   if(command!=null) {
+    val enabled=manifest.objects("plugins").any {it.string("id")==plugin.id && it.bool("enabled",true)}
+    TextButton(enabled=online && !running && plugin.state=="enabled" && enabled,onClick={
+     if(plugin.id=="ask") onAsk()
+     else {
+      running=true
+      error=""
+      runCommand(model,plugin.id,command.string("id"),JsonObject(emptyMap()),{model.remote.value=it},{running=false},scope,onError={error=it})
+     }
+    }) {Text(localizedPluginCommand(resources,plugin.raw,command,catalog))}
+    if(plugin.state=="waiting") WaitingTool(model,plugin,online)
+   }
+  }
+  if(!online) item {Text(resources.getString(R.string.settings_connect_to_the_server_to_use_tools))}
+  if(running) item {LinearProgressIndicator(Modifier.fillMaxWidth())}
+  if(error.isNotBlank()) item {Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})}
+ }
+}
+
+@Composable private fun WaitingTool(model:SpuntoViewModel,plugin:NativePluginFacts,online:Boolean) {
+ val resources=LocalContext.current.resources
+ Text(pluginWaitingLine(resources,plugin),Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall)
+ TextButton(onClick={model.pluginWeb("/settings/ai")},enabled=online) {Text(resources.getString(R.string.settings_ai_settings))}
+}

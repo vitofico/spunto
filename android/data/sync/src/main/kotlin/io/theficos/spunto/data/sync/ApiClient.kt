@@ -101,10 +101,13 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
   } finally {temporary.delete()}
  }
  suspend fun upload(path:String,mime:String):JsonObject = uploadNamed(path,mime,File(path).name)
- suspend fun uploadNamed(path:String,mime:String,filename:String):JsonObject = withContext(Dispatchers.IO) {
+ suspend fun uploadNamed(path:String,mime:String,filename:String,recordingNoteId:String?=null):JsonObject = withContext(Dispatchers.IO) {
   checkAuthority()
   val file=File(path); val body=MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("file",filename,file.asRequestBody(mime.toMediaType())).build()
-  val request=Request.Builder().url(config.serverUrl.trimEnd('/')+"/api/v1/attachments").header("Authorization","Bearer ${config.token}").post(body).build()
+  val request=Request.Builder().url(config.serverUrl.trimEnd('/')+"/api/v1/attachments")
+   .header("Authorization","Bearer ${config.token}")
+   .apply {recordingNoteId?.let {header("X-Spunto-Recording-Note",it)}}
+   .post(body).build()
   val result=client.newCall(request).awaitDecodedResponse { response -> val content=response.body?.string().orEmpty(); if(!response.isSuccessful) throw problem(response,content,"attachment_failed"); json.parseToJsonElement(content).jsonObject }
   checkAuthority();result
  }
@@ -114,6 +117,7 @@ fun wireOperation(op:OutboxOperation):JsonObject = buildJsonObject {
  put("op_id",op.opId); put("type",op.type); op.noteId?.let { put("note_id",it) };op.body?.let { put("body",it) };op.baseVersion?.let { put("base_version",it) };op.createdAt?.let { put("created_at",it) };op.at?.let { put("at",it) }
  op.pinnedAt?.let { put("pinned_at",it) };op.archivedAt?.let { put("archived_at",it) };op.trashedAt?.let { put("trashed_at",it) };op.privateAt?.let { put("private_at",it) };
  op.pinned?.let { put("pinned",it) };op.archived?.let { put("archived",it) };op.trashed?.let { put("trashed",it) };op.privateNote?.let { put("private",it) };op.suggestionId?.let { put("suggestion_id",it) };op.decision?.let { put("decision",it) }
+ op.reviewedVersion?.let {put("reviewed_version",it)}
  op.sourceKind?.let { kind -> put("source",buildJsonObject { put("kind",kind);op.sourceRef?.let { put("ref",it) };op.sourceUrl?.let { put("url",it) } }) }
 }
 fun noteFromWire(data:JsonObject):Note {

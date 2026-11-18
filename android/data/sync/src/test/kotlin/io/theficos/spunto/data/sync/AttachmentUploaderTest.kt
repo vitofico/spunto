@@ -32,7 +32,7 @@ class AttachmentUploaderTest {
   val item=item(true);val remote=uuidV7();server.enqueue(response(remote));AttachmentUploader(repo,config,ApiClient(config)).uploadAll()
   val note=repo.dao.get(item.noteId)!!;assertTrue(note.privateNote);assertEquals("Owner comment\n\n[Recording 0:02](/a/$remote)",note.body)
   assertEquals("uploaded",repo.dao.attachment(item.id)!!.status);assertEquals("e",repo.dao.attachment(item.id)!!.serverEpoch)
-  val request=server.takeRequest();assertEquals("/api/v1/attachments",request.path);assertEquals("Bearer synthetic-token",request.getHeader("Authorization"));assertTrue(request.body.readUtf8().contains("audio/ogg"))
+  val request=server.takeRequest();assertEquals("/api/v1/attachments",request.path);assertEquals("Bearer synthetic-token",request.getHeader("Authorization"));assertEquals(item.noteId,request.getHeader("X-Spunto-Recording-Note"));assertTrue(request.body.readUtf8().contains("audio/ogg"))
   assertTrue(folder.listFiles()!!.none {it.name.startsWith("spunto-upload-")})
  }
  @Test fun concurrentTypingIsPreservedWhileOnlyTheExactMarkerIsAcknowledged()=runBlocking {
@@ -75,7 +75,9 @@ class AttachmentUploaderTest {
   val remote=uuidV7();server.enqueue(MockResponse().setBody("""{"id":"$remote","snippet":"![Synthetic image](/a/$remote)"}"""))
   AttachmentUploader(repo,config,ApiClient(config)).uploadAll()
   assertEquals("Existing image comment\n\n![Synthetic image](/a/$remote)",repo.dao.get(id)!!.body);assertEquals("uploaded",repo.dao.attachment(image.id)!!.status)
-  assertTrue(server.takeRequest().body.readUtf8().contains("filename=\"synthetic.jpg\""))
+  val request=server.takeRequest()
+  assertNull(request.getHeader("X-Spunto-Recording-Note"))
+  assertTrue(request.body.readUtf8().contains("filename=\"synthetic.jpg\""))
  }
  @Test fun cancellationClosesNetworkAndKeepsQueuedImmutableBytesAndMarker()=runBlocking {
   val item=item();server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))

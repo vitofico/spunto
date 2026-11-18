@@ -213,7 +213,12 @@ async def test_labels_propose_only_then_owner_existing_auto_accept_and_dismiss(a
     await decide(host.store, OWNER, suggestion, "dismiss")
     await label_suggestions.decided(ctx, target["id"])
     assert await ctx.notes.suggestion_decisions(target["id"]) == ["project/Spunto"]
-    await host.set_settings("label-suggestions", {"auto_accept_existing": True})
+    await host.set_settings("label-suggestions", {"change_mode": "automatic"})
+    async with host.store.write() as conn:
+        await conn.execute(
+            "INSERT INTO credential(id,kind,name,scope,created_at) VALUES (?,'session',?,'full',0)",
+            (OWNER.id, OWNER.name),
+        )
     another = await notes.create("Another useful Spunto database note")
     await label_suggestions.saved(Ctx(host, "label-suggestions"), another["id"], another["version"])
     assert (await notes.get(another["id"]))["labels"] == ["project/Spunto"]

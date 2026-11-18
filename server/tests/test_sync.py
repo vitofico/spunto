@@ -229,7 +229,9 @@ async def test_pull_pages_disabled_plugin_rows_private_notes_gzip_and_tombstones
             (first["id"], '{"value":true}', await sequence(conn), now_ms()),
         )
         await conn.execute(
-            "INSERT INTO suggestion VALUES (?, 'tasks', ?,1,'append_text',?,NULL,'',"
+            "INSERT INTO suggestion(id,plugin_id,note_id,note_version,action,payload,confidence,"
+            "reason,status,model,change_seq,created_at,decided_at,decided_by) "
+            "VALUES (?, 'tasks', ?,1,'append_text',?,NULL,'',"
             "'pending',NULL,?,?,NULL,NULL)",
             (str(uuid.uuid7()), first["id"], '{"text":"Proposed"}', await sequence(conn), now_ms()),
         )
@@ -432,7 +434,9 @@ async def test_sync_wire_golden(server, monkeypatch):
             (note_id, '{"value":true}', await sequence(conn), moment),
         )
         await conn.execute(
-            "INSERT INTO suggestion VALUES (?, 'tasks', ?,3,'append_text',?,NULL,'',"
+            "INSERT INTO suggestion(id,plugin_id,note_id,note_version,action,payload,confidence,"
+            "reason,status,model,change_seq,created_at,decided_at,decided_by) "
+            "VALUES (?, 'tasks', ?,3,'append_text',?,NULL,'',"
             "'pending',NULL,?,?,NULL,NULL)",
             (
                 "01920000-0000-7000-8000-000000000003",
@@ -572,6 +576,47 @@ async def test_offline_suggestions_append_and_replace_use_latest_note_and_receip
         "body"
     ] == "ONE\nTWO\n\nOwner approved"
     assert (await push(server, headers, [decision]))[0]["status"] == "duplicate"
+
+
+@pytest.mark.parametrize(
+    ("remote_edit", "reviewed_version", "expected_status"),
+    [(False, 1, "applied"), (True, 1, "rejected"), (False, 2, "rejected")],
+)
+async def test_offline_reviewed_replacement_requires_matching_live_comparison(
+    server, proposal_host, remote_edit, reviewed_version, expected_status
+):
+    from spunto.core.suggestions import suggest
+    from spunto.host.runtime import Ctx
+
+    headers = await signed(server)
+    domain = Notes(server.services.store, OWNER)
+    note = await domain.create("one\ntwo")
+    proposal = await suggest(
+        Ctx(proposal_host, "proposals"),
+        note["id"],
+        "replace_body",
+        {"body": "one\nTWO"},
+        note_version=1,
+    )
+    if remote_edit:
+        await domain.edit(note["id"], "ONE\ntwo", 1)
+    decision = {
+        "op_id": str(uuid.uuid4()),
+        "type": "suggestion.decide",
+        "suggestion_id": proposal["id"],
+        "decision": "accept",
+        "reviewed_version": reviewed_version,
+    }
+    result = (await push(server, headers, [decision]))[0]
+    assert result["status"] == expected_status
+    if expected_status == "applied":
+        assert result["note"]["body"] == "one\nTWO"
+        assert (await push(server, headers, [decision]))[0]["status"] == "duplicate"
+    else:
+        assert result["code"] == "suggestion_stale"
+        unchanged = await domain.get(note["id"])
+        assert unchanged["body"] == ("ONE\ntwo" if remote_edit else "one\ntwo")
+        assert unchanged["version"] == (2 if remote_edit else 1)
 
 
 async def test_legacy_link_sync_uses_neutral_caption_and_rechecks_destination(server):
@@ -857,3 +902,43 @@ async def test_private_offline_insertion_does_not_defeat_later_unprivate_action(
             )
         )[0]
         assert tuple(row) == (0, changed)
+
+
+async def test_offline_accept_undo_order_replay_and_revision_refusal(server, proposal_host):
+    from spunto.host.runtime import Ctx
+
+    headers = await signed(server)
+    domain = Notes(server.services.store, OWNER)
+    note = await domain.create("Original body")
+    proposal = await Ctx(proposal_host, "proposals").notes.suggest(
+        note["id"], "append_text", {"text": "Approved addition"}
+    )
+    accept, undo = [
+        {
+            "op_id": str(uuid.uuid4()),
+            "type": "suggestion.decide",
+            "suggestion_id": proposal["id"],
+            "decision": decision,
+        }
+        for decision in ("accept", "undo")
+    ]
+    first = await push(server, headers, [accept, undo])
+    assert [r["status"] for r in first] == ["applied", "applied"]
+    assert first[0]["note"]["body"] == "Original body\n\nApproved addition"
+    assert first[1]["note"]["body"] == note["body"]
+    replay = await push(server, headers, [accept, undo])
+    assert [r["status"] for r in replay] == ["duplicate", "duplicate"]
+    assert [r["original"] for r in replay] == [
+        {k: v for k, v in result.items() if k != "op_id"} for result in first
+    ]
+
+    proposal = await Ctx(proposal_host, "proposals").notes.suggest(
+        note["id"], "add_label", {"path": "example"}
+    )
+    for decision in (accept, undo):
+        decision.update(op_id=str(uuid.uuid4()), suggestion_id=proposal["id"])
+    accepted = (await push(server, headers, [accept]))[0]
+    await domain.edit(note["id"], "Independent edit\n#example", accepted["version"])
+    refused = (await push(server, headers, [undo]))[0]
+    assert refused["status"] == "rejected" and refused["code"] == "suggestion_undo_stale"
+    assert (await domain.get(note["id"]))["body"] == "Independent edit\n#example"

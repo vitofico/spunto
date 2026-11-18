@@ -248,7 +248,10 @@ export function Palette({
               onDismiss={
                 result === true && origin?.plugin === "links"
                   ? onClose
-                  : () => setResult(null)
+                  : () => {
+                      setResult(null);
+                      input.current?.focus();
+                    }
               }
             />
           </div>

@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 from conftest import PUBLIC_URL, run_server
-from test_removed_plugins import PERMISSIONS, PLUGIN, install
+from test_removed_plugins import PERMISSIONS, PLUGIN, card, install
 
 pytestmark = pytest.mark.anyio
 PASSWORD = "correct horse battery"
@@ -26,7 +26,10 @@ async def test_toggle_receipt_has_actual_catalog_revision_and_state(
         assert (
             await server.client.post(
                 f"/api/v1/plugins/{PLUGIN}/enable",
-                json={"permissions": PERMISSIONS},
+                json={
+                    "permissions": PERMISSIONS,
+                    "review_token": card(server.services.host)["review_token"],
+                },
                 headers=ORIGIN,
             )
         ).status_code == 200
@@ -48,7 +51,12 @@ async def test_toggle_receipt_has_actual_catalog_revision_and_state(
             revision_before = server.services.host.plugins_rev
             response = await server.client.post(
                 f"/api/v1/plugins/{PLUGIN}/{action}",
-                json={"permissions": PERMISSIONS} if action == "enable" else None,
+                json={
+                    "permissions": PERMISSIONS,
+                    "review_token": card(server.services.host)["review_token"],
+                }
+                if action == "enable"
+                else None,
                 headers=headers,
             )
             assert response.status_code == 200, response.text

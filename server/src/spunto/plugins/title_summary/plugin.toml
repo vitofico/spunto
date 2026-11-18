@@ -21,3 +21,14 @@ online = true
 [contributes.panel]
 title = "Summary"
 mode = "stored"
+
+[settings]
+type = "object"
+additionalProperties = false
+
+[settings.properties.change_mode]
+title = "Plugin changes"
+description = "Add headings to new or edited notes without an explicit title."
+type = "string"
+enum = ["ask_first", "automatic"]
+default = "ask_first"

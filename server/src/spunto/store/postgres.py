@@ -94,6 +94,7 @@ _COLUMNS = {
         "origin",
         "source_kind",
         "source_identity",
+        "review_pending",
     ],
     "plugin_kv": ["plugin_id", "key", "value"],
     "plugin_record": ["plugin_id", "collection", "id", "note_id", "key", "data", "updated_at"],
@@ -112,6 +113,10 @@ _COLUMNS = {
         "created_at",
         "decided_at",
         "decided_by",
+        "applied_version",
+        "receipt_version",
+        "receipt_hidden",
+        "undone_at",
     ],
     "annotation": ["plugin_id", "note_id", "kind", "payload", "change_seq", "updated_at"],
     "note_text": ["plugin_id", "note_id", "text", "updated_at"],
@@ -254,7 +259,9 @@ def _translate(statement: str, parameters: Sequence = ()) -> tuple[str, list, bo
     returning_id = False
     statement, args = _vector_statement(statement, args)
     if statement == "PRAGMA user_version":
-        return "SELECT 8 AS user_version", [], False
+        from spunto.store.migrations import LATEST
+
+        return "SELECT %s AS user_version", [LATEST], False
     if re.match(r"(?is)^(?:CREATE|ALTER|DROP|PRAGMA|ATTACH|DETACH)\b", statement):
         raise ValueError("Schema changes require operator migrations")
     statement = re.sub(r"\bifnull\(", "coalesce(", statement, flags=re.I)
@@ -457,6 +464,8 @@ async def migrate_postgres(admin_url: str, runtime_role: str) -> None:
             "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA spunto TO {}",
             "GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA spunto TO {}",
             "GRANT SELECT ON public.spunto_schema_migration TO {}",
+            "GRANT EXECUTE ON FUNCTION spunto.owner_authored_credential(TEXT) TO {}",
+            "GRANT EXECUTE ON FUNCTION spunto.credential_belongs_to_actor(TEXT) TO {}",
         ]:
             await connection.execute(sql.SQL(command).format(sql.Identifier(runtime_role)))
 

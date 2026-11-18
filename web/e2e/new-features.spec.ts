@@ -43,9 +43,8 @@ async function login(page: Page, pluginId: string) {
   await expect(page.getByLabel("New note")).toBeVisible();
   const response = await page.request.get("/api/v1/plugins");
   expect(response.status()).toBe(200);
-  const plugins: { id: string; permissions: string[] }[] = (
-    await response.json()
-  ).plugins;
+  const plugins: { id: string; permissions: string[]; review_token: string }[] =
+    (await response.json()).plugins;
   const plugin = plugins.find((item) => item.id === pluginId);
   expect(
     plugin,
@@ -57,7 +56,10 @@ async function login(page: Page, pluginId: string) {
     `/api/v1/plugins/${pluginId}/enable`,
     {
       headers: { Origin: origin() },
-      data: { permissions: plugin!.permissions },
+      data: {
+        permissions: plugin!.permissions,
+        review_token: plugin!.review_token,
+      },
     },
   );
   expect(enabled.status(), await enabled.text()).toBe(200);

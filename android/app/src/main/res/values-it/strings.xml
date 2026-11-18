@@ -12,4 +12,34 @@
   <string name="core_search_terms_match">Corrispondenza dei termini di ricerca</string>
   <string name="core_share_text_preview">Condividere il testo della nota?</string>
   <string name="core_share_text_scope">Scegli un destinatario nel prossimo passaggio. Verrà inviata una copia del testo salvato mostrato sotto, inclusi i link scritti. Non invia allegati né concede accesso a Spunto o alle note collegate. Le copie non si possono revocare.</string>
+
+    <string name="plugin_change_behavior">Comportamento delle modifiche</string>
+    <string name="plugin_automatic_labels">Aggiunge automaticamente le etichette che usi già.</string>
+    <string name="plugin_automatic_titles">Aggiunge automaticamente un titolo alle note idonee.</string>
+    <string name="plugin_automatic_transcripts">Aggiunge automaticamente le trascrizioni alle note contenenti solo registrazioni.</string>
+    <string name="plugin_ask_first">Chiedi prima</string>
+    <string name="plugin_automatic">Automatico</string>
+    <string name="plugin_advanced">Avanzate</string>
+    <string name="plugin_webhook_destination">Invia il testo delle note idonee a %1$s.</string>
+    <string name="plugin_label_added">Etichetta %1$s aggiunta</string>
+    <string name="plugin_title_applied">Titolo impostato su %1$s</string>
+    <string name="plugin_notes_merged">Note unite</string>
+    <string name="plugin_changes_applied">Modifiche applicate</string>
+    <string name="plugin_undo_queued">Annullamento in attesa</string>
+    <string name="plugin_undo_stale">Impossibile annullare questa modifica. Apri la cronologia della nota per vedere le modifiche più recenti.</string>
+    <string name="plugin_review_stale">Il confronto non è disponibile o non è aggiornato. Esegui di nuovo il comando per esaminare la nota attuale.</string>
+    <string name="plugin_review_changes">Esamina le modifiche</string>
+    <string name="plugin_global_tools">Strumenti della raccolta</string>
+    <string name="plugin_open_history">Apri cronologia</string>
+    <string name="plugin_use_title">Usa il titolo %1$s</string>
+    <string name="plugin_add_link">Aggiungi collegamento</string>
+    <string name="plugin_append_transcript">Aggiungi trascrizione</string>
+    <string name="plugin_link_destination">Carica gli URL salvati dai siti a cui rimandano.</string>
+    <string name="plugin_review_enable">Esamina e attiva</string>
+    <string name="plugin_transcript_added">Trascrizione aggiunta</string>
+    <string name="plugin_note_updated">Nota aggiornata</string>
+    <string name="plugin_note_linked">Nota collegata</string>
+    <string name="plugin_text_added">Testo aggiunto</string>
+    <string name="plugin_webhook_without_destinations">Invia il testo delle note idonee alle destinazioni configurate. Non è configurata alcuna destinazione.</string>
+    <string name="plugin_add_link_to">Collega a %1$s</string>
 </resources>

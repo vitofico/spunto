@@ -62,6 +62,14 @@ def _catalog_snapshot(manifest):
     return {key: copy.deepcopy(value) for key, value in manifest.items() if key in CATALOG_FIELDS}
 
 
+def _permissions_changed(old, grants, permissions):
+    try:
+        previous = json.loads(old["manifest_snapshot"]).get("permissions", grants or permissions)
+        return set(previous) != set(permissions) or bool(grants and set(grants) != set(permissions))
+    except TypeError, ValueError, AttributeError:
+        return True
+
+
 def _retained_manifest(row):
     # Revalidate the closed display-only snapshot. Never resurrect code, settings or surfaces.
     try:
@@ -410,6 +418,24 @@ class Host:
                             }
                         except AIError:
                             continue  # noqa: S112 - unbound capabilities have no destination
+            item["review_required"] = (
+                item.pop("review_pending", False)
+                or item["origin"] != "bundled"
+                or any(p.startswith("net.") for p in manifest["permissions"])
+                or any(route["leaves_network"] for route in item["ai_destinations"].values())
+            )
+            binding = [
+                plugin_id,
+                self._review_identities.get(plugin_id),
+                manifest["version"],
+                sorted(manifest["permissions"]),
+                urls,
+                item["ai_destinations"],
+                item["review_required"],
+            ]
+            item["review_token"] = hashlib.sha256(
+                json.dumps(binding, sort_keys=True).encode()
+            ).hexdigest()
             result.append(item)
         for plugin_id, snapshot in self.removed_manifests.items():
             # Retired bundled import code leaves its data and lifecycle receipt in place.
@@ -535,6 +561,7 @@ class Host:
         self.manifests = {manifest["id"]: manifest for manifest in manifests}
         self.removed_manifests = {}
         self.catalog_metadata = {}
+        self._review_identities = {}
         self.invalid_manifests = invalid
         for plugin_id in rows.keys() - self.manifests.keys():
             old = rows[plugin_id]
@@ -599,13 +626,21 @@ class Host:
                     or (not old["source_identity"] and metadata["origin"] == "operator")
                 )
             )
+            self._review_identities[plugin_id] = identity
+            granted = json.loads(old["granted"]) if old else []
+            permissions_changed = bool(
+                old and _permissions_changed(old, granted, manifest["permissions"])
+            )
+            review_pending = (
+                bool(old and old["review_pending"]) or changed_source or permissions_changed
+            )
             self.catalog_metadata[plugin_id] = metadata
             switched_on = (
                 old["switch"] == "on"
                 if old
                 else not initialized and manifest.get("default", "off") != "off"
             )
-            if changed_source:
+            if changed_source or permissions_changed:
                 switched_on = False
                 self.generations[plugin_id] += 1
                 self.plugins.pop(plugin_id, None)
@@ -614,14 +649,15 @@ class Host:
                         task.cancel()
             if plugin_id in pins:
                 switched_on = pins[plugin_id]
-            granted = (
-                json.loads(old["granted"])
-                if old
-                else (manifest["permissions"] if switched_on else [])
-            )
+            if not old and switched_on:
+                granted = manifest["permissions"]
             if changed_source:
                 granted = []
+            if review_pending:
+                switched_on = False
             state = {
+                "review_pending": review_pending,
+                "can_review_pinned": review_pending and pins.get(plugin_id) is True,
                 "id": plugin_id,
                 "version": manifest["version"],
                 "kind": manifest["kind"],
@@ -663,13 +699,15 @@ class Host:
                 await conn.execute(
                     "INSERT INTO plugin(id,version,kind,switch,state,pinned_by_env,granted,"
                     "settings,position,data_version,last_run_at,last_error,ai_route,manifest_snapshot,"
-                    "origin,source_kind,source_identity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                    "origin,source_kind,source_identity,review_pending) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                     "ON CONFLICT(id) DO UPDATE SET version=excluded.version,"
                     "switch=excluded.switch,state=excluded.state,"
                     "pinned_by_env=excluded.pinned_by_env,settings=excluded.settings,"
                     "granted=excluded.granted,ai_route=excluded.ai_route,"
                     "manifest_snapshot=excluded.manifest_snapshot,origin=excluded.origin,"
-                    "source_kind=excluded.source_kind,source_identity=excluded.source_identity",
+                    "source_kind=excluded.source_kind,source_identity=excluded.source_identity,"
+                    "review_pending=excluded.review_pending",
                     (
                         plugin_id,
                         manifest["version"],
@@ -688,6 +726,7 @@ class Host:
                         metadata["origin"],
                         metadata["source_kind"],
                         identity,
+                        int(review_pending),
                     ),
                 )
                 if changed_source:
@@ -1002,12 +1041,22 @@ class Host:
                     raise ManifestError(f"{kind} needs one handler")
 
     @serialized
-    async def enable(self, plugin_id, permissions=None):
+    async def enable(self, plugin_id, permissions=None, *, reviewed=False, review_token=None):
         state, manifest = self.states[plugin_id], self.manifests[plugin_id]
         if plugin_id in self.invalid_manifests:
             raise ManifestError("plugin manifest is invalid")
-        if state["pinned_by_env"] and state["switch"] == "off":
+        if (
+            state["pinned_by_env"]
+            and state["switch"] == "off"
+            and not (state.get("can_review_pinned") and reviewed and review_token)
+        ):
             raise ContextError("plugin_pinned_by_environment")
+        if reviewed:
+            item = next(item for item in self.catalog() if item["id"] == plugin_id)
+            if (review_token is not None or item["review_required"]) and (
+                review_token != item["review_token"]
+            ):
+                raise ContextError("plugin_review_changed")
         if permissions is not None:
             if not isinstance(permissions, list) or set(permissions) != set(
                 manifest["permissions"]
@@ -1023,7 +1072,7 @@ class Host:
                 (plugin_id,),
             )
             await conn.execute(
-                "UPDATE plugin SET switch='on',granted=? WHERE id=?",
+                "UPDATE plugin SET switch='on',granted=?,review_pending=0 WHERE id=?",
                 (json.dumps(state["granted"]), plugin_id),
             )
             await conn.execute(
@@ -1046,6 +1095,8 @@ class Host:
                 "AND coalesce(last_error,'')!='plugin_removed'",
                 (self.clock(), plugin_id),
             )
+        state["review_pending"] = False
+        state["can_review_pinned"] = False
         for job in retired_runs:
             if self.claim_receipts.get(job["id"]) == job["run_receipt"]:
                 self.claim_receipts.pop(job["id"], None)
@@ -1124,7 +1175,9 @@ class Host:
         return dict(route)
 
     @serialized
-    async def set_settings(self, plugin_id, values):
+    async def set_settings(self, plugin_id, values, *, partial=False):
+        if partial:
+            values = {**self.states[plugin_id]["settings"], **values}
         sanitized = settings_values(self.manifests[plugin_id], values)
         if "net.out:<configured>" in self.manifests[plugin_id]["permissions"]:
             destinations = [*sanitized.get("urls", [])]

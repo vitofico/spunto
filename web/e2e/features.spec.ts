@@ -442,7 +442,7 @@ test("Review waits for impact, applies and dismisses, and hides disabled plugin 
     page.getByRole("link", { name: "Review", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "#journal", exact: true }),
+    page.getByRole("button", { name: "Add #journal", exact: true }),
   ).toBeVisible();
   await page.goto("/settings/plugins");
   await page.getByRole("switch", { name: "Enable Resurface" }).click();
@@ -451,7 +451,7 @@ test("Review waits for impact, applies and dismisses, and hides disabled plugin 
   ).not.toBeChecked();
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "#journal", exact: true }),
+    page.getByRole("button", { name: "Add #journal", exact: true }),
   ).toHaveCount(0);
   await page.goto("/review");
   await expect(page.getByText("All caught up.")).toBeVisible();

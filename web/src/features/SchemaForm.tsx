@@ -152,6 +152,7 @@ export function SchemaForm({
   busy = false,
   submitLabel = t("schemaform.save_settings"),
   hiddenFields = [],
+  advancedField,
 }: {
   schema: Schema;
   initial?: Args;
@@ -162,6 +163,7 @@ export function SchemaForm({
   busy?: boolean;
   submitLabel?: string;
   hiddenFields?: string[];
+  advancedField?: string;
 }) {
   useLanguage();
   const id = useId();
@@ -202,7 +204,14 @@ export function SchemaForm({
     >
       {Object.entries(schema.properties ?? {}).map(([key, prop]) => {
         if (hiddenFields.includes(key)) return null;
-        const label = prop.title ?? humanize(key);
+        const quietMode =
+          key === "change_mode" &&
+          ["label-suggestions", "title-summary", "voice-memos"].includes(
+            pluginId,
+          );
+        const label = quietMode
+          ? t("quiet.behavior")
+          : (prop.title ?? humanize(key));
         const fieldId = `${id}-${key}`;
         const value = values[key];
         const extra = prop as Record<string, unknown>;
@@ -226,9 +235,10 @@ export function SchemaForm({
               {prop.description && <small>{prop.description}</small>}
             </div>
           );
-        return (
+        const field = (
           <div className={styles.formField} key={key}>
             <label htmlFor={fieldId}>{label}</label>
+            {quietMode && <small>{t(`quiet.behavior.${pluginId}`)}</small>}
             {prop.enum ? (
               prop.enum.length <= 3 ? (
                 <div
@@ -244,7 +254,10 @@ export function SchemaForm({
                       aria-pressed={value === choice}
                       onClick={() => update(choice)}
                     >
-                      {choiceLabel(choice)}
+                      {quietMode &&
+                      (choice === "ask_first" || choice === "automatic")
+                        ? t(`quiet.mode.${choice}`)
+                        : choiceLabel(choice)}
                     </button>
                   ))}
                 </div>
@@ -258,7 +271,10 @@ export function SchemaForm({
                 >
                   {prop.enum.map((choice, i) => (
                     <option key={i} value={i}>
-                      {choiceLabel(choice)}
+                      {quietMode &&
+                      (choice === "ask_first" || choice === "automatic")
+                        ? t(`quiet.mode.${choice}`)
+                        : choiceLabel(choice)}
                     </option>
                   ))}
                 </select>
@@ -335,6 +351,14 @@ export function SchemaForm({
             )}
             {prop.description && <small>{prop.description}</small>}
           </div>
+        );
+        return key === advancedField ? (
+          <details className={styles.arrange} key={key}>
+            <summary>{t("quiet.advanced")}</summary>
+            {field}
+          </details>
+        ) : (
+          field
         );
       })}
       {error && (

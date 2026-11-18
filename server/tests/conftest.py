@@ -21,6 +21,11 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
+def pg_admin_url() -> str | None:
+    return os.environ.get("SPUNTO_TEST_POSTGRES_ADMIN_URL")
+
+
+@pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
     return tmp_path / "data"
 

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
+import { safeError } from "../lib/errors";
 import { useToast } from "../components/core/Toast";
 import type { Args, Plugin, AICapability } from "../lib/types";
 import { SchemaForm } from "./SchemaForm";
@@ -63,6 +64,20 @@ export function pluginCanEnable(plugin: Plugin) {
     plugin.state !== "removed" &&
     !plugin.availability_reason &&
     (plugin.can_enable === undefined || plugin.can_enable === true)
+  );
+}
+function canReviewPinned(plugin: Plugin) {
+  return (
+    !!plugin.pinned_by_env &&
+    plugin.switch === "off" &&
+    plugin.state !== "removed" &&
+    plugin.can_review_pinned === true
+  );
+}
+function canConfirmPlugin(plugin: Plugin) {
+  return (
+    canReviewPinned(plugin) ||
+    (!plugin.pinned_by_env && pluginCanEnable(plugin))
   );
 }
 function pluginPermissionsMatch(approved: Plugin, current: Plugin) {
@@ -157,10 +172,7 @@ function pluginFacts(plugin: Plugin) {
       })
       .join("; ");
   }
-  const destinations = (
-    (plugin as unknown as { network_destinations?: (string | null)[] })
-      .network_destinations ?? []
-  ).filter(
+  const destinations = (plugin.network_destinations ?? []).filter(
     (value): value is string => typeof value === "string" && !!value.trim(),
   );
   return destinations.length
@@ -178,6 +190,27 @@ function pluginFacts(plugin: Plugin) {
         : plugin.kind === "device"
           ? t("settingsplugins.stays_on_the_phone")
           : t("settingsplugins.stays_on_your_server");
+}
+function destinationDisclosure(plugin: Plugin) {
+  if (plugin.id === "webhooks" && plugin.origin === "bundled") {
+    const hosts = (plugin.network_destinations ?? []).filter(
+      (value) => !!value?.trim(),
+    );
+    return hosts.length
+      ? t("quiet.webhook_destinations", { destinations: hosts.join(", ") })
+      : t("quiet.webhook_no_destinations");
+  }
+  if (plugin.id === "link-enrichment" && plugin.origin === "bundled")
+    return t("quiet.link_destinations");
+  return null;
+}
+function pluginNeedsReview(plugin: Plugin) {
+  return (
+    plugin.review_required !== false ||
+    Object.values(plugin.ai_destinations ?? {}).some(
+      (route) => route.leaves_network,
+    )
+  );
 }
 function slotSentences(plugin: Plugin) {
   const c = plugin.contributes ?? {};
@@ -216,10 +249,11 @@ export function usePluginActions() {
       if (
         !current ||
         current.state === "removed" ||
-        current.pinned_by_env ||
+        (!on && current.pinned_by_env) ||
         (on &&
-          (!pluginCanEnable(current) ||
+          (!canConfirmPlugin(current) ||
             !pluginPermissionsMatch(plugin, current) ||
+            current.review_token !== plugin.review_token ||
             (intent === "undo" && !pluginRetainsGrants(plugin, current))))
       )
         throw new Error(
@@ -227,9 +261,18 @@ export function usePluginActions() {
             "settingsplugins.that_plugin_switch_is_unavailable_review_its_current",
           ),
         );
-      return on
+      if (!on) return api.disablePlugin(current.id);
+      return plugin.review_token === undefined
         ? api.enablePlugin(current.id, plugin.permissions)
-        : api.disablePlugin(current.id);
+        : api.enablePlugin(current.id, plugin.permissions, plugin.review_token);
+    },
+    onError: (error) => {
+      if (
+        ["permissions_changed", "plugin_review_changed"].includes(
+          safeError(error).code,
+        )
+      )
+        void client.invalidateQueries({ queryKey: ["catalog"] });
     },
     onSuccess: () => {
       for (const key of [
@@ -288,6 +331,7 @@ export function PermissionDialog({
       </ul>
       <h3>{t("settingsplugins.where_text_goes")}</h3>
       <p className="muted">{pluginFacts(plugin)}</p>
+      {destinationDisclosure(plugin) && <p>{destinationDisclosure(plugin)}</p>}
       <h3>{t("settingsplugins.where_it_shows_up")}</h3>
       <p className="muted">{slotSentences(plugin)}</p>
       <ErrorLine error={error} />
@@ -329,10 +373,32 @@ function aiSummary(plugins: Plugin[]) {
         .join(" · ");
 }
 /** Switching off asks nothing; one toast offers Undo for a few seconds (03 §6.4). */
-function useSwitchOff() {
+function useSwitchOff(review: (plugin: Plugin) => void) {
   const action = usePluginActions();
   const toast = useToast();
   const report = (error: Error) => toast.show({ message: error.message });
+  const switchOn = (plugin: Plugin, complete: () => void) => {
+    action.reset();
+    if (pluginNeedsReview(plugin)) {
+      review(plugin);
+      return;
+    }
+    action.mutate(
+      { plugin, on: true },
+      {
+        onSuccess: complete,
+        onError: (error) => {
+          if (
+            ["permissions_changed", "plugin_review_changed"].includes(
+              safeError(error).code,
+            )
+          )
+            review(plugin);
+          else report(error);
+        },
+      },
+    );
+  };
   const switchOff = (plugin: Plugin) =>
     action.mutate(
       { plugin, on: false },
@@ -346,16 +412,25 @@ function useSwitchOff() {
               value1: plugin.name,
             }),
             actionLabel: t("settingsplugins.undo"),
-            onAction: () =>
-              action.mutate(
-                { plugin, on: true, intent: "undo" },
-                { onError: report },
-              ),
+            onAction: () => {
+              if (
+                plugin.review_required === true ||
+                (plugin.review_token && pluginNeedsReview(plugin))
+              ) {
+                action.reset();
+                review(plugin);
+              } else {
+                action.mutate(
+                  { plugin, on: true, intent: "undo" },
+                  { onError: report },
+                );
+              }
+            },
           });
         },
       },
     );
-  return [action, switchOff] as const;
+  return [action, switchOff, switchOn] as const;
 }
 export function PluginManager() {
   useLanguage();
@@ -367,16 +442,13 @@ export function PluginManager() {
   const [onlyOn, setOnlyOn] = useState(false);
   const [enable, setEnable] = useState<Plugin | null>(null);
   const opener = useRef<HTMLElement>(null);
-  const [action, switchOff] = useSwitchOff();
+  const [action, switchOff, switchOn] = useSwitchOff(setEnable);
   const plugins =
     query.data?.plugins.filter(
       (p) => p.category !== "look" || p.state === "removed",
     ) ?? [];
   const pendingEnable = plugins.find((p) => p.id === enable?.id);
-  const canConfirmEnable =
-    pendingEnable &&
-    !pendingEnable.pinned_by_env &&
-    pluginCanEnable(pendingEnable);
+  const canConfirmEnable = pendingEnable && canConfirmPlugin(pendingEnable);
   const enabled = plugins.filter((p) => p.switch === "on").length;
   const aiOff = aiIsOff(plugins);
   const summary = aiOff ? null : aiSummary(plugins);
@@ -434,25 +506,19 @@ export function PluginManager() {
               <ul className={styles.list}>
                 {items.map((p) => {
                   const unavailable = p.switch !== "on" && !pluginCanEnable(p);
-                  const linked =
-                    p.switch === "on" || p.state === "removed" || unavailable;
                   return (
                     <li
-                      className={`${styles.plugin} ${linked ? styles.rowLink : ""} ${unavailable ? styles.pluginUnavailable : ""}`}
+                      className={`${styles.plugin} ${styles.rowLink} ${unavailable ? styles.pluginUnavailable : ""}`}
                       key={p.id}
                     >
                       <div className={styles.between}>
                         <div>
                           <strong>
-                            {linked ? (
-                              <Link
-                                href={`/settings/plugins/${encodeURIComponent(p.id)}`}
-                              >
-                                {p.name}
-                              </Link>
-                            ) : (
-                              p.name
-                            )}
+                            <Link
+                              href={`/settings/plugins/${encodeURIComponent(p.id)}`}
+                            >
+                              {p.name}
+                            </Link>
                           </strong>
                           {p.kind === "device" && (
                             <small className={styles.facts}>
@@ -487,12 +553,29 @@ export function PluginManager() {
                         </div>
                         <div className={styles.actions}>
                           {p.pinned_by_env ? (
-                            <span className={styles.facts}>
-                              {t("settingsplugins.set_in_the_environment")}{" "}
-                              {p.switch === "on"
-                                ? t("settingsplugins.on_3")
-                                : t("aisettings.off")}
-                            </span>
+                            <div className={styles.pinnedActions}>
+                              <span className={styles.facts}>
+                                {t("settingsplugins.set_in_the_environment")}{" "}
+                                {p.switch === "on"
+                                  ? t("settingsplugins.on_3")
+                                  : t("aisettings.off")}
+                              </span>
+                              {canReviewPinned(p) && (
+                                <button
+                                  disabled={action.isPending}
+                                  aria-label={t("quiet.review_plugin", {
+                                    plugin: p.name,
+                                  })}
+                                  onClick={(e) => {
+                                    opener.current = e.currentTarget;
+                                    action.reset();
+                                    setEnable(p);
+                                  }}
+                                >
+                                  {t("quiet.review_plugin", { plugin: p.name })}
+                                </button>
+                              )}
+                            </div>
                           ) : p.state === "removed" ? (
                             <span className={styles.facts}>
                               {t("settingsplugins.removed_off")}
@@ -512,9 +595,8 @@ export function PluginManager() {
                               }
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  action.reset();
                                   opener.current = e.currentTarget;
-                                  setEnable(p);
+                                  switchOn(p, () => setEnable(null));
                                 } else switchOff(p);
                               }}
                             />
@@ -695,6 +777,7 @@ export function PluginPage({ id }: { id: string }) {
   const [enable, setEnable] = useState(false);
   const [remove, setRemove] = useState(false);
   const enabler = useRef<HTMLInputElement>(null);
+  const pinnedReviewer = useRef<HTMLButtonElement>(null);
   const remover = useRef<HTMLButtonElement>(null);
   const [result, setResult] = useState<unknown>(null);
   const [commandOrigin, setCommandOrigin] = useState<CommandOrigin>();
@@ -707,7 +790,7 @@ export function PluginPage({ id }: { id: string }) {
       return {};
     }
   });
-  const [action, switchOff] = useSwitchOff();
+  const [action, switchOff, switchOn] = useSwitchOff(() => setEnable(true));
   const save = useMutation({
     mutationFn: (values: Args) => {
       const current = client
@@ -801,12 +884,26 @@ export function PluginPage({ id }: { id: string }) {
       <div className={styles.between}>
         <h1>{plugin.name}</h1>
         {plugin.pinned_by_env ? (
-          <span className={styles.facts}>
-            {t("schemaform.set_in_the_environment")}
-            {plugin.switch === "on"
-              ? t("settingsplugins.on_3")
-              : t("aisettings.off")}
-          </span>
+          <div className={styles.row}>
+            <span className={styles.facts}>
+              {t("schemaform.set_in_the_environment")}
+              {plugin.switch === "on"
+                ? t("settingsplugins.on_3")
+                : t("aisettings.off")}
+            </span>
+            {canReviewPinned(plugin) && (
+              <button
+                ref={pinnedReviewer}
+                disabled={action.isPending}
+                onClick={() => {
+                  action.reset();
+                  setEnable(true);
+                }}
+              >
+                {t("quiet.review_plugin", { plugin: plugin.name })}
+              </button>
+            )}
+          </div>
         ) : removed ? (
           <span className={styles.facts}>
             {t("settingsplugins.removed_off")}
@@ -826,7 +923,9 @@ export function PluginPage({ id }: { id: string }) {
               (plugin.switch !== "on" && !pluginCanEnable(plugin))
             }
             onChange={(e) =>
-              e.target.checked ? setEnable(true) : switchOff(plugin)
+              e.target.checked
+                ? switchOn(plugin, () => setEnable(false))
+                : switchOff(plugin)
             }
           />
         )}
@@ -878,6 +977,9 @@ export function PluginPage({ id }: { id: string }) {
           initial={{ ...query.data.values, ...deviceValues }}
           pluginId={id}
           secrets={query.data.secrets}
+          advancedField={
+            id === "label-suggestions" ? "confidence_threshold" : undefined
+          }
           onSave={saveValues}
           busy={save.isPending}
         />
@@ -942,10 +1044,16 @@ export function PluginPage({ id }: { id: string }) {
           )}
         </p>
       ) : (
-        <p className="muted">
-          {pluginFacts(plugin)}
-          {t("settingsplugins.up_to_3_commands_10_panel_items_and")}
-        </p>
+        <p className="muted">{pluginFacts(plugin)}</p>
+      )}
+      {!removed && (
+        <>
+          {destinationDisclosure(plugin) && (
+            <p>{destinationDisclosure(plugin)}</p>
+          )}
+          <h2>{t("settingsplugins.where_it_shows_up")}</h2>
+          <p className="muted">{slotSentences(plugin)}</p>
+        </>
       )}
       {!removed &&
         plugin.contributes?.mcp_tools?.map((tool) => (
@@ -973,10 +1081,10 @@ export function PluginPage({ id }: { id: string }) {
         </button>
       )}
       <ErrorLine error={(!removed ? query.error : null) ?? save.error} />
-      {enable && !plugin.pinned_by_env && pluginCanEnable(plugin) && (
+      {enable && canConfirmPlugin(plugin) && (
         <PermissionDialog
           plugin={plugin}
-          opener={enabler.current}
+          opener={pinnedReviewer.current ?? enabler.current}
           onClose={() => setEnable(false)}
           busy={action.isPending}
           error={action.error}

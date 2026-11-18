@@ -222,10 +222,17 @@ def _validate_snapshot(conn: sqlite3.Connection, snapshot: Path) -> None:
             "created_at, expires_at, last_used_at, revoked_at FROM credential LIMIT 0"
         )
         facts = dict(conn.execute("SELECT key, value FROM meta"))
-        if schema_version(conn) >= 2:
-            expected = _M1_COLUMNS | (_M2_COLUMNS if schema_version(conn) >= 3 else {})
-            if schema_version(conn) >= 4:
+        schema = schema_version(conn)
+        if schema >= 2:
+            expected = _M1_COLUMNS | (_M2_COLUMNS if schema >= 3 else {})
+            if schema >= 4:
                 expected |= _M4_COLUMNS
+            if schema >= 9:
+                expected["suggestion"] += (
+                    ",applied_version,receipt_version,receipt_hidden,undone_at"
+                )
+            if schema >= 10:
+                expected["plugin"] += ",review_pending"
             for table, columns in expected.items():
                 actual = {
                     row[0]
@@ -253,7 +260,7 @@ def _validate_snapshot(conn: sqlite3.Connection, snapshot: Path) -> None:
             plugin_changes = (
                 " UNION ALL SELECT change_seq FROM suggestion UNION ALL "
                 "SELECT change_seq FROM annotation"
-                if schema_version(conn) >= 3
+                if schema >= 3
                 else ""
             )
             latest = conn.execute(

@@ -188,3 +188,35 @@ async def test_legacy_event_sink_keeps_its_original_call_signature(tmp_path):
         assert events == [("attachment.added", "synthetic", 1)]
     finally:
         await store.close()
+
+
+@pytest.mark.parametrize(
+    ("old_settings", "mode"),
+    [
+        ('{"auto_accept_existing":true,"confidence_threshold":0.96}', "automatic"),
+        ('{"auto_accept_existing":false,"confidence_threshold":0.96}', "ask_first"),
+        ('{"confidence_threshold":0.96}', "ask_first"),
+    ],
+)
+def test_label_behavior_migrates_stored_setting_without_losing_threshold(
+    tmp_path, monkeypatch, old_settings, mode
+):
+    import json
+
+    database, backups = tmp_path / DB_NAME, tmp_path / "pre"
+    with monkeypatch.context() as legacy:
+        legacy.setattr(migrations, "MIGRATIONS", migrations.MIGRATIONS[:8])
+        legacy.setattr(migrations, "LATEST", 8)
+        migrate(database, backups)
+    with closing(connect(database)) as conn:
+        conn.execute(
+            "INSERT INTO plugin(id,version,kind,switch,state,settings,position) "
+            "VALUES('label-suggestions','1.0.0','server','on','enabled',?,0)",
+            (old_settings,),
+        )
+    assert migrate(database, backups) == 8
+    with closing(connect(database)) as conn:
+        assert json.loads(conn.execute("SELECT settings FROM plugin").fetchone()[0]) == {
+            "change_mode": mode,
+            "confidence_threshold": 0.96,
+        }

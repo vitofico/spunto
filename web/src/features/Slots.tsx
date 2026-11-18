@@ -23,6 +23,7 @@ import { createIdempotencyKey } from "../lib/drafts";
 import { copyText } from "./copy";
 import type {
   Args,
+  Component,
   Annotation,
   Note,
   Plugin,
@@ -33,7 +34,15 @@ import { SuggestionPreview } from "./LazyPluginViews";
 import { VocabularyOutput } from "./Vocabulary";
 import { outputText, validComponent } from "./vocabularyData";
 import { Dialog } from "./Dialog";
-import { requiresSuggestionPreview, suggestionTitle } from "./suggestionTitle";
+import {
+  appliedSuggestionTitle,
+  requiresSuggestionPreview,
+  suggestionTitle,
+} from "./suggestionTitle";
+import {
+  useCommandProposals,
+  useSuggestionFeedback,
+} from "./suggestionFeedback";
 import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
@@ -93,7 +102,9 @@ export function ReviewLine() {
     enabled: active.size > 0,
   });
   const count =
-    query.data?.suggestions.filter((s) => active.has(s.plugin)).length ?? 0;
+    query.data?.suggestions.filter(
+      (s) => s.status === "pending" && active.has(s.plugin),
+    ).length ?? 0;
   return count >= 3 ? (
     <p className={styles.reviewLine}>
       {plural(count, "suggestion")} ·{" "}
@@ -114,6 +125,13 @@ export function SuggestionLine({
   const manifest = usePlugins();
   const client = useQueryClient();
   const [expanded, setExpanded] = useState(false);
+  const [order, setOrder] = useState<string[]>([]);
+  const { data: hidden } = useQuery<string[]>({
+    queryKey: ["command-proposals", note.id],
+    queryFn: () => [],
+    enabled: false,
+  });
+  const { acknowledge, undo } = useSuggestionFeedback();
   const [preview, setPreview] = useState<Suggestion | null>(null);
   const opener = useRef<HTMLElement>(null);
   const describe = useId();
@@ -146,29 +164,48 @@ export function SuggestionLine({
   });
   const decision = useMutation({
     mutationFn: ({
-      id,
+      s,
       action,
     }: {
-      id: string;
+      s: Suggestion;
       action: "accept" | "dismiss";
-    }) => api.decideSuggestion(id, action),
-    onSuccess: () => {
+    }) => api.decideSuggestion(s.id, action),
+    onSuccess: (result, { s, action }) => {
       setPreview(null);
-      void client.invalidateQueries({ queryKey: ["notes"] });
-      void client.invalidateQueries({ queryKey: ["note", note.id] });
-      void client.invalidateQueries({ queryKey: ["suggestions"] });
+      void invalidateContentFor(client);
+      if (action === "accept") {
+        if (result?.suggestion?.receipt?.undoable)
+          setOrder(items.map((item) => item.id));
+        acknowledge(result, s);
+      }
     },
   });
   useEffect(() => {
     setExpanded(false);
+    setOrder([]);
     setPreview(null);
   }, [note.id]);
-  const suggestions = visibleSuggestions(note, manifest.data?.plugins ?? []);
-  if (editing || !suggestions.length) return null;
+  const suggestions = visibleSuggestions(
+    note,
+    manifest.data?.plugins ?? [],
+  ).filter((s) => !hidden?.includes(s.id));
+  const pending = new Set(suggestions.map((s) => s.id));
+  const items = (note.suggestions ?? []).filter(
+    (s) => pending.has(s.id) || s.receipt?.undoable,
+  );
+  if (items.some((s) => s.receipt?.undoable) && order.length) {
+    const positions = new Map(order.map((id, index) => [id, index]));
+    items.sort(
+      (a, b) =>
+        (positions.get(a.id) ?? order.length) -
+        (positions.get(b.id) ?? order.length),
+    );
+  }
+  if (editing || !items.length) return null;
   const apply = (s: Suggestion, trigger: HTMLElement) => {
     opener.current = trigger;
     if (requiresSuggestionPreview(s)) setPreview(s);
-    else decision.mutate({ id: s.id, action: "accept" });
+    else decision.mutate({ s, action: "accept" });
   };
   return (
     <div
@@ -180,12 +217,20 @@ export function SuggestionLine({
           e.target instanceof HTMLTextAreaElement
         )
           return;
-        if (e.key === "x") {
+        if (
+          e.key === "x" &&
+          e.target instanceof HTMLElement &&
+          !e.target.closest("dialog")
+        ) {
           e.preventDefault();
           for (const s of suggestions)
-            decision.mutate({ id: s.id, action: "dismiss" });
+            decision.mutate({ s, action: "dismiss" });
         }
-        if (e.key === "a") {
+        if (
+          e.key === "a" &&
+          e.target instanceof HTMLElement &&
+          !e.target.closest("dialog")
+        ) {
           e.preventDefault();
           const review = suggestions.find(requiresSuggestionPreview);
           if (review) {
@@ -193,82 +238,126 @@ export function SuggestionLine({
             onReview ? onReview() : setPreview(review);
           } else
             for (const s of suggestions)
-              decision.mutate({ id: s.id, action: "accept" });
+              decision.mutate({ s, action: "accept" });
         }
       }}
     >
-      {(expanded ? suggestions : suggestions.slice(0, 3)).map((s) => {
-        const by = manifest.data?.plugins.find((p) => p.id === s.plugin)?.name;
-        const provenance = t("slots.suggested_by_value1_value2", {
-          value1: by ?? s.plugin,
-          value2: s.reason ? `: ${s.reason}` : "",
-        });
-        return (
-          <span className={styles.suggestionGroup} key={s.id}>
-            <button
-              className={styles.pill}
-              disabled={decision.isPending}
-              title={provenance}
-              aria-describedby={`${describe}-${s.id}`}
-              onPointerDown={(e) => {
-                press.current =
-                  e.pointerType === "mouse"
-                    ? {}
-                    : {
-                        timer: window.setTimeout(() => reveal(provenance), 500),
-                      };
-              }}
-              onPointerUp={release}
-              onPointerCancel={release}
-              onPointerLeave={release}
-              onContextMenu={(e) => {
-                if (press.current.timer === undefined) return;
-                e.preventDefault();
-                reveal(provenance);
-              }}
-              onClick={(e) => {
-                const held = press.current.shown;
-                press.current = {};
-                if (!held) apply(s, e.currentTarget);
-              }}
-            >
-              {suggestionTitle(s)}
-              {s.payload.is_new === true && <small>{t("slots.new")}</small>}
-            </button>
-            <span id={`${describe}-${s.id}`} hidden>
-              {provenance}
+      <div
+        className={
+          expanded ? styles.expandedSuggestions : styles.suggestionItems
+        }
+      >
+        {(expanded ? items : items.slice(0, 3)).map((s) => {
+          if (s.receipt?.undoable)
+            return (
+              <span className={styles.suggestionGroup} key={s.id}>
+                <span
+                  className={styles.receipt}
+                  title={appliedSuggestionTitle(s)}
+                >
+                  {appliedSuggestionTitle(s)}
+                </span>
+                <button
+                  className={styles.receiptUndo}
+                  disabled={undo.isPending}
+                  onClick={() => undo.mutate(s)}
+                >
+                  {t("settingsplugins.undo")}
+                </button>
+                <button
+                  className={styles.dismiss}
+                  disabled={decision.isPending}
+                  aria-label={t("slots.dismiss_value1", {
+                    value1: appliedSuggestionTitle(s),
+                  })}
+                  onClick={() => decision.mutate({ s, action: "dismiss" })}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          const by = manifest.data?.plugins.find(
+            (p) => p.id === s.plugin,
+          )?.name;
+          const provenance = t("slots.suggested_by_value1_value2", {
+            value1: by ?? s.plugin,
+            value2: s.reason ? `: ${s.reason}` : "",
+          });
+          return (
+            <span className={styles.suggestionGroup} key={s.id}>
+              <button
+                className={styles.pill}
+                disabled={decision.isPending}
+                title={provenance}
+                aria-describedby={`${describe}-${s.id}`}
+                onPointerDown={(e) => {
+                  press.current =
+                    e.pointerType === "mouse"
+                      ? {}
+                      : {
+                          timer: window.setTimeout(
+                            () => reveal(provenance),
+                            500,
+                          ),
+                        };
+                }}
+                onPointerUp={release}
+                onPointerCancel={release}
+                onPointerLeave={release}
+                onContextMenu={(e) => {
+                  if (press.current.timer === undefined) return;
+                  e.preventDefault();
+                  reveal(provenance);
+                }}
+                onClick={(e) => {
+                  const held = press.current.shown;
+                  press.current = {};
+                  if (!held) apply(s, e.currentTarget);
+                }}
+              >
+                {suggestionTitle(s)}
+                {s.payload.is_new === true && <small>{t("slots.new")}</small>}
+              </button>
+              <span id={`${describe}-${s.id}`} hidden>
+                {provenance}
+              </span>
+              <button
+                className={styles.dismiss}
+                aria-label={t("slots.dismiss_value1", {
+                  value1:
+                    s.action === "add_label"
+                      ? `#${String(s.payload.path)}`
+                      : suggestionTitle(s),
+                })}
+                disabled={decision.isPending}
+                onClick={() => decision.mutate({ s, action: "dismiss" })}
+              >
+                ×
+              </button>
             </span>
-            <button
-              className={styles.dismiss}
-              aria-label={t("slots.dismiss_value1", {
-                value1: suggestionTitle(s),
-              })}
-              disabled={decision.isPending}
-              onClick={() => decision.mutate({ id: s.id, action: "dismiss" })}
-            >
-              ×
-            </button>
-          </span>
-        );
-      })}
-      {!expanded && suggestions.length > 3 && (
+          );
+        })}
+      </div>
+      {!expanded && items.length > 3 && (
         <button className={styles.overflow} onClick={() => setExpanded(true)}>
-          +{suggestions.length - 3}
+          +{items.length - 3}
         </button>
       )}
-      <button
-        className={styles.dismiss}
-        aria-label={t("slots.dismiss_value1", {
-          value1: plural(suggestions.length, "suggestion"),
-        })}
-        disabled={decision.isPending}
-        onClick={() => {
-          for (const s of suggestions)
-            decision.mutate({ id: s.id, action: "dismiss" });
-        }}
-      >
-        {t("review.dismiss")}
-      </button>
+      {suggestions.length > 1 && (
+        <button
+          className={styles.dismiss}
+          aria-label={t("slots.dismiss_value1", {
+            value1: plural(suggestions.length, "suggestion"),
+          })}
+          disabled={decision.isPending}
+          onClick={() => {
+            for (const s of suggestions)
+              decision.mutate({ s, action: "dismiss" });
+          }}
+        >
+          {t("review.dismiss")}
+        </button>
+      )}
       {decision.isError && (
         <p className="error" role="alert">
           {decision.error.message}
@@ -291,7 +380,7 @@ export function SuggestionLine({
                   (preview.action === "label_change" && !impact.data)
                 }
                 onClick={() =>
-                  decision.mutate({ id: preview.id, action: "accept" })
+                  decision.mutate({ s: preview, action: "accept" })
                 }
               >
                 {t("review.apply")}
@@ -667,7 +756,65 @@ export function CommandResult(props: {
         <LinkPicker sourceId={sourceId} onClose={props.onDismiss} />
       </Suspense>
     );
+  if (props.origin?.plugin === "tidy" && typeof sourceId === "string") {
+    const items = outputComponents(props.value);
+    const proposal = items.find(
+      (item) =>
+        validComponent(item) &&
+        item.type === "pill" &&
+        item.action === "accept",
+    );
+    const diff = items.find(
+      (item) => validComponent(item) && item.type === "diff",
+    ) as Extract<Component, { type: "diff" }> | undefined;
+    if (validComponent(proposal) && typeof proposal.suggestion_id === "string")
+      return (
+        <TidyResult
+          key={proposal.suggestion_id}
+          id={proposal.suggestion_id}
+          noteId={sourceId}
+          diff={diff}
+          onClose={props.onDismiss}
+        />
+      );
+  }
   return <PluginResult {...props} />;
+}
+
+function TidyResult({
+  id,
+  noteId,
+  diff,
+  onClose,
+}: {
+  id: string;
+  noteId: string;
+  diff?: Extract<Component, { type: "diff" }>;
+  onClose?: () => void;
+}) {
+  const [done, setDone] = useState(false);
+  const ids = useMemo(() => (done ? [] : [id]), [done, id]);
+  useCommandProposals(noteId, ids);
+  return done ? (
+    <div className={styles.result}>
+      <p>{t("commandproposal.applied")}</p>
+      <footer>
+        {onClose && <button onClick={onClose}>{t("app.close")}</button>}
+      </footer>
+    </div>
+  ) : (
+    <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
+      <CommandProposal
+        id={id}
+        plugin="tidy"
+        noteId={noteId}
+        inline
+        diff={diff}
+        onClose={onClose}
+        onApplied={() => (onClose ? onClose() : setDone(true))}
+      />
+    </Suspense>
+  );
 }
 
 function PluginResult({
@@ -689,12 +836,34 @@ function PluginResult({
   const [currentOrigin, setCurrentOrigin] = useState(origin);
   const [responseId, setResponseId] = useState(0);
   const [review, setReview] = useState<{ id: string; response: number }>();
-  const [applied, setApplied] = useState(false);
+  const [applied, setApplied] = useState<string[]>([]);
   const noteId = currentOrigin?.args?.note_id;
   const session = useMemo(() => ({}), [value, origin]);
   const activeSession = useRef(session);
   const appliedSession = useRef(session);
   activeSession.current = session;
+  const visibleResult = useMemo(() => {
+    if (!applied.length) return display;
+    return outputComponents(display).filter(
+      (item) =>
+        !validComponent(item) ||
+        item.type !== "pill" ||
+        !applied.includes(String(item.suggestion_id)),
+    );
+  }, [display, applied]);
+  const proposalIds = useMemo(
+    () =>
+      outputComponents(visibleResult).flatMap((item) =>
+        validComponent(item) && item.type === "pill" && item.action === "accept"
+          ? [String(item.suggestion_id)]
+          : [],
+      ),
+    [visibleResult],
+  );
+  useCommandProposals(
+    typeof noteId === "string" ? noteId : undefined,
+    proposalIds,
+  );
   const resultItems = askItems(display);
   const interactive = resultItems.some(
     (item) => item.type === "form" || item.type === "pill",
@@ -764,7 +933,7 @@ function PluginResult({
     setResponseId((prior) => prior + 1);
     setCopied(false);
     setSaved(null);
-    setApplied(false);
+    setApplied([]);
   }, [value, origin, session]);
   const followup = useMutation({
     mutationFn: async ({
@@ -821,7 +990,7 @@ function PluginResult({
       setResponseId((prior) => prior + 1);
       setCopied(false);
       setSaved(null);
-      setApplied(false);
+      setApplied([]);
       void client.invalidateQueries({ queryKey: ["notes"] });
     },
   });
@@ -895,7 +1064,7 @@ function PluginResult({
         )}
       <VocabularyOutput
         key={responseId}
-        value={display}
+        value={visibleResult}
         formLabel={
           sourcePickerArgs ? t("notepicker.update_sources") : formLabel
         }
@@ -923,7 +1092,6 @@ function PluginResult({
           typeof noteId === "string" &&
           plugin &&
           (plugin.id !== "links" || supportsNotePicker(plugin)) &&
-          !applied &&
           !followup.isPending
             ? (id) => setReview({ id, response: responseId })
             : undefined
@@ -996,12 +1164,12 @@ function PluginResult({
               onClose={() => setReview(undefined)}
               onApplied={() => {
                 setReview(undefined);
-                setApplied(true);
+                setApplied((ids) => [...ids, review.id]);
               }}
             />
           </Suspense>
         )}
-      {applied && <p role="status">{t("commandproposal.applied")}</p>}
+      {applied.length > 0 && <p>{t("commandproposal.applied")}</p>}
       <footer>
         {!interactive && (
           <button
@@ -1104,6 +1272,11 @@ export function PluginCommands({
 }) {
   useLanguage();
   const manifest = usePlugins();
+  const waitingCatalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    enabled: navigator.onLine,
+  });
   const workspaceRole = useWorkspaceRole();
   const places = Array.isArray(where) ? where : [where];
   const slash = places.includes("slash");
@@ -1285,6 +1458,33 @@ export function PluginCommands({
         (c.plugin === "ask" && c.id === "ask" && askQuestion) ||
         c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
+  const waiting =
+    slash || !navigator.onLine
+      ? []
+      : (waitingCatalog.data?.plugins ?? []).flatMap((plugin) =>
+          plugin.state === "waiting" &&
+          (!pluginId || pluginId === plugin.id) &&
+          plugin.permissions.some(
+            (p) =>
+              p.startsWith("ai.") &&
+              !Object.hasOwn(plugin.ai_destinations ?? {}, p.slice(3)),
+          )
+            ? (plugin.contributes?.commands ?? [])
+                .slice(0, 3)
+                .filter(
+                  (command) =>
+                    places.some((place) =>
+                      (command.where ?? command.surfaces ?? []).includes(place),
+                    ) &&
+                    (noteId ||
+                      !(command.where ?? command.surfaces ?? []).includes(
+                        "note-actions",
+                      )) &&
+                    command.title.toLowerCase().includes(query.toLowerCase()),
+                )
+                .map((command) => ({ plugin, command }))
+            : [],
+        );
   const highlighted = Math.min(active, commands.length - 1);
   const choose = (c: CommandChoice) => {
     if (onChoose) onChoose(c);
@@ -1336,7 +1536,7 @@ export function PluginCommands({
         onDismiss={() => setResult(null)}
       />
     );
-  if (!commands.length) return null;
+  if (!commands.length && !waiting.length) return null;
   return (
     <div
       className={slash ? styles.slash : inPalette ? "palette-group" : undefined}
@@ -1362,6 +1562,12 @@ export function PluginCommands({
           <span>{c.title}</span>
           <small className="muted">{c.name}</small>
         </button>
+      ))}
+      {waiting.map(({ plugin, command }) => (
+        <p className={styles.facts} key={`${plugin.id}/${command.id}`}>
+          {t("quiet.command_waiting", { command: command.title })}{" "}
+          <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
+        </p>
       ))}
       {command.isPending && command.variables?.plugin === "ask" && (
         <p role="status">{t("timeline.loading_notes")}</p>

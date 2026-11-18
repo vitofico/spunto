@@ -180,7 +180,7 @@
 .rowLink {
   position: relative;
 }
-.rowLink a::after {
+.rowLink strong > a::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -196,7 +196,7 @@
     text-decoration: none;
   }
 }
-.rowLink :is(input, button, .actions a) {
+.rowLink :is(input, button, .facts a, .actions a) {
   position: relative;
   z-index: 1;
 }
@@ -210,6 +210,11 @@
   align-items: center;
   flex-shrink: 0;
   white-space: nowrap;
+}
+.pinnedActions {
+  display: grid;
+  justify-items: end;
+  gap: var(--s-4);
 }
 .switch {
   appearance: none;
@@ -401,13 +406,14 @@
   display: flex;
   align-items: center;
   gap: var(--s-8);
-  flex-wrap: wrap;
   margin-top: var(--s-12);
 }
 .suggestionGroup {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 .dismiss {
   border: 0;
@@ -483,7 +489,7 @@
 }
 .diff {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-16);
 }
 .diff pre {
@@ -889,4 +895,51 @@
   margin: 0;
   padding: 0;
   min-width: 0;
+}
+
+.receipt {
+  color: var(--ink-2);
+  font: var(--t-meta) var(--f-sans);
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receiptUndo {
+  flex: none;
+  text-decoration: underline;
+}
+
+.commandComparison {
+  max-block-size: min(48dvh, 32rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.suggestionItems,
+.expandedSuggestions {
+  min-inline-size: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.suggestionItems {
+  overflow-x: auto;
+  padding: var(--s-4);
+  margin: calc(-1 * var(--s-4));
+}
+
+.suggestionItems > * {
+  flex-shrink: 0;
+}
+
+.expandedSuggestions {
+  flex-wrap: wrap;
+}
+
+.suggestions > .overflow,
+.suggestions > .dismiss {
+  flex: none;
 }

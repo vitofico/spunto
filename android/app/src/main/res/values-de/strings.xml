@@ -12,4 +12,34 @@
   <string name="core_search_terms_match">Suchbegriffe stimmen überein</string>
   <string name="core_share_text_preview">Notiztext teilen?</string>
   <string name="core_share_text_scope">Wähle im nächsten Schritt einen Empfänger. Eine Kopie des unten angezeigten gespeicherten Textes mit enthaltenen Links wird gesendet. Anhänge werden nicht gesendet und es wird kein Zugriff auf Spunto oder verlinkte Notizen erteilt. Kopien können nicht zurückgerufen werden.</string>
+
+    <string name="plugin_change_behavior">Änderungsverhalten</string>
+    <string name="plugin_automatic_labels">Fügt bereits verwendete Schlagwörter automatisch hinzu.</string>
+    <string name="plugin_automatic_titles">Fügt geeigneten Notizen automatisch eine Überschrift hinzu.</string>
+    <string name="plugin_automatic_transcripts">Fügt Transkripte automatisch zu Notizen hinzu, die nur Aufnahmen enthalten.</string>
+    <string name="plugin_ask_first">Zuerst fragen</string>
+    <string name="plugin_automatic">Automatisch</string>
+    <string name="plugin_advanced">Erweitert</string>
+    <string name="plugin_webhook_destination">Sendet den Text geeigneter Notizen an %1$s.</string>
+    <string name="plugin_label_added">%1$s hinzugefügt</string>
+    <string name="plugin_title_applied">Titel auf %1$s gesetzt</string>
+    <string name="plugin_notes_merged">Notizen zusammengeführt</string>
+    <string name="plugin_changes_applied">Änderungen angewendet</string>
+    <string name="plugin_undo_queued">Rückgängig in Warteschlange</string>
+    <string name="plugin_undo_stale">Diese Änderung konnte nicht rückgängig gemacht werden. Öffne den Notizverlauf, um neuere Änderungen zu sehen.</string>
+    <string name="plugin_review_stale">Der Vergleich ist nicht verfügbar oder veraltet. Führe den Befehl erneut aus, um die aktuelle Notiz zu prüfen.</string>
+    <string name="plugin_review_changes">Änderungen prüfen</string>
+    <string name="plugin_global_tools">Sammlungswerkzeuge</string>
+    <string name="plugin_open_history">Verlauf öffnen</string>
+    <string name="plugin_use_title">Titel %1$s verwenden</string>
+    <string name="plugin_add_link">Link hinzufügen</string>
+    <string name="plugin_append_transcript">Transkript anhängen</string>
+    <string name="plugin_link_destination">Ruft gespeicherte URLs von den verlinkten Websites ab.</string>
+    <string name="plugin_review_enable">Prüfen und einschalten</string>
+    <string name="plugin_transcript_added">Transkript hinzugefügt</string>
+    <string name="plugin_note_updated">Notiz aktualisiert</string>
+    <string name="plugin_note_linked">Notiz verlinkt</string>
+    <string name="plugin_text_added">Text hinzugefügt</string>
+    <string name="plugin_webhook_without_destinations">Sendet den Text geeigneter Notizen an die konfigurierten Ziele. Es ist kein Ziel konfiguriert.</string>
+    <string name="plugin_add_link_to">Mit %1$s verlinken</string>
 </resources>

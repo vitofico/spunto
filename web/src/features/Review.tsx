@@ -10,6 +10,7 @@ import { NoteReference } from "./Vocabulary";
 import styles from "./Feature.module.css";
 import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
 import { requiresSuggestionPreview } from "./suggestionTitle";
+import { useSuggestionFeedback } from "./suggestionFeedback";
 import { labelChangeImpact } from "./labelChange";
 import { activePlugins, supportsNotePicker, usePlugins } from "./Slots";
 export function ReviewPage() {
@@ -25,6 +26,7 @@ export function ReviewPage() {
     (p) => p.id !== "links" || supportsNotePicker(p),
   );
   const client = useQueryClient();
+  const { acknowledge } = useSuggestionFeedback();
   const [preview, setPreview] = useState<Suggestion | null>(null);
   const opener = useRef<HTMLElement>(null);
   const [one, setOne] = useState(false);
@@ -53,7 +55,8 @@ export function ReviewPage() {
       s: Suggestion;
       action: "accept" | "dismiss";
     }) => api.decideSuggestion(s.id, action),
-    onSuccess: (result) => {
+    onSuccess: (result, { s, action }) => {
+      if (action === "accept") acknowledge(result, s);
       const open = (
         result as {
           result?: {
@@ -75,7 +78,10 @@ export function ReviewPage() {
   });
   const suggestions =
     query.data?.suggestions.filter(
-      (s) => plugins.some((p) => p.id === s.plugin) && !skip.includes(s.id),
+      (s) =>
+        s.status === "pending" &&
+        plugins.some((p) => p.id === s.plugin) &&
+        !skip.includes(s.id),
     ) ?? [];
   const apply = (s: Suggestion, trigger?: HTMLElement) => {
     opener.current = trigger ?? null;

@@ -12,4 +12,34 @@
   <string name="core_search_terms_match">Coinciden los términos de búsqueda</string>
   <string name="core_share_text_preview">¿Compartir el texto de la nota?</string>
   <string name="core_share_text_scope">Elige un destinatario en el siguiente paso. Se envía una copia del texto guardado que aparece abajo, con los enlaces escritos. No envía archivos adjuntos ni da acceso a Spunto o a notas enlazadas. Las copias no se pueden revocar.</string>
+
+    <string name="plugin_change_behavior">Comportamiento de los cambios</string>
+    <string name="plugin_automatic_labels">Añade automáticamente etiquetas que ya usas.</string>
+    <string name="plugin_automatic_titles">Añade automáticamente un encabezado a las notas que cumplan los requisitos.</string>
+    <string name="plugin_automatic_transcripts">Añade automáticamente transcripciones a las notas que solo contienen grabaciones.</string>
+    <string name="plugin_ask_first">Preguntar primero</string>
+    <string name="plugin_automatic">Automático</string>
+    <string name="plugin_advanced">Avanzado</string>
+    <string name="plugin_webhook_destination">Envía el texto de las notas que cumplan los requisitos a %1$s.</string>
+    <string name="plugin_label_added">Se añadió %1$s</string>
+    <string name="plugin_title_applied">Título cambiado a %1$s</string>
+    <string name="plugin_notes_merged">Notas combinadas</string>
+    <string name="plugin_changes_applied">Cambios aplicados</string>
+    <string name="plugin_undo_queued">Acción de deshacer en cola</string>
+    <string name="plugin_undo_stale">No se pudo deshacer este cambio. Abre el historial de la nota para ver los cambios más recientes.</string>
+    <string name="plugin_review_stale">La comparación no está disponible o ha quedado desactualizada. Vuelve a ejecutar el comando para revisar la nota actual.</string>
+    <string name="plugin_review_changes">Revisar cambios</string>
+    <string name="plugin_global_tools">Herramientas de la biblioteca</string>
+    <string name="plugin_open_history">Abrir historial</string>
+    <string name="plugin_use_title">Usar el título %1$s</string>
+    <string name="plugin_add_link">Añadir enlace</string>
+    <string name="plugin_append_transcript">Añadir transcripción</string>
+    <string name="plugin_link_destination">Obtiene las URL guardadas desde los sitios a los que apuntan.</string>
+    <string name="plugin_review_enable">Revisar y activar</string>
+    <string name="plugin_transcript_added">Transcripción añadida</string>
+    <string name="plugin_note_updated">Nota actualizada</string>
+    <string name="plugin_note_linked">Nota enlazada</string>
+    <string name="plugin_text_added">Texto añadido</string>
+    <string name="plugin_webhook_without_destinations">Envía el texto de las notas que cumplan los requisitos a los destinos configurados. No hay destinos configurados.</string>
+    <string name="plugin_add_link_to">Enlazar con %1$s</string>
 </resources>

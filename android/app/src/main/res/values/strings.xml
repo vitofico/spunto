@@ -14,4 +14,34 @@
   <string name="core_search_terms_match">Search terms match</string>
   <string name="core_share_text_preview">Share note text?</string>
   <string name="core_share_text_scope">Choose a recipient in the next step. This sends a copy of the saved note text shown below, including any written links. It does not send attachment files or grant access to Spunto or linked notes. Copies cannot be revoked.</string>
+
+    <string name="plugin_change_behavior">Change behavior</string>
+    <string name="plugin_automatic_labels">Automatically add labels you already use.</string>
+    <string name="plugin_automatic_titles">Automatically add a heading to eligible notes.</string>
+    <string name="plugin_automatic_transcripts">Automatically append transcripts to notes containing only recordings.</string>
+    <string name="plugin_ask_first">Ask first</string>
+    <string name="plugin_automatic">Automatic</string>
+    <string name="plugin_advanced">Advanced</string>
+    <string name="plugin_webhook_destination">Sends eligible note bodies to %1$s.</string>
+    <string name="plugin_label_added">Added %1$s</string>
+    <string name="plugin_title_applied">Title set to %1$s</string>
+    <string name="plugin_notes_merged">Notes merged</string>
+    <string name="plugin_changes_applied">Changes applied</string>
+    <string name="plugin_undo_queued">Undo queued</string>
+    <string name="plugin_undo_stale">This change could not be undone. Open note history to see newer changes.</string>
+    <string name="plugin_review_stale">The comparison is unavailable or out of date. Run the command again to review the current note.</string>
+    <string name="plugin_review_changes">Review changes</string>
+    <string name="plugin_global_tools">Library tools</string>
+    <string name="plugin_open_history">Open history</string>
+    <string name="plugin_use_title">Use title %1$s</string>
+    <string name="plugin_add_link">Add link</string>
+    <string name="plugin_append_transcript">Append transcript</string>
+    <string name="plugin_link_destination">Fetches saved URLs from the sites they link to.</string>
+    <string name="plugin_review_enable">Review and turn on</string>
+    <string name="plugin_transcript_added">Transcript added</string>
+    <string name="plugin_note_updated">Note updated</string>
+    <string name="plugin_note_linked">Note linked</string>
+    <string name="plugin_text_added">Text added</string>
+    <string name="plugin_webhook_without_destinations">Sends eligible note bodies to the configured destinations. No destination is configured.</string>
+    <string name="plugin_add_link_to">Link to %1$s</string>
 </resources>

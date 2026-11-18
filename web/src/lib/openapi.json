@@ -89,6 +89,24 @@
         "title": "Append",
         "type": "object"
       },
+      "ChangeMode": {
+        "additionalProperties": false,
+        "properties": {
+          "change_mode": {
+            "enum": [
+              "ask_first",
+              "automatic"
+            ],
+            "title": "Change Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "change_mode"
+        ],
+        "title": "ChangeMode",
+        "type": "object"
+      },
       "Create": {
         "additionalProperties": false,
         "properties": {
@@ -236,6 +254,18 @@
             "maxItems": 30,
             "title": "Permissions",
             "type": "array"
+          },
+          "review_token": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Token"
           }
         },
         "required": [
@@ -1739,6 +1769,18 @@
     "/api/v1/attachments": {
       "post": {
         "operationId": "upload_api_v1_attachments_post",
+        "parameters": [
+          {
+            "description": "Intended note for a newly captured Android recording.",
+            "in": "header",
+            "name": "X-Spunto-Recording-Note",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -3255,6 +3297,54 @@
           "Plugins"
         ]
       },
+      "patch": {
+        "operationId": "change_mode_api_v1_plugins__plugin_id__settings_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plugin_id",
+            "required": true,
+            "schema": {
+              "title": "Plugin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeMode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Mode",
+        "tags": [
+          "Plugins"
+        ]
+      },
       "put": {
         "operationId": "put_settings_api_v1_plugins__plugin_id__settings_put",
         "parameters": [
@@ -3799,6 +3889,46 @@
           }
         },
         "summary": "Dismiss",
+        "tags": [
+          "Suggestions"
+        ]
+      }
+    },
+    "/api/v1/suggestions/{id}/undo": {
+      "post": {
+        "operationId": "undo_api_v1_suggestions__id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo",
         "tags": [
           "Suggestions"
         ]

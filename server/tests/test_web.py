@@ -301,3 +301,30 @@ async def test_label_renderer_preserves_fragment_links_titles_and_references(bod
     assert ">jump</a>" in html
     assert "\ue000" not in html and "%EE%80" not in html
     assert 'href="#ideas"' in html or 'href="https://example.org/#target"' in html
+
+
+async def test_device_recording_upload_binds_only_the_intended_note(server):
+    from uuid import uuid7
+
+    await setup(server)
+    issued = await server.client.post(
+        "/api/v1/auth/devices", json={"name": "Fixture phone", "password": "correct horse battery"}
+    )
+    assert issued.status_code == 200
+    capture = str(uuid7())
+    headers = {
+        "Authorization": "Bearer " + issued.json()["token"],
+        "X-Spunto-Recording-Note": capture,
+    }
+    files = {"file": ("sample.ogg", b"OggS" + bytes(64), "audio/ogg")}
+    ref = await server.client.post("/api/v1/attachments", files=files, headers=headers)
+    assert ref.status_code == 200
+    session_headers = {**ORIGIN, "X-Spunto-Recording-Note": str(uuid7())}
+    assert (
+        await server.client.post("/api/v1/attachments", files=files, headers=session_headers)
+    ).status_code == 200
+    async with server.services.store.read() as conn:
+        markers = await conn.execute_fetchall(
+            "SELECT key,id FROM plugin_record WHERE collection='host:capture-markers'"
+        )
+    assert [tuple(m) for m in markers] == [(capture, capture + "/" + ref.json()["id"])]

@@ -38,7 +38,6 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /** Opt-in local screenshots of the real timeline with invented notes, restoring the replica afterward. */
-@ManualFixture
 class IdentityScreenshotsTest {
  private val compose=createComposeRule()
  private val windowMode=object:ExternalResource() {

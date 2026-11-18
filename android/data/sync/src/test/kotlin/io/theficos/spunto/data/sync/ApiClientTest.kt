@@ -50,6 +50,7 @@ class ApiClientTest {
   val req=server.takeRequest();assertEquals("Bearer test-synthetic",req.getHeader("Authorization"));assertEquals("/api/v1/sync/push",req.path)
   val op=Json.parseToJsonElement(req.body.readUtf8()).jsonObject["ops"]!!.jsonArray.single().jsonObject;assertEquals(123,op["created_at"]!!.jsonPrimitive.int);assertEquals("id",op["note_id"]!!.jsonPrimitive.content);assertFalse(op.containsKey("noteId"))
  }
+ @Test fun signInUsesVersionedServerPath() = runBlocking {server.enqueue(MockResponse().setBody("""{"id":"d","token":"fixture","name":"Phone"}"""));api("").signIn("synthetic-password","Phone");assertEquals("/api/v1/auth/devices",server.takeRequest().path)}
  @Test fun signOutRevokesOnlyThisPhonesCredentialAndSaysWhenItCouldNot() = runBlocking {
   server.enqueue(MockResponse().setResponseCode(204));assertTrue(api().signOut())
   val request=server.takeRequest();assertEquals("POST",request.method);assertEquals("/api/v1/auth/logout",request.path);assertEquals("Bearer test-synthetic",request.getHeader("Authorization"))

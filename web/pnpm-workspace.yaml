@@ -1,0 +1,5 @@
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf
+patchedDependencies:
+  picomatch@4.0.7: patches/picomatch@4.0.7.patch

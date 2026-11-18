@@ -9,10 +9,11 @@ ARG NODE=node:26.9.0-slim@sha256:3a771f83944bb763050c23c0225c260638c4b7899e7a724
 FROM ${NODE} AS web
 WORKDIR /web
 RUN npm install --global pnpm@12.11.2
-COPY web/package.json web/pnpm-lock.yaml ./
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+COPY web/patches/ ./patches/
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 COPY web/ ./
-RUN pnpm build
+RUN node scripts/check-picomatch.mjs && pnpm build
 
 FROM ${PYTHON} AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.0@sha256:cdc6093146eb3ff6a40107b38f008b789e050e77ad87865e381d9917da55a168 /uv /bin/uv

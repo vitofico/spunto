@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  picomatch@4.0.7: 6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4
+
 importers:
 
   .:
@@ -1340,9 +1343,9 @@ snapshots:
 
   fast-deep-equal@3.1.3: {}
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4)
 
   fsevents@2.3.3:
     optional: true
@@ -1496,7 +1499,7 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4): {}
 
   playwright-core@1.64.0: {}
 
@@ -1576,8 +1579,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4))
+      picomatch: 4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4)
 
   tldts-core@7.4.18: {}
 
@@ -1610,7 +1613,7 @@ snapshots:
   vite@8.3.4(@types/node@26.6.5):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4)
       postcss: 8.5.30
       rolldown: 1.2.13
       tinyglobby: 0.2.17
@@ -1627,7 +1630,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 1.4.3
       obug: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=6a524dafcb62b77263754432deaf54d538a6e1b2a6b5f409311c6e452155ade4)
       std-env: 4.3.0
       tinybench: 6.2.2
       tinyexec: 1.3.1

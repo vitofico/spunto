@@ -5,7 +5,7 @@ import re
 
 import httpx
 import pytest
-from test_plugins_ai import FakeProvider
+from ai_fake import FakeProvider
 
 from spunto.ai.errors import AIError
 from spunto.ai.gateway import Gateway, Probe
@@ -38,7 +38,7 @@ async def bounded(server):
 
 
 def bodies(fake):
-    content = fake.requests[-1]["messages"][1]["content"]
+    content = fake.chat_bodies[-1]["messages"][1]["content"]
     return {
         match[1]: html.unescape(match[2])
         for match in re.finditer(r'<note id="([^"]+)"[^>]*>(.*?)</note>', content, re.DOTALL)
@@ -96,7 +96,7 @@ async def test_unknown_note_budget_key_fails_before_provider(bounded):
 async def test_per_note_caps_keep_live_privacy_checks_on_validation_retry(bounded):
     gateway, fake, notes = bounded
     note = await notes.create("Synthetic source becomes private during provider validation")
-    fake.mode = "wrong-types"
+    fake.mode = "wrong_types"
 
     async def hide():
         await notes.flags(note["id"], {"private": True})

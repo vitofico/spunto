@@ -7,7 +7,8 @@ from dataclasses import replace
 
 import httpx
 import pytest
-from test_plugins_ai import OWNER, FakeProvider
+from ai_fake import FakeProvider
+from test_plugins_ai import OWNER
 from test_plugins_ai import ai_host as ai_host
 from test_postgres import pg as pg
 
@@ -144,11 +145,7 @@ async def test_created_machine_note_can_be_edited_by_receipt_without_becoming_ai
     provider.requests.clear()
     provider.action_plan = plan("edit", before="Monday", after="Tuesday")
     edit = await request(host, "Change Monday to Tuesday in that note", **continuation(preview))
-    assert all(
-        "<note " not in item["messages"][1]["content"]
-        for item in provider.requests
-        if "messages" in item
-    )
+    assert all("<note " not in item["messages"][1]["content"] for item in provider.chat_bodies)
     changed = await confirm(host, action(edit))
     current = await Notes(host.store, OWNER).get(note["id"])
     assert current["machine"] and "Tuesday" in current["body"]
@@ -355,8 +352,7 @@ async def test_private_notes_never_enter_action_model_context(ai_host):
         await request(host, "Change Secret to public", note_actions=True)
     assert all(
         "PRIVATE-ACTION-CANARY" not in item["messages"][1]["content"]
-        for item in provider.requests
-        if "messages" in item
+        for item in provider.chat_bodies
     )
 
 
@@ -419,7 +415,7 @@ async def test_discussion_to_generated_checklist_binds_factual_sources_atomicall
     preview = await request(
         host, "Turn this discussion into a checklist note", **continuation(first)
     )
-    content = [r for r in provider.requests if "messages" in r][-1]["messages"][1]["content"]
+    content = provider.chat_bodies[-1]["messages"][1]["content"]
     assert "Luca owns testing" in content and "discussion" in content
     await Notes(host.store, OWNER).flags(source["id"], {"private": True})
     before = await snapshot(host.store)
@@ -492,7 +488,7 @@ async def test_generated_anchored_rewrite_and_confirmed_machine_draft_revision(a
     revised = await request(
         host, "Rewrite that note as a checklist", **continuation(created_preview)
     )
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert '<authoring-data untrusted="true">' in content
     assert "Remember to pack a tent and water." in content
     assert f'<note id="{created_id}"' not in content
@@ -511,7 +507,7 @@ async def test_pending_generated_draft_revision_uses_only_bound_authoring_contex
     first = await request(host, "Draft a short camping note", note_actions=True)
     provider.action_plan = plan("create", body="# Camping\n\n- [ ] Pack a tent\n- [ ] Bring water")
     revised = await request(host, "Turn that draft into a checklist", **continuation(first))
-    content = [r for r in provider.requests if "messages" in r][-1]["messages"][1]["content"]
+    content = provider.chat_bodies[-1]["messages"][1]["content"]
     assert '<authoring-data untrusted="true">' in content and "Pack a tent and water" in content
     assert not (await Notes(host.store, OWNER).list())["notes"]
     await confirm(host, action(revised))
@@ -641,7 +637,7 @@ async def test_incidental_or_qualified_it_cannot_override_named_human_target(ai_
         "edit", target=human["id"], selector="Meeting note", before="Monday", after="Tuesday"
     )
     preview = await request(host, question, **continuation(first))
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert "<authoring-data" not in content
     await confirm(host, action(preview))
     assert (await domain.get(human["id"]))["body"] == "# Meeting\n\nTuesday at 18:00."
@@ -680,7 +676,7 @@ async def test_incidental_deictic_words_with_explicit_named_target_clarify_safel
     )
     assert not any("action_id" in i.get("args", {}) for i in output["items"])
     assert await snapshot(host.store) == before
-    assert not [r for r in provider.requests if "messages" in r]
+    assert not provider.chat_bodies
 
 
 async def test_content_deictic_after_bare_named_human_target_does_not_admit_machine_draft(ai_host):
@@ -760,7 +756,7 @@ async def test_quoted_location_in_new_content_cannot_override_named_first_edit_o
     )
     assert not any("action_id" in i.get("args", {}) for i in output["items"])
     assert await snapshot(host.store) == before
-    assert not [r for r in provider.requests if "messages" in r]
+    assert not provider.chat_bodies
 
 
 async def test_latest_confirmed_human_target_takes_precedence_over_older_machine_context(ai_host):
@@ -783,7 +779,7 @@ async def test_latest_confirmed_human_target_takes_precedence_over_older_machine
         "edit", target=human["id"], before="Tuesday at 18:00.", after="Tuesday, 18:00."
     )
     shorter = await request(host, "Make it shorter", **continuation(human_preview))
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert "<authoring-data" not in content
     await confirm(host, action(shorter))
     assert (await domain.get(human["id"]))["body"] == "# Meeting\n\nTuesday, 18:00."
@@ -858,7 +854,7 @@ async def test_uppercase_it_does_not_send_a_created_note_as_authoring_context(ai
     provider.action_plan = plan("create", body="# IT checklist\n\n- [ ] Check network access")
     second = await request(host, "Draft an IT checklist", **continuation(first))
     assert action(second)["stage"] == "preview"
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert "<authoring-data" not in content
 
 
@@ -897,7 +893,7 @@ async def test_review_worker_revalidates_all_factual_sources_and_receipt_before_
         release.set()
     with pytest.raises((AIError, Problem)):
         await pending
-    assert not [r for r in provider.requests if "messages" in r]
+    assert not provider.chat_bodies
 
 
 async def test_committed_draft_with_lost_ack_cannot_be_recreated_as_pending_draft(
@@ -996,7 +992,7 @@ async def test_ordinary_opt_in_question_costs_one_chat_and_one_ask_allowance(ai_
     host.gateway.quota = quota
     provider.requests.clear()
     await request(host, question, note_actions=True)
-    assert len([r for r in provider.requests if "messages" in r]) == 1
+    assert len(provider.chat_bodies) == 1
     assert quota.calls.count("ask") == 1
 
 
@@ -1098,9 +1094,7 @@ async def test_real_postgres_reviewed_edit_create_authoring_and_stale_undo(pg, s
         with pytest.raises(Problem, match="version_conflict"):
             await confirm(host, action(created), principal)
         assert all(
-            "PRIVATE-OTHER-SPACE" not in r["messages"][1]["content"]
-            for r in provider.requests
-            if "messages" in r
+            "PRIVATE-OTHER-SPACE" not in r["messages"][1]["content"] for r in provider.chat_bodies
         )
     finally:
         await host.close()

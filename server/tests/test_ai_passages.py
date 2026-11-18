@@ -80,7 +80,7 @@ async def test_gateway_selects_fresh_tail_and_ignores_caller_excerpts(fixture_ga
         context_query="contralto rehearsal",
         max_note_chars=1100,
     )
-    content = provider.requests[-1]["body"]["messages"][1]["content"]
+    content = provider.chat_bodies[-1]["messages"][1]["content"]
     assert fact in content and "FORGED EXCERPT" not in content
     assert len(bodies(content)[note["id"]]) <= 1100
 
@@ -96,7 +96,7 @@ async def test_gateway_retrieval_keeps_shared_and_per_note_budgets(fixture_gatew
         max_note_chars=8000,
         note_char_limits={note["id"]: 1000 for note in notes},
     )
-    sent = bodies(provider.requests[-1]["body"]["messages"][1]["content"])
+    sent = bodies(provider.chat_bodies[-1]["messages"][1]["content"])
     assert len(sent) == 8
     assert all("contralto tail" in body and len(body) <= 1000 for body in sent.values())
     assert sum(map(len, sent.values())) <= 8000
@@ -141,7 +141,7 @@ async def test_keyword_fallback_recalls_enabled_transcript_without_vectors(ai_ho
 
     monkeypatch.setattr(host.vectors, "nearest", unavailable)
     await ask.ask(Ctx(host, "ask", principal=OWNER), "When is the contralto rehearsal?")
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert fact in bodies(content)[note["id"]]
 
 
@@ -186,7 +186,7 @@ async def test_gateway_rechecks_full_evidence_on_validation_retry(ai_host, chang
             conversation_context=json.dumps({"answer": snapshot["body"]}),
             external_ok=False,
         )
-    assert len([r for r in provider.requests if "messages" in r]) == 1
+    assert len(provider.chat_bodies) == 1
 
 
 @pytest.mark.parametrize("change", ["text", "disabled"])
@@ -256,11 +256,11 @@ async def test_semantic_hint_preserves_paraphrase_fact_in_single_paragraph_tail(
         source_chunks={note["id"]: hits[0]["chunks"]},
         max_note_chars=1400,
     )
-    content = provider.requests[-1]["messages"][1]["content"]
+    content = provider.chat_bodies[-1]["messages"][1]["content"]
     assert fact in bodies(content)[note["id"]]
     provider.requests.clear()
     await ask.ask(ctx, question)
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert fact in bodies(content)[note["id"]]
 
 
@@ -301,7 +301,7 @@ async def test_ask_blends_transcript_match_with_tied_routine_semantic_chunks(ai_
     assert all(fact not in snapshot[1][hint["ordinal"]] for hint in hits[0]["chunks"])
     provider.ask_answer = {"found": True, "answer": fact, "citations": [note["id"]]}
     await ask.ask(Ctx(host, "ask", principal=OWNER), query)
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     sent = bodies(content)[note["id"]]
     assert fact in sent
     assert len(sent) <= ask.MAX_CONTEXT
@@ -380,7 +380,7 @@ async def test_scoped_gateway_fences_history_repeating_full_fresh_source(ai_host
         source_fingerprints={note["id"]: snapshot["evidence_fingerprint"]},
         conversation_context=history,
     )
-    content = provider.requests[-1]["messages"][1]["content"]
+    content = provider.chat_bodies[-1]["messages"][1]["content"]
     assert '<conversation-data untrusted="true">' in content
     assert "&lt;/conversation-data&gt;" in content
     assert content.count("</conversation-data>") == 1

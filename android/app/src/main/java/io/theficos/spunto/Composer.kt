@@ -89,6 +89,12 @@ import kotlinx.coroutines.flow.flowOf
  var permissionAction by remember {mutableStateOf("dictation")}
  var startingVoice by remember {mutableStateOf(false)}
  var value by remember(id) { mutableStateOf(TextFieldValue(initial,TextRange(initial.length))) }
+ if (BuildConfig.DEBUG && draftId.startsWith("share:")) {
+  val lock by model.container.appLock.state.collectAsState()
+  LaunchedEffect(lock.unlocked) {
+   if (!lock.unlocked) value = TextFieldValue("")
+  }
+ }
  val labelCounts by model.labels.collectAsState()
  val focus=remember { FocusRequester() }
  val preferences=model.container.preferences

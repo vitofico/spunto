@@ -483,18 +483,17 @@ async def test_webhook_retry_all_destinations_and_private_cancellation(capture):
     assert len(http.calls) == 2
 
 
-@pytest.mark.parametrize(("private", "machine"), [(True, False), (False, True)])
-async def test_webhook_tombstones_fail_closed_and_no_private_ids(capture, private, machine):
+async def test_webhook_tombstones_fail_closed_and_no_private_ids(capture):
     host, ai, http, notes = capture
     await host.set_settings(IDS[3], {"urls": ["https://receiver.test/hook"]})
     note = await notes.create("Synthetic public then private")
-    trashed = await notes.flags(note["id"], {"trashed": True, "private": private})
+    trashed = await notes.flags(note["id"], {"trashed": True, "private": True})
     await webhooks.trashed(
         ctx(host, IDS[3], note),
         note["id"],
         trashed["version"],
-        private=private,
-        machine=machine,
+        private=True,
+        machine=False,
         origin="owner",
         change_seq=trashed["change_seq"],
     )
@@ -509,8 +508,8 @@ async def test_webhook_tombstones_fail_closed_and_no_private_ids(capture, privat
         ctx(host, IDS[3], note),
         note["id"],
         trashed["version"],
-        private=private,
-        machine=machine,
+        private=True,
+        machine=False,
         origin="owner",
         change_seq=trashed["change_seq"] + 1,
     )

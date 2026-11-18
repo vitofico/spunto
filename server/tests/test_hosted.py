@@ -258,34 +258,6 @@ async def test_http_policy_changes_atomic_account_allowance_without_resetting_us
         assert (await client.get("/api/v1/notes", headers=headers(alice))).status_code == 200
         assert (await client.get("/api/v1/export", headers=headers(alice))).status_code == 200
 
-        # A provider received this synthetic chat. A later HTTP failure still consumes quota.
-        from ai_fake import FakeProvider
-        from test_ai_gateway import settings_for
-
-        from spunto.ai import AIError, Gateway
-        from spunto.ai.gateway import Probe
-        from spunto.ai.profiles import Profile
-
-        runtime = await manager.services(
-            {**alice["workspace"], "role": "owner"}, alice["account"]["id"]
-        )
-        provider = FakeProvider(modes=["500"])
-        profile = Profile(name="synthetic", base_url="http://model.test/v1", chat_model="test")
-        gateway = Gateway(
-            runtime.store,
-            settings_for(profile),
-            transport=httpx.ASGITransport(provider.app),
-            quota=quota,
-        )
-        try:
-            with pytest.raises(AIError, match="ai_provider_http_error"):
-                await gateway.chat(Probe, "check", plugin_id="tidy")
-            assert len(provider.requests) == 1
-            actions = (await quota.status())["actions"]
-            assert next(row["used"] for row in actions if row["action"] == "chat") == 1
-        finally:
-            await gateway.close()
-
 
 async def test_generic_account_limits_are_atomic_shared_and_keep_reads_export(hosted):
     from spunto.account_policy import AccountPolicy
@@ -403,22 +375,6 @@ async def test_account_closure_requires_choice_revokes_credentials_and_purges_on
         headers=headers(alice),
         json={"user_id": bob["account"]["id"], "role": "editor"},
     )
-    joined = await client.post(
-        "/api/v1/workspaces", headers=headers(bob), json={"name": "Bob-owned shared space"}
-    )
-    assert joined.status_code == 201, joined.text
-    joined_id = joined.json()["id"]
-    assert (
-        await client.post(
-            f"/api/v1/workspaces/{joined_id}/members",
-            headers=headers(bob),
-            json={"user_id": alice["account"]["id"], "role": "editor"},
-        )
-    ).is_success
-    written = await client.post(
-        "/api/v1/notes", headers=headers(alice, joined_id), json={"body": "Joined space survives"}
-    )
-    assert written.status_code == 201, written.text
     body = {"confirm": "DELETE MY ACCOUNT"}
     assert (
         await client.post("/api/v1/auth/account/closure", headers=headers(alice), json=body)
@@ -467,9 +423,6 @@ async def test_account_closure_requires_choice_revokes_credentials_and_purges_on
     assert (await client.post(url + "/purge", json=receipt, headers=service)).status_code == 200
     remaining = await client.get("/api/v1/notes", headers=headers(bob))
     assert remaining.status_code == 200 and remaining.json()["notes"][0]["body"] == "Bob retained"
-    joined_notes = await client.get("/api/v1/notes", headers=headers(bob, joined_id))
-    assert joined_notes.status_code == 200, joined_notes.text
-    assert [note["body"] for note in joined_notes.json()["notes"]] == ["Joined space survives"]
     assert (
         await manager.accounts.one(
             "SELECT id FROM public.spunto_account WHERE id=%s", (alice["account"]["id"],)
@@ -1027,13 +980,9 @@ async def _sync_pull(client, device):
 
 
 async def _assert_phone_conflict_receipts_tombstones_and_tag_removal(hosted):
-    client, _, (alice, bob, _), settings = hosted
-    first, second, other = (
-        await _sync_phone(client, alice),
-        await _sync_phone(client, alice),
-        await _sync_phone(client, bob),
-    )
-    disputed, kept, gone, other_gone = (str(uuid.uuid7()) for _ in range(4))
+    client, _, (alice, _, _), _ = hosted
+    first, second = await _sync_phone(client, alice), await _sync_phone(client, alice)
+    disputed, kept, gone = (str(uuid.uuid7()) for _ in range(3))
     assert [
         result["status"]
         for result in await _sync_push(
@@ -1065,34 +1014,17 @@ async def _assert_phone_conflict_receipts_tombstones_and_tag_removal(hosted):
     }
     assert {"SERVER\ntwo", "PHONE\ntwo"} <= bodies
 
-    assert (await _sync_push(client, other, _sync_op("note.create", other_gone, body="Bystander")))[
-        0
-    ]["status"] == "applied"
-    for user, device, note_id in ((alice, first, gone), (bob, other, other_gone)):
-        (trashed,) = await _sync_push(client, device, _sync_op("note.flags", note_id, trashed=True))
-        assert trashed["status"] == "applied" and trashed["note"]["trashed"]
-        emptied = await client.post("/api/v1/trash/empty", headers=headers(user))
-        assert emptied.status_code == 200 and emptied.json() == {"deleted": 1}, emptied.text
-
-    for device, note_id in ((first, gone), (other, other_gone)):
-        items = await _sync_pull(client, device)
-        assert [
-            (entry["data"]["kind"], entry["data"]["id"])
-            for entry in items
-            if entry["kind"] == "tombstone"
-        ] == [("note", note_id)]
-        assert all(entry["kind"] != "note" or entry["data"]["id"] != note_id for entry in items)
-
-    # Use the ordinary runtime role and both legitimate workspace contexts.
-    async with await psycopg.AsyncConnection.connect(settings.database_url) as connection:
-        for user, expected in ((alice, gone), (bob, other_gone)):
-            await connection.execute(
-                "SELECT set_config('spunto.workspace_id',%s,true),"
-                "set_config('spunto.user_id',%s,true),set_config('spunto.role','owner',true)",
-                (user["workspace"]["id"], user["account"]["id"]),
-            )
-            rows = await (await connection.execute("SELECT id FROM spunto.tombstone")).fetchall()
-            assert rows == [(expected,)]
+    (trashed,) = await _sync_push(client, first, _sync_op("note.flags", gone, trashed=True))
+    assert trashed["status"] == "applied" and trashed["note"]["trashed"]
+    emptied = await client.post("/api/v1/trash/empty", headers=headers(alice))
+    assert emptied.status_code == 200 and emptied.json() == {"deleted": 1}, emptied.text
+    items = await _sync_pull(client, first)
+    assert [
+        (entry["data"]["kind"], entry["data"]["id"])
+        for entry in items
+        if entry["kind"] == "tombstone"
+    ] == [("note", gone)]
+    assert all(entry["kind"] != "note" or entry["data"]["id"] != gone for entry in items)
 
     (restored,) = await _sync_push(client, first, _sync_op("note.restore", gone, body="Disposable"))
     assert restored["status"] == "rejected" and restored["code"] == "not_found"

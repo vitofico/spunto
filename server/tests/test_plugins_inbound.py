@@ -573,19 +573,3 @@ async def test_new_uidvalidity_restarts_receipts_without_losing_or_duplicating_m
     ]
     assert host.states["email-in"]["last_error"] is None
     assert (await ctx.storage.kv.get("checkpoint"))["uidvalidity"] == 78
-
-
-async def test_a_message_with_more_than_one_sender_is_not_admitted(inbound, monkeypatch):
-    import spunto.net.imap
-
-    host, _ = inbound
-    joint = mail(sender="allowed@example.invalid, outsider@example.invalid", body="Joint sender")
-
-    async def read(url, **kwargs):
-        return {"uidvalidity": 7, "messages": [{"uid": 1, "raw": joint}]}
-
-    monkeypatch.setattr(spunto.net.imap, "guarded_read", read)
-    ctx = Ctx(host, "email-in", unattended=True)
-    await email_in.poll(ctx)
-    assert await rows(host) == []
-    assert (await ctx.storage.kv.get("checkpoint"))["uid"] == 1

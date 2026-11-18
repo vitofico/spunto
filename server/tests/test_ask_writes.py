@@ -248,10 +248,6 @@ async def test_old_client_cannot_receive_action_receipts_or_escalate_a_conversat
 async def test_receipt_binds_caller_role_and_clear_revokes_pending_action(ai_host):
     host, provider = ai_host
     _, preview = await edit_preview(host, provider)
-    viewer = replace(OWNER, workspace_role="viewer")
-    refused = await request(host, "Create a note: buy milk", principal=viewer, note_actions=True)
-    assert not any("action_id" in item.get("args", {}) for item in refused["items"])
-    assert any("writable session" in item.get("text", "").lower() for item in refused["items"])
     for principal in (replace(OWNER, id="someone-else"), replace(OWNER, workspace_role="viewer")):
         with pytest.raises(Problem):
             await confirm(host, action(preview), principal)

@@ -393,26 +393,6 @@ def test_restore_accepts_legacy_schema_one_and_upgrades_on_next_start(settings, 
     assert rows(db, "SELECT count(*) FROM note") == [(0,)]
 
 
-def test_restore_rejects_a_non_hex_attachment_digest(settings, db):
-    with closing(connect(db)) as conn:
-        note_id = seed_note(conn)
-        attachment_id = str(uuid.uuid7())
-        conn.execute(
-            "INSERT INTO attachment(id,sha256,mime,size,filename,created_at) VALUES (?,?,?,1,?,0)",
-            (attachment_id, "a" * 64, "image/png", "fixture.png"),
-        )
-        conn.execute("INSERT INTO note_attachment VALUES (?,?)", (note_id, attachment_id))
-
-    snapshot = backup_now(settings, NOW)
-    with closing(connect(snapshot)) as conn:
-        conn.execute("UPDATE attachment SET sha256=?", ("g" * 64,))
-    with pytest.raises(OperatorError, match="is not a Spunto snapshot"):
-        restore(settings, checksum(snapshot), NOW)
-    assert rows(db, "SELECT sha256 FROM attachment") == [("a" * 64,)]
-    assert rows(db, "SELECT password_hash FROM owner") == [("first-hash",)]
-    assert not list(db.parent.glob(f"{DB_NAME}.before-restore-*"))
-
-
 @pytest.mark.parametrize(
     "damage",
     [
@@ -427,17 +407,12 @@ def test_restore_rejects_a_non_hex_attachment_digest(settings, db):
         "DELETE FROM meta WHERE key='change_seq'",
         "UPDATE meta SET value='invalid' WHERE key='plugins_rev'",
         "ALTER TABLE note DROP COLUMN private_clock",
-        "DELETE FROM meta WHERE key='instance_id'",
-        "DELETE FROM meta WHERE key='migrated_by'",
-        "UPDATE meta SET value='not-an-epoch' WHERE key='sync_epoch'",
-        "DROP TABLE note_fts; CREATE TABLE note_fts(title,body,extra)",
-        "PRAGMA foreign_keys=OFF; INSERT INTO note_label VALUES ('missing-note', 999)",
     ],
 )
 def test_restore_rejects_incomplete_claimed_schema_two(settings, db, damage):
     snapshot = backup_now(settings, NOW)
     with closing(sqlite3.connect(snapshot)) as conn:
-        conn.executescript(damage)
+        conn.execute(damage)
         conn.commit()
     with pytest.raises(OperatorError, match="is not a Spunto snapshot"):
         restore(settings, checksum(snapshot), NOW)

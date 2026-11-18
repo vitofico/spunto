@@ -73,6 +73,15 @@ export interface AccountSecurity {
   reauthenticated: boolean;
   reauth_url: string | null;
 }
+export interface SuggestionDecision {
+  suggestion: Suggestion;
+  applied: boolean;
+  result?:
+    | Note
+    | { changed: number }
+    | { open?: { note_id?: string; plugin_id?: string; view?: string } }
+    | null;
+}
 export interface Suggestion {
   id: string;
   plugin: string;
@@ -83,6 +92,8 @@ export interface Suggestion {
   confidence: number | null;
   reason: string;
   status: string;
+  one_tap?: boolean;
+  receipt?: { note_version: number; undoable: boolean } | null;
   change_seq: number;
   created_at: string;
   decided_at: string | null;
@@ -177,6 +188,10 @@ export interface Plugin {
   origin?: "bundled" | "operator" | "unknown";
   source_kind?: "bundled" | "folder" | "entrypoint" | "unknown";
   can_enable?: boolean;
+  review_required?: boolean;
+  can_review_pinned?: boolean;
+  review_token?: string;
+  network_destinations?: (string | null)[];
   availability_reason?: string | null;
   can_delete_data?: boolean;
   granted?: string[];

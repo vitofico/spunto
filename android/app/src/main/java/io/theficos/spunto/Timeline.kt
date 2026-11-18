@@ -228,7 +228,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
     if(note.conflictOf!=null) { Text("●",style=MaterialTheme.typography.labelSmall,color=SpuntoColors.warn);Text(context.getString(R.string.core_conflict_compare),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3) }
     if(provenance.isNotEmpty()) Text((if(note.conflictOf!=null) "· " else "")+provenance.joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
    }
-   if(writable) Suggestions(model,note.id,onNote)
+   if(writable) Suggestions(model,note,onNote)
    if(note.machine) Text(context.getString(R.string.core_machine_written,note.sourceRef ?: context.getString(R.string.core_plugin_indefinite)),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
    if(restore && writable) TextButton(onClick={ model.flags(note.id,trashed=false);feedback.show(context.getString(R.string.core_restored)) },modifier=Modifier.heightIn(min=48.dp)) { Text(context.getString(R.string.core_restore)) }
    if(!paneEnd) HorizontalDivider(Modifier.padding(top=8.dp),color=MaterialTheme.colorScheme.outlineVariant)

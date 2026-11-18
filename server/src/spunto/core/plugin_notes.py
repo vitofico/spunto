@@ -145,6 +145,25 @@ class PluginNotes:
         self.ctx.check("notes.read")
         return result
 
+    async def is_label_decision_revision(self, note_id, version):
+        self.ctx.check("suggest")
+        async with self.store.read() as conn:
+            try:
+                note = await self.core._row(conn, note_id)
+            except Problem as exc:
+                if exc.status == 404:
+                    return True
+                raise
+            if note["version"] != version:
+                return True
+            rows = await conn.execute_fetchall(
+                "SELECT 1 FROM note_revision WHERE note_id=? AND version=? "
+                "AND change_kind IN ('label_suggestion','label_suggestion_undo')",
+                (note_id, version),
+            )
+        self.ctx.check("suggest")
+        return bool(rows)
+
     async def suggestion_decisions(self, note_id):
         self.ctx.check("suggest")
         async with self.store.read() as conn:
@@ -174,16 +193,21 @@ class PluginNotes:
             or type(recent) is not bool
         ):
             raise ValueError("invalid suggestion history page")
-        condition = " AND rowid<?" if recent and cursor else " AND rowid>?" if not recent else ""
-        order = "DESC" if recent else "ASC"
+        if recent:
+            condition = " AND status IN ('accepted','dismissed')"
+            if cursor:
+                condition += " AND change_seq<?"
+            order, cursor_key = "change_seq DESC", "change_seq"
+        else:
+            condition, order, cursor_key = " AND rowid>?", "rowid ASC", "rowid"
         async with self.store.read() as conn:
             rows = await conn.execute_fetchall(
                 "SELECT rowid,* FROM suggestion WHERE plugin_id=?"  # noqa: S608
                 + condition
-                + " ORDER BY rowid "
+                + " ORDER BY "
                 + order
                 + " LIMIT ?",
-                (self.ctx.plugin_id, *([cursor] if condition else []), limit + 1),
+                (self.ctx.plugin_id, *([cursor] if cursor or not recent else []), limit + 1),
             )
         self.ctx.check("suggest")
         return {
@@ -198,7 +222,7 @@ class PluginNotes:
                 }
                 for r in rows[:limit]
             ],
-            "next_cursor": rows[limit - 1]["rowid"] if len(rows) > limit else None,
+            "next_cursor": rows[limit - 1][cursor_key] if len(rows) > limit else None,
         }
 
     async def _guard_sources(

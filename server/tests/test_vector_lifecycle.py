@@ -89,9 +89,14 @@ async def lifecycle(tmp_path):
 
 
 async def switch(client, plugin_id, on, permissions=None):
+    consent = None
+    if on:
+        catalog = (await client.get("/api/v1/plugins")).json()["plugins"]
+        plugin = next(item for item in catalog if item["id"] == plugin_id)
+        consent = {"permissions": permissions, "review_token": plugin["review_token"]}
     response = await client.post(
         f"/api/v1/plugins/{plugin_id}/{'enable' if on else 'disable'}",
-        json={"permissions": permissions} if on else None,
+        json=consent,
         headers={"Origin": PUBLIC_URL},
     )
     assert response.status_code == 200, response.text

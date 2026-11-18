@@ -1,21 +1,23 @@
 import { t, useLanguage } from "../lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import type { Suggestion } from "../lib/types";
+import type { Note, Suggestion } from "../lib/types";
 import { NoteReference } from "./Vocabulary";
 import styles from "./Feature.module.css";
 import { labelChangeImpact } from "./labelChange";
 export { suggestionTitle } from "./suggestionTitle";
 export function SuggestionPreview({
   suggestion: s,
+  baseNote,
 }: {
   suggestion: Suggestion;
+  baseNote?: Note;
 }) {
   useLanguage();
   const note = useQuery({
     queryKey: ["note", s.note_id],
     queryFn: () => api.note(s.note_id!),
-    enabled: !!s.note_id,
+    enabled: !!s.note_id && !baseNote,
   });
   const source = useQuery({
     queryKey: ["note", s.payload.source_id],
@@ -94,11 +96,14 @@ export function SuggestionPreview({
         </p>
         <div className={styles.diff}>
           <div>
-            <h3>{t("suggestionpreview.before")}</h3>
-            <pre>{note.data?.body ?? t("suggestionpreview.loading_note")}</pre>
+            <h3>− {t("suggestionpreview.before")}</h3>
+            <pre>
+              {(baseNote ?? note.data)?.body ??
+                t("suggestionpreview.loading_note")}
+            </pre>
           </div>
           <div>
-            <h3>{t("suggestionpreview.after")}</h3>
+            <h3>+ {t("suggestionpreview.after")}</h3>
             <pre>{String(s.payload.body ?? "")}</pre>
           </div>
         </div>
@@ -115,7 +120,10 @@ export function SuggestionPreview({
         <div className={styles.diff}>
           <div>
             <h3>{t("suggestionpreview.destination")}</h3>
-            <pre>{note.data?.body ?? t("suggestionpreview.loading_note")}</pre>
+            <pre>
+              {(baseNote ?? note.data)?.body ??
+                t("suggestionpreview.loading_note")}
+            </pre>
           </div>
           <div>
             <h3>{t("suggestionpreview.source")}</h3>

@@ -422,6 +422,66 @@ class SyncEngineTest {
   assertEquals(emptyMap<String,String>(),repo.refused.first());assertTrue(repo.dao.outbox().isEmpty())
   assertEquals("Owner words\n\nDecided on the web",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending)
  }
+ @Test fun reviewedReplacementSendsExactVersionAndRefreshesOnStaleRefusal()=runBlocking {
+  val id=uuidV7()
+  val proposal=uuidV7()
+  val pushed=mutableListOf<JsonObject>()
+  repo.putNote(Note(id,"Reviewed body",serverRev=1))
+  repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {
+   put("action","replace_body")
+   put("note_version",1)
+   put("payload",buildJsonObject {put("body","Tidy replacement")})
+   put("status","pending")
+  }.toString()))
+  repo.decideSuggestion(proposal,"accept")
+  server.dispatcher=refusingServer(pushed,notes=mapOf(id to note(id,"Newer owner edit",2))) {
+   buildJsonObject {put("status","rejected");put("code","suggestion_stale")}
+  }
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(1,pushed.single().getValue("reviewed_version").jsonPrimitive.int)
+  assertEquals(id,repo.dao.output("review-refusal",proposal)?.noteId)
+  assertEquals("Newer owner edit",repo.dao.get(id)?.body)
+ }
+ @Test fun queuedUndoFollowsItsAcceptanceAndShowsHistoryWhenServerRejectsAnInterveningEdit()=runBlocking {
+  val context=ApplicationProvider.getApplicationContext<android.content.Context>()
+  val replica="undo-"+uuidV7()+".db"
+  fun openReplica()=Room.databaseBuilder(context,SpuntoDatabase::class.java,replica).allowMainThreadQueries().build()
+  db.close()
+  db=openReplica()
+  repo=NotesRepository(db)
+  try {
+   val id=uuidV7()
+   val proposal=uuidV7()
+   val pushed=mutableListOf<JsonObject>()
+   repo.putNote(Note(id,"Owner words",serverRev=1))
+   repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {
+    put("action","add_label")
+    put("payload",buildJsonObject {put("path","recipes")})
+    put("status","pending")
+   }.toString()))
+   repo.decideSuggestion(proposal,"accept")
+   repo.decideSuggestion(proposal,"undo")
+   db.close()
+   db=openReplica()
+   val reopened=NotesRepository(db)
+   assertEquals(setOf(id),reopened.queuedSuggestionUndos.first())
+   server.dispatcher=refusingServer(pushed,notes=mapOf(id to note(id,"Newer collaborator words #recipes",3))) { op ->
+    if(op.getValue("decision").jsonPrimitive.content=="accept") {
+     buildJsonObject {put("status","applied");put("version",2);put("note",note(id,"Owner words #recipes",2))}
+    } else {
+     buildJsonObject {put("status","rejected");put("code","suggestion_undo_stale")}
+    }
+   }
+   assertEquals(SyncStatus.Complete(0),engine(reopened).sync())
+   assertEquals(listOf("accept","undo"),pushed.map {it.getValue("decision").jsonPrimitive.content})
+   assertEquals(emptySet<String>(),reopened.queuedSuggestionUndos.first())
+   assertEquals(id,reopened.dao.output("undo-refusal",proposal)?.noteId)
+   assertEquals("Newer collaborator words #recipes",reopened.dao.get(id)?.body)
+  } finally {
+   db.close()
+   context.deleteDatabase(replica)
+  }
+ }
  @Test fun decisionRefusedByAnOlderBuildIsSettledNotShownAsARefusedNote()=runBlocking {
   val id=uuidV7();val proposal=uuidV7();repo.putNote(Note(id,"Owner words",serverRev=1));val pushed=mutableListOf<JsonObject>()
   repo.dao.putOutput(PluginOutputEntity("suggestion",proposal,id,buildJsonObject {put("action","append_text");put("payload",buildJsonObject {put("text","Machine words")});put("status","pending")}.toString()))

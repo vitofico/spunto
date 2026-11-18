@@ -75,7 +75,10 @@ async def test_removed_catalog_owner_cleanup_preserves_notes_and_other_data(env,
         assert (
             await server.client.post(
                 f"/api/v1/plugins/{PLUGIN}/enable",
-                json={"permissions": PERMISSIONS},
+                json={
+                    "permissions": PERMISSIONS,
+                    "review_token": card(server.services.host)["review_token"],
+                },
                 headers=ORIGIN,
             )
         ).status_code == 200
@@ -236,11 +239,17 @@ async def test_new_source_with_same_id_does_not_inherit_consent_or_execute(tmp_p
         note = await notes.create("Synthetic source-change note")
         await notes.set_search_text(note["id"], "Retired-source supplement")
         await host.enqueue(PLUGIN, "follow", delay_ms=3_600_000)
+        reviewed = card(host)["review_token"]
         folder.rename(folder.parent / "replacement")
         await host.discover()
         current = card(host)
         assert current["switch"] == "off" and current["granted"] == []
         assert current["origin"] == "operator" and current["source_kind"] == "folder"
+        assert current["review_required"] and current["review_token"] != reviewed
+        await host.discover()
+        assert card(host)["review_required"]
+        with pytest.raises(ContextError, match="plugin_review_changed"):
+            await host.enable(PLUGIN, PERMISSIONS, reviewed=True, review_token=reviewed)
         assert host.generations[PLUGIN] > generation
         assert PLUGIN not in host.plugins
         with pytest.raises(ContextError, match="plugin_disabled"):
@@ -363,7 +372,10 @@ async def test_retained_environment_pin_stays_locked_off_but_owner_can_delete(en
         assert (
             await server.client.post(
                 f"/api/v1/plugins/{PLUGIN}/enable",
-                json={"permissions": PERMISSIONS},
+                json={
+                    "permissions": PERMISSIONS,
+                    "review_token": card(server.services.host)["review_token"],
+                },
                 headers=ORIGIN,
             )
         ).status_code == 200
@@ -790,3 +802,31 @@ async def test_failed_run_writer_fault_keeps_revocation_and_successor_state(
             if owner_task and not owner_task.done():
                 owner_task.cancel()
                 await asyncio.gather(owner_task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("pin", ["+", "-"])
+async def test_changed_pinned_source_requires_fresh_consent_without_overriding_off(
+    tmp_path, settings, pin
+):
+    folder = install(tmp_path)
+    config = settings.model_copy(update={"data_dir": tmp_path, "plugins": pin + PLUGIN})
+    async with harness(tmp_path, config) as host:
+        original = card(host)["review_token"]
+        folder.rename(folder.parent / "new-source")
+        await host.discover()
+        await host.discover()
+        current = card(host)
+        assert current["switch"] == "off" and current["review_required"]
+        assert current["can_review_pinned"] == (pin == "+")
+        if pin == "-":
+            with pytest.raises(ContextError, match="pinned"):
+                await host.enable(
+                    PLUGIN, PERMISSIONS, reviewed=True, review_token=current["review_token"]
+                )
+        else:
+            with pytest.raises(ContextError, match="plugin_review_changed"):
+                await host.enable(PLUGIN, PERMISSIONS, reviewed=True, review_token=original)
+            await host.enable(
+                PLUGIN, PERMISSIONS, reviewed=True, review_token=current["review_token"]
+            )
+            assert card(host)["switch"] == "on" and not card(host)["can_review_pinned"]

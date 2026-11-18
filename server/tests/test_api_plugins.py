@@ -329,3 +329,40 @@ async def test_unconfigured_plugins_stay_off_and_catalog_explains_requirements(p
         assert server.services.host.plugins_rev == before
     assert rows["tasks"]["can_enable"] is True
     assert rows["tasks"]["availability_reason"] is None
+
+
+async def test_mode_patch_merges_only_behavior_and_rejects_other_settings(plugin_server):
+    server = plugin_server
+    await setup(server)
+    url = "/api/v1/plugins/label-suggestions/settings"
+    advanced = {"confidence_threshold": 0.95}
+    assert (await server.client.put(url, json=advanced, headers=ORIGIN)).status_code == 200
+    response = await server.client.patch(url, json={"change_mode": "automatic"}, headers=ORIGIN)
+    assert response.status_code == 200
+    assert response.json()["values"]["confidence_threshold"] == 0.95
+    assert response.json()["values"]["change_mode"] == "automatic"
+    assert (await server.client.patch(url, json=advanced, headers=ORIGIN)).status_code == 422
+
+
+async def test_network_consent_tracks_configured_destination(plugin_server):
+    server = plugin_server
+    await setup(server)
+    host = server.services.host
+    plugin = "webhooks"
+
+    def catalog_row():
+        return next(item for item in host.catalog() if item["id"] == plugin)
+
+    await host.set_settings(plugin, {"urls": ["https://first.example.org/notes"]})
+    reviewed = catalog_row()
+    assert reviewed["review_required"] and reviewed["network_destinations"] == ["first.example.org"]
+    await host.set_settings(plugin, {"urls": ["https://second.example.org/notes"]})
+    url = f"/api/v1/plugins/{plugin}/enable"
+    consent = {"permissions": reviewed["permissions"], "review_token": reviewed["review_token"]}
+    response = await server.client.post(url, json=consent, headers=ORIGIN)
+    assert response.status_code == 409
+    current = response.json()["plugin"]
+    assert current["switch"] == "off" and current["network_destinations"] == ["second.example.org"]
+    assert response.json()["code"] == "plugin_review_changed"
+    consent["review_token"] = current["review_token"]
+    assert (await server.client.post(url, json=consent, headers=ORIGIN)).status_code == 200

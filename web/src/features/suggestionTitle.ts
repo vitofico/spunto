@@ -1,6 +1,7 @@
 import { t } from "../lib/i18n";
 import type { Suggestion } from "../lib/types";
 export function requiresSuggestionPreview(s: Suggestion) {
+  if (s.one_tap === true) return false;
   return (
     ["replace_body", "merge_notes", "label_change"].includes(s.action) ||
     (s.plugin === "links" && s.action === "append_text")
@@ -10,7 +11,7 @@ export function suggestionTitle(s: Suggestion) {
   const p = s.payload;
   switch (s.action) {
     case "add_label":
-      return `#${String(p.path)}`;
+      return t("quiet.add_label", { label: String(p.path) });
     case "set_title":
       return t("suggestionpreview.title_value1", { value1: String(p.title) });
     case "append_text":
@@ -20,7 +21,11 @@ export function suggestionTitle(s: Suggestion) {
           : "suggestionpreview.append_text",
       );
     case "replace_body":
-      return t("suggestionpreview.review_edit");
+      return t(
+        s.one_tap && s.plugin === "voice-memos"
+          ? "quiet.add_transcript"
+          : "suggestionpreview.review_edit",
+      );
     case "merge_notes":
       return t("suggestionpreview.compare_notes");
     case "label_change":
@@ -36,5 +41,30 @@ export function suggestionTitle(s: Suggestion) {
       return t("slots.open");
     default:
       return t("suggestionpreview.review_suggestion");
+  }
+}
+
+export function appliedSuggestionTitle(s: Suggestion) {
+  switch (s.action) {
+    case "add_label":
+      return t("quiet.added_label", { label: String(s.payload.path) });
+    case "set_title":
+      return t("quiet.set_title", { title: String(s.payload.title) });
+    case "replace_body":
+      return t(
+        s.plugin === "voice-memos"
+          ? "quiet.added_transcript"
+          : "quiet.edited_note",
+      );
+    case "merge_notes":
+      return t("quiet.merged_notes");
+    case "label_change":
+      return t("quiet.changed_labels");
+    case "append_text":
+      return t(
+        s.plugin === "links" ? "quiet.linked_note" : "quiet.appended_text",
+      );
+    default:
+      return t("commandproposal.applied");
   }
 }

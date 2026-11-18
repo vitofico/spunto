@@ -45,6 +45,11 @@ async def smart(server):
     await host.discover()
     await host.enable(PLUGIN, permissions=host.manifests[PLUGIN]["permissions"])
     provider.label_answer = {"labels": [{"path": "Project/Spunto", "confidence": 0.97}]}
+    async with host.store.write() as conn:
+        await conn.execute(
+            "INSERT INTO credential(id,kind,name,scope,created_at) VALUES (?,'session',?,'full',0)",
+            (OWNER.id, OWNER.name),
+        )
     try:
         yield host, provider, Notes(host.store, OWNER)
     finally:
@@ -129,7 +134,7 @@ async def test_live_feedback_preferences_exclude_hidden_and_machine_sources(smar
 async def test_only_high_confidence_existing_tags_autoapply_and_explicit_false_wins(smart):
     host, provider, notes = smart
     await notes.create("Prior personal vocabulary #Project/Spunto")
-    await host.set_settings(PLUGIN, {"auto_accept_existing": True, "confidence_threshold": 0.9})
+    await host.set_settings(PLUGIN, {"change_mode": "automatic", "confidence_threshold": 0.9})
     provider.label_answer = {
         "labels": [
             {"path": "project/spunto", "confidence": 0.97},
@@ -142,17 +147,17 @@ async def test_only_high_confidence_existing_tags_autoapply_and_explicit_false_w
     assert current["labels"] == ["Project/Spunto"]
     statuses = {row["payload"]["path"]: row["status"] for row in await proposals(host)}
     assert statuses == {"Project/Spunto": "accepted", "new-topic": "pending"}
-    await host.set_settings(PLUGIN, {"auto_accept_existing": False})
+    await host.set_settings(PLUGIN, {"change_mode": "ask_first"})
     other = await notes.create("Another SQLite project needs tagging")
     await label_suggestions.saved(ctx(host), other["id"])
     assert (await notes.get(other["id"]))["labels"] == []
-    assert host.states[PLUGIN]["settings"]["auto_accept_existing"] is False
+    assert host.states[PLUGIN]["settings"]["change_mode"] == "ask_first"
 
 
 async def test_existing_label_below_owner_threshold_remains_pending(smart):
     host, provider, notes = smart
     await notes.create("Prior personal vocabulary #Project/Spunto")
-    await host.set_settings(PLUGIN, {"auto_accept_existing": True, "confidence_threshold": 0.95})
+    await host.set_settings(PLUGIN, {"change_mode": "automatic", "confidence_threshold": 0.95})
     provider.label_answer = {"labels": [{"path": "Project/Spunto", "confidence": 0.9}]}
     target = await notes.create("SQLite should honor the owner's confidence threshold")
     await label_suggestions.saved(ctx(host), target["id"])
@@ -175,7 +180,7 @@ async def test_past_example_changed_during_provider_call_never_writes(smart, cha
             await notes.flags(used["id"], {"private" if change == "private" else "trashed": True})
 
     provider.on_chat = mutate
-    await host.set_settings(PLUGIN, {"auto_accept_existing": True})
+    await host.set_settings(PLUGIN, {"change_mode": "automatic"})
     await label_suggestions.saved(ctx(host), target["id"])
     assert not await proposals(host)
     assert not await ctx(host).storage.records.get("processed", target["id"])
@@ -251,7 +256,11 @@ async def test_long_target_reserves_real_fenced_past_examples_and_drops_each_tai
 async def test_recent_feedback_after_sixty_old_decisions_is_used_and_paginates(smart):
     host, provider, notes = smart
     source = await notes.create("Owner feedback on a past SQLite decision")
-    decision_ids = []
+    reversible = await ctx(host).notes.suggest(
+        source["id"], "add_label", {"path": "older-reversible-label"}
+    )
+    source = (await decide(host.store, OWNER, reversible["id"], "accept"))["result"]
+    decision_ids = [reversible["id"]]
     for index in range(65):
         proposal = await ctx(host).notes.suggest(
             source["id"],
@@ -285,6 +294,10 @@ async def test_recent_feedback_after_sixty_old_decisions_is_used_and_paginates(s
     assert '"path": "recent-owner-preference"' in prompt
     assert '"path": "feedback/old-0"' not in prompt
 
+    await decide(host.store, OWNER, reversible["id"], "undo")
+    newest = (await ctx(host).notes.suggestion_history(limit=1, recent=True))["suggestions"][0]
+    assert newest["id"] == reversible["id"] and newest["status"] == "dismissed"
+
 
 async def test_owner_suggest_now_reruns_unchanged_note_without_ignoring_dismissal(smart):
     host, provider, notes = smart
@@ -302,3 +315,102 @@ async def test_owner_suggest_now_reruns_unchanged_note_without_ignoring_dismissa
     assert '"dismissed": ["Project/Spunto"]' in chat_prompt(provider)
     assert (await notes.get(target["id"]))["labels"] == []
     assert (await proposals(host))[0]["status"] == "dismissed"
+
+
+async def test_automatic_labels_share_one_revision_and_undo_independently_without_retrigger(smart):
+    host, provider, notes = smart
+    await notes.create("Prior vocabulary #recipes #books")
+    await host.set_settings(PLUGIN, {"change_mode": "automatic"})
+    provider.label_answer = {
+        "labels": [
+            {"path": "recipes", "confidence": 0.92},
+            {"path": "books", "confidence": 0.98},
+            {"path": "new-topic", "confidence": 0.99},
+        ]
+    }
+    target = await notes.create("My note about recipes and books  \n")
+    result = await label_suggestions.saved(ctx(host), target["id"], target["version"])
+    recipes, books, new = [
+        next(row for row in result if row["payload"]["path"] == path)
+        for path in ("recipes", "books", "new-topic")
+    ]
+    assert recipes["receipt"] == books["receipt"]
+    assert recipes["receipt"]["note_version"] == target["version"] + 1
+    assert new["status"] == "pending"
+    count = len(provider.requests)
+
+    after_recipes = (await decide(host.store, OWNER, recipes["id"], "undo"))["result"]
+    assert after_recipes["labels"] == ["books"]
+    assert {row["id"] for row in after_recipes["suggestions"]} == {books["id"], new["id"]}
+    await label_suggestions.saved(ctx(host), target["id"], after_recipes["version"])
+    after_books = (await decide(host.store, OWNER, books["id"], "undo"))["result"]
+    assert after_books["body"] == target["body"]
+    await label_suggestions.saved(ctx(host), target["id"], after_books["version"])
+    assert len(provider.requests) == count
+    assert set(await ctx(host).notes.suggestion_decisions(target["id"])) == {"recipes", "books"}
+
+    final = (await decide(host.store, OWNER, new["id"], "accept"))["result"]
+    await label_suggestions.saved(ctx(host), target["id"], final["version"])
+    assert len(provider.requests) == count
+    edited = await notes.edit(target["id"], "Updated prose for another look", final["version"])
+    provider.label_answer = {"labels": [{"path": "updated-topic", "confidence": 0.96}]}
+    await label_suggestions.saved(ctx(host), target["id"], edited["version"])
+    assert len(provider.requests) > count
+
+
+async def test_label_mode_is_checked_again_after_provider_returns(smart):
+    host, provider, notes = smart
+    await notes.create("Known project #Project/Spunto")
+    await host.set_settings(PLUGIN, {"change_mode": "automatic"})
+    target = await notes.create("A SQLite note without labels")
+
+    async def opt_out():
+        await host.set_settings(PLUGIN, {"change_mode": "ask_first"})
+
+    provider.on_chat = opt_out
+    result = await label_suggestions.saved(ctx(host), target["id"], target["version"])
+    assert result[0]["status"] == "pending"
+    assert (await notes.get(target["id"]))["version"] == target["version"]
+
+
+async def test_quiet_labels_skip_private_machine_agent_and_external_notes(smart):
+    import uuid
+
+    from spunto.store.db import now_ms
+
+    host, provider, notes = smart
+    await notes.create("Existing owner vocabulary #Project/Spunto")
+    await host.set_settings(PLUGIN, {"change_mode": "automatic"})
+    private = await notes.create("Private current note for testing", private=True)
+    async with host.store.write() as conn:
+        machine = await notes._insert(
+            conn,
+            "Machine-provided current note",
+            str(uuid.uuid7()),
+            now_ms(),
+            {},
+            False,
+            machine=True,
+        )
+        external = await notes._insert(
+            conn,
+            "External current note for testing",
+            str(uuid.uuid7()),
+            now_ms(),
+            {},
+            False,
+            origin="external",
+        )
+    agent = await Notes(host.store, Principal("agent", "pat", "Synthetic agent", "write")).create(
+        "Agent current note for testing"
+    )
+
+    count = len(provider.requests)
+    for note in (private, machine):
+        assert await label_suggestions.saved(ctx(host), note["id"], note["version"]) is None
+        assert (await notes.get(note["id"]))["version"] == note["version"]
+    assert len(provider.requests) == count
+    for note in (agent, external):
+        result = await label_suggestions.saved(ctx(host), note["id"], note["version"])
+        assert result[0]["status"] == "pending"
+        assert (await notes.get(note["id"]))["version"] == note["version"]

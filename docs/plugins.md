@@ -48,7 +48,11 @@ Recording and reviewing need a connection. Synced decision/outcome notes, the De
 
 ## Smart tag suggestions
 
-**Label suggestions** runs after a note is saved when a chat model is available. It proposes at most three labels, including at most one new label. To apply the agreed automatic-tagging policy, enable **Accept existing labels automatically** in its settings and choose **Minimum confidence for automatic acceptance** (default `0.9`, configurable from `0.7` to `1.0`). Only labels already in use can be applied automatically at that threshold. New labels always wait for review. The setting starts off, and an existing owner's explicit opt-out is preserved.
+**Label suggestions** runs after a note is saved when a chat model is available. It proposes at most three labels, including at most one new label. In its settings, choose **Ask first** or **Automatic**. Automatic adds existing labels that meet the minimum confidence (default `0.9`, configurable from `0.7` to `1.0`). New labels remain available to add with a tap. The upgrade preserves the previous automatic-label setting. Fresh installations start on Ask first.
+
+The space owner can choose the mode on web or Android. Automatic applies only to the owner’s eligible notes. Title and summary and Link enrichment can add a heading to a new or edited note that lacks one. Voice memos can append a transcript when the note contains only verified links to recordings captured for that note. Captions, pasted recording links and older uploads go to review. Title backfill and dictated-text rewrites also remain under review.
+
+Open the note to see what changed and choose **Undo** while the change is reversible. Undoing an automatic label also teaches the plugin to leave that label off this note. Dismissing the acknowledgement keeps the change. Android can queue Undo offline. If another edit wins before it syncs, open the note’s history to inspect the revisions.
 
 Suggestions use your vocabulary and live examples of how you tagged owner-authored notes, rather than label names alone. Semantic neighbours supply examples when embeddings are available; tagged notes from the vocabulary fill gaps and support chat-only installations. The plugin reads the most recent 60 of its labeling decisions and uses at most six accepted/dismissed feedback items as contextual evidence. A rejection on the current note remains an exclusion; a rejection on another note is not a universal ban. This is bounded context selection, not a globally trained personal model or a review of the entire library.
 
@@ -70,7 +74,7 @@ The space owner can choose chat, embedding, vision and transcription models in t
 
 A Waiting plugin names the missing capability, attachment support or setup requirement. A failed connection check includes its safe operator hint. Command failures distinguish invalid model answers, unavailable indexes, credentials, missing models, timeouts and provider limits while retaining stable API error codes. Server plugin warnings include the plugin, operation, exception class and a database SQLSTATE when available; exception messages, note text, provider response bodies and credentials are omitted.
 
-After repairing a provider or upgrading the server, use the failed plugin card's **Retry** action to re-enable it. The supported API equivalent is `POST /api/v1/plugins/{id}/enable` with the exact current manifest `permissions` array, authenticated as an owner session or device; cookie requests also need the matching Origin. This resets the circuit counter and retries retained dead work without deleting plugin data or suggestions. A restart alone preserves a Failed state. Do not edit lifecycle rows directly.
+After repairing a provider or upgrading the server, use the failed plugin card's **Retry** action to re-enable it. The supported API equivalent is `POST /api/v1/plugins/{id}/enable` with the current catalog’s `permissions` and `review_token`, authenticated as an owner session or device; cookie requests also need the matching Origin. This resets the circuit counter and retries retained dead work without deleting plugin data or suggestions. A restart alone preserves a Failed state. Do not edit lifecycle rows directly.
 
 ## Periodic tag curation
 

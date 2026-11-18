@@ -1038,3 +1038,94 @@ async def test_real_trashed_event_guard_rechecks_private_state_after_dns(capture
         change_seq=trashed["change_seq"],
     )
     assert not sent
+
+
+@pytest.mark.parametrize(
+    "extra,keep_link,minutes,automatic",
+    [
+        ("", True, "0", True),
+        ("Owner caption", True, "0", False),
+        ("", False, "0", False),
+        ("", True, "00", False),
+    ],
+)
+async def test_quiet_transcript_preserves_verified_recordings(
+    capture, extra, keep_link, minutes, automatic
+):
+    host, ai, _, notes = capture
+    async with host.store.write() as conn:
+        await conn.execute(
+            "INSERT INTO credential(id,kind,name,scope,created_at) "
+            "VALUES (?,'session','Owner','full',0)",
+            (OWNER.id,),
+        )
+    await host.set_settings("voice-memos", {"change_mode": "automatic", "keep_link": keep_link})
+    from uuid import uuid7
+
+    note_id = str(uuid7())
+    attachments = [
+        await write_attachment(
+            host.store,
+            host.settings,
+            wav(n),
+            filename="clip.wav",
+            mime="audio/wav",
+            capture_note=note_id,
+        )
+        for n in (1, 2)
+    ]
+    body = "\n\n".join(
+        f"[Recording {minutes}:0{n}](/a/{a['id']})" for n, a in enumerate(attachments, 1)
+    )
+    note = await notes.create("  " + (body + "\n\n" + extra).rstrip(), id=note_id)
+    await voice_memos.process(ctx(host, IDS[2], note), note["id"])
+    current = await notes.get(note["id"])
+    assert current["body"] == note["body"] + (
+        "\n\nSynthetic voice transcript." * 2 if automatic else ""
+    )
+    assert current["suggestions"][0]["status"] == ("accepted" if automatic else "pending")
+    await voice_memos.process(ctx(host, IDS[2], current), current["id"])
+    assert len(ai.calls) == 2
+    if automatic:
+        copied = await notes.create(body)
+        await voice_memos.process(ctx(host, IDS[2], copied), copied["id"])
+        saved = await notes.get(copied["id"])
+        assert saved["body"] == body and saved["suggestions"][0]["status"] == "pending"
+        assert not saved["suggestions"][0].get("one_tap")
+
+
+@pytest.mark.parametrize("mode,label_count", [("ask_first", 2), ("automatic", 3)])
+async def test_enrichment_prioritizes_title_and_ranks_pending_labels(capture, mode, label_count):
+    host, ai, http, notes = capture
+    async with host.store.write() as conn:
+        await conn.execute(
+            "INSERT INTO credential(id,kind,name,scope,created_at) "
+            "VALUES (?,'session','Owner','full',0)",
+            (OWNER.id,),
+        )
+
+    async def with_labels(output, **_):
+        return output(
+            summary="Source",
+            labels=[
+                {"path": "third", "confidence": 0.77},
+                {"path": "first", "confidence": 0.99},
+                {"path": "second", "confidence": 0.88},
+            ],
+        )
+
+    ai.chat = with_labels
+    await host.set_settings("link-enrichment", {"change_mode": mode})
+    note = await notes.create("https://public.test/article")
+    await link_enrichment.enrich(ctx(host, IDS[0], note), note["id"], note["version"])
+    current = await notes.get(note["id"])
+    pending = [s for s in current["suggestions"] if s["status"] == "pending"]
+    assert len(pending) == 3
+    assert {s["payload"]["path"] for s in pending if s["action"] == "add_label"} == set(
+        ["first", "second", "third"][:label_count]
+    )
+    assert (
+        current["body"] == ("# Synthetic source\n\n" if mode == "automatic" else "") + note["body"]
+    )
+    await link_enrichment.enrich(ctx(host, IDS[0], current), current["id"], current["version"])
+    assert len(http.calls) == 1

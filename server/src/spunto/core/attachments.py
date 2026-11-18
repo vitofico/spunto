@@ -76,6 +76,7 @@ async def write_attachment(
     *,
     filename=None,
     mime=None,
+    capture_note=None,
     check=lambda: None,
     clock=now_ms,
     to_thread=asyncio.to_thread,
@@ -120,6 +121,15 @@ async def write_attachment(
                     "INSERT INTO attachment VALUES (?,?,?,?,?,?,?,?)", tuple(result.values())
                 )
                 store.emit("attachment.added")
+            if capture_note and media in {"audio/ogg", "audio/opus", "audio/wav", "audio/x-wav"}:
+                # Attachment upload may precede the note create on an offline phone.
+                await conn.execute(
+                    "INSERT INTO plugin_record(plugin_id,collection,id,note_id,key,data,updated_at)"
+                    " VALUES('voice-memos','host:capture-markers',?,"
+                    "(SELECT id FROM note WHERE id=?),?,'{}',?) "
+                    "ON CONFLICT(plugin_id,collection,id) DO NOTHING",
+                    (capture_note + "/" + result["id"], capture_note, capture_note, clock()),
+                )
             check()
             # Quota rejection happens before publication. Only rename/directory fsync
             # hold the writer; writing and verifying the full blob happen above.

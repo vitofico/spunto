@@ -14,6 +14,8 @@ internal interface NativePluginBackend {
  suspend fun ai():JsonObject
  suspend fun settings(id:String):JsonObject
  suspend fun toggle(id:String,on:Boolean,permissions:List<String>):JsonObject
+ suspend fun toggle(id:String,on:Boolean,permissions:List<String>,reviewToken:String?):JsonObject=toggle(id,on,permissions)
+ suspend fun changeMode(id:String,mode:String):JsonObject=error("Settings update unavailable")
 }
 internal data class PluginManagerSnapshot(val catalog:JsonObject,val manifest:JsonObject,val epoch:String="")
 internal sealed interface PluginToggleResult {
@@ -73,13 +75,13 @@ internal class NativePluginManagerActions(
    catch(error:Exception) {if(owns(config,attempt)) report(errorCode(error))}
   }.also {refreshJob=it}
  }
- fun toggle(id:String,on:Boolean,accepted:List<String>?=null,requiredUndo:PluginUndo?=null,onComplete:(PluginToggleResult)->Unit={}):Job? {
+ fun toggle(id:String,on:Boolean,accepted:List<String>?=null,requiredUndo:PluginUndo?=null,reviewToken:String?=null,onComplete:(PluginToggleResult)->Unit={}):Job? {
   val config=owner() ?: return null
   if(!online() || busy.value) return null
   val plugin=current().rows.firstOrNull {it.id==id} ?: return null
   if(if(on) !plugin.canEnable else !plugin.canDisable) return null
   val permissions=plugin.permissions ?: return null
-  if(on && (accepted==null || accepted.size!=accepted.distinct().size || accepted.toSet()!=permissions.toSet())) {onComplete(PluginToggleResult.ReviewPermissions);return null}
+  if(on && (reviewToken!=plugin.reviewToken || accepted==null || accepted.size!=accepted.distinct().size || accepted.toSet()!=permissions.toSet())) {onComplete(PluginToggleResult.ReviewPermissions);return null}
   val expectedEpoch=epoch();val attempt=++generation;refreshJob?.cancel();busy.value=true;undo.value=null;expiry?.cancel()
   return scope.launch {
    try {
@@ -88,7 +90,7 @@ internal class NativePluginManagerActions(
      val latest=current().rows.firstOrNull {it.id==id}
      if(latest==null || undoPermissions(requiredUndo,latest,config.serverUrl.trimEnd('/'),now())==null) {if(owns(config,attempt)) onComplete(PluginToggleResult.ReviewPermissions);return@launch}
     }
-    val row=api.toggle(id,on,if(on) permissions else emptyList());ensureActive()
+    val row=api.toggle(id,on,if(on) permissions else emptyList(),reviewToken);ensureActive()
     if(!owns(config,attempt)) return@launch
     require(row.pluginText("id")==id && row.pluginText("switch") in setOf("on","off") && row.pluginLong("plugins_rev")!=null) {resources.getString(R.string.settings_the_server_did_not_acknowledge_this_switch)}
     if(epoch()!=expectedEpoch || !owns(config,attempt)) return@launch
@@ -115,7 +117,7 @@ internal class NativePluginManagerActions(
       catch(cancelled:CancellationException) {throw cancelled}
       catch(refreshError:Exception) {if(owns(config,attempt)) report(errorCode(refreshError))}
      }
-     if(owns(config,attempt) && epoch()==expectedEpoch) {report(errorCode(error));onComplete(if(error is ApiException && error.code=="permissions_changed") PluginToggleResult.ReviewPermissions else PluginToggleResult.Failed(errorCode(error)))}
+     if(owns(config,attempt) && epoch()==expectedEpoch) {report(errorCode(error));onComplete(if(error is ApiException && error.status==409 && on) PluginToggleResult.ReviewPermissions else PluginToggleResult.Failed(errorCode(error)))}
     }
    } finally {if(owns(config,attempt)) busy.value=false}
   }.also {toggleJob=it}
@@ -127,7 +129,7 @@ internal class NativePluginManagerActions(
   if(now()>=receipt.expiresAt || receipt.server!=config.serverUrl.trimEnd('/') || plugin.removed || plugin.pin!=EnvironmentPin.Unmanaged || !online()) {undo.value=null;return}
   val accepted=undoPermissions(receipt,plugin,config.serverUrl.trimEnd('/'),now())
   undo.value=null
-  if(accepted==null) {if(plugin.canEnable) onReview(plugin.id)} else toggle(plugin.id,true,accepted,requiredUndo=receipt) {if(it==PluginToggleResult.ReviewPermissions) onReview(plugin.id)}
+  if(accepted==null || plugin.reviewToken!=null && !plugin.quietEnable) {if(plugin.canEnable) onReview(plugin.id)} else toggle(plugin.id,true,accepted,requiredUndo=receipt,reviewToken=plugin.reviewToken) {if(it==PluginToggleResult.ReviewPermissions) onReview(plugin.id)}
  }
  fun select(id:String) {
   closePage()
@@ -141,6 +143,29 @@ internal class NativePluginManagerActions(
    try {
     val result=safePluginPage(backend(config).settings(id));ensureActive()
     if(ownsPage()) {cachePage(config,plugin,result);page.value=PluginPageState(id,result)}
+   } catch(cancelled:CancellationException) {throw cancelled}
+   catch(error:Exception) {if(ownsPage()) page.value=page.value.copy(error=errorCode(error))}
+   finally {if(ownsPage()) page.value=page.value.copy(loading=false)}
+  }
+ }
+ fun changeMode(id:String,mode:String):Job? {
+  val config=owner() ?: return null
+  if(!online() || busy.value || page.value.id!=id || page.value.loading || mode !in setOf("ask_first","automatic")) return null
+  val plugin=current().rows.firstOrNull {it.id==id} ?: return null
+  val expectedEpoch=epoch()
+  val attempt=pageGeneration
+  val previous=page.value.page
+  page.value=page.value.copy(loading=true,error="")
+  return scope.launch {
+   fun ownsPage()=owner()==config && epoch()==expectedEpoch && pageGeneration==attempt && page.value.id==id
+   try {
+    val response=backend(config).changeMode(id,mode)
+    ensureActive()
+    if(ownsPage()) {
+     val updated=safePluginPage(JsonObject(response+("schema" to previous.schema)))
+     cachePage(config,plugin,updated)
+     page.value=PluginPageState(id,updated)
+    }
    } catch(cancelled:CancellationException) {throw cancelled}
    catch(error:Exception) {if(ownsPage()) page.value=page.value.copy(error=errorCode(error))}
    finally {if(ownsPage()) page.value=page.value.copy(loading=false)}

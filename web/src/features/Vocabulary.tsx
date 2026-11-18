@@ -191,12 +191,16 @@ export function VocabularyItem({
             }[]
           ).map((hunk, index) => (
             <div className={styles.diff} key={index}>
-              <pre aria-label={t("suggestionpreview.before")}>
-                {(hunk.old_lines ?? hunk.lines ?? []).join("\n")}
-              </pre>
-              <pre aria-label={t("suggestionpreview.after")}>
-                {(hunk.new_lines ?? hunk.lines ?? []).join("\n")}
-              </pre>
+              <div>
+                <p className={styles.facts}>
+                  − {t("suggestionpreview.before")}
+                </p>
+                <pre>{(hunk.old_lines ?? hunk.lines ?? []).join("\n")}</pre>
+              </div>
+              <div>
+                <p className={styles.facts}>+ {t("suggestionpreview.after")}</p>
+                <pre>{(hunk.new_lines ?? hunk.lines ?? []).join("\n")}</pre>
+              </div>
             </div>
           ))}
         </div>

@@ -681,7 +681,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change Mode */
+        patch: operations["change_mode_api_v1_plugins__plugin_id__settings_patch"];
         trace?: never;
     };
     "/api/v1/search": {
@@ -835,6 +836,23 @@ export interface paths {
         put?: never;
         /** Dismiss */
         post: operations["dismiss_api_v1_suggestions__id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suggestions/{id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo */
+        post: operations["undo_api_v1_suggestions__id__undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1011,6 +1029,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** ChangeMode */
+        ChangeMode: {
+            /**
+             * Change Mode
+             * @enum {string}
+             */
+            change_mode: "ask_first" | "automatic";
+        };
         /** Create */
         Create: {
             /** Body */
@@ -1058,6 +1084,8 @@ export interface components {
         EnableBody: {
             /** Permissions */
             permissions: string[];
+            /** Review Token */
+            review_token?: string | null;
         };
         /** Flags */
         Flags: {
@@ -1654,7 +1682,10 @@ export interface operations {
     upload_api_v1_attachments_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Intended note for a newly captured Android recording. */
+                "X-Spunto-Recording-Note"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2779,6 +2810,41 @@ export interface operations {
             };
         };
     };
+    change_mode_api_v1_plugins__plugin_id__settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeMode"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_api_v1_search_get: {
         parameters: {
             query?: {
@@ -3041,6 +3107,37 @@ export interface operations {
         };
     };
     dismiss_api_v1_suggestions__id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_api_v1_suggestions__id__undo_post: {
         parameters: {
             query?: never;
             header?: never;

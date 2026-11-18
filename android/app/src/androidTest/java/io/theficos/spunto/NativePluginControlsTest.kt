@@ -1,6 +1,13 @@
 package io.theficos.spunto
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,7 +34,7 @@ class NativePluginControlsTest {
   compose.setContent {SpuntoTheme {NativePluginRow(plugin,true,false,{toggles++},{settings++},{},{})}}
   compose.onNode(hasContentDescription("voice-memos") and isToggleable()).assertIsOff().assertIsNotEnabled()
   compose.onNodeWithText("Needs a transcription model").assertExists()
-  compose.onNodeWithText("Settings").performClick()
+  compose.onNodeWithText(plugin.name).performClick()
   compose.runOnIdle {assertEquals(0,toggles);assertEquals(1,settings)}
  }
  @Test fun wantedWaitingAndFailedRemainCheckedWhilePinnedAndRemovedHaveNoToggle() {
@@ -61,6 +68,45 @@ class NativePluginControlsTest {
   compose.onNodeWithText("voice-memos now also wants to…").assertExists()
   compose.onNodeWithText("It will").assertExists();compose.onNodeWithText("AI and where note text goes").assertExists();compose.onNodeWithText("Where it shows up").assertExists()
   compose.onNodeWithText("Saving…").assertIsNotEnabled();compose.runOnIdle {assertEquals(0,accepts)}
+ }
+ @Test fun pluginModeControlShowsPersistedValueAndOnlyChangesBehavior() {
+  var mode by mutableStateOf("ask_first")
+  val page=safePluginPage(Json.parseToJsonElement("""{"schema":{"type":"object","properties":{"change_mode":{"type":"string","enum":["ask_first","automatic"]},"min_confidence":{"type":"number","title":"Confidence"}}},"values":{"change_mode":"ask_first","min_confidence":0.91}}""").jsonObject)
+  compose.setContent {SpuntoTheme {Column {
+   val current=page.copy(values=JsonObject(page.values+("change_mode" to JsonPrimitive(mode))))
+   NativePluginSettingsValues(NativePluginFacts(row("label-suggestions")),current,true,onChangeMode={mode=it}) {}
+  }}}
+  compose.onNodeWithText("Ask first").assertIsSelected()
+  compose.onNodeWithText("Automatic").performClick()
+  compose.onNodeWithText("Automatic").assertIsSelected()
+  compose.onNodeWithText("Confidence · 0.91").assertExists()
+ }
+ @Test fun receiptUndoRemainsReachableOnANarrowLayoutWithLargeText() {
+  val label="very-long-nested-recipe-label"
+  val receipt=buildJsonObject {
+   put("id","applied")
+   put("status","accepted")
+   put("action","add_label")
+   put("payload",buildJsonObject {put("path",label)})
+  }
+  val waiting=(1..3).map {index -> buildJsonObject {
+   put("id","pending-$index")
+   put("title","Add #pending-$index")
+   put("action","add_label")
+  }}
+  var undone=""
+  compose.setContent {SpuntoTheme {
+   val density=LocalDensity.current.density
+   CompositionLocalProvider(LocalDensity provides Density(density,1.8f)) {
+    Column(Modifier.width(240.dp).verticalScroll(rememberScrollState())) {
+     ProposalLine(waiting,emptyMap(),{},{},listOf(receipt),{undone=it})
+    }
+   }
+  }}
+  compose.onNodeWithText("+1").performScrollTo().performClick()
+  compose.onNodeWithText("Added #$label").performScrollTo().assertIsDisplayed()
+  compose.onNodeWithText("Undo").performScrollTo().performClick()
+  compose.runOnIdle {assertEquals("applied",undone)}
  }
  @Test fun renderedUndoAppearsOnlyAfterRealControllerAcknowledgement()=runBlocking {
   val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)

@@ -40,6 +40,22 @@ class NativePluginFactsTest {
   assertFalse(NativePluginFacts(JsonObject(pluginFixture(on=false)-"can_enable")).canEnable)
   assertFalse(NativePluginFacts(JsonObject(pluginFixture()+ ("pinned_by_env" to JsonPrimitive(1)))).canDisable)
  }
+ @Test fun environmentPinPermitsOnlyExplicitPendingConsentWithItsReviewToken() {
+  val pinned=JsonObject(pluginFixture(on=false,state="available")+mapOf(
+   "pinned_by_env" to JsonPrimitive(true),
+   "can_review_pinned" to JsonPrimitive(true),
+   "review_required" to JsonPrimitive(true),
+   "review_token" to JsonPrimitive("synthetic-review"),
+  ))
+  val review=NativePluginFacts(pinned)
+  assertTrue(review.canEnable)
+  assertTrue(review.reviewBeforeEnable)
+  assertFalse(review.quietEnable)
+  assertFalse(review.canDisable)
+  assertFalse(NativePluginFacts(JsonObject(pinned-"review_token")).canEnable)
+  assertFalse(NativePluginFacts(JsonObject(pinned-"can_review_pinned")).canEnable)
+  assertFalse(NativePluginFacts(JsonObject(pinned+("switch" to JsonPrimitive("on")))).canEnable)
+ }
  @Test fun missingRequirementsBlockActivationButKeepDisableAvailable() {
   val off=NativePluginFacts(JsonObject(pluginFixture(on=false,state="available")+mapOf("can_enable" to JsonPrimitive(false),"availability_reason" to JsonPrimitive("Needs a vision model"))))
   assertFalse(off.canEnable);assertFalse(off.canDisable);assertEquals("Needs a vision model",off.availabilityReason)

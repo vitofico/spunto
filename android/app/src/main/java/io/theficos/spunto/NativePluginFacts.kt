@@ -36,9 +36,15 @@ internal data class NativePluginFacts(val raw:JsonObject,private val manifestAct
  val valid=pluginIdPattern.matches(id) && raw.pluginText("api") in setOf("0.4","0.9","1.0") && category in pluginGroups && raw.pluginText("kind") in setOf("server","device") && raw.pluginText("switch") in setOf("on","off") && state in setOf("available","enabled","waiting","failed","removed","disabled") && permissions!=null && permissions.distinct().size==permissions.size && granted!=null && granted.distinct().size==granted.size
  val activeContribution get()=valid && wantedOn && state=="enabled" && manifestActive
  val availabilityReason=raw.pluginText("availability_reason")?.takeIf {it.isNotBlank()}
- val canEnable=valid && !removed && pin==EnvironmentPin.Unmanaged && raw.pluginFlag("can_enable")==true && availabilityReason==null
+ private val canReviewPinned=pin==EnvironmentPin.Managed && !wantedOn &&
+  raw.pluginFlag("can_review_pinned")==true && raw.pluginFlag("review_required")==true &&
+  !raw.pluginText("review_token").isNullOrBlank()
+ val canEnable=valid && !removed && (pin==EnvironmentPin.Unmanaged || canReviewPinned) && raw.pluginFlag("can_enable")==true && availabilityReason==null
  val canDisable=valid && !removed && wantedOn && pin==EnvironmentPin.Unmanaged
  val canDeleteData=valid && raw.pluginFlag("can_delete_data")==true
+ val reviewToken=raw.pluginText("review_token")
+ val quietEnable=pin==EnvironmentPin.Unmanaged && reviewToken!=null && raw.pluginFlag("review_required")==false
+ val reviewBeforeEnable=!wantedOn && canEnable && raw.pluginFlag("review_required")==true
  val permissionReviewRequired=wantedOn && permissions!=null && granted!=null && !granted.toSet().containsAll(permissions)
  fun origin(resources:Resources)=when(raw.pluginText("origin")) { "bundled" -> resources.getString(R.string.settings_built_in); "operator" -> resources.getString(R.string.settings_third_party); else -> resources.getString(R.string.settings_origin_unavailable) }
  val contribution=if(removed) JsonObject(emptyMap()) else raw["contributes"] as? JsonObject ?: JsonObject(emptyMap())
@@ -89,10 +95,10 @@ internal fun pluginDestinationFacts(resources:Resources,plugin:NativePluginFacts
   val model=destination?.pluginText("model");val host=destination?.pluginText("host");val outside=destination?.pluginFlag("leaves_network")
   result+=if(!model.isNullOrBlank() && !host.isNullOrBlank() && outside!=null) resources.getString(R.string.settings_note_text_to_at ,label,model,host,if(outside) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)) else resources.getString(R.string.settings_no_model_is_set_up ,label)
  }
- if("net.fetch" in plugin.permissions.orEmpty()) result+=resources.getString(R.string.settings_fetches_the_linked_page_from_your_server)
+ if("net.fetch" in plugin.permissions.orEmpty()) result+=resources.getString(R.string.plugin_link_destination)
  val network=plugin.raw.pluginStrings("network_destinations").orEmpty().filter {it.isNotBlank()}.distinct()
- network.forEach {result+=resources.getString(R.string.settings_talks_to ,it)}
- if(plugin.permissions.orEmpty().any {it.startsWith("net.out:")} && network.isEmpty()) result+=resources.getString(R.string.settings_outbound_network_destinations_are_unavailable)
+ network.forEach {result+=resources.getString(if(plugin.id=="webhooks") R.string.plugin_webhook_destination else R.string.settings_talks_to,it)}
+ if(plugin.permissions.orEmpty().any {it.startsWith("net.out:")} && network.isEmpty()) result+=resources.getString(if(plugin.id=="webhooks") R.string.plugin_webhook_without_destinations else R.string.settings_outbound_network_destinations_are_unavailable)
  if(result.isEmpty() && said==null) result+=if(plugin.id=="dictation" && plugin.raw.pluginText("kind")=="device") resources.getString(R.string.settings_recognition_uses_this_phone_or_its_speech) else if(plugin.raw.pluginText("kind")=="device") resources.getString(R.string.settings_stays_on_the_phone) else resources.getString(R.string.settings_stays_on_your_server)
  return result
 }

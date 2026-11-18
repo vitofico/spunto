@@ -35,3 +35,10 @@ title = "Keep the recording in the note"
 description = "When off, the transcript replaces the recording link. The recording itself is kept."
 type = "boolean"
 default = true
+
+[settings.properties.change_mode]
+title = "Plugin changes"
+description = "Append transcripts to notes containing only their recording links."
+type = "string"
+enum = ["ask_first", "automatic"]
+default = "ask_first"

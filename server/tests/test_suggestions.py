@@ -127,9 +127,10 @@ async def test_double_accept_is_atomic_idempotent_and_uses_deciding_credential(p
             )
         )[0]
     assert revision["changed_by"] == OWNER.id
-    with pytest.raises(Problem) as failure:
-        await decide(host.store, OWNER, proposal["id"], "dismiss")
-    assert failure.value.code == "suggestion_decided"
+    hidden = await decide(host.store, OWNER, proposal["id"], "dismiss")
+    assert "receipt" not in hidden["suggestion"]
+    assert not (await Notes(host.store, OWNER).get(note["id"]))["suggestions"]
+    assert (await Notes(host.store, OWNER).get(note["id"]))["body"] == saved["body"]
 
 
 async def test_append_and_label_accept_against_latest_body_replace_is_stale(proposal_host):
@@ -433,3 +434,92 @@ async def test_repeated_merge_accept_still_checks_privacy_and_is_idempotent_afte
         await decide(host.store, writer, proposal["id"], "accept")
     assert failure.value.status == 404
     assert (await domain.get(target["id"]))["body"] == "Target\n\nRelated"
+
+
+async def test_undo_remains_available_until_revision_changes_and_replay_is_idempotent(
+    proposal_host,
+):
+    host = proposal_host
+    domain = Notes(host.store, OWNER)
+    note = await domain.create("Unchanged opening")
+    ctx = Ctx(host, "proposals")
+    proposal = await suggest(ctx, note["id"], "append_text", {"text": "An addition"})
+
+    accepted = await decide(host.store, OWNER, proposal["id"], "accept")
+    expected = {"note_version": note["version"] + 1, "undoable": True}
+    assert accepted["suggestion"]["receipt"] == expected
+    assert (await domain.get(note["id"]))["suggestions"][0]["receipt"] == expected
+    assert (await pending(host.store, OWNER, scope="review"))["suggestions"] == []
+    assert (await pending(host.store, OWNER, note_id=note["id"]))["suggestions"][0][
+        "receipt"
+    ] == expected
+
+    first = await decide(host.store, OWNER, proposal["id"], "undo")
+    assert first["applied"] and first["suggestion"]["status"] == "dismissed"
+    assert first["result"]["body"] == note["body"]
+    assert not (await decide(host.store, OWNER, proposal["id"], "undo"))["applied"]
+    assert not (await decide(host.store, OWNER, proposal["id"], "accept"))["applied"]
+    assert (await domain.get(note["id"]))["version"] == note["version"] + 2
+
+    new = await suggest(ctx, note["id"], "add_label", {"path": "important"})
+    accepted = await decide(host.store, OWNER, new["id"], "accept")
+    current = await domain.edit(note["id"], "Newer work\n#important", accepted["result"]["version"])
+    assert current["suggestions"] == []
+    with pytest.raises(Problem) as refused:
+        await decide(host.store, OWNER, new["id"], "undo")
+    assert refused.value.code == "suggestion_undo_stale"
+    assert (await domain.get(note["id"]))["body"] == current["body"]
+
+    noop = await suggest(ctx, note["id"], "add_label", {"path": "important"})
+    response = await decide(host.store, OWNER, noop["id"], "accept")
+    assert "receipt" not in response["suggestion"]
+    assert response["result"]["version"] == current["version"]
+
+
+async def test_title_proposal_survives_unrelated_label_but_not_independent_edit(proposal_host):
+    host = proposal_host
+    domain = Notes(host.store, OWNER)
+    note = await domain.create("Opening prose")
+    ctx = Ctx(host, "proposals")
+    title = await suggest(ctx, note["id"], "set_title", {"title": "Heading"})
+    add_label = await suggest(ctx, note["id"], "add_label", {"path": "kept"})
+    labeled = (await decide(host.store, OWNER, add_label["id"], "accept"))["result"]
+    assert (
+        next(row for row in labeled["suggestions"] if row["id"] == title["id"])["note_version"]
+        == labeled["version"]
+    )
+    titled = (await decide(host.store, OWNER, title["id"], "accept"))["result"]
+    assert titled["body"] == "# Heading\n\nOpening prose\n#kept"
+
+    replacement = await suggest(ctx, note["id"], "set_title", {"title": "Stale heading"})
+    edited = await domain.edit(
+        note["id"], "# Owner title\n\nOpening prose\n#kept", titled["version"]
+    )
+    assert edited["suggestions"] == []
+    with pytest.raises(Problem) as refused:
+        await decide(host.store, OWNER, replacement["id"], "accept")
+    assert refused.value.code == "suggestion_stale"
+    assert (await domain.get(note["id"]))["body"] == edited["body"]
+
+
+async def test_link_undo_remains_available_when_destination_is_trashed(server):
+    host = server.services.host
+    await host.enable("links", permissions=host.manifests["links"]["permissions"])
+    domain = Notes(host.store, OWNER)
+    original = await domain.create("A link belongs here")
+    destination = await domain.create("A related note")
+    link = await host.invoke_command(
+        "links",
+        "link",
+        {"note_id": original["id"], "target_id": destination["id"]},
+        principal=OWNER,
+    )
+    accepted = await decide(host.store, OWNER, link["suggestion_id"], "accept")
+    assert accepted["suggestion"]["receipt"]["undoable"]
+
+    await domain.flags(destination["id"], {"trashed": True})
+    receipts = (await domain.get(original["id"]))["suggestions"]
+    assert len(receipts) == 1 and receipts[0]["payload"] == {}
+    assert receipts[0]["receipt"]["undoable"]
+    undone = await decide(host.store, OWNER, link["suggestion_id"], "undo")
+    assert undone["result"]["body"] == original["body"]

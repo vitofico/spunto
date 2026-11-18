@@ -171,7 +171,9 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
  val projection=nativePluginCatalog(catalog,manifest)
  val enable=remember(auth) {PluginEnableState()}
  LaunchedEffect(auth,online) {if(auth!=null && online) model.refreshPluginManager()}
- NativePluginCatalogList(projection,ai,online,busy,undo,{plugin,on -> if(on) enable.review(plugin.id) else model.pluginToggle(plugin,false)},onPlugin,enable::review,{actions.undo(enable::review)},model::pluginWeb)
+ NativePluginCatalogList(projection,ai,online,busy,undo,{plugin,on -> if(!on) model.pluginToggle(plugin,false)
+ else if(!plugin.quietEnable) enable.review(plugin.id)
+ else model.pluginToggle(plugin,true,plugin.permissions) {result -> if(result==PluginToggleResult.ReviewPermissions) enable.review(plugin.id)}},onPlugin,enable::review,{actions.undo(enable::review)},model::pluginWeb)
  PluginEnableDialog(model,enable,projection,online,busy)
 }
 @Composable internal fun NativePluginCatalogList(projection:NativePluginCatalog,ai:JsonObject,online:Boolean,busy:Boolean,undo:PluginUndo?,onToggle:(NativePluginFacts,Boolean)->Unit,onSettings:(String)->Unit,onReview:(String)->Unit,onUndo:()->Unit,onWeb:(String)->Unit) {
@@ -233,6 +235,7 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
   }}
  )}
  val commandPending by commandOwner.pending.collectAsState()
+ val owner by model.workspaceIsOwner.collectAsState()
  LaunchedEffect(auth,id,epoch,plugin?.raw?.pluginText("api"),plugin?.raw?.pluginText("version"),plugin?.removed) {commandOwner.reset();actions.select(id)}
  DisposableEffect(actions,id) {onDispose {commandOwner.reset();actions.closePage()}}
  if(plugin==null) {Text(resources.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20));return}
@@ -241,18 +244,20 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
   item {
    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
     Text(localizedPluginName(resources,plugin.raw),Modifier.weight(1f).semantics {heading()},style=MaterialTheme.typography.titleLarge)
-    if(!plugin.removed && plugin.pin==EnvironmentPin.Unmanaged && plugin.valid) PluginSwitch(plugin,online,busy) {on -> if(on) enable.review(plugin.id) else model.pluginToggle(plugin,false)}
+    if(!plugin.removed && plugin.pin==EnvironmentPin.Unmanaged && plugin.valid) PluginSwitch(plugin,online,busy) {on -> if(!on) model.pluginToggle(plugin,false)
+ else if(!plugin.quietEnable) enable.review(plugin.id)
+ else model.pluginToggle(plugin,true,plugin.permissions) {result -> if(result==PluginToggleResult.ReviewPermissions) enable.review(plugin.id)}}
    }
    Text(localizedPluginDescription(resources,plugin.raw),Modifier.padding(top=SpuntoSpacing.s4),style=MaterialTheme.typography.bodyMedium)
    Text(listOf(pluginCategoryName(resources,plugin.category),plugin.origin(resources),plugin.raw.pluginText("version").orEmpty()).filter {it.isNotBlank()}.joinToString(" · "),Modifier.padding(top=SpuntoSpacing.s4),style=MaterialTheme.typography.bodySmall,color=quiet)
-   if(plugin.permissionReviewRequired) TextButton(onClick={enable.review(plugin.id)},enabled=online && !busy && plugin.canEnable,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_review_updated_permissions))}
+   if(plugin.permissionReviewRequired || plugin.reviewBeforeEnable) TextButton(onClick={enable.review(plugin.id)},enabled=online && !busy && plugin.canEnable,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(if(plugin.permissionReviewRequired) R.string.settings_review_updated_permissions else R.string.plugin_review_enable))}
    if(!online) Text(resources.getString(R.string.settings_changes_need_a_connection),Modifier.padding(top=SpuntoSpacing.s4),style=MaterialTheme.typography.bodySmall,color=quiet)
   }
   if(!plugin.removed && plugin.id=="dictation") item {DictationSettings(model,readOnly=!online)}
   if(!plugin.removed && page.id==plugin.id) item {Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
    if(page.loading && page.page.schema.isEmpty()) Text(resources.getString(R.string.settings_loading_settings),style=MaterialTheme.typography.bodySmall,color=quiet)
    if(page.error.isNotEmpty()) Text(page.error,style=MaterialTheme.typography.bodySmall,color=quiet)
-   NativePluginSettingsValues(plugin,page.page,online,model::pluginWeb)
+   NativePluginSettingsValues(plugin,page.page,online && owner,{mode -> actions.changeMode(id,mode)},page.loading,model::pluginWeb)
   }}
   // Facts read as quiet body text under their headings; buttons keep their own colour.
   item {CompositionLocalProvider(LocalContentColor provides quiet) {ProvideTextStyle(MaterialTheme.typography.bodyMedium) {Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {NativePluginDetailFacts(plugin,online,commandPending,{command ->

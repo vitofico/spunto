@@ -126,26 +126,39 @@ class ScopedCapture:
     async def store_result(
         self, collection, record_id, note_id, note_version, data, *, attachment_id=None
     ):
+        async with self.ctx._host.store.write() as conn:
+            await self._store_result(
+                conn,
+                collection,
+                record_id,
+                note_id,
+                note_version,
+                data,
+                attachment_id=attachment_id,
+            )
+
+    async def _store_result(
+        self, conn, collection, record_id, note_id, note_version, data, *, attachment_id=None
+    ):
         self.ctx.check_write()
         collection, record_id, payload = key(collection), key(record_id), encoded(data)
-        async with self.ctx._host.store.write() as conn:
-            row = await self._row(conn, note_id, note_version)
-            if row is None:
-                raise ContextError("capture_source_changed")
-            if attachment_id is not None:
-                links = await conn.execute_fetchall(
-                    "SELECT 1 FROM note_attachment WHERE note_id=? AND attachment_id=?",
-                    (note_id, attachment_id),
-                )
-                if not links:
-                    raise ContextError("capture_attachment_changed")
-            await conn.execute(
-                "INSERT INTO plugin_record(plugin_id,collection,id,note_id,key,data,updated_at) "
-                "VALUES(?,?,?,?,NULL,?,?) ON CONFLICT(plugin_id,collection,id) DO UPDATE SET "
-                "note_id=excluded.note_id,data=excluded.data,updated_at=excluded.updated_at",
-                (self.ctx.plugin_id, collection, record_id, note_id, payload, self.ctx.clock()),
+        row = await self._row(conn, note_id, note_version)
+        if row is None:
+            raise ContextError("capture_source_changed")
+        if attachment_id is not None:
+            links = await conn.execute_fetchall(
+                "SELECT 1 FROM note_attachment WHERE note_id=? AND attachment_id=?",
+                (note_id, attachment_id),
             )
-            self.ctx.check()
+            if not links:
+                raise ContextError("capture_attachment_changed")
+        await conn.execute(
+            "INSERT INTO plugin_record(plugin_id,collection,id,note_id,key,data,updated_at) "
+            "VALUES(?,?,?,?,NULL,?,?) ON CONFLICT(plugin_id,collection,id) DO UPDATE SET "
+            "note_id=excluded.note_id,data=excluded.data,updated_at=excluded.updated_at",
+            (self.ctx.plugin_id, collection, record_id, note_id, payload, self.ctx.clock()),
+        )
+        self.ctx.check()
 
     async def set_search_text(self, note_id, note_version, text):
         self.ctx.check_write()

@@ -195,7 +195,7 @@ async def test_lifecycle_secrets_generation_and_isolated_storage(tmp_path, monke
 
 
 @pytest.mark.anyio
-async def test_default_pins_and_new_permissions_wait(tmp_path):
+async def test_default_pins_and_new_permissions_require_review(tmp_path):
     settings = SimpleNamespace(data_dir=tmp_path, plugins="+example,-second", tz="UTC")
     async with harness(
         tmp_path, settings, catalog=[manifest(), manifest("second", default="on")]
@@ -215,7 +215,8 @@ async def test_default_pins_and_new_permissions_wait(tmp_path):
             manifest("upgrade-new", default="on"),
         ],
     ) as host:
-        assert host.states["example"]["state"] == "waiting"
+        assert host.states["example"]["switch"] == "off"
+        assert host.states["example"]["review_pending"]
         assert host.states["upgrade-new"]["state"] == "available"
         await host.enable("example", ["notes.read"])
         assert host.states["example"]["state"] == "enabled"

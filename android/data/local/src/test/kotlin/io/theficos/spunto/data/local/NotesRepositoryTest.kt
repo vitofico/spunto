@@ -248,6 +248,35 @@ class NotesRepositoryTest {
   repo.dao.putOutput(PluginOutputEntity("suggestion",id,noteId,data.toString()))
  }
  private suspend fun suggestionStatus(id:String)=Json.parseToJsonElement(repo.dao.output("suggestion",id)!!.payload).jsonObject.getValue("status").jsonPrimitive.content
+ @Test fun offlineUndoQueuesAfterItsAcceptAndRepeatedTapsDoNotEnqueueAgain()=runBlocking {
+  val id=uuidV7()
+  repo.putNote(Note(id,"Owner words",serverRev=3))
+  suggestion("label",id,"add_label",buildJsonObject {put("path","recipes")})
+  assertTrue(repo.decideSuggestion("label","accept"))
+  assertTrue(repo.decideSuggestion("label","undo"))
+  assertFalse(repo.decideSuggestion("label","undo"))
+  val queued=repo.dao.outbox().map {Json.decodeFromString<OutboxOperation>(it.payload)}
+  assertEquals(listOf("accept","undo"),queued.map {it.decision})
+  assertEquals(setOf(id),repo.queuedSuggestionUndos.first())
+  assertEquals("dismissed",suggestionStatus("label"))
+ }
+ @Test fun replacingTheLeadingHeadingKeepsExactlyOneTitleAndPreservesFollowingContent()=runBlocking {
+  val pairs=listOf(
+   "# Old heading\n\nOpening prose" to "# New heading\n\nOpening prose",
+   "Old heading\n===\n\nOpening prose" to "# New heading\n\nOpening prose",
+   "\r\n  Old heading\r\nSpanning two lines\r\n===\r\n\r\nOpening prose" to "\r\n# New heading\r\n\r\nOpening prose",
+   "#\nOpening prose" to "# New heading\nOpening prose",
+   "Opening prose\n\n# Later heading" to "# New heading\n\nOpening prose\n\n# Later heading",
+  )
+  pairs.forEach { (body,expected) ->
+   val id=uuidV7()
+   val proposal=uuidV7()
+   repo.putNote(Note(id,body,serverRev=3))
+   suggestion(proposal,id,"set_title",buildJsonObject {put("title","New heading")},JsonPrimitive(3))
+   repo.decideSuggestion(proposal,"accept")
+   assertEquals(expected,repo.dao.get(id)?.body)
+  }
+ }
  @Test fun replacementRejectsInvalidBasisWithoutChangingWordsOrQueuingAnOperation()=runBlocking {
   for(mode in listOf("stale","missing_version","quoted_version","missing_note","private","trashed","tombstoned","pending_edit")) {
    val id=uuidV7();val proposal=uuidV7()
@@ -267,7 +296,7 @@ class NotesRepositoryTest {
   val id=uuidV7();repo.putNote(Note(id,"Old machine words",serverRev=3,machine=true,sourceKind="plugin",origin="plugin"))
   suggestion("replace",id,"replace_body",buildJsonObject {put("body","Owner accepted words")},JsonPrimitive(3))
   repo.decideSuggestion("replace","accept");assertEquals("Owner accepted words",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.machine);assertEquals("accepted",suggestionStatus("replace"))
-  val accepted=Json.decodeFromString<OutboxOperation>(repo.dao.outbox().single().payload);assertEquals("suggestion.decide",accepted.type);assertEquals("accept",accepted.decision)
+  val accepted=Json.decodeFromString<OutboxOperation>(repo.dao.outbox().single().payload);assertEquals("suggestion.decide",accepted.type);assertEquals("accept",accepted.decision);assertEquals(3,accepted.reviewedVersion)
   val missing=uuidV7();suggestion("dismiss",missing,"replace_body",buildJsonObject {put("body","Unused")},JsonPrimitive(1))
   repo.decideSuggestion("dismiss","dismiss");assertNull(repo.dao.get(missing));assertEquals("dismissed",suggestionStatus("dismiss"))
   assertTrue(repo.dao.outbox().map {Json.decodeFromString<OutboxOperation>(it.payload)}.any {it.suggestionId=="dismiss" && it.decision=="dismiss"})

@@ -1,6 +1,6 @@
 import { getLanguage, t, useLanguage } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   useNote,
   useDraftEditor,
@@ -259,6 +259,17 @@ function NoteEditor({ note }: { note: Note }) {
   const revisions = useHistory(note.id);
   const links = useNoteLinks(note);
   const historyRef = useRef<HTMLDetailsElement>(null);
+  const showHistory = new URLSearchParams(useSearch()).get("history") === "1";
+  const openHistory = () => {
+    const details = historyRef.current;
+    if (!details) return;
+    details.open = true;
+    details.scrollIntoView?.({ block: "start" });
+    details.querySelector("summary")?.focus();
+  };
+  useEffect(() => {
+    if (showHistory) openHistory();
+  }, [note.id, showHistory]);
   const name = note.title || t("vocabulary.untitled_note");
   useDocumentTitle(name);
   useEffect(() => {
@@ -366,13 +377,7 @@ function NoteEditor({ note }: { note: Note }) {
         },
         {
           label: t("note.revision_history"),
-          onSelect: () => {
-            const details = historyRef.current;
-            if (!details) return;
-            details.open = true;
-            details.scrollIntoView({ block: "start" });
-            details.querySelector("summary")?.focus();
-          },
+          onSelect: openHistory,
         },
         {
           label: t("app.move_to_trash"),

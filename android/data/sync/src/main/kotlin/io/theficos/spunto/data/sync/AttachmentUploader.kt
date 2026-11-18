@@ -47,7 +47,7 @@ class AttachmentUploader(
      item.copy(serverUrl=root,marker=marker,byteSize=total,sha256=hash,status="uploading",error=null).also {dao.putAttachment(it)}
     }
     val sent=claimed?:continue
-    val response=api.uploadNamed(uploadFile.absolutePath,sent.mime,File(sent.localPath).name.removeSuffix(".partial"))
+    val response=api.uploadNamed(uploadFile.absolutePath,sent.mime,File(sent.localPath).name.removeSuffix(".partial"),recordingNoteId=sent.noteId.takeIf {sent.kind=="recording"})
     val remote=(response["id"] as? JsonPrimitive)?.takeIf {it.isString}?.content?:error("attachment_id_missing")
     require(UUID.fromString(remote).toString()==remote) {"attachment_id_invalid"}
     if(currentConfig()!=config) {pause(sent,"credentials_changed");continue}

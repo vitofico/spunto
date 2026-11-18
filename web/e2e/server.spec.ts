@@ -1,6 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { willSentence } from "../src/features/willSentence";
 
 // This suite uses the packaged app and real API. Fixture-only suites also run
 // against Vite when working on individual components.
@@ -133,7 +132,8 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
   type CatalogPlugin = {
     id: string;
     permissions: string[];
-    permission_sentences: string[];
+    review_required: boolean;
+    review_token: string;
     granted: string[];
     switch: "on" | "off";
     state: string;
@@ -152,7 +152,14 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
       `/api/v1/plugins/${encodeURIComponent(plugin.id)}/${on ? "enable" : "disable"}`,
       {
         headers: { Origin: origin },
-        ...(on ? { data: { permissions: plugin.granted } } : {}),
+        ...(on
+          ? {
+              data: {
+                permissions: plugin.granted,
+                review_token: plugin.review_token,
+              },
+            }
+          : {}),
       },
     );
     expect(response.status(), `Restore/switch ${plugin.id}`).toBe(200);
@@ -175,7 +182,10 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
     );
     const prepared = await page.request.post("/api/v1/plugins/tasks/enable", {
       headers: { Origin: origin },
-      data: { permissions: freshTasks.permissions },
+      data: {
+        permissions: freshTasks.permissions,
+        review_token: freshTasks.review_token,
+      },
     });
     expect(prepared.status(), "Prepare fresh Tasks fixture grants").toBe(200);
     await setSwitch(freshTasks, false);
@@ -201,9 +211,7 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
   expect(tasks, "The disposable fixture must include Tasks").toBeDefined();
   if (!tasks) throw new Error("Tasks is missing from the fixture catalog");
   expect([...tasks.permissions].sort()).toEqual(["annotate", "notes.read"]);
-  expect(tasks.permission_sentences.length).toBeGreaterThanOrEqual(
-    tasks.permissions.length,
-  );
+  expect(tasks.review_required).toBe(false);
   // The owner API cannot revoke grants. Pre-grant Tasks in this disposable
   // fixture so its UI permission acceptance can be undone without changing them.
   expect(
@@ -244,24 +252,24 @@ test("real plugin switches and all-off mobile layout survive reload", async ({
       exact: true,
     });
     await expect(toggle).not.toBeChecked();
-    await toggle.click();
-    const sheet = page.getByRole("dialog", { name: "Turn on Tasks?" });
-    await expect(sheet).toBeVisible();
-    // The server's sentences, reworded to follow "It will".
-    await expect(sheet.locator("ul li")).toHaveText(
-      tasks.permission_sentences.map(willSentence),
-    );
+    await expect(
+      page.getByRole("link", { name: "Tasks", exact: true }),
+    ).toHaveAttribute("href", "/settings/plugins/tasks");
     const [enableRequest] = await Promise.all([
       page.waitForRequest(
         (request) =>
           new URL(request.url()).pathname === "/api/v1/plugins/tasks/enable" &&
           request.method() === "POST",
       ),
-      sheet.getByRole("button", { name: "Turn on", exact: true }).click(),
+      toggle.click(),
     ]);
     expect(enableRequest.postDataJSON()).toEqual({
       permissions: tasks.permissions,
+      review_token: tasks.review_token,
     });
+    await expect(
+      page.getByRole("dialog", { name: "Turn on Tasks?" }),
+    ).toHaveCount(0);
     await expect(toggle).toBeChecked();
     await page.reload();
     await expect(toggle).toBeChecked();

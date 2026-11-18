@@ -165,12 +165,20 @@ class Notes:
         proposals = {note_id: [] for note_id in ids}
         annotations = {note_id: [] for note_id in ids}
         if include_plugins:
+            from spunto.core.suggestions import manages_receipts
+
             for proposal in await conn.execute_fetchall(
                 "SELECT s.* FROM suggestion s JOIN plugin p ON p.id=s.plugin_id "  # noqa: S608
-                f"WHERE s.note_id IN ({placeholders}) AND s.status='pending' "
-                "AND p.state='enabled' AND p.switch='on' AND s.created_at>? "
-                "ORDER BY coalesce(s.confidence,0) DESC,p.position,s.created_at DESC",
-                [*ids, now_ms() - 14 * 86400000],
+                "JOIN note n ON n.id=s.note_id "
+                f"WHERE s.note_id IN ({placeholders}) AND ((s.status='pending' "
+                "AND p.state='enabled' AND p.switch='on' AND s.created_at>?) OR "
+                "(? AND s.status='accepted' AND s.receipt_hidden=0 AND s.receipt_version=n.version "
+                "AND n.trashed_at IS NULL)) "
+                "ORDER BY (s.status='pending') DESC,"
+                "(s.plugin_id='link-enrichment' AND s.action='set_title') DESC,"
+                "coalesce(s.confidence,0) DESC,p.position,"
+                "s.created_at DESC",
+                [*ids, now_ms() - 14 * 86400000, manages_receipts(self.principal)],
             ):
                 proposals[proposal["note_id"]].append(proposal)
             for annotation in await conn.execute_fetchall(
@@ -217,18 +225,24 @@ class Notes:
                 continue
             counts = {}
             for proposal in proposals[row["id"]]:
-                from spunto.core.suggestions import visible_payload
+                from spunto.core.suggestions import receipt_actor, value, visible_payload
 
                 count = counts.get(proposal["plugin_id"], 0)
-                if count >= 3:
+                if proposal["status"] == "pending" and count >= 3:
+                    continue
+                if proposal["status"] == "accepted" and not await receipt_actor(
+                    conn, self, proposal
+                ):
                     continue
                 payload = await visible_payload(conn, self, proposal, source=row)
-                if payload is None:
+                if payload is None and proposal["status"] == "pending":
                     continue
-                counts[proposal["plugin_id"]] = count + 1
-                item = dict(proposal)
-                item["payload"] = payload
-                item["created_at"] = iso(item["created_at"])
+                if proposal["status"] == "pending":
+                    counts[proposal["plugin_id"]] = count + 1
+                item = value(dict(proposal), payload=payload or {}, note_version=row["version"])
+                item["plugin_id"] = item.pop("plugin")
+                for key in ("decided_at", "decided_by", "model"):
+                    item[key] = proposal[key]
                 result["suggestions"].append(item)
             meta = False
             for annotation in annotations[row["id"]]:
@@ -386,7 +400,11 @@ class Notes:
         self, conn, row, body: str, kind: str, *, changes: dict | None = None, coalesce: bool = True
     ) -> dict:
         _body(body, allow_empty=True)
-        previous_hash, previous_machine = row["body_hash"], row["machine"]
+        previous_body, previous_hash, previous_machine = (
+            row["body"],
+            row["body_hash"],
+            row["machine"],
+        )
         previous_private, previous_trash = row["private"], row["trashed_at"]
         previous_credential = row["updated_by"]
         if self.principal.owner and body != row["body"]:
@@ -422,18 +440,43 @@ class Notes:
         await self._revision(
             conn, row, kind, coalesce=coalesce and previous_credential == self.principal.id
         )
-        stale = await conn.execute_fetchall(
-            "SELECT id FROM suggestion WHERE note_id=? AND action='replace_body' "
-            "AND status='pending' AND note_version!=?",
-            (row["id"], row["version"]),
-        )
-        for item in stale:
-            await conn.execute(
-                "UPDATE suggestion SET status='superseded',change_seq=? WHERE id=?",
-                (await sequence(conn), item[0]),
-            )
+        await self._advance_proposals(conn, row, previous_body, kind)
         self.store.emit("note.saved", row["id"], row["version"])
         return await self._serialize(conn, row)
+
+    async def _advance_proposals(self, conn, row, previous_body, kind):
+        pending = await conn.execute_fetchall(
+            "SELECT id,action,note_version FROM suggestion WHERE note_id=? "
+            "AND action IN ('replace_body','set_title') AND status='pending' AND note_version!=?",
+            (row["id"], row["version"]),
+        )
+        carry_title = False
+        if kind in {"label_suggestion", "label_suggestion_undo"} and any(
+            item["action"] == "set_title" for item in pending
+        ):
+            from spunto.core.quiet_changes import heading_span
+
+            before = heading_span(previous_body)
+            after = heading_span(row["body"])
+            carry_title = (previous_body[slice(*before)] if before else None) == (
+                row["body"][slice(*after)] if after else None
+            )
+        for item in pending:
+            change_seq = await sequence(conn)
+            if (
+                carry_title
+                and item["action"] == "set_title"
+                and item["note_version"] == row["version"] - 1
+            ):
+                await conn.execute(
+                    "UPDATE suggestion SET note_version=?,change_seq=? WHERE id=?",
+                    (row["version"], change_seq, item["id"]),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE suggestion SET status='superseded',change_seq=? WHERE id=?",
+                    (change_seq, item["id"]),
+                )
 
     async def _insert(
         self,
@@ -662,7 +705,7 @@ class Notes:
                 }
 
     async def edit_in_transaction(
-        self, conn, id, body, base_version, *, restore=False, machine=False
+        self, conn, id, body, base_version, *, restore=False, machine=False, coalesce=True
     ):
         """Sync stores both the domain result and the receipt in this transaction."""
         _body(body, allow_empty=True)
@@ -689,7 +732,7 @@ class Notes:
         )
         if merged is not None and len(merged) <= MAX_BODY:
             result = await self._update(
-                conn, row, merged, "edit" if base_version == current else "merge"
+                conn, row, merged, "edit" if base_version == current else "merge", coalesce=coalesce
             )
             if base_version != current:
                 result["merged"] = True

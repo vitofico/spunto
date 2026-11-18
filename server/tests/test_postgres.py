@@ -88,9 +88,9 @@ async def test_child_event_registry_is_drained_by_root(pg):
 
 
 @pytest.fixture
-async def pg():
+async def pg(pg_admin_url):
     runtime = os.environ.get("SPUNTO_TEST_POSTGRES_URL")
-    admin = os.environ.get("SPUNTO_TEST_POSTGRES_ADMIN_URL")
+    admin = pg_admin_url
     if not runtime or not admin:
         pytest.skip("Set disposable SPUNTO_TEST_POSTGRES_URL and SPUNTO_TEST_POSTGRES_ADMIN_URL")
     store = await PostgresStore.open(runtime, admin_url=admin, max_size=1)
@@ -174,8 +174,8 @@ async def test_notes_create_edit_list_search_revisions_flags_and_delete(pg):
     assert not (await domain.list(view="all"))["notes"]
 
 
-async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, settings):
-    _, bounds, users, _, _ = pg
+async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, pg_admin_url, settings):
+    root, bounds, users, spaces, _ = pg
     domain = notes(bounds[0], users[0])
     await domain.create("Synthetic project vocabulary #project/spunto")
     target = await domain.create("Synthetic notes need useful labels")
@@ -235,6 +235,75 @@ async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, settin
         assert "0 tag proposals added to Review" in result["text"]
         assert purposes == ["labels", "gardener"]
         assert (await domain.get(target["id"]))["labels"] == []
+
+        # Credentials are resolved against the real hosted account and membership.
+        # Both capture clients may apply quietly, while a shared member's note stays pending.
+        async with await psycopg.AsyncConnection.connect(pg_admin_url) as connection:
+            await connection.execute(
+                "INSERT INTO public.spunto_membership VALUES(%s,%s,'editor')",
+                (spaces[0], users[1]),
+            )
+        member = root.for_workspace(spaces[0], users[1], "editor")
+        captures = []
+        second_editor_credential = Principal(
+            uuid.uuid4().hex,
+            "device",
+            "Synthetic editor's phone",
+            "full",
+            private_ok=True,
+            user_id=users[1],
+            workspace_role="editor",
+        )
+        for scope, kind, expected in [
+            (bounds[0], "session", "accepted"),
+            (bounds[0], "device", "accepted"),
+            (member, "session", "pending"),
+        ]:
+            actor = Principal(
+                uuid.uuid4().hex,
+                kind,
+                "Synthetic author",
+                "full",
+                private_ok=True,
+                user_id=users[1] if scope is member else users[0],
+                workspace_role="editor" if scope is member else "owner",
+            )
+            async with scope.write() as conn:
+                await conn.execute(
+                    "INSERT INTO credential(id,kind,name,scope,created_at) VALUES(?,?,?,?,?)",
+                    (actor.id, kind, actor.name, actor.scope, now_ms()),
+                )
+            authored = await Notes(scope, actor).create("Synthetic note reserved for tag action")
+            captures.append((authored, expected, actor))
+        await host.set_settings("label-suggestions", {"change_mode": "automatic"})
+        from spunto.core.suggestions import decide
+        from spunto.plugins import label_suggestions
+
+        ctx = Ctx(host, "label-suggestions")
+        editor_notes = Notes(member, second_editor_credential)
+        for authored, expected, actor in [*captures, (target, "pending", None)]:
+            result = await label_suggestions.saved(
+                ctx, authored["id"], authored["version"], force=True
+            )
+            assert result[0]["status"] == expected
+            current = await domain.get(authored["id"])
+            assert bool(current["labels"]) == (expected == "accepted")
+            if expected == "accepted":
+                assert current["suggestions"][0]["receipt"]["note_version"] == current["version"]
+                assert (await editor_notes.get(authored["id"]))["suggestions"] == []
+                with pytest.raises(Problem) as forbidden:
+                    await decide(member, second_editor_credential, result[0]["id"], "undo")
+                assert forbidden.value.code == "suggestion_decision_forbidden"
+                undone = await decide(bounds[0], principal, result[0]["id"], "undo")
+                assert undone["result"]["body"] == authored["body"]
+            elif actor:
+                accepted = await decide(member, actor, result[0]["id"], "accept")
+                assert accepted["suggestion"]["receipt"]["undoable"]
+                assert (await editor_notes.get(authored["id"]))["suggestions"][0]["receipt"][
+                    "undoable"
+                ]
+                undone = await decide(member, second_editor_credential, result[0]["id"], "undo")
+                assert undone["result"]["body"] == authored["body"]
     finally:
         await host.close()
         await gateway.close()

@@ -2,6 +2,7 @@
 
 import re
 
+from spunto.core.quiet_changes import finish_recordings
 from spunto.host import Ctx, Plugin
 from spunto.host.manifest import ManifestError
 from spunto.host.storage import encoded
@@ -85,6 +86,7 @@ async def process(
             receipt = {
                 "attachment_id": attachment["id"],
                 "seconds": round(duration, 2),
+                "marker_seconds": int(duration),
                 "preview": bounded(words, 1800),
                 "words": words,
                 "complete": False,
@@ -113,18 +115,12 @@ async def process(
             body = re.sub(
                 r"\[[^\]\n]*\]\(/a/" + re.escape(attachment["id"]) + r"\)", "", body
             ).strip()
-    words = list(dict.fromkeys(value["words"] for value in values if value["words"] not in body))
-    proposed = "\n\n".join([body, *words]).strip()
+    words = [value["words"] for value in values]
+    proposed = "\n\n".join(part for part in (body, *words) if part)
     if len(proposed) > 100000:
         return text("The transcripts are too long to append; recordings are kept.")
-    suggestion = await ctx.notes.suggest(
-        note_id, "replace_body", {"body": proposed}, note_version=note["version"]
-    )
-    for key, receipt, attachment in pending:
-        receipt.update(complete=True, suggestion_id=suggestion["id"])
-        await ctx.capture.store_result(
-            "recordings", key, note_id, note["version"], receipt, attachment_id=attachment["id"]
-        )
+    if await finish_recordings(ctx, note, proposed, values, pending):
+        return text("Transcript added; recordings are kept.")
     return text("Transcript proposals are ready; recordings are kept.")
 
 

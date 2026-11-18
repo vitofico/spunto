@@ -6,7 +6,7 @@ import json
 import math
 import os
 import unicodedata
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Body, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -24,6 +24,12 @@ router = APIRouter(prefix="/api/v1", tags=["Plugins"])
 class EnableBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     permissions: list[str] = Field(max_length=30)
+    review_token: str | None = Field(None, max_length=64)
+
+
+class ChangeMode(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    change_mode: Literal["ask_first", "automatic"]
 
 
 class AIRoute(BaseModel):
@@ -95,6 +101,8 @@ async def _call(awaitable):
         raise Problem(404, "not_found", "That plugin action is unavailable.") from None
     except ContextError as error:
         code = str(error)
+        if code == "plugin_review_changed":
+            raise Problem(409, code, "Review the current plugin details.") from None
         if code == "plugin_disabled":
             raise Problem(404, "not_found", "That plugin is unavailable.") from None
         if code == "plugin_pinned_by_environment":
@@ -256,12 +264,27 @@ async def enable(plugin_id: str, body: EnableBody, principal: PrincipalDep, serv
         )
         payload = json.loads(response.body)
         payload["permissions"] = permissions
+        payload["plugin"] = _toggle_receipt(host, plugin_id)
         from fastapi.responses import JSONResponse
 
         return JSONResponse(payload, 409, media_type="application/problem+json")
     if host.states[plugin_id]["switch"] != "on" and (reason := host.availability_reason(plugin_id)):
         raise Problem(409, "plugin_requirements_missing", reason)
-    await _call(host.enable(plugin_id, body.permissions))
+    try:
+        await _call(
+            host.enable(plugin_id, body.permissions, reviewed=True, review_token=body.review_token)
+        )
+    except Problem as error:
+        if error.code != "plugin_review_changed":
+            raise
+        from fastapi.responses import JSONResponse
+
+        details = json.loads(problem_response(409, error.code, error.detail).body)
+        return JSONResponse(
+            {**details, "plugin": _toggle_receipt(host, plugin_id)},
+            409,
+            media_type="application/problem+json",
+        )
     return _toggle_receipt(host, plugin_id)
 
 
@@ -281,6 +304,16 @@ async def get_settings(plugin_id: str, principal: PrincipalDep, services: Servic
         "values": host.get_settings(plugin_id),
         "secrets": _secret_status(host.manifests[plugin_id]),
     }
+
+
+@router.patch("/plugins/{plugin_id}/settings")
+async def change_mode(
+    plugin_id: str, body: ChangeMode, principal: PrincipalDep, services: ServicesDep
+):
+    _owner(principal)
+    host = _host(services, plugin_id)
+    await _call(host.set_settings(plugin_id, body.model_dump(), partial=True))
+    return {"values": host.get_settings(plugin_id)}
 
 
 @router.put("/plugins/{plugin_id}/settings")

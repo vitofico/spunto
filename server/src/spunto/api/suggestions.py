@@ -29,3 +29,8 @@ async def accept(id: str, principal: PrincipalDep, services: ServicesDep):
 @router.post("/{id}/dismiss")
 async def dismiss(id: str, principal: PrincipalDep, services: ServicesDep):
     return await decide(services.store, principal, id, "dismiss")
+
+
+@router.post("/{id}/undo")
+async def undo(id: str, principal: PrincipalDep, services: ServicesDep):
+    return await decide(services.store, principal, id, "undo")

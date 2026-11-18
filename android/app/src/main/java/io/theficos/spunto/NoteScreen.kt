@@ -13,6 +13,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,6 +56,15 @@ import kotlinx.serialization.json.*
  var history by remember(id) { mutableStateOf(model.historyFor.value==id) }
  var about by remember(id) { mutableStateOf(false) }
  var commandResult by remember(id) { mutableStateOf<JsonObject?>(null) }
+ val noteActionsFocus=remember(id) {FocusRequester()}
+ var restoreActionFocus by remember(id) {mutableStateOf(false)}
+ LaunchedEffect(restoreActionFocus) {
+  if(restoreActionFocus) {
+   androidx.compose.runtime.withFrameNanos {}
+   noteActionsFocus.requestFocus()
+   restoreActionFocus=false
+  }
+ }
  val editorScope=rememberCoroutineScope()
  var finishing by remember(id) {mutableStateOf(false)}
  var restoring by remember(id) {mutableStateOf(false)}
@@ -63,7 +74,8 @@ import kotlinx.serialization.json.*
  var recordingTarget by remember(id) {mutableStateOf<String?>(null)}
  val nav=LocalNavigator.current
  val doneInTopBar=LocalTopBar.current!=null
- LaunchedEffect(id) { if(model.historyFor.value==id) model.historyFor.value=null }
+ val requestedHistory by model.historyFor.collectAsState()
+ LaunchedEffect(id,requestedHistory) { if(requestedHistory==id) {history=true;model.historyFor.value=null} }
  val value=note?.takeIf {it.id==id} ?: run { if(loaded.second) Text(context.getString(R.string.core_note_missing),Modifier.padding(SpuntoSpacing.s20),color=MaterialTheme.colorScheme.onSurfaceVariant);return }
  val online by model.online.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
@@ -93,7 +105,7 @@ import kotlinx.serialization.json.*
  TopBarActions {
   if(writable) IconToggleButton(checked=value.pinned,onCheckedChange={model.flags(id,pinned=it)},enabled=!restoring,colors=IconButtonDefaults.iconToggleButtonColors(checkedContentColor=MaterialTheme.colorScheme.onSurface)) {Icon(painterResource(if(value.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin),contentDescription=context.getString(R.string.core_pin_note),modifier=Modifier.size(24.dp))}
   if(editing && writable && doneInTopBar) NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)
-  else if(!editing) IconButton(onClick={actions=true},enabled=!restoring) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_note_actions),modifier=Modifier.size(24.dp))}
+  else if(!editing) IconButton(onClick={actions=true},enabled=!restoring,modifier=Modifier.focusRequester(noteActionsFocus)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_note_actions),modifier=Modifier.size(24.dp))}
  }
  LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
  LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
@@ -112,7 +124,7 @@ import kotlinx.serialization.json.*
     Markdown(value.body,value.machine,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(recordingAttachmentLinks(value.body).any {link ->link.second==it}) recordingTarget=it},onLabel={nav.filter("label:$it")},onText={caret=it},onToggle=if(writable) ({model.toggleTask(value,it)}) else null,noteNames=linkedById.mapValues {it.value.title.ifBlank {context.getString(R.string.core_untitled)}})
    }
   }
-  if(!editing && writable) item {Suggestions(model,id,onNote)}
+  if(!editing && writable) item {Suggestions(model,value,onNote,commandResult?.takeIf {online}?.let(::commandSuggestionId).orEmpty())}
   item {NoteAttachments(model,id,value.body)}
   if(!editing && linked.isNotEmpty()) item {LinkedNotes(linksTo.mapNotNull(linkedById::get),linkedFrom.mapNotNull(linkedById::get),locale,onNote)}
   if(!editing) item {TextButton(onClick={about=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_about_note),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}}
@@ -136,7 +148,7 @@ import kotlinx.serialization.json.*
   val label=recordingAttachmentLinks(value.body).first {it.second==target}.first
   ModalBottomSheet(onDismissRequest={recordingTarget=null}) {Column(Modifier.padding(SpuntoSpacing.s20)) {AttachmentPlayer(model,target.substringAfterLast('/'),label,attachments.firstOrNull {it.kind=="recording" && it.remoteId==target.substringAfterLast('/')});Spacer(Modifier.height(SpuntoSpacing.s32))}}
  }
- commandResult?.takeIf {online && model.container.manifest.enabled(it.string("plugin_id"))}?.let {result ->CommandResultSheet(model,result,onNote,{commandResult=it},{commandResult=null})}
+ commandResult?.takeIf {online && model.container.manifest.enabled(it.string("plugin_id"))}?.let {result ->CommandResultSheet(model,result,onNote,{commandResult=it},{commandResult=null;if(commandSuggestionId(result).isNotBlank()) restoreActionFocus=true})}
 }
 
 /** The complete action label remains accessible when a long saving state needs an ellipsis in a narrow app bar. */

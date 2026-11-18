@@ -6,6 +6,7 @@ from pydantic import Field
 
 from spunto.ai.errors import AIError
 from spunto.ai.output import Output
+from spunto.core.quiet_changes import finish_source
 from spunto.core.text import label_key
 from spunto.host import Ctx, Plugin
 from spunto.host.plugin import ContextError
@@ -59,7 +60,8 @@ async def optional_summary(ctx, note, receipt):
     receipt["summary"] = clean(answer.summary, 700)
     existing = {label_key(path) for path in note["labels"]}
     ideas = []
-    for idea in answer.labels:
+    scores = {}
+    for idea in sorted(answer.labels, key=lambda item: -item.confidence):
         try:
             canonical = label_key(idea.path)
         except ValueError:
@@ -68,7 +70,9 @@ async def optional_summary(ctx, note, receipt):
             continue
         existing.add(canonical)
         ideas.append(idea.path)
+        scores[idea.path] = idea.confidence
     receipt["labels"] = ideas
+    receipt["label_confidence"] = scores
 
 
 @plugin.on("note.saved")
@@ -153,16 +157,9 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
         {"type": "text", "text": f"{receipt['minutes']} min read"},
         note_version=note["version"],
     )
-    proposal = None
-    if title and title != note["title"]:
-        proposal = await ctx.notes.suggest(
-            note_id, "set_title", {"title": title}, note_version=note["version"]
-        )
-    for path in receipt["labels"]:
-        await ctx.notes.suggest(note_id, "add_label", {"path": path}, note_version=note["version"])
     receipt["complete"] = True
     receipt.pop("page", None)
-    await ctx.capture.store_result("sources", key, note_id, note["version"], receipt)
+    proposal = await finish_source(ctx, note, key, receipt)
     return (
         {
             "type": "pill",

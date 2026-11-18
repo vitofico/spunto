@@ -26,10 +26,12 @@ filter = { no_labels = true }
 [settings]
 type = "object"
 additionalProperties = false
-[settings.properties.auto_accept_existing]
-type = "boolean"
-title = "Accept existing labels automatically"
-default = false
+[settings.properties.change_mode]
+type = "string"
+title = "When a label is suggested"
+description = "Automatically add labels you already use when confidence is high."
+enum = ["ask_first", "automatic"]
+default = "ask_first"
 [settings.properties.confidence_threshold]
 type = "number"
 title = "Minimum confidence for automatic acceptance"

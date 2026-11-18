@@ -16,6 +16,20 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
+import org.commonmark.node.Heading
+import org.commonmark.parser.IncludeSourceSpans
+import org.commonmark.parser.Parser
+
+private val titleParser=Parser.builder().includeSourceSpans(IncludeSourceSpans.BLOCKS).build()
+
+private fun replaceLeadingTitle(body:String,title:String):String {
+ val leading=titleParser.parse(body).firstChild as? Heading
+ if(leading?.level!=1) return "# $title\n\n$body"
+ val first=leading.sourceSpans.first()
+ val last=leading.sourceSpans.last()
+ val indent=if(first.lineIndex==last.lineIndex) body.substring(first.inputIndex,first.inputIndex+first.length).takeWhile {it==' '} else ""
+ return body.replaceRange(first.inputIndex,last.inputIndex+last.length,indent+"# "+title)
+}
 
 /** A live editor owns ordered draft writes; retired editors cannot overwrite a restored note. */
 class EditorLease internal constructor(noteId:String?,draftId:String) {
@@ -133,6 +147,11 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  val notes = dao.notes().map { rows -> rows.map { it.note() } }
  val pendingCount = dao.pendingCount()
  /** Notes with a change the server refused, and its reason: kept here, out of the waiting count, until the owner settles them. */
+ val queuedSuggestionUndos = dao.observeOutbox().map { rows ->
+  rows.filter { it.error==null }.mapNotNull { row ->
+   Json.decodeFromString<OutboxOperation>(row.payload).takeIf { it.type=="suggestion.decide" && it.decision=="undo" }?.noteId
+  }.toSet()
+ }
  val refused = dao.refusedOutbox().map { rows -> rows.filter { it.noteId!=null }.associate { it.noteId!! to it.error!! } }
  /** The way out of a refused change that never loses words: the text becomes a new note, and the original follows the server again. */
  suspend fun keepRefusedAsNewNote(id:String):String = db.withTransaction {
@@ -278,8 +297,8 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   queued.forEach { dao.removeOutbox(it.opId) }
   compacted.forEachIndexed { index,item -> dao.putOutbox(OutboxEntity(item.opId,item.noteId,Json.encodeToString(item),queued.firstOrNull()?.createdAt?.plus(index)?:System.currentTimeMillis()+index)) }
  }
- suspend fun decideSuggestion(id: String, decision: String) {
-  require(decision in listOf("accept","dismiss"))
+ suspend fun decideSuggestion(id: String, decision: String): Boolean {
+  require(decision in listOf("accept","dismiss","undo"))
   var rejection:LocalOperationException?=null
   var unchangedDecision=false
   db.withTransaction {
@@ -295,8 +314,15 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
      return@withTransaction
     }
    }
+   if(decision=="undo" && (data?.get("receipt") as? JsonObject)?.get("undoable")?.jsonPrimitive?.booleanOrNull!=true) {
+    unchangedDecision=true
+    return@withTransaction
+   }
+   if(data?.get("status")==JsonPrimitive("dismissed")) {unchangedDecision=true;return@withTransaction}
    val actionAt=System.currentTimeMillis()
    val affected=mutableSetOf<String>();noteId?.let { affected+=it }
+   var localReceipt:JsonObject?=null
+   var reviewedVersion:Int?=null
    if(decision=="accept" && data!=null) {
     val payload=data["payload"]?.jsonObject?:JsonObject(emptyMap())
     fun text(key:String)=payload[key]?.jsonPrimitive?.content.orEmpty()
@@ -324,6 +350,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
       reject(LocalOperationProblem.ReplacementSuperseded,"This replacement is superseded. Compare the current note before applying a new proposal.")
       return@withTransaction
      }
+     reviewedVersion=proposedVersion
     }
     val mergeSource=if(action=="merge_notes") live(text("source_id")) else null
     val mergeTarget=if(action=="merge_notes") live(text("target_id")) else null
@@ -336,15 +363,24 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
      // A cached link caption may no longer be visible. Only the server can resolve it for acceptance.
      "append_text" -> if(data["plugin"]?.jsonPrimitive?.content=="links") null else note?.body?.plus("\n\n"+text("text"))
      "replace_body" -> text("body")
-     "set_title" -> note?.body?.let { "# "+text("title")+"\n\n"+it }
+     "set_title" -> note?.body?.let {replaceLeadingTitle(it,text("title"))}
      "merge_notes" -> { val source=mergeSource!!;val target=mergeTarget!!;affected+=source.id;affected+=target.id;val merged=target.body+"\n\n"+source.body;putNote(target.note().copy(body=merged,title=titleOf(merged),pending=true,updatedAt=actionAt,machine=false,updatedViaAgent=false),localEdit=true,historyKind="accept");putNote(source.note().copy(trashed=true,pending=true,updatedAt=actionAt,trashedAt=actionAt,updatedViaAgent=false),localEdit=true,historyKind="accept");null }
      else -> null
     }
-    if(note!=null && body!=null) putNote(note.copy(body=body,title=titleOf(body),pending=true,updatedAt=actionAt,machine=note.machine && note.body==body,updatedViaAgent=false),localEdit=true,historyKind="accept")
+    if(note!=null && body!=null && body!=note.body) {
+     putNote(note.copy(body=body,title=titleOf(body),pending=true,updatedAt=actionAt,machine=false,updatedViaAgent=false),localEdit=true,historyKind="accept")
+     localReceipt=buildJsonObject {put("note_version",note.serverRev);put("undoable",true);put("local",true);put("local_applied_at",actionAt)}
+    }
    }
-   if(cached!=null && data!=null) dao.putOutput(cached.copy(payload=JsonObject(data+mapOf("status" to JsonPrimitive(if(decision=="accept") "accepted" else "dismissed"))).toString()))
-   enqueue(OutboxOperation(type="suggestion.decide",noteId=noteId,suggestionId=id,decision=decision,affectedNoteIds=affected.toList()))
-  }; if(!unchangedDecision) onChange();rejection?.let {throw it}
+   if(cached!=null && data!=null) {
+    val updated=data.toMutableMap()
+    updated["status"]=JsonPrimitive(if(decision=="accept") "accepted" else "dismissed")
+    updated.remove("receipt")
+    if(localReceipt!=null) updated["receipt"]=localReceipt
+    dao.putOutput(cached.copy(payload=JsonObject(updated).toString()))
+   }
+   enqueue(OutboxOperation(type="suggestion.decide",noteId=noteId,suggestionId=id,decision=decision,affectedNoteIds=affected.toList(),reviewedVersion=reviewedVersion))
+  }; if(!unchangedDecision) onChange();rejection?.let {throw it};return !unchangedDecision
  }
  suspend fun queueImage(noteId:String,path:String,mime:String):String = db.withTransaction {
   val note=dao.get(noteId);requireLocal(note!=null && !note.trashed && dao.tombstone(noteId)==null,LocalOperationProblem.NoteUnavailable) {"This note is no longer available."}

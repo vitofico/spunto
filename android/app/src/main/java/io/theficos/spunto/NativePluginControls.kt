@@ -5,6 +5,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -29,7 +31,8 @@ import java.time.format.DateTimeFormatter
 
 @Composable internal fun PluginHeading(text:String) {
  Text(text,style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface,modifier=Modifier.semantics {heading()})}
-/** One compact row (03 §6.4): name and tags, one sentence, one grey facts line; "Settings" and the switch on the right; a state line only when there is one. */
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun NativePluginRow(plugin:NativePluginFacts,online:Boolean,busy:Boolean,onToggle:(Boolean)->Unit,onSettings:()->Unit,onReview:()->Unit,onWeb:(String)->Unit) {
  val resources=LocalContext.current.resources
  val quiet=MaterialTheme.colorScheme.onSurfaceVariant
@@ -37,16 +40,15 @@ import java.time.format.DateTimeFormatter
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
     val tags=listOfNotNull("Android".takeIf {plugin.raw.pluginText("kind")=="device"},resources.getString(R.string.settings_default_with_ai).takeIf {plugin.raw.pluginText("default")=="on-with-ai"})
-    Text(localizedPluginName(resources,plugin.raw)+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall,color=if(!plugin.wantedOn && !plugin.canEnable) quiet else MaterialTheme.colorScheme.onSurface)
+    TextButton(onClick=onSettings,contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(localizedPluginName(resources,plugin.raw)+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface)}
     if(localizedPluginDescription(resources,plugin.raw).isNotBlank()) Text(localizedPluginDescription(resources,plugin.raw),style=MaterialTheme.typography.bodyMedium,color=quiet,maxLines=2,overflow=TextOverflow.Ellipsis)
     if(plugin.facts(resources).isNotEmpty()) Text(plugin.facts(resources).joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3,maxLines=2,overflow=TextOverflow.Ellipsis)
    }
    when {
-    plugin.removed -> TextButton(onClick=onSettings,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_details))}
+    plugin.removed -> Unit
     plugin.pin==EnvironmentPin.Managed -> Text(resources.getString(R.string.settings_set_in_the_environment ,if(plugin.wantedOn) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off)),Modifier.widthIn(max=128.dp),style=MaterialTheme.typography.bodySmall,color=quiet)
     plugin.pin==EnvironmentPin.Unknown || !plugin.valid -> Text(resources.getString(R.string.settings_switch_unavailable),style=MaterialTheme.typography.bodySmall,color=quiet)
     else -> {
-     if(plugin.wantedOn || !plugin.canEnable) TextButton(onClick=onSettings,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_settings))}
      PluginSwitch(plugin,online,busy,onToggle)
     }
    }
@@ -58,11 +60,11 @@ import java.time.format.DateTimeFormatter
    plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs)
    else -> null
   }
-  if(state!=null || plugin.permissionReviewRequired) Row(verticalAlignment=Alignment.CenterVertically) {
+  if(state!=null || plugin.permissionReviewRequired || plugin.reviewBeforeEnable) FlowRow(itemVerticalAlignment=Alignment.CenterVertically) {
    state?.let {Text(it,style=MaterialTheme.typography.bodySmall,color=quiet)}
    if(plugin.state=="waiting" && !plugin.removed) TextButton(onClick={onWeb("/settings/ai")},enabled=online,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_ai_settings))}
    if(plugin.state=="failed" && !plugin.removed) TextButton(onClick={onWeb("/status")},enabled=online,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_details))}
-   if(plugin.permissionReviewRequired) TextButton(onClick=onReview,enabled=online && !busy && plugin.canEnable,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_review_updated_permissions))}
+   if(plugin.permissionReviewRequired || plugin.reviewBeforeEnable) TextButton(onClick=onReview,enabled=online && !busy && plugin.canEnable,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(if(plugin.permissionReviewRequired) R.string.settings_review_updated_permissions else R.string.plugin_review_enable))}
   }
  }
  HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
@@ -75,7 +77,7 @@ import java.time.format.DateTimeFormatter
 /** Announced as "Dictation, on" (05 §10). */
 @Composable internal fun PluginSwitch(plugin:NativePluginFacts,online:Boolean,busy:Boolean,onToggle:(Boolean)->Unit) {
  val resources=LocalContext.current.resources
- Switch(plugin.wantedOn,onToggle,enabled=online && !busy && (plugin.canDisable || plugin.canEnable),colors=spuntoSwitchColors(),modifier=Modifier.semantics {contentDescription=localizedPluginName(resources,plugin.raw);stateDescription=if(plugin.wantedOn) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off)})
+ Switch(plugin.wantedOn,onToggle,enabled=online && !busy && plugin.pin==EnvironmentPin.Unmanaged && (plugin.canDisable || plugin.canEnable),colors=spuntoSwitchColors(),modifier=Modifier.semantics {contentDescription=localizedPluginName(resources,plugin.raw);stateDescription=if(plugin.wantedOn) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off)})
 }
 
 
@@ -93,13 +95,31 @@ import java.time.format.DateTimeFormatter
  }},confirmButton={TextButton(onClick=onAccept,enabled=online && !busy && plugin.canEnable) {Text(if(busy) resources.getString(R.string.settings_saving) else if(plugin.permissionReviewRequired) resources.getString(R.string.settings_accept_updated_permissions) else resources.getString(R.string.settings_turn_on_26563))}},dismissButton={TextButton(onClick=onDismiss,enabled=!busy) {Text(resources.getString(R.string.settings_cancel))}})
 }
 
-@Composable internal fun NativePluginSettingsValues(plugin:NativePluginFacts,page:NativePluginPage,online:Boolean,onWeb:(String)->Unit) {
+@Composable internal fun NativePluginSettingsValues(plugin:NativePluginFacts,page:NativePluginPage,online:Boolean,onChangeMode:((String)->Unit)?=null,changing:Boolean=false,onWeb:(String)->Unit) {
  val resources=LocalContext.current.resources
  val fields=page.schema["properties"] as? JsonObject ?: JsonObject(emptyMap())
  if(fields.isEmpty()) return
- PluginHeading(resources.getString(R.string.settings_settings))
- Text(if(online) resources.getString(R.string.settings_server_settings_are_read_only_on_this) else resources.getString(R.string.settings_changes_need_a_connection),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
- fields.forEach { (key,raw) -> val field=raw as? JsonObject ?: return@forEach
+ val hasMode=plugin.id in setOf("label-suggestions","title-summary","voice-memos") && "change_mode" in fields && onChangeMode!=null
+ if(hasMode) {
+  PluginHeading(resources.getString(R.string.plugin_change_behavior))
+  Text(resources.getString(when(plugin.id) {
+   "label-suggestions" -> R.string.plugin_automatic_labels
+   "title-summary" -> R.string.plugin_automatic_titles
+   else -> R.string.plugin_automatic_transcripts
+  }))
+  Column {
+   listOf("ask_first" to R.string.plugin_ask_first,"automatic" to R.string.plugin_automatic).forEach { (mode,label) ->
+    val selected=page.values.pluginText("change_mode")==mode
+    Row(Modifier.fillMaxWidth().heightIn(min=48.dp).selectable(selected,enabled=online && !changing,role=Role.RadioButton,onClick={onChangeMode?.invoke(mode)}),verticalAlignment=Alignment.CenterVertically) {
+     RadioButton(selected,onClick=null,modifier=Modifier.padding(end=SpuntoSpacing.s12),enabled=online && !changing)
+     Text(resources.getString(label))
+    }
+   }
+  }
+ }
+ if(fields.keys.any {it!="change_mode"}) PluginHeading(resources.getString(if(hasMode) R.string.plugin_advanced else R.string.settings_settings))
+ if(fields.keys.any {it!="change_mode"}) Text(if(online) resources.getString(R.string.settings_server_settings_are_read_only_on_this) else resources.getString(R.string.settings_changes_need_a_connection),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+ fields.forEach { (key,raw) -> if(hasMode && key=="change_mode") return@forEach;val field=raw as? JsonObject ?: return@forEach
   val title=localizedPluginSettingTitle(resources,plugin.raw,key,field)
   if(field.pluginFlag("x-secret")==true) {
    val set=(page.secrets[key] as? JsonObject)?.pluginFlag("set")
@@ -112,7 +132,7 @@ import java.time.format.DateTimeFormatter
    if(field.pluginText("x-scope")=="device") Text(resources.getString(R.string.settings_this_phone_only),style=MaterialTheme.typography.bodySmall)
   }
  }
- TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online && plugin.valid) {Text(resources.getString(R.string.settings_manage_settings_in_the_web_app_owner))}
+ if(fields.keys.any {it!="change_mode"}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online && plugin.valid) {Text(resources.getString(R.string.settings_manage_settings_in_the_web_app_owner))}
 }
 
 @Composable internal fun NativePluginDetailFacts(plugin:NativePluginFacts,online:Boolean,commandBusy:Boolean,onCommand:(JsonObject)->Unit,onWeb:(String)->Unit) {

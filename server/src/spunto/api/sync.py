@@ -52,11 +52,16 @@ class Operation(BaseModel):
     trashed_at: int | None = Field(None, ge=0)
     private_at: int | None = Field(None, ge=0)
     suggestion_id: str | None = None
-    decision: Literal["accept", "dismiss"] | None = None
+    decision: Literal["accept", "dismiss", "undo"] | None = None
+    reviewed_version: int | None = Field(None, ge=1)
 
     @model_validator(mode="after")
     def required_fields(self):
         self.op_id = str(uuid.UUID(self.op_id))
+        if self.reviewed_version is not None and (
+            self.type != "suggestion.decide" or self.decision != "accept"
+        ):
+            raise ValueError("reviewed_version is accepted only for suggestion acceptance")
         if self.type == "suggestion.decide":
             if self.suggestion_id is None or self.decision is None:
                 raise ValueError("suggestion_id and decision are required")
@@ -173,7 +178,12 @@ def check_epoch(epoch, meta):
 async def apply(conn, domain, op):
     if op.type == "suggestion.decide":
         decided = await suggestions.decide(
-            domain.store, domain.principal, op.suggestion_id, op.decision, connection=conn
+            domain.store,
+            domain.principal,
+            op.suggestion_id,
+            op.decision,
+            connection=conn,
+            reviewed_version=op.reviewed_version,
         )
         result = decided.get("result")
         if result and result.get("conflict"):

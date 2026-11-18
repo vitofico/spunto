@@ -242,7 +242,7 @@ it("labels actual origin without guessing from IDs and shows uncategorized Remov
   expect(
     screen.getByRole("link", { name: removed.name }).getAttribute("href"),
   ).toBe(`/settings/plugins/${removed.id}`);
-  expect(screen.queryByRole("link", { name: "Bundled fixture" })).toBeNull();
+  expect(screen.getByRole("link", { name: "Bundled fixture" })).toBeTruthy();
   expect(
     screen.queryByRole("switch", { name: `Enable ${removed.name}` }),
   ).toBeNull();

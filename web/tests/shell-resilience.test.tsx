@@ -96,8 +96,9 @@ it.each(["same entry", "HTTP error", "unreachable"] as const)(
     currentEntry();
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       if (scenario === "unreachable") throw new TypeError("Network failure");
+      const entry = scenario === "same entry" ? "current" : "new";
       return new Response(
-        '<script type="module" src="/assets/index-current.js"></script>',
+        `<script type="module" src="/assets/index-${entry}.js"></script>`,
         {
           status: scenario === "same entry" ? 200 : 503,
         },

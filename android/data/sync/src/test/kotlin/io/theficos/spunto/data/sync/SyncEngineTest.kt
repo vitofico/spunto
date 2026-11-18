@@ -56,7 +56,7 @@ class SyncEngineTest {
   val clean=uuidV7()
   workspace.putNote(Note(clean,"Downloaded from old epoch",serverRev=8))
   workspace.dao.putState(SyncStateEntity(epoch="old",cursor="old.8",serverUrl=config.serverUrl,replicaId=config.replicaId))
-  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"viewer"}"""))
+  server.enqueue(response(hostedSyncGolden.getValue("viewer_meta").toString()))
   server.enqueue(response("""{"epoch":"e","restore_ids":["$local","$clean"]}"""))
   server.enqueue(response(pullNote(clean,"Downloaded from restored epoch",1).toString()))
   repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
@@ -84,8 +84,10 @@ class SyncEngineTest {
   workspace.dao.putState(SyncStateEntity(epoch="old",cursor="old.8",serverUrl=config.serverUrl,replicaId=config.replicaId))
   var cachedRole=config.workspaceRole
   val engine=SyncEngine(workspace,{config},{ApiClient(it)},{cachedRole},{_,role ->cachedRole=role})
-  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"editor"}"""))
-  server.enqueue(response("""{"epoch":"e","restore_ids":["$local","$clean"],"workspace_role":"viewer"}"""))
+  server.enqueue(response(hostedSyncGolden.getValue("editor_meta").toString()))
+  server.enqueue(response(JsonObject(hostedSyncGolden.getValue("viewer_reconcile").jsonObject + (
+   "restore_ids" to buildJsonArray { add(JsonPrimitive(local)); add(JsonPrimitive(clean)) }
+  )).toString()))
   server.enqueue(response(pullNote(restored,"Live in the restored snapshot",1).toString()))
   repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
   assertEquals(SyncStatus.Complete(2),engine.sync())
@@ -113,8 +115,8 @@ class SyncEngineTest {
   val metadataRole=java.util.concurrent.atomic.AtomicReference<String>()
   val engine=SyncEngine(workspace,{config},{ApiClient(it)},{cachedRole.get()},{_,role ->cachedRole.set(role)})
   server.dispatcher=object:Dispatcher() {override fun dispatch(request:RecordedRequest)=when(request.requestUrl?.encodedPath) {
-   "/api/v1/changes/wait" -> if(waiting.incrementAndGet()==1) response("""{"cursor":"e.0","changed":false,"workspace_role":"viewer"}""") else MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
-   "/api/v1/meta" -> {metadataRole.set(cachedRole.get());response("""{"sync_epoch":"e","workspace_role":"viewer"}""")}
+   "/api/v1/changes/wait" -> if(waiting.incrementAndGet()==1) response(hostedSyncGolden.getValue("viewer_wait").toString()) else MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+   "/api/v1/meta" -> {metadataRole.set(cachedRole.get());response(hostedSyncGolden.getValue("viewer_meta").toString())}
    "/api/v1/sync/pull" -> response(pullNote(remote,"Quiet-space update",1).toString())
    "/api/v1/plugins","/api/v1/plugins/manifest" -> response("""{"plugins":[]}""")
    else -> response("{}",404)
@@ -141,20 +143,20 @@ class SyncEngineTest {
    server.enqueue(response(pullNote(remote,"Remote $version",version).toString()))
    repeat(2) {server.enqueue(response("""{"plugins":[]}"""))}
   }
-  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"editor"}"""))
-  server.enqueue(response("""{"code":"read_only_space"}""",403))
+  server.enqueue(response(hostedSyncGolden.getValue("editor_meta").toString()))
+  server.enqueue(response(hostedSyncGolden.getValue("read_only_push").toString(),403))
   enqueueReads(1)
   assertEquals(SyncStatus.Complete(1),engine.sync())
   assertEquals("viewer",cachedRole)
   assertEquals(before.copy(sent=true),workspace.dao.outbox().single())
   assertEquals("Remote 1",workspace.dao.get(remote)?.body)
   assertEquals("Previously queued words",workspace.dao.get(local)?.body)
-  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"viewer"}"""))
+  server.enqueue(response(hostedSyncGolden.getValue("viewer_meta").toString()))
   enqueueReads(2)
   assertEquals(SyncStatus.Complete(1),engine.sync())
   assertEquals("Remote 2",workspace.dao.get(remote)?.body)
   assertEquals(before.copy(sent=true),workspace.dao.outbox().single())
-  server.enqueue(response("""{"sync_epoch":"e","workspace_role":"editor"}"""))
+  server.enqueue(response(hostedSyncGolden.getValue("editor_meta").toString()))
   server.enqueue(response("""{"epoch":"e","results":[{"op_id":"${before.opId}","status":"applied","version":1}]}"""))
   enqueueReads(3)
   assertEquals(SyncStatus.Complete(0),engine.sync())

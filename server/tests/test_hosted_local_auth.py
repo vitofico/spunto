@@ -21,7 +21,7 @@ from spunto.auth.oidc import OIDCClient, OIDCSettings
 from spunto.config import Settings
 from spunto.hosted import create_hosted_app, hosted_startup
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 ORIGIN = "http://127.0.0.1:18081"
 PASSWORD = "synthetic local account password"
 REPLACEMENT = "synthetic replacement account password"
@@ -1117,6 +1117,18 @@ async def test_new_identity_tables_deny_runtime_and_public_without_domain_contro
             )
         ).fetchone()
         assert role == (False, False)
+        public_grants = await (
+            await runtime.execute(
+                "SELECT c.relname, privilege FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid=c.relnamespace "
+                "CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE',"
+                "'TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege "
+                "WHERE n.nspname='public' AND left(c.relname,7)='spunto_' "
+                "AND c.relkind IN ('r','p','v','m','f') "
+                "AND has_table_privilege(current_user,c.oid,privilege)"
+            )
+        ).fetchall()
+        assert set(public_grants) == {("spunto_schema_migration", "SELECT")}
         for table in tables:
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 await runtime.execute(

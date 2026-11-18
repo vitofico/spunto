@@ -91,18 +91,18 @@ async def test_fencing_rereads_stale_note_and_external_origin(fixture_gateway, s
     assert (await gateway.status())["stats"][0]["outcome"] == "ok"
 
 
-@pytest.mark.parametrize("flag", ["private", "machine"])
+@pytest.mark.parametrize("flag", ["private", "machine", "trashed_at"])
 @pytest.mark.parametrize("cap", ["chat", "embed", "vision", "transcribe"])
 async def test_privacy_is_reread_at_every_outbound_boundary(fixture_gateway, store, flag, cap):
     gateway, fake = fixture_gateway
     note = await make_note(store)
     async with store.write() as conn:
-        await conn.execute(
-            "UPDATE note SET private=1 WHERE id=?"
-            if flag == "private"
-            else "UPDATE note SET machine=1 WHERE id=?",
-            (note["id"],),
-        )
+        updates = {
+            "private": "UPDATE note SET private=1 WHERE id=?",
+            "machine": "UPDATE note SET machine=1 WHERE id=?",
+            "trashed_at": "UPDATE note SET trashed_at=1 WHERE id=?",
+        }
+        await conn.execute(updates[flag], (note["id"],))
     with pytest.raises(AIError, match="ai_note_refused"):
         if cap == "chat":
             await gateway.chat(Probe, "check", notes=[note])

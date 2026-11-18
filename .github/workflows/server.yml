@@ -103,7 +103,17 @@ jobs:
           version: "0.13.0" # the uv in server/Dockerfile
           enable-cache: true # keyed on server/uv.lock
       - name: Local and hosted server preflight
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/sqlite.xml
         run: ../scripts/check-ci server
+      - name: Retain SQLite JUnit results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sqlite-tests
+          path: ${{ runner.temp }}/sqlite.xml
+          if-no-files-found: error
+          retention-days: 3
 
   postgres:
     name: PostgreSQL 18 isolation, hosted auth and recovery
@@ -181,14 +191,9 @@ jobs:
           SPUNTO_DATABASE_ROLE: spunto_runtime
           SPUNTO_IDENTITY_DATABASE_ROLE: spunto_identity
         run: uv run spunto database migrate
-      - name: Exercise real PostgreSQL and signed OIDC fixtures
+      - name: Exercise real PostgreSQL fixtures
         run: |
-          uv run pytest tests/test_postgres.py tests/test_hosted.py tests/test_oidc.py \
-            tests/test_hosted_local_auth.py tests/test_operator_workspace.py \
-            tests/test_sqlite_import.py tests/test_postgres_snapshot.py \
-            tests/test_library_stats_hosted.py \
-            tests/test_ask_writes.py::test_real_postgres_reviewed_edit_create_authoring_and_stale_undo \
-            --junitxml="$RUNNER_TEMP/postgres.xml" -ra
+          uv run pytest -m postgres --junitxml="$RUNNER_TEMP/postgres.xml" -ra
           python3 - <<'PY'
           import os
           import xml.etree.ElementTree as ET
@@ -197,6 +202,75 @@ jobs:
           assert cases, "PostgreSQL acceptance collected no tests"
           assert not report.findall(".//skipped"), "Real PostgreSQL acceptance must not skip"
           PY
+      - name: Retain PostgreSQL JUnit results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: postgres-tests
+          path: ${{ runner.temp }}/postgres.xml
+          if-no-files-found: error
+          retention-days: 3
+      - name: Verify exact M1 translator-order regression
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.head_ref == 'test/safety-net' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          uv run python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          out = Path(os.environ["RUNNER_TEMP"]) / "spunto-a2"
+          out.mkdir()
+          source = Path("src/spunto/store/postgres.py")
+          original = source.read_bytes()
+          before = b'"applied_op": ["credential_id", "op_id", "result", "applied_at"]'
+          after = b'"applied_op": ["credential_id", "result", "op_id", "applied_at"]'
+          assert original.count(before) == 1
+          selector = (
+              "tests/test_postgres.py::"
+              "test_runtime_rejects_admin_role_and_direct_cross_workspace_writes"
+          )
+          for label, expected_failures in (("control", 0), ("M1", 1)):
+              report = out / f"{label}.xml"
+              if expected_failures:
+                  source.write_bytes(original.replace(before, after, 1))
+              try:
+                  with (out / f"{label}.log").open("wb") as log:
+                      process = subprocess.run(
+                          [sys.executable, "-B", "-m", "pytest", "-q",
+                           f"--junitxml={report}", selector],
+                          stdout=log, stderr=subprocess.STDOUT, timeout=90,
+                      )
+              finally:
+                  source.write_bytes(original)
+              suite, = ET.parse(report).getroot().findall("testsuite")
+              counts = tuple(int(suite.attrib[key]) for key in ("tests", "failures", "errors", "skipped"))
+              print(label, counts, suite.attrib["time"])
+              assert process.returncode == expected_failures
+              assert counts == (1, expected_failures, 0, 0)
+              if expected_failures:
+                  failure, = suite.findall("testcase/failure")
+                  assert "AssertionError: applied_op" in failure.attrib["message"]
+          PY
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/spunto-a2-no-bytecode-cache
+      - name: Retain A2 mutation results
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          github.head_ref == 'test/safety-net' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: spunto-a2-mutation
+          path: ${{ runner.temp }}/spunto-a2
+          if-no-files-found: warn
+          retention-days: 3
 
   image:
     env:

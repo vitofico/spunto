@@ -16,7 +16,7 @@ from spunto.plugins import thinking_desk as desk
 
 hosted = hosted_fixture
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 BASE = "/api/v1/plugins/thinking-desk/commands/"
 
 

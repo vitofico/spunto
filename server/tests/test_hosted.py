@@ -5,6 +5,7 @@ import json
 import os
 import time
 import uuid
+from pathlib import Path
 from urllib.parse import quote
 
 import httpx
@@ -18,7 +19,7 @@ from spunto.hosted import create_hosted_app, hosted_startup
 from spunto.jobs.maintenance import DAY_MS, prune
 from spunto.store.db import now_ms
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 ORIGIN = "http://127.0.0.1:18081"
 
 
@@ -260,6 +261,34 @@ async def test_http_policy_changes_atomic_account_allowance_without_resetting_us
         assert (await client.get("/api/v1/notes", headers=headers(alice))).status_code == 200
         assert (await client.get("/api/v1/export", headers=headers(alice))).status_code == 200
 
+        # A provider received this synthetic chat. A later HTTP failure still consumes quota.
+        from ai_fake import FakeProvider
+        from test_ai_gateway import settings_for
+
+        from spunto.ai import AIError, Gateway
+        from spunto.ai.gateway import Probe
+        from spunto.ai.profiles import Profile
+
+        runtime = await manager.services(
+            {**alice["workspace"], "role": "owner"}, alice["account"]["id"]
+        )
+        provider = FakeProvider(modes=["500"])
+        profile = Profile(name="synthetic", base_url="http://model.test/v1", chat_model="test")
+        gateway = Gateway(
+            runtime.store,
+            settings_for(profile),
+            transport=httpx.ASGITransport(provider.app),
+            quota=quota,
+        )
+        try:
+            with pytest.raises(AIError, match="ai_provider_http_error"):
+                await gateway.chat(Probe, "check", plugin_id="tidy")
+            assert len(provider.requests) == 1
+            actions = (await quota.status())["actions"]
+            assert next(row["used"] for row in actions if row["action"] == "chat") == 1
+        finally:
+            await gateway.close()
+
 
 async def test_generic_account_limits_are_atomic_shared_and_keep_reads_export(hosted):
     from spunto.account_policy import AccountPolicy
@@ -375,6 +404,22 @@ async def test_account_closure_requires_choice_revokes_credentials_and_purges_on
         headers=headers(alice),
         json={"user_id": bob["account"]["id"], "role": "editor"},
     )
+    joined = await client.post(
+        "/api/v1/workspaces", headers=headers(bob), json={"name": "Bob-owned shared space"}
+    )
+    assert joined.status_code == 201, joined.text
+    joined_id = joined.json()["id"]
+    assert (
+        await client.post(
+            f"/api/v1/workspaces/{joined_id}/members",
+            headers=headers(bob),
+            json={"user_id": alice["account"]["id"], "role": "editor"},
+        )
+    ).is_success
+    written = await client.post(
+        "/api/v1/notes", headers=headers(alice, joined_id), json={"body": "Joined space survives"}
+    )
+    assert written.status_code == 201, written.text
     body = {"confirm": "DELETE MY ACCOUNT"}
     assert (
         await client.post("/api/v1/auth/account/closure", headers=headers(alice), json=body)
@@ -422,6 +467,9 @@ async def test_account_closure_requires_choice_revokes_credentials_and_purges_on
     assert (await client.post(url + "/purge", json=receipt, headers=service)).status_code == 200
     remaining = await client.get("/api/v1/notes", headers=headers(bob))
     assert remaining.status_code == 200 and remaining.json()["notes"][0]["body"] == "Bob retained"
+    joined_notes = await client.get("/api/v1/notes", headers=headers(bob, joined_id))
+    assert joined_notes.status_code == 200, joined_notes.text
+    assert [note["body"] for note in joined_notes.json()["notes"]] == ["Joined space survives"]
     assert (
         await manager.accounts.one(
             "SELECT id FROM public.spunto_account WHERE id=%s", (alice["account"]["id"],)
@@ -912,6 +960,125 @@ async def test_read_and_status_pats_cannot_enter_account_sharing_controlplane(ho
         ).status_code == 403
 
 
+async def _sync_phone(client, user):
+    grant = await client.post("/api/v1/auth/pairing", headers=headers(user))
+    assert grant.status_code == 200, grant.text
+    paired = await client.post(
+        "/api/v1/auth/pairing/exchange",
+        json={"code": grant.json()["code"], "name": "Synthetic phone"},
+    )
+    assert paired.status_code == 200, paired.text
+    bearer = {"Authorization": "Bearer " + paired.json()["token"]}
+    meta = await client.get("/api/v1/meta", headers=bearer)
+    assert meta.status_code == 200, meta.text
+    return bearer, meta.json()["sync_epoch"]
+
+
+def _sync_op(kind, note_id, **fields):
+    return {"op_id": str(uuid.uuid4()), "type": kind, "note_id": note_id, **fields}
+
+
+async def _sync_push(client, device, *ops):
+    bearer, epoch = device
+    response = await client.post(
+        "/api/v1/sync/push", headers=bearer, json={"epoch": epoch, "ops": list(ops)}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["results"]
+
+
+async def _sync_pull(client, device):
+    response = await client.get("/api/v1/sync/pull", headers=device[0])
+    assert response.status_code == 200, response.text
+    return response.json()["items"]
+
+
+async def _assert_phone_conflict_receipts_tombstones_and_tag_removal(hosted):
+    client, _, (alice, bob, _), settings = hosted
+    first, second, other = (
+        await _sync_phone(client, alice),
+        await _sync_phone(client, alice),
+        await _sync_phone(client, bob),
+    )
+    disputed, kept, gone, other_gone = (str(uuid.uuid7()) for _ in range(4))
+    assert [
+        result["status"]
+        for result in await _sync_push(
+            client,
+            first,
+            _sync_op("note.create", disputed, body="one\ntwo"),
+            _sync_op("note.create", kept, body="Kept #garden"),
+            _sync_op("note.create", gone, body="Disposable"),
+        )
+    ] == ["applied"] * 3
+    assert (
+        await _sync_push(
+            client,
+            first,
+            _sync_op("note.update", disputed, base_version=1, body="SERVER\ntwo"),
+        )
+    )[0]["status"] == "applied"
+    stale = _sync_op("note.update", disputed, base_version=1, body="PHONE\ntwo")
+    (conflict,) = await _sync_push(client, second, stale)
+    assert conflict["status"] == "conflict"
+    (receipt,) = await _sync_push(client, second, stale)
+    assert receipt["status"] == "duplicate"
+    assert receipt["original"]["status"] == "conflict"
+    assert receipt["original"]["conflict_id"] == conflict["conflict_id"]
+    bodies = {
+        entry["data"]["body"]
+        for entry in await _sync_pull(client, first)
+        if entry["kind"] == "note"
+    }
+    assert {"SERVER\ntwo", "PHONE\ntwo"} <= bodies
+
+    assert (await _sync_push(client, other, _sync_op("note.create", other_gone, body="Bystander")))[
+        0
+    ]["status"] == "applied"
+    for user, device, note_id in ((alice, first, gone), (bob, other, other_gone)):
+        (trashed,) = await _sync_push(client, device, _sync_op("note.flags", note_id, trashed=True))
+        assert trashed["status"] == "applied" and trashed["note"]["trashed"]
+        emptied = await client.post("/api/v1/trash/empty", headers=headers(user))
+        assert emptied.status_code == 200 and emptied.json() == {"deleted": 1}, emptied.text
+
+    for device, note_id in ((first, gone), (other, other_gone)):
+        items = await _sync_pull(client, device)
+        assert [
+            (entry["data"]["kind"], entry["data"]["id"])
+            for entry in items
+            if entry["kind"] == "tombstone"
+        ] == [("note", note_id)]
+        assert all(entry["kind"] != "note" or entry["data"]["id"] != note_id for entry in items)
+
+    # Use the ordinary runtime role and both legitimate workspace contexts.
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as connection:
+        for user, expected in ((alice, gone), (bob, other_gone)):
+            await connection.execute(
+                "SELECT set_config('spunto.workspace_id',%s,true),"
+                "set_config('spunto.user_id',%s,true),set_config('spunto.role','owner',true)",
+                (user["workspace"]["id"], user["account"]["id"]),
+            )
+            rows = await (await connection.execute("SELECT id FROM spunto.tombstone")).fetchall()
+            assert rows == [(expected,)]
+
+    (restored,) = await _sync_push(client, first, _sync_op("note.restore", gone, body="Disposable"))
+    assert restored["status"] == "rejected" and restored["code"] == "not_found"
+    (recreated,) = await _sync_push(client, first, _sync_op("note.create", gone, body="Disposable"))
+    assert recreated["status"] == "rejected"
+    removed = await client.post(
+        "/api/v1/labels/remove", headers=headers(alice), json={"path": "garden"}
+    )
+    assert removed.status_code == 200 and removed.json() == {"rewritten": 1}, removed.text
+    items = await _sync_pull(client, first)
+    notes = {
+        item["data"]["id"]: item["data"]["body"].strip() for item in items if item["kind"] == "note"
+    }
+    assert notes[kept] == "Kept"
+    assert gone not in notes
+    labels = await client.get("/api/v1/labels", headers=headers(alice))
+    assert labels.status_code == 200 and labels.json()["labels"] == [], labels.text
+
+
 async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
     client, _, users, _ = hosted
     alice, bob, _ = users
@@ -956,7 +1123,9 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
     viewer_identity = await client.get("/api/v1/auth/me", headers=bearer)
     assert viewer_identity.status_code == 200
     assert viewer_identity.json()["account"]["id"] == bob["account"]["id"]
-    assert (await client.get("/api/v1/meta", headers=bearer)).json()["workspace_role"] == "viewer"
+    viewer_metadata = await client.get("/api/v1/meta", headers=bearer)
+    assert viewer_metadata.status_code == 200, viewer_metadata.text
+    assert viewer_metadata.json()["workspace_role"] == "viewer"
     viewer_wait = await client.get(
         "/api/v1/changes/wait",
         headers=bearer,
@@ -997,6 +1166,45 @@ async def test_pairing_metadata_sync_and_viewer_downgrade(hosted):
         "/api/v1/sync/push", headers=bearer, json={**viewer_sync, "ops": []}
     )
     assert blocked.status_code == 403 and blocked.json()["code"] == "read_only_space"
+    epoch = metadata.json()["sync_epoch"]
+    # Hosted cursors start at a database-wide sequence, so pin the change relative
+    # to the preceding pull while retaining the response's actual epoch.
+    _, baseline_seq = pull.json()["cursor"].rsplit(".", 1)
+    wait_epoch, wait_seq = viewer_wait.json()["cursor"].rsplit(".", 1)
+    hosted_contract = {
+        "editor_meta": {**metadata.json(), "sync_epoch": "e"},
+        "viewer_meta": {
+            **viewer_metadata.json(),
+            "sync_epoch": viewer_metadata.json()["sync_epoch"].replace(epoch, "e", 1),
+        },
+        "viewer_wait": {
+            **viewer_wait.json(),
+            "cursor": f"{wait_epoch.replace(epoch, 'e', 1)}.{int(wait_seq) - int(baseline_seq)}",
+        },
+        "viewer_reconcile": {
+            **reconciled.json(),
+            "epoch": reconciled.json()["epoch"].replace(epoch, "e", 1),
+        },
+        "read_only_push": blocked.json(),
+    }
+    # Capture the fields consumed by the Android sync adapter. Other metadata
+    # includes version and deployment fields that are outside this contract.
+    fields = {
+        "editor_meta": ("sync_epoch", "workspace_role"),
+        "viewer_meta": ("sync_epoch", "workspace_role"),
+        "viewer_wait": ("cursor", "changed", "workspace_role"),
+        "viewer_reconcile": ("epoch", "restore_ids", "workspace_role"),
+        "read_only_push": ("code",),
+    }
+    actual = {
+        name: {field: payload[field] for field in fields[name]}
+        for name, payload in hosted_contract.items()
+    }
+    target = Path(__file__).parents[2] / "spec" / "fixtures" / "sync-api-hosted.json"
+    if os.environ.get("UPDATE_SPUNTO_SYNC_FIXTURES") == "1":
+        target.write_text(json.dumps(actual, ensure_ascii=False, indent=2) + "\n")
+    assert actual == json.loads(target.read_text())
+    await _assert_phone_conflict_receipts_tombstones_and_tag_removal(hosted)
     assert (
         await client.post("/api/v1/notes", headers=bearer, json={"body": "No"})
     ).status_code == 403

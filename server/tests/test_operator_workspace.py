@@ -19,7 +19,7 @@ from spunto.host import Ctx
 from spunto.operator_workspace import scoped_operator_services
 from spunto.plugins.markdown_import import read_zip, run_import
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 
 
 @pytest.fixture

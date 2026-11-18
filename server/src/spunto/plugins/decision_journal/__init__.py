@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime
 from spunto.api.errors import Problem
 from spunto.core.text import labels, title_of
 from spunto.host import ContextError, Ctx, Plugin
+from spunto.host.language import language, tr, use_language
 
 plugin = Plugin("decision-journal")
 LIMITS = {"title": 80, "decision": 500, "alternatives": 500, "rationale": 700, "expected": 500}
@@ -17,6 +18,20 @@ STATUSES = ("open", "reviewed", "closed")
 REVIEW_FIELDS = ("request_id", "base_version", "outcome", "reflection", "status", "review_on")
 DECISION_UNAVAILABLE = "This decision is unavailable. Its original creation will not be repeated."
 OUTCOME_UNAVAILABLE = "That outcome note is unavailable. It will not be recreated."
+MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 
 def text(value):
@@ -64,7 +79,25 @@ def review_date(value):
 def stamp(milliseconds):
     """A date people read in a note: "21 October 2026, 14:32 UTC"."""
     moment = datetime.fromtimestamp(milliseconds / 1000, UTC)
-    return f"{moment.day} {moment:%B %Y, %H:%M} UTC"
+    return tr(
+        "{day} {month} {year}, {time} UTC",
+        day=moment.day,
+        month=tr(MONTHS[moment.month - 1]),
+        year=moment.year,
+        time=f"{moment:%H:%M}",
+    )
+
+
+def display_date(iso):
+    if language() == "en":
+        return iso
+    day = date.fromisoformat(iso)
+    return tr(
+        "{day} {month} {year}",
+        day=day.day,
+        month=tr(MONTHS[day.month - 1]),
+        year=day.year,
+    )
 
 
 def field(title, limit, default=None, **extra):
@@ -87,7 +120,9 @@ def form(properties, required):
 
 
 def conflict():
-    return Problem(409, "decision_conflict", "This decision changed. Reopen it before reviewing.")
+    return Problem(
+        409, "decision_conflict", tr("This decision changed. Reopen it before reviewing.")
+    )
 
 
 async def available(ctx, state, root=None):
@@ -128,8 +163,9 @@ def summary(state, now):
     status = state["status"]
     if due and status != "closed":
         today = datetime.fromtimestamp(now / 1000, UTC).date().isoformat()
-        return f"{status.capitalize()} · Review {'due' if due <= today else 'on'} {due}"
-    return status.capitalize()
+        date = tr("Review due {date}" if due <= today else "Review on {date}", date=due)
+        return f"{tr(status.capitalize())} · {date}"
+    return tr(status.capitalize())
 
 
 def action(id, title, **args):
@@ -144,6 +180,7 @@ async def annotate(ctx, note, *, decision_entry=False):
     }
     panel = {
         "ui": 1,
+        # Persist a stable action for offline clients; clients localize by command ID.
         "items": [action("journal", "Open decision journal", note_id=note["id"])],
     }
     try:
@@ -157,7 +194,7 @@ async def annotate(ctx, note, *, decision_entry=False):
 
 
 def heading(value):
-    value = " ".join(value.split()) or "Decision"
+    value = " ".join(value.split()) or tr("Decision")
     return re.sub(r"([\\`*_\[\]()#!~])", r"\\\1", html.escape(value, quote=False))
 
 
@@ -166,7 +203,7 @@ def recording_fingerprint(original, due):
     return hashlib.sha256(json.dumps([intent, due], sort_keys=True).encode()).hexdigest()
 
 
-def original_body(original, due):
+def original_body(original, due, *, untitled=False):
     decision = original["decision"]
     choice_is_title = (
         original["title"] == " ".join(decision.split()) == decision
@@ -174,11 +211,12 @@ def original_body(original, due):
         and not labels(decision)
     )
     body = (
-        f"# {heading(original['title'])}\n\n"
-        f"Decision recorded {stamp(original['created_ms'])}.\n\n"
-        + ("" if choice_is_title else f"## Decision\n{decision}\n\n")
+        f"# {heading('' if untitled else original['title'])}\n\n"
+        + tr("Decision recorded {time}.", time=stamp(original["created_ms"]))
+        + "\n\n"
+        + ("" if choice_is_title else f"## {tr('Decision')}\n{decision}\n\n")
         + "".join(
-            f"## {label}\n{original[key]}\n\n"
+            f"## {tr(label)}\n{original[key]}\n\n"
             for key, label in (
                 ("alternatives", "Alternatives"),
                 ("rationale", "Rationale"),
@@ -186,8 +224,12 @@ def original_body(original, due):
             )
             if original[key]
         )
-        + (f"Initial review date: {due}.\n\n" if due else "")
-        + (f"[Source note](/n/{original['source_id']})\n\n" if original.get("source_id") else "")
+        + (tr("Initial review date: {date}.", date=display_date(due)) + "\n\n" if due else "")
+        + (
+            f"[{tr('Source note')}](/n/{original['source_id']})\n\n"
+            if original.get("source_id")
+            else ""
+        )
     ).rstrip()
     if len(body) > 4000:
         raise ValueError("Decision exceeds the display budget.")
@@ -210,7 +252,7 @@ async def record(
     owner(ctx)
     source = await ctx.notes.get(note_id) if note_id is not None else None
     if note_id is not None and source is None:
-        return text("The source note is unavailable.")
+        return text(tr("The source note is unavailable."))
     if (
         all(
             value is None
@@ -220,21 +262,21 @@ async def record(
         and private is False
     ):
         properties = {
-            "request_id": field("Request ID", 36, str(uuid.uuid7())),
-            "decision": field("What did you decide?", LIMITS["decision"], minLength=1),
-            "title": field("Decision title", LIMITS["title"]),
-            "alternatives": field("Alternatives considered", LIMITS["alternatives"]),
-            "rationale": field("Why this choice?", LIMITS["rationale"]),
-            "expected": field("Expected outcome", LIMITS["expected"]),
-            "review_on": field("Review date (YYYY-MM-DD, optional)", 10, ""),
+            "request_id": field(tr("Request ID"), 36, str(uuid.uuid7())),
+            "decision": field(tr("What did you decide?"), LIMITS["decision"], minLength=1),
+            "title": field(tr("Decision title"), LIMITS["title"]),
+            "alternatives": field(tr("Alternatives considered"), LIMITS["alternatives"]),
+            "rationale": field(tr("Why this choice?"), LIMITS["rationale"]),
+            "expected": field(tr("Expected outcome"), LIMITS["expected"]),
+            "review_on": field(tr("Review date (YYYY-MM-DD, optional)"), 10, ""),
             "private": {
                 "type": "boolean",
-                "title": "Private",
+                "title": tr("Private"),
                 "default": bool(source and source["private"]),
             },
         }
         if source:
-            properties["note_id"] = field("Source note ID", 36, source["id"])
+            properties["note_id"] = field(tr("Source note ID"), 36, source["id"])
         return form(properties, ["request_id", "decision"])
     values = dict(
         title=title,
@@ -247,8 +289,11 @@ async def record(
         key: clean("" if value is None else value, LIMITS[key], optional=key != "decision")
         for key, value in values.items()
     }
+    untitled = False
     if not values["title"]:
-        values["title"] = title_of(values["decision"], LIMITS["title"]) or "Decision"
+        derived = title_of(values["decision"], LIMITS["title"])
+        untitled = not derived
+        values["title"] = derived or "Decision"
     if type(private) is not bool:
         raise ValueError("Private must be true or false.")
     requested_private = private
@@ -271,7 +316,7 @@ async def record(
             # Creation is acknowledged even if the note and its linked state were purged.
             state = await records.get("decisions", request_id)
             if state is None:
-                return text(DECISION_UNAVAILABLE)
+                return text(tr(DECISION_UNAVAILABLE))
     if state is None:
         state = {
             "id": request_id,
@@ -282,6 +327,7 @@ async def record(
                 "created_ms": ctx.clock(),
             },
             "draft_hash": fingerprint,
+            "language": language(),
             "initial_review_date": due,
             "note_id": None,
             "version": 1,
@@ -295,7 +341,7 @@ async def record(
         ):
             state = await records.get("decisions", request_id)
             if state is None:
-                return text(DECISION_UNAVAILABLE)
+                return text(tr(DECISION_UNAVAILABLE))
     # Inherited source privacy can change while an interrupted creation is retried.
     # Compare the owner's input, then preserve any classification already reserved.
     saved_fingerprint = state.get("draft_hash") or recording_fingerprint(
@@ -315,8 +361,10 @@ async def record(
             created_ms=state["original"]["created_ms"],
             private=state["original"]["private"],
         )
+        with use_language(state.get("language", "en")):
+            body = original_body(original, due, untitled=untitled)
         created = await ctx.notes.create(
-            original_body(original, due),
+            body,
             private=original["private"],
             source_versions=source_versions,
             request_id=creation_id,
@@ -329,13 +377,13 @@ async def record(
             state = completed
         else:
             if await records.compare_and_delete("decisions", request_id, state):
-                return text(DECISION_UNAVAILABLE)
+                return text(tr(DECISION_UNAVAILABLE))
             state = await records.get("decisions", request_id)
             if state is not None and state["note_id"] is None:
                 raise conflict()
     visible = await available(ctx, state)
     if visible is None:
-        return text(DECISION_UNAVAILABLE)
+        return text(tr(DECISION_UNAVAILABLE))
     await annotate(ctx, visible[0], decision_entry=True)
     return {"type": "notes", "ids": [state["note_id"]]}
 
@@ -354,7 +402,7 @@ async def review(
     owner(ctx)
     entry = await entry_for_note(ctx, note_id)
     if entry is None:
-        return text("Choose a decision or outcome note from the Decisions view.")
+        return text(tr("Choose a decision or outcome note from the Decisions view."))
     state, root, source = entry
     if outcome is None:
         if state["pending"]:
@@ -363,11 +411,14 @@ async def review(
                 "ui": 1,
                 "items": [
                     text(
-                        "A review was interrupted. Resume the same review before starting another."
+                        tr(
+                            "A review was interrupted. "
+                            "Resume the same review before starting another."
+                        )
                     ),
                     action(
                         "review-decision",
-                        "Resume review",
+                        tr("Resume review"),
                         note_id=root["id"],
                         **{key: pending[key] for key in REVIEW_FIELDS},
                     ),
@@ -375,23 +426,23 @@ async def review(
             }
         return form(
             {
-                "note_id": field("Decision note ID", 36, state["note_id"]),
-                "request_id": field("Request ID", 36, str(uuid.uuid7())),
+                "note_id": field(tr("Decision note ID"), 36, state["note_id"]),
+                "request_id": field(tr("Request ID"), 36, str(uuid.uuid7())),
                 "base_version": {
                     "type": "integer",
-                    "title": "Decision revision",
+                    "title": tr("Decision revision"),
                     "minimum": 1,
                     "default": state["version"],
                 },
-                "outcome": field("What happened, or why reopen?", 1600, minLength=1),
-                "reflection": field("What did you learn? (optional)", 600, ""),
+                "outcome": field(tr("What happened, or why reopen?"), 1600, minLength=1),
+                "reflection": field(tr("What did you learn? (optional)"), 600, ""),
                 "status": {
                     "type": "string",
-                    "title": "After this review",
+                    "title": tr("After this review"),
                     "enum": list(STATUSES),
                     "default": "reviewed",
                 },
-                "review_on": field("Next review date (YYYY-MM-DD, optional)", 10, ""),
+                "review_on": field(tr("Next review date (YYYY-MM-DD, optional)"), 10, ""),
             },
             ["note_id", "request_id", "base_version", "outcome", "status"],
         )
@@ -425,10 +476,10 @@ async def review(
     private = root["private"] or bool(source and source["private"])
     if pending is None or {key: pending[key] for key in REVIEW_FIELDS} != intent:
         if prior is None and await ctx.notes.creation_acknowledged(creation_id):
-            return text(OUTCOME_UNAVAILABLE)
+            return text(tr(OUTCOME_UNAVAILABLE))
         if pending is not None or state["version"] != base_version:
             raise conflict()
-        pending = {**intent, "created_ms": ctx.clock(), "private": private}
+        pending = {**intent, "created_ms": ctx.clock(), "private": private, "language": language()}
     else:
         # Earlier reservations did not save their classification. Resume
         # those privately because their sources could have been declassified.
@@ -446,24 +497,28 @@ async def review(
             raise conflict()
         state = reserved
     followup = due if status != "closed" else ""
-    if root["title"]:
-        title = (
-            f"{'Reopened' if status == 'open' else 'Outcome'} · {root['title'][: LIMITS['title']]}"
-        )
-    else:
-        title = "Decision reopened" if status == "open" else "Decision outcome"
-    body = (
-        f"# {heading(title)}\n\n"
-        f"[Original decision](/n/{root['id']})\n\n"
-        f"Recorded {stamp(pending['created_ms'])}.\n\n"
-        f"## {'Reason to reopen' if status == 'open' else 'Outcome'}\n{outcome}\n\n"
-        + (f"## Reflection\n{reflection}\n\n" if reflection else "")
-        + (f"Next review date: {followup}.\n\n" if followup else "")
-    ).rstrip()
     # A linked legacy outcome can survive longer than its old creation receipt.
     if prior:
         outcome_id = prior["note_id"]
     else:
+        with use_language(pending.get("language", "en")):
+            reopened = status == "open"
+            original_title = root["title"][: LIMITS["title"]]
+            title = (
+                tr("Reopened · {title}" if reopened else "Outcome · {title}", title=original_title)
+                if original_title
+                else tr("Decision reopened" if reopened else "Decision outcome")
+            )
+            section = tr("Reason to reopen" if reopened else "Outcome")
+            recorded = tr("Recorded {time}.", time=stamp(pending["created_ms"]))
+            body = (
+                f"# {heading(title)}\n\n"
+                f"[{tr('Original decision')}](/n/{root['id']})\n\n"
+                f"{recorded}\n\n"
+                f"## {section}\n{outcome}\n\n"
+                + (f"## {tr('Reflection')}\n{reflection}\n\n" if reflection else "")
+                + (tr("Next review date: {date}.", date=display_date(followup)) if followup else "")
+            ).rstrip()
         created = await ctx.notes.create(
             body,
             private=pending["private"],
@@ -497,7 +552,7 @@ async def review(
     ):
         latest = await records.get("decisions", state["id"])
         if latest is None:
-            return text("The decision is unavailable.")
+            return text(tr("The decision is unavailable."))
         if latest["version"] < completed["version"] or (
             latest["latest"] != completed["latest"]
             and await records.get("outcomes", event_id) != event
@@ -509,7 +564,7 @@ async def review(
 async def review_result(ctx, root, outcome_id):
     outcome_note = await ctx.notes.get(outcome_id)
     if outcome_note is None:
-        return text(OUTCOME_UNAVAILABLE)
+        return text(tr(OUTCOME_UNAVAILABLE))
     await annotate(ctx, root, decision_entry=True)
     await annotate(ctx, outcome_note)
     return {"type": "notes", "ids": [outcome_id, root["id"]]}
@@ -521,7 +576,7 @@ async def journal(ctx: Ctx, note_id=None, cursor=None, outcome_cursor=None):
     if note_id is not None:
         entry = await entry_for_note(ctx, note_id)
         if entry is None:
-            return text("This decision is unavailable.")
+            return text(tr("This decision is unavailable."))
         state, root, _ = entry
         items = [text(summary(state, ctx.clock())), {"type": "notes", "ids": [state["note_id"]]}]
         events = await ctx.storage.records.list(
@@ -535,7 +590,7 @@ async def journal(ctx: Ctx, note_id=None, cursor=None, outcome_cursor=None):
                     {
                         "id": event["note_id"],
                         "reason": (
-                            (
+                            tr(
                                 "Reopened"
                                 if event["intent"]["status"] == "open"
                                 else event["intent"]["status"].capitalize()
@@ -549,14 +604,17 @@ async def journal(ctx: Ctx, note_id=None, cursor=None, outcome_cursor=None):
         items.append(
             action(
                 "review-decision",
-                "Record outcome" if state["status"] == "open" else "Review or reopen",
+                tr("Record outcome") if state["status"] == "open" else tr("Review or reopen"),
                 note_id=root["id"],
             )
         )
         if len(events) > 8:
             items.append(
                 action(
-                    "journal", "More outcomes", note_id=root["id"], outcome_cursor=events[7]["id"]
+                    "journal",
+                    tr("More outcomes"),
+                    note_id=root["id"],
+                    outcome_cursor=events[7]["id"],
                 )
             )
         return {"ui": 1, "items": items}
@@ -572,10 +630,14 @@ async def journal(ctx: Ctx, note_id=None, cursor=None, outcome_cursor=None):
         [{"type": "notes", "items": refs}]
         if refs
         else [
-            text("No decisions on this page." if cursor or page["notes"] else "No decisions yet.")
+            text(
+                tr("No decisions on this page.")
+                if cursor or page["notes"]
+                else tr("No decisions yet.")
+            )
         ]
     )
     if page["next_cursor"]:
-        items.append(action("journal", "More decisions", cursor=page["next_cursor"]))
-    items.append(action("record-decision", "Record decision"))
+        items.append(action("journal", tr("More decisions"), cursor=page["next_cursor"]))
+    items.append(action("record-decision", tr("Record decision")))
     return {"ui": 1, "items": items}

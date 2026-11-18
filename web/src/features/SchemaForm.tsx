@@ -210,9 +210,12 @@ export function SchemaForm({
         if (hiddenFields.includes(key)) return null;
         const quietMode =
           key === "change_mode" &&
-          ["label-suggestions", "title-summary", "voice-memos"].includes(
-            pluginId,
-          );
+          [
+            "label-suggestions",
+            "title-summary",
+            "voice-memos",
+            "link-enrichment",
+          ].includes(pluginId);
         const label = quietMode
           ? t("quiet.behavior")
           : (prop.title ?? humanize(key));

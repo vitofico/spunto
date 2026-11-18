@@ -1,4 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { api } from "../src/lib/api";
+import { localizePluginSchema } from "../src/features/pluginDiagnostics";
+import CommandResult from "../src/features/CommandResult";
+import { NotePanel } from "../src/features/NotePluginPanel";
 import { useManifest } from "../src/lib/query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -27,7 +31,7 @@ import {
   translate,
   type Catalog,
 } from "../src/lib/i18n";
-import type { Plugin } from "../src/lib/types";
+import type { Note, Plugin, Schema } from "../src/lib/types";
 
 const files = import.meta.glob<Catalog>("../src/locales/*.json", {
   eager: true,
@@ -320,3 +324,129 @@ it("localizes compact manifest UI through trusted catalog provenance without cha
   ).toBe(plugin);
   client.clear();
 });
+
+it("translates an editable bundled schema without changing values or an operator schema", async () => {
+  await setLanguage("it");
+  const plugin = { id: "digest", origin: "bundled" } as Plugin;
+  const schema: Schema = {
+    type: "object",
+    properties: {
+      weekday: {
+        type: "string",
+        title: "Weekday",
+        enum: ["monday", "sunday"],
+        default: "sunday",
+      },
+    },
+  };
+  expect(localizePluginSchema(plugin, schema).properties?.weekday).toEqual({
+    ...schema.properties?.weekday,
+    title: "Giorno",
+  });
+  expect(localizePluginSchema({ ...plugin, origin: "operator" }, schema)).toBe(
+    schema,
+  );
+});
+
+it("translates a stored panel’s generated captions and keeps its source and summary as written", async () => {
+  await setLanguage("it");
+  const plugin = {
+    id: "link-enrichment",
+    origin: "bundled",
+    state: "enabled",
+    position: 1,
+    permissions: [],
+    contributes: { panel: { title: "Source", mode: "stored" } },
+  } as unknown as Plugin;
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity } },
+  });
+  client.setQueryData(["manifest"], { plugins: [plugin] });
+  client.setQueryData(["catalog"], { plugins: [plugin] });
+  const live = vi.spyOn(api, "pluginPanel");
+  const note = {
+    id: "note",
+    annotations: [
+      {
+        plugin: plugin.id,
+        kind: "panel",
+        payload: {
+          type: "markdown",
+          text: "[A source title](https://example.org/)\n\n7 min read\n\nOrdinary English summary.",
+          html: '<p><a href="https://example.org/">A source title</a></p>\n<p>7 min read</p>\n<p>Ordinary English summary.</p>',
+        },
+      },
+    ],
+  } as Note;
+  render(
+    <QueryClientProvider client={client}>
+      <NotePanel note={note} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByText("Fonte · 1 elemento"));
+  expect(screen.getByText("7 min di lettura")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "A source title" })).toBeTruthy();
+  expect(screen.getByText("Ordinary English summary.")).toBeTruthy();
+  expect(live).not.toHaveBeenCalled();
+});
+
+it.each(["bundled", "operator"] as const)(
+  "keeps %s form enum values stable when choosing in Italian",
+  async (origin) => {
+    await setLanguage("it");
+    const plugin = {
+      id: "thinking-desk",
+      name: "Thinking desk",
+      version: "1.0.0",
+      description: "",
+      category: "develop",
+      kind: "server",
+      origin,
+      state: "enabled",
+      position: 1,
+      permissions: [],
+    } satisfies Plugin;
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity } },
+    });
+    client.setQueryData(["manifest"], { plugins: [plugin] });
+    client.setQueryData(["catalog"], { plugins: [plugin] });
+    const run = vi
+      .spyOn(api, "command")
+      .mockResolvedValue({ type: "text", text: "Done" });
+    render(
+      <QueryClientProvider client={client}>
+        <CommandResult
+          origin={{ plugin: plugin.id, command: "edit" }}
+          value={{
+            type: "form",
+            schema: {
+              type: "object",
+              properties: {
+                mode: {
+                  type: "string",
+                  title: "Metodo",
+                  enum: ["history", "collision"],
+                  default: "history",
+                },
+              },
+            },
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: origin === "bundled" ? "Combinazione di idee" : "collision",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: t("settingsplugins.run") }),
+    );
+    await waitFor(() =>
+      expect(run).toHaveBeenCalledWith(plugin.id, "edit", {
+        mode: "collision",
+      }),
+    );
+  },
+);

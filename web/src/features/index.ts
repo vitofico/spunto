@@ -6,12 +6,9 @@ export {
   DailySlip,
   SuggestionLine,
   EntryMeta,
-  NotePanel,
-  PluginNoteSlots,
   SlashCommands,
   PaletteCommands,
   PluginCommands,
-  CommandResult,
 } from "./Slots";
 export {
   VocabularyItem,
@@ -21,3 +18,5 @@ export {
 } from "./Vocabulary";
 export { SchemaForm, validSchema, validateSettings } from "./SchemaForm";
 export type { CommandChoice } from "./Slots";
+export { NotePanel } from "./NotePluginPanel";
+export { default as CommandResult } from "./CommandResult";

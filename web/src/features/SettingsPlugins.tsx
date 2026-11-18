@@ -1,5 +1,6 @@
-import { localizeCatalog } from "../lib/localizePlugins";
-import { t, useLanguage } from "../lib/i18n";
+import CommandResult from "./CommandResult";
+import { isBundledPlugin, localizeCatalog } from "../lib/localizePlugins";
+import { getLanguage, t, useLanguage } from "../lib/i18n";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -9,7 +10,7 @@ import { useToast } from "../components/core/Toast";
 import type { Args, Plugin, AICapability } from "../lib/types";
 import { SchemaForm } from "./SchemaForm";
 import { Dialog } from "./Dialog";
-import { CommandResult, PluginCommands, type CommandOrigin } from "./Slots";
+import { PluginCommands, type CommandOrigin } from "./Slots";
 import styles from "./Feature.module.css";
 import { AIRouting, AIOffHint } from "./AISettings";
 import {
@@ -20,37 +21,65 @@ import {
   willSentence,
 } from "./format";
 import { ErrorLine, PageTitle } from "./SettingsParts";
+import { localizePluginSchema, pluginDiagnostic } from "./pluginDiagnostics";
 function permissions(plugin: Plugin) {
-  const sentences =
-    plugin.permission_sentences ??
-    plugin.permissions.map(
-      (p) =>
-        ({
-          "notes.read": t("settingsplugins.reads_your_notes"),
-          "notes.create": t("settingsplugins.creates_notes"),
-          "notes.review": t("settingsplugins.reviews_note_changes"),
-          "notes.update_own": t(
-            "settingsplugins.updates_its_own_unedited_notes",
-          ),
-          suggest: t("settingsplugins.proposes_edits_for_your_review"),
-          annotate: t("settingsplugins.adds_information_about_notes"),
-          "search.text": t("settingsplugins.adds_searchable_text"),
-          schedule: t("settingsplugins.runs_scheduled_jobs"),
-          routes: t("settingsplugins.provides_commands"),
-          mcp: t("settingsplugins.adds_tools_for_agents"),
-          "net.fetch": t("settingsplugins.fetches_public_web_pages"),
-          "attachments.read": t("settingsplugins.reads_attachments"),
-          "attachments.write": t("settingsplugins.adds_attachments"),
-        })[p] ?? p,
+  const fallback = (permission: string) =>
+    ({
+      "notes.read": t("settingsplugins.reads_your_notes"),
+      "notes.create": t("settingsplugins.creates_notes"),
+      "notes.review": t("settingsplugins.reviews_note_changes"),
+      "notes.update_own": t("settingsplugins.updates_its_own_unedited_notes"),
+      suggest: t("settingsplugins.proposes_edits_for_your_review"),
+      annotate: t("settingsplugins.adds_information_about_notes"),
+      "search.text": t("settingsplugins.adds_searchable_text"),
+      schedule: t("settingsplugins.runs_scheduled_jobs"),
+      routes: t("settingsplugins.provides_commands"),
+      mcp: t("settingsplugins.adds_tools_for_agents"),
+      "net.fetch": t("settingsplugins.fetches_public_web_pages"),
+      "attachments.read": t("settingsplugins.reads_attachments"),
+      "attachments.write": t("settingsplugins.adds_attachments"),
+      mic: t("pluginui.microphone"),
+    })[permission] ?? permission;
+  if (!isBundledPlugin(plugin))
+    return plugin.permission_sentences ?? plugin.permissions.map(fallback);
+  if (getLanguage() === "en" && plugin.permission_sentences) {
+    return plugin.permission_sentences.map((sentence, index) =>
+      plugin.permissions[index] === "notes.review"
+        ? fallback("notes.review")
+        : sentence,
     );
-  // Bundled catalog sentences correspond to permissions, followed by any privacy note.
-  return plugin.origin === "bundled"
-    ? sentences.map((sentence, index) =>
-        plugin.permissions[index] === "notes.review"
-          ? t("settingsplugins.reviews_note_changes")
-          : sentence,
-      )
-    : sentences;
+  }
+  const items = plugin.permissions.map((permission) => {
+    if (permission.startsWith("net.out:")) {
+      const destinations = (plugin.network_destinations ?? [])
+        .filter(Boolean)
+        .join(", ");
+      return destinations
+        ? t("pluginui.connects_to", { destinations })
+        : t("pluginui.configured_host");
+    }
+    const capability = permission.slice(3) as AICapability;
+    const names = permission.startsWith("ai.") && capabilityNames()[capability];
+    if (!names) return fallback(permission);
+    const route = plugin.ai_destinations?.[capability];
+    return route
+      ? t("settingsplugins.destination", {
+          capability: names[0],
+          model: route.model,
+          host: route.host ?? route.profile,
+          network: t(
+            route.leaves_network
+              ? "settingsplugins.outside_your_network"
+              : "settingsplugins.on_your_network",
+          ),
+        })
+      : t(`settingsplugins.missing_model.${capability}`, {
+          capability: names[0],
+        });
+  });
+  if (plugin.permissions.some((permission) => /^(ai|net)\./.test(permission)))
+    items.push(t("pluginui.private_excluded"));
+  return items;
 }
 function pluginOrigin(plugin: Plugin) {
   return plugin.origin === "bundled"
@@ -142,7 +171,8 @@ function aiIsOff(plugins: Plugin[]) {
 function pluginFacts(plugin: Plugin) {
   if (plugin.state === "removed")
     return t("settingsplugins.plugin_code_is_no_longer_installed");
-  if (plugin.availability_reason) return plugin.availability_reason;
+  if (plugin.availability_reason)
+    return pluginDiagnostic(plugin, plugin.availability_reason);
   const ai = aiCapabilities(plugin);
   if (ai.length) {
     const missing = ai.filter((c) => !plugin.ai_destinations?.[c]);
@@ -345,7 +375,13 @@ export function PermissionDialog({
       }
     >
       <p>{plugin.description}</p>
-      <h3>{t("settingsplugins.it_will")}</h3>
+      <h3>
+        {t(
+          getLanguage() === "en"
+            ? "settingsplugins.it_will"
+            : "collaboration.access",
+        )}
+      </h3>
       <ul>
         {permissions(plugin).map((p, i) => (
           <li key={i}>{willSentence(p)}</li>
@@ -998,12 +1034,22 @@ export function PluginPage({ id }: { id: string }) {
             )}
           </p>
         ) : (
-          plugin.last_error && <p className="notice">{plugin.last_error}</p>
+          plugin.last_error && (
+            <p className="notice">
+              {pluginDiagnostic(plugin, plugin.last_error)}
+            </p>
+          )
         ))}
       {!removed && query.data && (
         <SchemaForm
           key={`${id}-${JSON.stringify(query.data.values)}`}
-          schema={query.data.schema}
+          schema={localizePluginSchema(plugin, query.data.schema)}
+          optionLabel={(key, choice) => {
+            if (!isBundledPlugin(plugin) || id === "semantic-search")
+              return String(choice);
+            if (id === "voice-memos" && key === "language" && choice === "auto")
+              return t("choice.automatic");
+          }}
           initial={{ ...query.data.values, ...deviceValues }}
           pluginId={id}
           secrets={query.data.secrets}
@@ -1021,7 +1067,7 @@ export function PluginPage({ id }: { id: string }) {
       )}
       {!removed && usesAI && !aiOff && (
         <>
-          <h2>AI</h2>
+          <h2>{t("settings.ai")}</h2>
           <AIRouting plugin={plugin} />
         </>
       )}
@@ -1055,7 +1101,7 @@ export function PluginPage({ id }: { id: string }) {
         {data.state === "waiting"
           ? ""
           : data.last_error
-            ? ` · ${data.last_error}`
+            ? ` · ${pluginDiagnostic(plugin, data.last_error)}`
             : t("settingsplugins.no_failures")}
       </p>
       <h2>{t("collaboration.access")}</h2>

@@ -9,6 +9,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,7 +63,7 @@ fun safeComponent(value:JsonObject, depth:Int=0):JsonObject? {
  }
  if(valid) return value
  val fallback=value["fallback"]
- return when { fallback is JsonObject -> safeComponent(fallback,depth+1); fallback is JsonPrimitive && fallback.content=="Open on the web" -> buildJsonObject { put("type","text"); put("text","Open on the web") }; else -> null }
+ return when { fallback is JsonObject -> safeComponent(fallback,depth+1); fallback is JsonPrimitive && fallback.content=="Open on the web" -> buildJsonObject { put("type","text"); put("text","Open on the web");put("fallback","Open on the web") }; else -> null }
 }
 fun validSchema(value:JsonElement?):Boolean {
  val schema=value as? JsonObject ?: return false
@@ -84,21 +86,22 @@ fun validSchema(value:JsonElement?):Boolean {
    (!field.bool("x-secret") || type=="string" && field["default"]==null)
  }
 }
-@Composable fun Vocabulary(value:JsonObject,onNote:(String)->Unit={},onSuggestion:(String)->Unit={},onCommand:(String,JsonObject)->Unit={_,_->},online:Boolean=true,onForm:((JsonObject)->Unit)?=null,formInitial:JsonObject=JsonObject(emptyMap()),formHidden:Set<String> = emptySet(),noteReference:(@Composable (String,String)->Unit)?=null,proposalPill:(@Composable (JsonObject)->Unit)?=null) {
+@Composable fun Vocabulary(value:JsonObject,onNote:(String)->Unit={},onSuggestion:(String)->Unit={},onCommand:(String,JsonObject)->Unit={_,_->},online:Boolean=true,onForm:((JsonObject)->Unit)?=null,formInitial:JsonObject=JsonObject(emptyMap()),formHidden:Set<String> = emptySet(),noteReference:(@Composable (String,String)->Unit)?=null,proposalPill:(@Composable (JsonObject)->Unit)?=null,choiceLabel:((String,JsonElement)->String?)?=null) {
  val component=safeComponent(value) ?: return
+ val webLabel=stringResource(R.string.plugin_ui_web)
  when(component.string("type")) {
-  "text" -> Text(component.string("text"))
+  "text" -> Text(if(component.string("fallback")=="Open on the web" && component.string("text")=="Open on the web") webLabel else component.string("text"))
   "markdown" -> Markdown(component.string("text").ifEmpty { component.string("markdown") },machine=true,onLink={ if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) })
   "notes" -> Column {
    val entries=((component["ids"] ?: component["items"]) as? JsonArray).orEmpty()
-   if(entries.isEmpty()) Text("No notes to show yet.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-   entries.forEach { item -> val id=if(item is JsonObject) item.string("id") else item.jsonPrimitive.content; val reason=(item as? JsonObject)?.string("reason").orEmpty();if(noteReference!=null) noteReference(id,reason) else TextButton(onClick={onNote(id)}) { Text(reason.ifEmpty { "Open note" }) } }
+   if(entries.isEmpty()) Text(stringResource(R.string.plugin_ui_no_notes),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   entries.forEach { item -> val id=if(item is JsonObject) item.string("id") else item.jsonPrimitive.content; val reason=(item as? JsonObject)?.string("reason").orEmpty();if(noteReference!=null) noteReference(id,reason) else TextButton(onClick={onNote(id)}) { Text(reason.ifEmpty { stringResource(R.string.plugin_ui_open_note) }) } }
   }
   "pill" -> if(proposalPill!=null) proposalPill(component) else SuggestionChip(onClick={onSuggestion(component.string("suggestion_id"))},label={Text(component.string("label"))})
   "command" -> if(online) TextButton(onClick={onCommand(component.string("id"),component["args"] as? JsonObject ?: JsonObject(emptyMap()))}) { Text(component.string("title")) }
-  "form" -> SchemaForm(component["schema"]!!.jsonObject,initial=formInitial,preferDefaults=true,readOnly=!online || onForm==null,readOnlyMessage=if(!online) "Changes need a connection." else "Open on the web",saveLabel="Run",hiddenFields=formHidden+commandFormHiddenFields(component["schema"]!!.jsonObject),onSave={onForm?.invoke(it)})
+  "form" -> SchemaForm(component["schema"]!!.jsonObject,initial=formInitial,preferDefaults=true,readOnly=!online || onForm==null,readOnlyMessage=if(!online) stringResource(R.string.plugin_ui_connection) else webLabel,saveLabel=stringResource(R.string.plugin_ui_run),choiceLabel=choiceLabel,hiddenFields=formHidden+commandFormHiddenFields(component["schema"]!!.jsonObject),onSave={onForm?.invoke(it)})
   "diff" -> Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-   Text("Based on version ${component["base_version"]}",style=MaterialTheme.typography.bodySmall)
+   Text(stringResource(R.string.plugin_ui_version,component.string("base_version")),style=MaterialTheme.typography.bodySmall)
    component.objects("hunks").forEachIndexed { index,hunk ->
     if(index>0) HorizontalDivider()
     val (before,after)=diffHunkTexts(hunk)
@@ -108,8 +111,10 @@ fun validSchema(value:JsonElement?):Boolean {
  }
 }
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable fun SchemaForm(schema:JsonObject,initial:JsonObject=JsonObject(emptyMap()),readOnly:Boolean=false,pluginId:String="",readOnlyMessage:String="Changes need a connection.",saveLabel:String="Save settings",hiddenFields:Set<String> = emptySet(),preferDefaults:Boolean=false,
+@Composable fun SchemaForm(schema:JsonObject,initial:JsonObject=JsonObject(emptyMap()),readOnly:Boolean=false,pluginId:String="",readOnlyMessage:String?=null,saveLabel:String?=null,hiddenFields:Set<String> = emptySet(),preferDefaults:Boolean=false,
  submitEnabled:Boolean=true,retainEdits:Boolean=false,choiceLabel:((String,JsonElement)->String?)?=null,invalidInputMessage:String?=null,validateInput:((JsonObject)->String?)?=null,detailsFields:Set<String> = emptySet(),detailsLabels:Pair<String,String>?=null,onSave:(JsonObject)->Unit={}) {
+ val resources=LocalContext.current.resources
+ val unavailable=readOnlyMessage ?: stringResource(R.string.plugin_ui_connection)
  val fields=(schema["properties"] as? JsonObject).orEmpty().filterKeys {it !in hiddenFields}
  val details=fields.filterKeys {it in detailsFields && detailsLabels!=null}
  var expanded by rememberSaveable(schema,initial) {mutableStateOf(false)}
@@ -120,7 +125,7 @@ fun validSchema(value:JsonElement?):Boolean {
  fun update(key:String,value:JsonElement) {values=JsonObject(values+(key to value))}
  var error by remember(schema,initial) { mutableStateOf("") }
  Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-  if(readOnly && readOnlyMessage.isNotEmpty()) Text(readOnlyMessage)
+  if(readOnly && unavailable.isNotEmpty()) Text(unavailable)
   schema.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
   (fields.filterKeys {it !in details}+details).forEach { (key,raw) ->
    if(key==details.keys.firstOrNull() && detailsLabels!=null) {
@@ -130,8 +135,8 @@ fun validSchema(value:JsonElement?):Boolean {
    val field=raw as? JsonObject ?: return@forEach
    val label=field.string("title").ifEmpty { key.replace('_',' ').replaceFirstChar { it.uppercase() } }
    val value=values[key] ?: field["default"] ?: JsonPrimitive("")
-   if(field.bool("x-secret")) { Text("$label · Set in the environment"); Text("SPUNTO_PLUGIN_${pluginId.replace('-','_').uppercase()}_${key.uppercase()}"); return@forEach }
-   if(field.string("x-scope")=="device") Text("This phone only",style=MaterialTheme.typography.labelSmall)
+   if(field.bool("x-secret")) { Text("$label · ${stringResource(R.string.plugin_ui_environment)}"); Text("SPUNTO_PLUGIN_${pluginId.replace('-','_').uppercase()}_${key.uppercase()}"); return@forEach }
+   if(field.string("x-scope")=="device") Text(stringResource(R.string.plugin_ui_device),style=MaterialTheme.typography.labelSmall)
    val choices=field["enum"] as? JsonArray
    when {
     choices!=null -> {FormChoiceField(label,choices,value,!readOnly,language=key=="language",choiceLabel=choiceLabel?.let { localize -> { localize(key,it) } }) {update(key,it)};field.string("description").takeIf(String::isNotBlank)?.let {Text(it,style=MaterialTheme.typography.bodySmall)}}
@@ -150,8 +155,10 @@ fun validSchema(value:JsonElement?):Boolean {
    runCatching { formArguments(schema,values) }.onSuccess {args ->
     error=validateInput?.invoke(args).orEmpty()
     if(error.isEmpty()) onSave(args)
-   }.onFailure { error=invalidInputMessage ?: it.message ?: "Check the form fields.";if(details.isNotEmpty()) expanded=true }
-  }) { Text(saveLabel) }
+   }.onFailure { error=invalidInputMessage ?: (it as? FormInputError)?.let { problem ->
+    if(problem.label==null) resources.getString(problem.messageId) else resources.getString(problem.messageId,problem.label)
+   } ?: resources.getString(R.string.plugin_ui_check);if(details.isNotEmpty()) expanded=true }
+  }) { Text(saveLabel ?: stringResource(R.string.plugin_ui_save_settings)) }
  }
 }
 data class ViewNote(val id:String,val body:String,val createdAt:Long,val pinned:Boolean=false,val archived:Boolean=false,val trashed:Boolean=false,val source:String="owner",val latestAgent:Boolean=false,val sourceRef:String="",val members:Set<String> = emptySet(),val labels:Set<String> = emptySet(),val origin:String="owner")

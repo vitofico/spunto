@@ -19,6 +19,23 @@ class ApiClientTest {
  @Before fun start() { server.start() }
  @After fun stop() { server.shutdown() }
  private fun api(token:String="test-synthetic")=ApiClient(AuthConfig(server.url("/").toString(),token,"device","Test",true))
+ @Test fun localizedPluginRequestsKeepAuthorityAndReturnTheNegotiatedLanguage() = runBlocking {
+  var locale="it-IT"
+  val client=ApiClient(api().config,language={locale}).guarded {true}
+  val path="/api/v1/plugins/context-packs/commands/edit"
+  server.enqueue(MockResponse().setHeader("Content-Language","it").setBody("""{"type":"text","text":"Risultato"}"""))
+  val first=client.requestPayload(path,"POST")
+  assertEquals("it",first.contentLanguage)
+  assertEquals("Risultato",first.body.jsonObject["text"]?.jsonPrimitive?.content)
+  assertEquals("it-IT",server.takeRequest().getHeader("Accept-Language"))
+  locale="fr-FR"
+  server.enqueue(MockResponse().setBody("""{"type":"text","text":"Legacy"}"""))
+  val older=client.requestPayload(path,"POST")
+  assertNull(older.contentLanguage)
+  assertEquals("Legacy",older.body.jsonObject["text"]?.jsonPrimitive?.content)
+  assertEquals("fr-FR",server.takeRequest().getHeader("Accept-Language"))
+  assertEquals(2,server.requestCount)
+ }
  @Test fun accountIdentityUsesAuthenticatedOwnAccountAndTrimsNameFallbacks() = runBlocking {
   server.enqueue(MockResponse().setBody("""{"account":{"id":"alice","display_name":"  Élodie 李  ","username":"alice-login","email":null},"workspace":{"name":"Someone else’s space"}}"""))
   val account=api().accountIdentity();assertEquals("alice",account.id);assertEquals("Élodie 李",account.label)

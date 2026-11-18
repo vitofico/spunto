@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_capture_conflict">This form was already submitted with different details. Check Decisions before trying again.</string>
+    <string name="plugin_review_details">Review the current plugin details.</string>
+    <string name="plugin_owner_required">Only the space owner can run this action.</string>
+    <string name="plugin_command_denied">This plugin action is not allowed.</string>
+    <string name="plugin_reads_notes">Reads your notes</string>
+    <string name="plugin_needs_attachments">Needs attachment storage.</string>
+    <string name="plugin_check_secrets">Plugin secrets are unavailable. Check the environment.</string>
+    <string name="plugin_needs_index">The note search index is unavailable. Check indexing in AI settings.</string>
+    <string name="plugin_last_run_failed">The last run failed.</string>
+    <string name="plugin_working">Working…</string>
+    <string name="plugin_collision">Combine ideas</string>
+    <string name="plugin_builds_on">Builds on</string>
+    <string name="plugin_challenges">Challenges</string>
+    <string name="plugin_replaces">Replaces</string>
+    <string name="plugin_action">Action</string>
+    <string name="plugin_translate_to">Translate to</string>
+    <string name="plugin_choose_note">Choose a note</string>
+    <string name="plugin_auto_language">Automatic detection</string>
+    <string name="plugin_delete">Delete</string>
+    <string name="plugin_accept_title">Use title</string>
+    <string name="plugin_minutes_read">%1$d min read</string>
+</resources>

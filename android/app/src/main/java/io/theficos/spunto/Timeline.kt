@@ -176,7 +176,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val context=LocalContext.current
  val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
  val outputs by model.outputs.collectAsState()
- val meta=entryMetaText(outputs,note.id,model.container.manifest.plugins())
+ val meta=entryMetaText(outputs,note.id,model.container.manifest.plugins(),context.resources)
  val nav=LocalNavigator.current
  val feedback=LocalFeedback.current
  val writable by model.workspaceCanWrite.collectAsState()

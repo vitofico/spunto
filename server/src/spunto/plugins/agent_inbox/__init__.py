@@ -1,6 +1,7 @@
 """The inbox is a core source filter minus synced review membership."""
 
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 
 plugin = Plugin("agent-inbox")
 
@@ -9,12 +10,12 @@ plugin = Plugin("agent-inbox")
 async def mark_reviewed(ctx: Ctx, note_id: str) -> dict:
     note = await ctx.notes.get(note_id)
     if note is None:
-        return {"type": "text", "text": "Note unavailable"}
+        return {"type": "text", "text": tr("Note unavailable")}
     await ctx.notes.annotate(note_id, "member:reviewed", {})
     await ctx.storage.records.put(
         "reviewed", note_id, {"version": note["version"]}, note_id=note_id
     )
-    return {"type": "text", "text": "Marked reviewed"}
+    return {"type": "text", "text": tr("Marked reviewed")}
 
 
 @plugin.on("note.saved")

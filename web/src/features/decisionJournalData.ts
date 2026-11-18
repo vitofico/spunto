@@ -1,5 +1,5 @@
 import { getLanguage, t } from "../lib/i18n";
-import type { Note, Schema } from "../lib/types";
+import type { Args, Note, Schema } from "../lib/types";
 
 export const decisionsPath = "/v/decision-journal/journal";
 
@@ -49,7 +49,18 @@ export function decisionStatus(text: string) {
   const status = localizedDecisionStatus(text);
   if (status) return status;
   const outcome = /^(Closed|Reviewed|Reopened) · (.+)$/.exec(text);
-  if (!outcome) return text;
+  if (!outcome) {
+    // Localized servers preserve ISO review dates. Keep any other response text as sent.
+    return text.replace(
+      / · ([^·]+?)(\d{4}-\d{2}-\d{2})$/,
+      (part, label, value: string) => {
+        const date = new Date(`${value}T00:00:00Z`);
+        return Number.isNaN(date.getTime())
+          ? part
+          : ` · ${label}${date.toLocaleDateString(getLanguage(), { dateStyle: "medium", timeZone: "UTC" })}`;
+      },
+    );
+  }
   const date = new Date(outcome[2]);
   const when = Number.isNaN(date.getTime())
     ? outcome[2]
@@ -61,15 +72,16 @@ export function decisionStatus(text: string) {
   return `${t(`decisions.status.${outcome[1].toLowerCase()}`)} · ${when}`;
 }
 
-export function decisionCommandLabel(id: string, title: string) {
+export function decisionCommandLabel(id: string, title: string, args: Args) {
   switch (id) {
     case "journal":
-      if (title === "More decisions") return t("decisions.more_decisions");
-      if (title === "More outcomes") return t("decisions.more_outcomes");
+      if (typeof args.cursor === "string") return t("decisions.more_decisions");
+      if (typeof args.outcome_cursor === "string")
+        return t("decisions.more_outcomes");
       return t("decisions.review_history");
     case "review-decision":
       return t(
-        title === "Resume review"
+        typeof args.request_id === "string"
           ? "decisions.resume_review"
           : "plugin.decision-journal.commands.review-decision.title",
       );

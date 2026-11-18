@@ -5,6 +5,7 @@ from pydantic import Field, model_validator
 from spunto.ai.output import Output
 from spunto.core.quiet_changes import finish_summary, title_event
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._wave2 import backfill, eligible, excerpts, text, unchanged
 
 plugin = Plugin("title-summary")
@@ -26,17 +27,17 @@ class Summary(Output):
 async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
     note = await eligible(ctx, note_id, maximum=1_000_000)
     if note is None:
-        return text("This note is unavailable for Title and summary.")
+        return text(tr("This note is unavailable for Title and summary."))
     if len(note["body"].split()) < 300:
         await ctx.notes.annotate(note_id, "panel", None)
-        return text("Title and summary need a note of at least 300 words.")
+        return text(tr("Title and summary need a note of at least 300 words."))
     if note_version is not None and note["version"] != note_version:
-        return text("The note changed.")
+        return text(tr("The note changed."))
     if not await title_event(ctx, note):
-        return text("No title change for this revision.")
+        return text(tr("No title change for this revision."))
     prior = await ctx.storage.records.get("processed", note_id)
     if prior and prior["version"] == note["version"]:
-        return text("The stored summary is current.")
+        return text(tr("The stored summary is current."))
     answer = await ctx.ai.chat(
         Summary,
         prompt=(
@@ -55,11 +56,11 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
     )
     proposal = await finish_summary(ctx, note, answer.title)
     if proposal is None:
-        return text("The stored summary is current.")
+        return text(tr("The stored summary is current."))
     return {
         "type": "pill",
         "action": "accept",
-        "label": "Use title",
+        "label": tr("Use title"),
         "suggestion_id": proposal["id"],
     }
 

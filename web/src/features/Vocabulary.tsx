@@ -81,7 +81,7 @@ export type Callbacks = {
   formChoices?: (key: string, value: Json) => string | undefined;
   formDetails?: { label: string; fields: readonly string[] };
   formSubmitDisabled?: boolean;
-  commandLabel?: (id: string, title: string) => string;
+  commandLabel?: (id: string, title: string, args: Args) => string;
   displayText?: (text: string) => string;
   onSuggestion?: (id: string) => void;
   onCommand?: (id: string, args: Args) => void;
@@ -151,8 +151,11 @@ export function VocabularyItem({
             actions.onCommand?.(String(value.id), (value.args ?? {}) as Args)
           }
         >
-          {actions.commandLabel?.(String(value.id), String(value.title)) ??
-            String(value.title)}
+          {actions.commandLabel?.(
+            String(value.id),
+            String(value.title),
+            (value.args ?? {}) as Args,
+          ) ?? String(value.title)}
         </button>
       );
     case "form":

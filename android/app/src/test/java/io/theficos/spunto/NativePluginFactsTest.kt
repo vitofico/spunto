@@ -116,6 +116,10 @@ class NativePluginFactsTest {
   val custom=NativePluginFacts(JsonObject(pluginFixture()+mapOf("permission_sentences" to JsonArray(listOf(JsonPrimitive("Author-provided access sentence"))))))
   assertEquals(listOf("Author-provided access sentence"),custom.permissionLines(settingsTestResources("de")))
   val bundled=NativePluginFacts(JsonObject(pluginFixture(permissions=listOf("notes.read"))+mapOf("origin" to JsonPrimitive("bundled"))))
-  assertEquals(listOf("Liest nicht private Notizen"),bundled.permissionLines(settingsTestResources("de")))
+  val german=settingsTestResources("de")
+  assertEquals(listOf("Liest deine Notizen"),bundled.permissionLines(german))
+  val ai=NativePluginFacts(JsonObject(bundled.raw+("permissions" to JsonArray(listOf(JsonPrimitive("notes.read"),JsonPrimitive("ai.chat"))))))
+  assertEquals(german.getString(R.string.settings_reads_non_private_notes),ai.permissionLines(german).first())
+  assertEquals(german.getString(R.string.settings_never_reads_private_notes),ai.permissionLines(german).last())
  }
 }

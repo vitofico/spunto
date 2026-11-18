@@ -2,6 +2,7 @@ package io.theficos.spunto
 
 import io.theficos.spunto.data.sync.ApiException
 import io.theficos.spunto.core.model.Note
+import io.theficos.spunto.core.plugins.formArguments
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -49,6 +50,16 @@ class PluginPresentationTest {
   val catalog=buildJsonObject {put("plugins",JsonArray(plugins))}
   val manifest=buildJsonObject {put("plugins",JsonArray(plugins.filterNot {it["id"]==JsonPrimitive("library-stats")}))}
   assertEquals(listOf("ask","packs","desk","review-now"),globalTools(catalog,manifest).map {it.second["id"]!!.jsonPrimitive.content})
+ }
+ @Test fun thinkingDeskConnectionLabelsTranslateTheKindFieldAndKeepWireValues() {
+  val italian=settingsTestResources("it")
+  val schema=Json.parseToJsonElement("""{"type":"object","properties":{
+   "kind":{"type":"string","title":"Collegamento","enum":["builds-on","challenges","replaces"],"default":"builds-on"}
+  }}""").jsonObject
+  val choices=schema["properties"]!!.jsonObject["kind"]!!.jsonObject["enum"]!!.jsonArray
+  assertEquals(listOf("Si basa su","Mette in discussione","Sostituisce"),choices.map {pluginFormChoice(italian,"thinking-desk","kind",it)})
+  assertEquals(choices,choices.map {formArguments(schema,buildJsonObject {put("kind",it)})["kind"]})
+  assertNull(pluginFormChoice(italian,"thinking-desk","from_note",JsonPrimitive("builds-on")))
  }
  @Test fun journalStatusAndOutcomeDatesUseTheAppLocaleWithoutRewritingOtherText() {
   val de=settingsTestResources("de")

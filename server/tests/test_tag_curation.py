@@ -314,7 +314,7 @@ async def test_review_now_command_is_opt_in_online_and_no_new_note_or_tool_surfa
     assert manifest["contributes"]["commands"] == [
         {
             "id": "review-now",
-            "title": "Review tags now",
+            "title": "Review labels",
             "where": ["palette", "slash"],
             "online": True,
         }

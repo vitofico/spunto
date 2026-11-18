@@ -1,3 +1,4 @@
+import CommandResult from "../src/features/CommandResult";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   act,
@@ -11,11 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { api } from "../src/lib/api";
-import {
-  CommandResult,
-  PaletteCommands,
-  SlashCommands,
-} from "../src/features/Slots";
+import { PaletteCommands, SlashCommands } from "../src/features/Slots";
 import type { Plugin, Schema } from "../src/lib/types";
 
 let client: QueryClient;

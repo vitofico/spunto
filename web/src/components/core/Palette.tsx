@@ -1,3 +1,4 @@
+import CommandResult from "../../features/CommandResult";
 import { t, useLanguage } from "../../lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -9,11 +10,7 @@ import {
   useWorkspaceRole,
 } from "../../lib";
 import { Icon } from "./Icon";
-import {
-  PaletteCommands,
-  CommandResult,
-  type CommandOrigin,
-} from "../../features/Slots";
+import { PaletteCommands, type CommandOrigin } from "../../features/Slots";
 export function Palette({
   onClose,
   onHelp,

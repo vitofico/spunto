@@ -1,4 +1,5 @@
 import { getLanguage, t, useLanguage } from "../lib/i18n";
+import { NotePanel } from "../features/NotePluginPanel";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -33,7 +34,6 @@ import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
 import {
   SuggestionLine,
-  NotePanel,
   usePlugins,
   useWaitingCommandPlugins,
   activePlugins,

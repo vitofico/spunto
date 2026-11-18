@@ -5,6 +5,7 @@ import uuid
 
 from spunto.api.errors import Problem
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins.context_packs import (
     NONE,
     caption,
@@ -38,8 +39,10 @@ def conflict():
         409,
         "version_conflict",
         (
-            "This desk or source changed. Reopen the desk, review sources, and retry; "
-            "your original notes remain intact."
+            tr(
+                "This desk or source changed. Reopen the desk, review sources, and retry; "
+                "your original notes remain intact."
+            )
         ),
     )
 
@@ -47,7 +50,7 @@ def conflict():
 async def load(ctx, desk_id, expected_revision=None):
     data = await ctx.storage.records.get(COLLECTION, identifier(desk_id))
     if data is None or data.get("deleted"):
-        raise Problem(404, "not_found", "That thinking desk is unavailable.")
+        raise Problem(404, "not_found", tr("That thinking desk is unavailable."))
     if expected_revision is not None and (
         type(expected_revision) is not int or data["revision"] != expected_revision
     ):
@@ -77,9 +80,9 @@ async def save(ctx, desk_id, old, new, *, picker=False, source_versions=None):
 
 
 def summary(data, states):
-    lines = [f"# {data['title']}", "Mode: " + data["mode"], data["prompt"]]
+    lines = [f"# {data['title']}", tr("Mode: {mode}", mode=tr(data["mode"])), data["prompt"]]
     lines.append(
-        "## Notes in creation order" if data["mode"] == "history" else "## Selected subjects"
+        "## " + tr("Notes in creation order" if data["mode"] == "history" else "Selected subjects")
     )
     for index, (baseline, note) in enumerate(
         sorted(states, key=lambda pair: (pair[0]["created_at"], pair[0]["id"])), 1
@@ -94,11 +97,11 @@ def summary(data, states):
         )
         # Deliberately retain no cached titles or bodies when sources become unavailable.
         lines.append(
-            f"{index}. {date}: [Note](/n/{baseline['id']}) "
-            f"· revision {baseline['version']} · {status}"
+            f"{index}. {date}: [{tr('Note')}](/n/{baseline['id']}) "
+            f"· {tr('revision {version}', version=baseline['version'])} · {tr(status)}"
         )
     if data["mode"] == "history":
-        lines.append("## Your connections")
+        lines.append("## " + tr("Your connections"))
         numbers = {
             b["id"]: i
             for i, (b, _) in enumerate(
@@ -107,12 +110,20 @@ def summary(data, states):
         }
         for link in data["relations"]:
             lines.append(
-                f"- Note {numbers[link['from']]} {link['kind']} note {numbers[link['to']]}"
+                "- "
+                + tr(
+                    "Note {first} {relation} note {second}",
+                    first=numbers[link["from"]],
+                    relation=tr(link["kind"]),
+                    second=numbers[link["to"]],
+                )
             )
 
     else:
-        lines.extend(["## Creative prompts", *[f"- {prompt}" for prompt in PROMPTS]])
-    lines.extend(["## Your thinking", data["thinking"] or "No reflection recorded yet."])
+        lines.extend(["## " + tr("Creative prompts"), *[f"- {tr(prompt)}" for prompt in PROMPTS]])
+    lines.extend(
+        ["## " + tr("Your thinking"), data["thinking"] or tr("No reflection recorded yet.")]
+    )
     result = "\n\n".join(lines)
     if len(result) > 4000:
         raise ValueError("Desk exceeds its display budget; shorten your reflection or connections")
@@ -133,15 +144,15 @@ async def render(ctx, desk_id):
                 if n
             ],
         },
-        command("edit", "Write reflection", **args),
-        command("sources", "Review sources", **args),
+        command("edit", tr("Write reflection"), **args),
+        command("sources", tr("Review sources"), **args),
         *(
-            [command("sources", "Connect notes", **args, action="connect")]
+            [command("sources", tr("Connect notes"), **args, action="connect")]
             if data["mode"] == "history"
             else []
         ),
-        command("edit", "Keep private note copy", **args, action="snapshot"),
-        command("desk", "All thinking desks"),
+        command("edit", tr("Keep private note copy"), **args, action="snapshot"),
+        command("desk", tr("All thinking desks")),
     )
 
 
@@ -155,17 +166,19 @@ async def desk(
     page = await ctx.storage.records.list(COLLECTION, limit=6, after=cursor)
     items = [
         text(
-            "Choose notes deliberately. Histories preserve originals; collision desks "
-            "combine subjects using your own words. Commands require a connection. Saved"
-            " private note copies remain available offline."
+            tr(
+                "Choose notes deliberately. Histories preserve originals; collision desks "
+                "combine subjects using your own words. Commands require a connection. Saved"
+                " private note copies remain available offline."
+            )
         ),
-        command("edit", "New thinking desk", **({"note_id": note_id} if note_id else {})),
+        command("edit", tr("New thinking desk"), **({"note_id": note_id} if note_id else {})),
     ]
     for row in page[:5]:
         if not row["data"].get("deleted"):
             items.append(command("desk", row["data"]["title"][:24], desk_id=row["id"]))
     if len(page) > 5:
-        items.append(command("desk", "Next desks", cursor=page[4]["id"]))
+        items.append(command("desk", tr("Next desks"), cursor=page[4]["id"]))
     return output(*items)
 
 
@@ -194,7 +207,7 @@ async def edit(
         await ctx.storage.records.compare_and_set(
             COLLECTION, desk_id, old, {"deleted": True}
         ) or conflict()
-        return text("Desk deleted. Original notes and saved copies remain intact.")
+        return text(tr("Desk deleted. Original notes and saved copies remain intact."))
     if action == "snapshot":
         if not old:
             raise ValueError("a saved desk is required")
@@ -212,41 +225,49 @@ async def edit(
             request_id=f"desk:{desk_id}:{old['revision']}",
         )
         return output(
-            text("Private snapshot saved. It does not update automatically."),
+            text(tr("Private snapshot saved. It does not update automatically.")),
             {"type": "notes", "ids": [note["id"]]},
         )
     if title is None:
         data = old or {}
         return output(
             text(
-                "History follows selected notes in creation order. Collision: choose two to "
-                "five notes from different subjects and develop your own idea. No AI is used"
-                " and original notes never change."
+                tr(
+                    "History follows selected notes in creation order. Collision: choose two to "
+                    "five notes from different subjects and develop your own idea. No AI is used"
+                    " and original notes never change."
+                )
             ),
             form(
                 {
                     "title": {
-                        **field("Topic or desk title", 80, data.get("title", "New thinking desk")),
+                        **field(
+                            tr("Topic or desk title"),
+                            80,
+                            data.get("title", tr("New thinking desk")),
+                        ),
                         "minLength": 1,
                     },
                     "mode": {
                         "type": "string",
-                        "title": "Desk type",
+                        "title": tr("Desk type"),
                         "enum": [data["mode"]] if old else ["history", "collision"],
                         "default": data.get("mode", "history"),
                     },
-                    "prompt": field("Problem or question (optional)", 300, data.get("prompt", "")),
+                    "prompt": field(
+                        tr("Problem or question (optional)"), 300, data.get("prompt", "")
+                    ),
                     "thinking": field(
-                        "Your reflection or new idea", 1500, data.get("thinking", "")
+                        tr("Your reflection or new idea"), 1500, data.get("thinking", "")
                     ),
                     "action": {
                         "type": "string",
-                        "title": "Action",
+                        "title": tr("Action"),
                         "enum": ["save", "delete"] if old else ["save"],
                         "default": "save",
                     },
                     **(
-                        {"request_id": field("Creation request ID", 36, str(uuid.uuid4()))}
+                        {"request_id": field(tr("Creation request ID"), 36, str(uuid.uuid4()))}
                         if not old
                         else {}
                     ),
@@ -378,22 +399,24 @@ async def render_sources(ctx, desk_id, data, states, *, query="", picker=False):
     actions = {
         "remove": {
             "type": "string",
-            "title": "Remove source",
+            "title": tr("Remove source"),
             "enum": [NONE, *source_captions(states)],
             "default": NONE,
         },
         "refresh": {
             "type": "boolean",
-            "title": "Acknowledge current source revisions",
+            "title": tr("Acknowledge current source revisions"),
             "default": False,
         },
     }
-    back = command("desk", "Back to desk", desk_id=desk_id)
+    back = command("desk", tr("Back to desk"), desk_id=desk_id)
     if picker:
         return output(
             text(
-                "Removing a source also removes its connections. "
-                "Acknowledge revisions only after reviewing the current originals."
+                tr(
+                    "Removing a source also removes its connections. "
+                    "Acknowledge revisions only after reviewing the current originals."
+                )
             ),
             {"type": "notes", "ids": [note["id"] for _, note in states if note]},
             form({**actions, **picker_fields(data, 5 if data["mode"] == "collision" else 10)}),
@@ -407,17 +430,19 @@ async def render_sources(ctx, desk_id, data, states, *, query="", picker=False):
     hits = [n for n in hits if n["id"] not in {b["id"] for b in data["sources"]}]
     return output(
         text(
-            "Search, then add one note. Removing a source also removes its connections. "
-            "Acknowledge revisions only after reviewing the current originals. Collision"
-            " works best with two to five different subjects."
+            tr(
+                "Search, then add one note. Removing a source also removes its connections. "
+                "Acknowledge revisions only after reviewing the current originals. Collision"
+                " works best with two to five different subjects."
+            )
         ),
         {"type": "notes", "ids": [n["id"] for n in hits]},
         form(
             {
-                "query": field("Search notes (blank browses recent)", 200, query),
+                "query": field(tr("Search notes (blank browses recent)"), 200, query),
                 "add": {
                     "type": "string",
-                    "title": "Add source",
+                    "title": tr("Add source"),
                     "enum": [NONE, *[caption(n, i) for i, n in enumerate(hits, 1)]],
                     "default": NONE,
                 },
@@ -458,31 +483,36 @@ async def relate(
     if from_note is None:
         if len(ids) < 2:
             return output(
-                text("Select at least two source notes first."),
+                text(tr("Select at least two source notes first.")),
                 command(
-                    "sources", "Choose sources", desk_id=desk_id, expected_revision=old["revision"]
+                    "sources",
+                    tr("Choose sources"),
+                    desk_id=desk_id,
+                    expected_revision=old["revision"],
                 ),
             )
         return output(
             text(
-                "The first note builds on, challenges, or replaces the second. This records "
-                "your interpretation; neither note is edited. Choose the same connection "
-                "with Remove to undo it."
+                tr(
+                    "The first note builds on, challenges, or replaces the second. This records "
+                    "your interpretation; neither note is edited. Choose the same connection "
+                    "with Remove to undo it."
+                )
             ),
             {"type": "notes", "ids": ids},
             form(
                 {
-                    "from_note": {"type": "string", "title": "First note", "enum": labels},
+                    "from_note": {"type": "string", "title": tr("First note"), "enum": labels},
                     "kind": {
                         "type": "string",
-                        "title": "Connection",
+                        "title": tr("Connection"),
                         "enum": RELATIONS,
                         "default": "builds-on",
                     },
-                    "to_note": {"type": "string", "title": "Second note", "enum": labels},
+                    "to_note": {"type": "string", "title": tr("Second note"), "enum": labels},
                     "disconnect": {
                         "type": "boolean",
-                        "title": "Remove this connection",
+                        "title": tr("Remove this connection"),
                         "default": False,
                     },
                 },

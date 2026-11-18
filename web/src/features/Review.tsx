@@ -9,7 +9,7 @@ import { Dialog } from "./Dialog";
 import { NoteReference } from "./Vocabulary";
 import styles from "./Feature.module.css";
 import { SuggestionPreview, suggestionTitle } from "./SuggestionPreview";
-import { requiresSuggestionPreview } from "./suggestionTitle";
+import { requiresSuggestionPreview, suggestionReason } from "./suggestionTitle";
 import { useSuggestionFeedback } from "./suggestionFeedback";
 import { labelChangeImpact } from "./labelChange";
 import { activePlugins, supportsNotePicker, usePlugins } from "./Slots";
@@ -182,7 +182,12 @@ export function ReviewPage() {
                       </span>
                     </div>
                     {s.note_id && <NoteReference id={s.note_id} />}
-                    <p>{s.reason}</p>
+                    <p>
+                      {suggestionReason(
+                        s,
+                        plugins.find((p) => p.id === s.plugin),
+                      )}
+                    </p>
                     <div className={styles.row}>
                       <button
                         className="primary"

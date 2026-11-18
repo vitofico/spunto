@@ -28,7 +28,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.FlowRow
 import io.theficos.spunto.core.plugins.*
-import io.theficos.spunto.data.sync.ApiClient
+import io.theficos.spunto.data.sync.ApiPayload
 import io.theficos.spunto.data.sync.ApiException
 import io.theficos.spunto.data.local.PluginOutputEntity
 import io.theficos.spunto.core.model.Note
@@ -81,13 +81,17 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
     require(synced!=null && !synced.trashed && !synced.pending && synced.serverRev>0) {resources.getString(R.string.settings_this_note_has_changes_waiting_to_sync)}
    }
   }
-  val result=if(plugin=="ask" && id=="ask" && args.string("question").isNotBlank()) {
-   conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> ApiClient(auth!!).request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value),noteActionsSupported=supportsAskNoteActions(model.container.manifest.value,auth?.workspaceRole)) ?: return@task
-  } else ApiClient(auth!!).guarded {authorized()}.request("/api/v1/plugins/$plugin/commands/$id","POST",args)
+  val api=pluginApi(auth!!,resources)
+  val response=if(plugin=="ask" && id=="ask" && args.string("question").isNotBlank()) {
+   val result=conversationAskRequest(args.string("question"),args.takeIf {it.string("conversation_id").isNotBlank()},{command,input -> api.request("/api/v1/plugins/ask/commands/$command","POST",input)},{current() && requestContext.isActive},{pendingAskHandle=it},conversationSupported=supportsAskConversation(model.container.manifest.value),noteActionsSupported=supportsAskNoteActions(model.container.manifest.value,auth.workspaceRole)) ?: return@task
+   ApiPayload(result,null)
+  } else api.guarded {authorized()}.requestPayload("/api/v1/plugins/$plugin/commands/$id","POST",args)
   if(!authorized()) return@task
   model.synchronize().join()
   if(authorized()) {
-   val envelope=commandEnvelope(plugin,id,args,result)
+   val envelope=commandEnvelope(plugin,id,args,response.body).let {value ->
+    response.contentLanguage?.let {JsonObject(value+("content_language" to JsonPrimitive(it)))} ?: value
+   }
    val ownedResult=if(plugin==DecisionJournalId) JsonObject(envelope+mapOf(
     "authority" to JsonPrimitive(auth!!.serverUrl), "replica_epoch" to JsonPrimitive(epoch),
    )) else envelope
@@ -97,10 +101,10 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
  catch(error:Exception) {
   if(authorized()) {
    if(error is ApiException && error.status==401) model.reauthenticate.value=true
-   onError(when(error) {is ApiException -> if(plugin==DecisionJournalId && error.code=="decision_conflict") resources.getString(R.string.decision_conflict) else apiErrorMessage(resources,error);is IllegalArgumentException -> error.message ?: resources.getString(R.string.settings_check_the_tool_inputs);is java.net.SocketTimeoutException -> resources.getString(R.string.settings_the_tool_took_too_long_try_again);else -> resources.getString(R.string.settings_couldn_t_reach_the_server_check_your)})
+   onError(when(error) {is ApiException -> pluginApiError(resources,error,id);is IllegalArgumentException -> error.message ?: resources.getString(R.string.settings_check_the_tool_inputs);is java.net.SocketTimeoutException -> resources.getString(R.string.settings_the_tool_took_too_long_try_again);else -> resources.getString(R.string.settings_couldn_t_reach_the_server_check_your)})
   }
  } finally {
-  pendingAskHandle?.let {handle -> withContext(NonCancellable) {runCatching {ApiClient(auth!!).request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",handle.string("conversation_id"))})}}}
+  pendingAskHandle?.let {handle -> withContext(NonCancellable) {runCatching {pluginApi(auth!!,resources).request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",handle.string("conversation_id"))})}}}
   onComplete()
  }
 }
@@ -108,6 +112,7 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
 @Composable fun PluginPanels(model:SpuntoViewModel,note:Note,onNote:(String)->Unit) {
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
+ val language=LocalConfiguration.current.locales[0]
  val manifest=model.manifest.collectAsState().value
  val outputs by model.outputs.collectAsState()
  val online by model.online.collectAsState()
@@ -119,19 +124,19 @@ internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonO
   val contribution=(plugin["contributes"] as? JsonObject)?.get("panel")
   val panel=(contribution as? JsonObject) ?: (contribution as? JsonArray)?.firstOrNull() as? JsonObject ?: return@forEach
   val stored=outputs.filter { it.noteId==note.id && it.kind=="annotation" }.map { payload(it.payload) }.filter { it.string("plugin")==id && it.string("kind")=="panel" }
-  val components=stored.flatMap(::outputComponents).take(10)
+  val components=stored.flatMap(::outputComponents).take(10).map {localizedStoredComponent(resources,id,it)}
   val live=panel.string("mode")=="live"
   if(live && (!online || note.privateNote) || !live && components.isEmpty()) return@forEach
   var expanded by remember(note.id,id) { mutableStateOf(model.container.preferences.getBoolean("panel-open:$id",false)) }
-  var result by remember(note.id,id,note.serverRev) { mutableStateOf<JsonElement?>(null) }
+  var result by remember(note.id,id,note.serverRev,language) { mutableStateOf<JsonElement?>(null) }
   // Live sections load when the note opens, as on the web; until they have something to say they are absent (03 A5).
-  LaunchedEffect(online,note.id,note.serverRev,note.privateNote) {
+  LaunchedEffect(online,note.id,note.serverRev,note.privateNote,language) {
    if(live && online && !note.privateNote) {
     val auth=model.auth.value ?: return@LaunchedEffect
     val epoch=model.pluginReplicaEpoch
     fun current()=model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled(id)
     try {
-     val response=ApiClient(auth).guarded {current()}.request("/api/v1/plugins/$id/panel",query=mapOf("note_id" to note.id))
+     val response=pluginApi(auth,resources).guarded {current()}.request("/api/v1/plugins/$id/panel",query=mapOf("note_id" to note.id))
      if(current()) result=response
     } catch(cancelled:CancellationException) {throw cancelled}
     catch(failure:Exception) {if(failure is ApiException && failure.status==401 && current()) model.reauthenticate.value=true}
@@ -155,9 +160,37 @@ internal fun labelChangeSummary(resources:Resources,proposed:JsonObject):String 
   else -> resources.getString(R.string.settings_rename_or_merge_into ,proposed.string("old"),proposed.string("new"))
  }
 }
-internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugins:List<JsonObject>):String {
+internal fun entryMetaText(outputs:List<PluginOutputEntity>,noteId:String,plugins:List<JsonObject>,resources:Resources):String {
  val active=plugins.filter { it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed") }.associateBy { it.string("id") }
- return outputs.filter { it.noteId==noteId && it.kind=="annotation" }.map { payload(it.payload) }.filter { it.string("kind")=="meta" && it.string("plugin") in active }.sortedWith(compareBy<JsonObject> { (active[it.string("plugin")]?.get("position") as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE }.thenBy { it.string("plugin") }).firstNotNullOfOrNull { data -> outputComponents(data).firstOrNull { it.string("type")=="text" }?.string("text")?.take(24)?.takeIf(String::isNotBlank) }.orEmpty()
+ return outputs.filter { it.noteId==noteId && it.kind=="annotation" }.map { payload(it.payload) }.filter { it.string("kind")=="meta" && it.string("plugin") in active }.sortedWith(compareBy<JsonObject> { (active[it.string("plugin")]?.get("position") as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE }.thenBy { it.string("plugin") }).firstNotNullOfOrNull { data ->
+  outputComponents(data).firstOrNull { it.string("type")=="text" }?.string("text")?.take(24)?.takeIf(String::isNotBlank)?.let { text ->
+   when(data.string("plugin")) {
+    "tasks" -> Regex("([0-9]+) of ([0-9]+) done").matchEntire(text)?.destructured?.let { (done,total) ->
+     val completed=done.toIntOrNull()
+     val count=total.toIntOrNull()
+     if(completed!=null && count!=null) resources.getString(R.string.core_tasks_done,completed,count) else text
+    } ?: text
+    "link-enrichment" -> localizedReadingTime(resources,text)
+    else -> text
+   }
+  }
+ }.orEmpty()
+}
+
+private fun localizedReadingTime(resources:Resources,text:String):String = Regex("([0-9]+) min read").matchEntire(text)
+ ?.groupValues?.get(1)?.toIntOrNull()?.let {resources.getString(R.string.plugin_minutes_read,it)} ?: text
+
+private fun localizedStoredComponent(resources:Resources,plugin:String,component:JsonObject):JsonObject {
+ if(plugin!="link-enrichment" || component.string("type")!="markdown") return component
+ val field=if(component["text"]!=null) "text" else "markdown"
+ val parts=component.string(field).split("\n\n",limit=3)
+ if(parts.size<2 || !parts.first().startsWith("[") || "](" !in parts.first()) return component
+ val readingTime=localizedReadingTime(resources,parts[1])
+ if(readingTime==parts[1]) return component
+ val text=listOf(parts[0],readingTime)+parts.drop(2)
+ return JsonObject(component.mapValues { (key,value) ->
+  if(key==field) JsonPrimitive(text.joinToString("\n\n")) else value
+ })
 }
 
 @Composable fun ProposedPill(title:String,pluginName:String,changesWords:Boolean,onClick:()->Unit,onDismiss:()->Unit) {
@@ -258,7 +291,10 @@ private fun isOneTapProposal(data:JsonObject)=data.string("action") in setOf("ad
 
 private fun proposalLabel(resources:Resources,data:JsonObject):String {
  val proposed=data["payload"] as? JsonObject
- return data.string("title").ifBlank {
+ val title=data.string("title")
+ val stock=pluginPillCaption(resources,data.string("plugin"),title)
+ if(stock!=title) return stock
+ return title.ifBlank {
   when(data.string("action")) {
    "add_label" -> resources.getString(R.string.settings_add,"#"+proposed?.string("path").orEmpty().removePrefix("#"))
    "set_title" -> resources.getString(R.string.plugin_use_title,proposed?.string("title").orEmpty())
@@ -316,7 +352,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
     val data=proposalData(item)
     Surface(color=MaterialTheme.colorScheme.surfaceContainer,shape=MaterialTheme.shapes.medium) {
      Column(Modifier.padding(SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-      Text(data.string("title").ifBlank { resources.getString(R.string.settings_review_change) },style=MaterialTheme.typography.titleSmall)
+      Text(proposalLabel(resources,data),style=MaterialTheme.typography.titleSmall)
       val plugin=data.string("plugin")
       Text(model.container.manifest.plugins().firstOrNull { it.string("id")==plugin }?.let {localizedPluginName(resources,it,catalog)} ?: plugin,style=MaterialTheme.typography.bodySmall)
       item.noteId?.let { RoomReference(model,it,"",onNote) }
@@ -417,7 +453,9 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
      return@forEach
     }
    }
-   Vocabulary(component,onNote,review,run,online=online && canWrite && !running,
+   val output=if(wrapper.string("content_language").isBlank()) pluginFormComponent(resources,plugin,component) else component
+   Vocabulary(output,onNote,review,run,online=online && canWrite && !running,
+    choiceLabel={field,value -> pluginFormChoice(resources,plugin,field,value)},
     onForm=if(canWrite && command.isNotBlank()) { args -> run(command,sourcePicker?.update(args) ?: JsonObject(initial+args)) } else null,
     formInitial=if(sourcePicker!=null) sourcePicker.args else initial,
     formHidden=if(sourcePicker!=null) setOf("selected_ids","max_sources") else initial.keys.filter { it=="note_id" }.toSet(),
@@ -428,7 +466,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
      val oneTap=pending?.takeIf(::isOneTapProposal)
      if(proposal==null || pending!=null) {
       val feedback=LocalFeedback.current
-      val label=oneTap?.let {proposalLabel(resources,it)} ?: pill.string("label")
+      val label=oneTap?.let {proposalLabel(resources,it)} ?: pluginPillCaption(resources,plugin,pill.string("label"))
       val pluginName=model.container.manifest.plugins().firstOrNull {it.string("id")==plugin}?.let {localizedPluginName(resources,it,catalog)} ?: plugin
       ProposedPill(label,pluginName,oneTap==null && pending?.string("action") in setOf("replace_body","merge_notes"),{
        if(oneTap==null) review(id)
@@ -446,7 +484,7 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
    Text(resources.getString(when {
     journal && command=="journal" -> R.string.decision_opening
     journal -> R.string.settings_saving
-    else -> R.string.settings_working_this_can_take_a_moment_with
+    else -> R.string.plugin_working
    }),style=MaterialTheme.typography.bodySmall)
   }
  }
@@ -521,7 +559,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
        fun current()=active && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.workspaceCanWrite.value
        sheetScope.launch {
         try {
-         val response=ApiClient(auth).guarded {current()}.post("/api/v1/suggestions/$suggestionId/accept",JsonObject(emptyMap()))
+         val response=pluginApi(auth,resources).guarded {current()}.post("/api/v1/suggestions/$suggestionId/accept",JsonObject(emptyMap()))
          model.synchronize().join()
          if(current()) {
           if(response.pluginFlag("applied")==true) {
@@ -535,7 +573,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
          if(current()) {
           if(error is ApiException && error.status==401) model.reauthenticate.value=true
           if(error is ApiException && error.status==409) model.synchronize().join()
-          applyError=if(error is ApiException) apiErrorMessage(resources,error) else resources.getString(R.string.sys_server_unreachable)
+          applyError=if(error is ApiException) pluginApiError(resources,error) else resources.getString(R.string.sys_server_unreachable)
          }
         } finally {applying=false}
        }
@@ -697,7 +735,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
  HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
  commands.take(6).forEach {tool -> NoteSheetRow(tool.title,enabled=online && !running) {run(tool)}}
  if(overflow.isNotEmpty()) NoteSheetRow(resources.getString(R.string.settings_more),enabled=online && !running) {expanded=true;query="";error=""}
- if(running && !expanded) Text(resources.getString(R.string.settings_working_this_can_take_a_moment_with),Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
+ if(running && !expanded) Text(resources.getString(R.string.plugin_working),Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
  if(error.isNotBlank() && !expanded) Text(error,Modifier.padding(horizontal=SpuntoSpacing.s20),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
  if(expanded) ModalBottomSheet(onDismissRequest={attempt?.cancel();expanded=false}) {
   Column(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
@@ -705,7 +743,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
    if(!online) Text(resources.getString(R.string.settings_connect_to_the_server_to_use_tools),style=MaterialTheme.typography.bodySmall)
    if(overflow.size>5) OutlinedTextField(value=query,onValueChange={query=it},label={Text(resources.getString(R.string.settings_find_a_tool))},singleLine=true,modifier=Modifier.fillMaxWidth())
    if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
-   if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(R.string.settings_working_this_can_take_a_moment_with),style=MaterialTheme.typography.bodySmall)}
+   if(running) {LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(R.string.plugin_working),style=MaterialTheme.typography.bodySmall)}
    val visible=overflow.filter {it.title.contains(query,true) || it.pluginName.contains(query,true)}
    if(visible.isEmpty()) Text(resources.getString(R.string.settings_no_tools_match_your_search))
    LazyColumn(Modifier.weight(1f,false),contentPadding=PaddingValues(bottom=SpuntoSpacing.s24)) {

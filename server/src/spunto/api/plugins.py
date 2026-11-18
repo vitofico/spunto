@@ -6,17 +6,19 @@ import json
 import math
 import os
 import unicodedata
+from contextlib import contextmanager
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Body, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from spunto.ai.errors import AIError
-from spunto.ai.quota import QuotaExceeded
+from spunto.ai.quota import TITLES, QuotaExceeded
 from spunto.ai.vectors import VectorUnavailable
 from spunto.api.deps import PrincipalDep, ServicesDep, SessionDep
 from spunto.api.errors import Problem, problem_response
 from spunto.host import ContextError, ManifestError
+from spunto.host.language import language, negotiate, tr, use_language
 
 router = APIRouter(prefix="/api/v1", tags=["Plugins"])
 
@@ -66,15 +68,15 @@ def _host(services, plugin_id=None, *, enabled=False, retained=False):
         and plugin_id not in host.manifests
         and not (retained and plugin_id in host.removed_manifests)
     ):
-        raise Problem(404, "not_found", "That plugin is unavailable.")
+        raise Problem(404, "not_found", tr("That plugin is unavailable."))
     if enabled and host.states[plugin_id]["state"] != "enabled":
-        raise Problem(404, "not_found", "That plugin is unavailable.")
+        raise Problem(404, "not_found", tr("That plugin is unavailable."))
     return host
 
 
 def _owner(principal):
     if not principal.owner:
-        raise Problem(403, "owner_required", "Use an owner session or device.")
+        raise Problem(403, "owner_required", tr("Use an owner session or device."))
 
 
 async def _call(awaitable):
@@ -84,29 +86,40 @@ async def _call(awaitable):
         raise
     except QuotaExceeded as error:
         wait = {"Retry-After": str(math.ceil(error.retry_after))}
-        raise Problem(429, error.code, error.detail, wait) from None
+        detail = error.detail
+        if language() != "en":
+            detail = tr(
+                "{action} has reached its limit ({limit}). It resumes on {date}. "
+                "Notes and search keep working.",
+                action=tr(TITLES[error.action]),
+                limit=error.limit,
+                date=error.resets_at.date().isoformat(),
+            )
+        raise Problem(429, error.code, detail, wait) from None
     except AIError as error:
         if error.code == "ai_source_changed":
-            raise Problem(409, error.code, error.detail) from None
+            raise Problem(409, error.code, tr(error.detail)) from None
         status = {"validation": 422, "refused": 403}.get(error.category, 503)
-        raise Problem(status, error.code, error.detail) from None
+        raise Problem(status, error.code, tr(error.detail)) from None
     except VectorUnavailable:
         raise Problem(
             503,
             "vectors_unavailable",
-            "The note search index is still preparing. "
-            "Check indexing in Settings → AI and try again.",
+            tr(
+                "The note search index is still preparing. "
+                "Check indexing in Settings → AI and try again."
+            ),
         ) from None
     except KeyError:
-        raise Problem(404, "not_found", "That plugin action is unavailable.") from None
+        raise Problem(404, "not_found", tr("That plugin action is unavailable.")) from None
     except ContextError as error:
         code = str(error)
         if code == "plugin_review_changed":
-            raise Problem(409, code, "Review the current plugin details.") from None
+            raise Problem(409, code, tr("Review the current plugin details.")) from None
         if code == "plugin_disabled":
-            raise Problem(404, "not_found", "That plugin is unavailable.") from None
+            raise Problem(404, "not_found", tr("That plugin is unavailable.")) from None
         if code == "plugin_pinned_by_environment":
-            raise Problem(409, "pinned_by_environment", "Set in the environment.") from None
+            raise Problem(409, "pinned_by_environment", tr("Set in the environment.")) from None
         known = {
             "owner_required",
             "route_token_denied",
@@ -118,16 +131,32 @@ async def _call(awaitable):
         raise Problem(
             403,
             code if code in known else "plugin_call_denied",
-            "This plugin call is not permitted.",
+            tr("This plugin call is not permitted."),
         ) from None
     except ManifestError, ValueError, TypeError:
         raise Problem(
-            422, "validation_failed", "The plugin request does not match its contract."
+            422, "validation_failed", tr("The plugin request does not match its contract.")
         ) from None
     except Exception:
         raise Problem(
-            503, "plugin_call_failed", "The plugin could not complete this action."
+            503, "plugin_call_failed", tr("The plugin could not complete this action.")
         ) from None
+
+
+@contextmanager
+def _localized(request, response, host, plugin_id):
+    if host is None or host.catalog_metadata.get(plugin_id, {}).get("origin") != "bundled":
+        yield
+        return
+    code = negotiate(request.headers.get("Accept-Language", ""))
+    headers = {"Content-Language": code or "en", "Vary": "Accept-Language"}
+    with use_language(code):
+        try:
+            yield
+        except Problem as error:
+            error.headers = {**(error.headers or {}), **headers}
+            raise
+    response.headers.update(headers)
 
 
 def _permission_sentences(manifest):
@@ -344,23 +373,34 @@ async def ai_route(plugin_id: str, body: AIRoute, session: SessionDep, services:
 
 
 @router.get("/plugins/{plugin_id}/panel")
-async def panel(plugin_id: str, note_id: str, principal: PrincipalDep, services: ServicesDep):
-    host = _host(services, plugin_id, enabled=True)
-    return await _call(host.invoke_panel(plugin_id, note_id, principal=principal))
+async def panel(
+    plugin_id: str,
+    note_id: str,
+    request: Request,
+    response: Response,
+    principal: PrincipalDep,
+    services: ServicesDep,
+):
+    with _localized(request, response, services.host, plugin_id):
+        host = _host(services, plugin_id, enabled=True)
+        return await _call(host.invoke_panel(plugin_id, note_id, principal=principal))
 
 
 @router.post("/plugins/{plugin_id}/commands/{command}")
 async def command(
     plugin_id: str,
     command: str,
+    request: Request,
+    response: Response,
     principal: PrincipalDep,
     services: ServicesDep,
     body: Annotated[dict | None, Body()] = None,
 ):
-    _owner(principal)
-    host = _host(services, plugin_id, enabled=True)
-    _arguments(body or {})
-    return await _call(host.invoke_command(plugin_id, command, body or {}, principal=principal))
+    with _localized(request, response, services.host, plugin_id):
+        _owner(principal)
+        host = _host(services, plugin_id, enabled=True)
+        _arguments(body or {})
+        return await _call(host.invoke_command(plugin_id, command, body or {}, principal=principal))
 
 
 async def _preferences(services):
@@ -448,7 +488,9 @@ def _arguments(value):
     except ValueError, TypeError:
         invalid = True
     if invalid:
-        raise Problem(422, "validation_failed", "Plugin arguments must be an object under 64 KB.")
+        raise Problem(
+            422, "validation_failed", tr("Plugin arguments must be an object under 64 KB.")
+        )
 
 
 @router.get("/changes/wait")
@@ -508,21 +550,29 @@ async def changes(
     include_in_schema=False,
 )
 async def dispatch(
-    plugin_id: str, path: str, request: Request, principal: PrincipalDep, services: ServicesDep
+    plugin_id: str,
+    path: str,
+    request: Request,
+    response: Response,
+    principal: PrincipalDep,
+    services: ServicesDep,
 ):
-    host = _host(services, plugin_id, enabled=True)
-    args = dict(request.query_params)
-    if request.method != "GET":
-        try:
-            body = await request.json() if await request.body() else {}
-        except ValueError:
-            raise Problem(
-                422, "validation_failed", "Use a JSON object for plugin arguments."
-            ) from None
-        if not isinstance(body, dict):
-            raise Problem(422, "validation_failed", "Use a JSON object for plugin arguments.")
-        args.update(body)
-    _arguments(args)
-    return await _call(
-        host.invoke_route(plugin_id, path, args, method=request.method, principal=principal)
-    )
+    with _localized(request, response, services.host, plugin_id):
+        host = _host(services, plugin_id, enabled=True)
+        args = dict(request.query_params)
+        if request.method != "GET":
+            try:
+                body = await request.json() if await request.body() else {}
+            except ValueError:
+                raise Problem(
+                    422, "validation_failed", tr("Use a JSON object for plugin arguments.")
+                ) from None
+            if not isinstance(body, dict):
+                raise Problem(
+                    422, "validation_failed", tr("Use a JSON object for plugin arguments.")
+                )
+            args.update(body)
+        _arguments(args)
+        return await _call(
+            host.invoke_route(plugin_id, path, args, method=request.method, principal=principal)
+        )

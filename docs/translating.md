@@ -14,17 +14,25 @@ Settings → Appearance. It initially follows the browser, then remembers your
 choice in that browser. Unsupported languages fall back to English.
 
 The interface language is separate from speech recognition and note content.
-Changing it never translates saved notes, label names, operator-provided text or
-custom plugins. Android supplies its own translations for system authentication
-and permission dialogs.
+Bundled plugins use the selected app language for commands, forms and results.
+A new decision or outcome uses that language for its headings. After saving,
+the headings are part of the note. Switching languages preserves saved notes,
+label names, operator-provided text and custom plugin output. Android supplies its own
+translations for system authentication and permission dialogs.
 
 ## Correct existing text
 
-- Android: edit the XML files in `android/app/src/main/res/values-<language>/`
-  and `android/plugins/quick-capture/src/main/res/values-<language>/`.
+- Android: edit the XML files in `android/app/src/main/res/values-<language>/`,
+  `android/core/plugins/src/main/res/values-<language>/` and
+  `android/plugins/quick-capture/src/main/res/values-<language>/`.
 - Web: edit `web/src/locales/<language>.json`. `nativeName` is the language's own
   name, `direction` is `ltr` or `rtl`, and `messages` contains the translations.
 - English source text lives in Android's `values/` folders and the web's `en.json`.
+- Bundled server commands use English source messages as keys in
+  `server/src/spunto/host/locales/<language>.json`. Preserve named placeholders
+  in each message. Translate the surrounding instructions and labels.
+  Note text, titles, names entered by the user and search terms keep their
+  original wording.
 
 Translate whole messages naturally. Keep resource names, JSON keys, placeholders
 such as `%1$s`, `%2$d`, `{count}` and `{value1}`, and markup intact. Numbered Android
@@ -55,7 +63,9 @@ For right-to-left web languages, set `direction` to `rtl`.
 Alternatively, copy the translatable English resources and web catalog manually.
 No language list or application-code edit is needed: Android and web discover
 the files automatically. Android translations cover every resource module,
-including the quick-capture widget.
+including the quick-capture widget. To support server-generated plugin text in
+the same language, add its catalog under `server/src/spunto/host/locales/` and
+register its language code and name in `server/src/spunto/host/language.py`.
 
 ## Check and contribute
 

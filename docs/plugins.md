@@ -80,7 +80,7 @@ After repairing a provider or upgrading the server, use the failed plugin card's
 
 ## Periodic tag curation
 
-Enable **Label gardener** with chat and embedding profiles available. Its settings choose the weekly day and time, initially Sunday at `18:00` in the instance's time zone. **Review tags now** in the web palette or the `/` menu starts an immediate pass. Scheduled and manual runs share the same limit: at most three pending proposals and three proposals created per week. Dismissing a proposal does not grant another weekly slot, and a refused change is not offered again.
+Enable **Label gardener** with chat and embedding profiles available. Its settings choose the weekly day and time, initially Sunday at `18:00` in the instance's time zone. **Review labels** in the web palette or the `/` menu starts an immediate pass. Scheduled and manual runs share the same limit: at most three pending proposals and three proposals created per week. Dismissing a proposal does not grant another weekly slot, and a refused change is not offered again.
 
 Each pass samples up to 500 recent eligible non-private, non-machine notes and up to 50 top labels from a vocabulary limited to 500 labels. It supplies bounded labeled and unlabeled evidence, with full evidence notes no longer than 20,000 characters each and a combined 50,000-character note-text budget. The command reports its sample coverage. This is not a full taxonomy audit: absence from a sample does not prove a tag is unused, and sampled note-creation dates are not a history of when tags were added.
 

@@ -9,6 +9,7 @@ from spunto.ai.output import Output
 from spunto.core.quiet_changes import finish_source
 from spunto.core.text import label_key
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.host.plugin import ContextError
 from spunto.plugins._capture import (
     bounded,
@@ -80,23 +81,23 @@ async def optional_summary(ctx, note, receipt):
 async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
     note = await ctx.capture.note(note_id, note_version=note_version)
     if note is None:
-        return text("That source is unavailable.")
+        return text(tr("That source is unavailable."))
     url = source_url(note)
     if url is None:
         return None
     key = identity(note_id, url)
     prior = await ctx.storage.records.get("sources", key)
     if prior and prior.get("complete"):
-        return text("Source details are cached.")
+        return text(tr("Source details are cached."))
     if prior and prior["version"] != note["version"]:
-        return text("Cached source facts belong to an earlier note version.")
+        return text(tr("Cached source facts belong to an earlier note version."))
     if prior:
         receipt = prior
     else:
         automatic = (ctx.operation or "").startswith("hook:") or ctx.unattended
         marker = "fetch:" + key
         if automatic and await ctx.storage.kv.get(marker):
-            return text("Fetch link details to restore the cleared source.")
+            return text(tr("Fetch link details to restore the cleared source."))
 
         async def pre_send():
             if not await current(ctx, note):
@@ -107,16 +108,16 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
         except ContextError as exc:
             if str(exc) != "capture_source_changed":
                 raise
-            return text("The source note changed; no page was fetched.")
+            return text(tr("The source note changed; no page was fetched."))
         media = response.headers.get("content-type", "text/html").split(";")[0].lower()
         if not 200 <= response.status_code < 300 or media not in {
             "text/html",
             "text/plain",
             "application/xhtml+xml",
         }:
-            return text("The source page did not return usable details.")
+            return text(tr("The source page did not return usable details."))
         if not await current(ctx, note):
-            return text("The note changed.")
+            return text(tr("The note changed."))
         title, page, words = await ctx.to_thread(page_details, response.body)
         receipt = {
             "url": url,
@@ -133,7 +134,7 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
         await ctx.capture.store_result("sources", key, note_id, note["version"], receipt)
         await ctx.storage.kv.set(marker, True)
     if not await current(ctx, note):
-        return text("The note changed.")
+        return text(tr("The note changed."))
     title = receipt["title"]
     paragraphs = [link(title or "Saved source", url), f"{receipt['minutes']} min read"]
     if receipt["summary"]:
@@ -164,11 +165,11 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
         {
             "type": "pill",
             "action": "accept",
-            "label": "Use page title",
+            "label": tr("Use page title"),
             "suggestion_id": proposal["id"],
         }
         if proposal
-        else text("Source details saved.")
+        else text(tr("Source details saved."))
     )
 
 

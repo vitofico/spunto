@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { test, expect, type Locator, type Page } from "@playwright/test";
 
 // Run against a disposable local server, with its real API and packaged client.
@@ -6,6 +7,7 @@ test.skip(
   "Set SPUNTO_E2E_URL to a local test server",
 );
 test.setTimeout(60_000);
+test.use({ locale: "en-US" });
 
 type Output = {
   type?: string;
@@ -41,6 +43,10 @@ async function login(page: Page, pluginId: string) {
     .fill(process.env.SPUNTO_E2E_PASSWORD ?? "browser acceptance password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByLabel("New note")).toBeVisible();
+  await enablePlugin(page, pluginId);
+}
+
+async function enablePlugin(page: Page, pluginId: string) {
   const response = await page.request.get("/api/v1/plugins");
   expect(response.status()).toBe(200);
   const plugins: { id: string; permissions: string[]; review_token: string }[] =
@@ -461,6 +467,180 @@ test("a source note offers decision capture with inherited privacy", async ({
   expect(decision.private).toBe(true);
   expect(decision.body).toContain(`/n/${source.id}`);
   expect((await note(page, source.id)).body).toBe(source.body);
+});
+
+test("bundled plugin settings and decision outcomes follow Italian with an English browser", async ({
+  page,
+}, info) => {
+  const italian = JSON.parse(
+    readFileSync(new URL("../src/locales/it.json", import.meta.url), "utf8"),
+  ).messages as Record<string, string>;
+  const name = (key: string) => italian[key];
+  await login(page, "decision-journal");
+  expect(await page.evaluate(() => navigator.language)).toBe("en-US");
+  await page.goto("/settings/appearance");
+  await page
+    .getByRole("combobox", { name: "Language", exact: true })
+    .selectOption("it");
+  await expect(page.locator("html")).toHaveAttribute("lang", "it");
+  await page.goto("/settings/plugins/digest");
+  await expect(
+    page.getByRole("heading", {
+      name: name("plugin.digest.name"),
+      exact: true,
+    }),
+  ).toBeVisible();
+  const weekday = page.getByLabel(
+    name("plugin.digest.settings.weekday.title"),
+    { exact: true },
+  );
+  await expect(
+    weekday.getByRole("option", { name: name("choice.sunday"), exact: true }),
+  ).toBeAttached();
+  await expect(
+    page.getByText(name("settingsplugins.reads_your_notes"), { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Reads your notes", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.screenshot({ path: info.outputPath("plugin-settings-it.png") });
+
+  await enablePlugin(page, "library-stats");
+  await page.goto("/settings/plugins/library-stats");
+  const stats = page.getByRole("button", {
+    name: new RegExp(name("plugin.library-stats.commands.summary.title")),
+  });
+  await uiCommand(page, "library-stats", "summary", () => stats.click());
+  await expect(page.getByText(/Note salvate: /)).toBeVisible();
+  await expect(page.getByText(/Saved notes: /)).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("library-stats-it.png") });
+
+  await enablePlugin(page, "thinking-desk");
+  await page.goto("/settings/plugins/thinking-desk");
+  await page
+    .getByRole("button", {
+      name: name("plugin.thinking-desk.commands.desk.title"),
+      exact: true,
+    })
+    .click();
+  await page.getByRole("button", { name: "Nuovo tavolo", exact: true }).click();
+  await expect(
+    page.getByRole("button", {
+      name: name("pluginui.choice.history"),
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: name("pluginui.choice.collision"),
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Collision", exact: true }),
+  ).toHaveCount(0);
+
+  await page.goto("/v/decision-journal/journal");
+  const commandHeaders: string[] = [];
+  const mutations: string[] = [];
+  page.on("request", (request) => {
+    if (
+      !new URL(request.url()).pathname.includes("/decision-journal/commands/")
+    )
+      return;
+    commandHeaders.push(request.headers()["accept-language"]);
+    if (request.postDataJSON()?.request_id) mutations.push(request.url());
+  });
+  const captureTitle = name(
+    "plugin.decision-journal.commands.record-decision.title",
+  );
+  await page.getByRole("button", { name: captureTitle, exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: captureTitle, exact: true });
+  const decision = `Keep Tuesday’s draft as written ${info.project.name}`;
+  await dialog
+    .getByLabel(name("decisions.form.decision"), { exact: true })
+    .fill(decision);
+  await dialog
+    .getByRole("button", { name: name("decisions.save_decision"), exact: true })
+    .click();
+  await dialog.getByRole("link", { name: decision, exact: true }).click();
+  const reviewTitle = name(
+    "plugin.decision-journal.commands.review-decision.title",
+  );
+  const journal = page.getByRole("region", {
+    name: name("plugin.decision-journal.name"),
+    exact: true,
+  });
+  await journal.getByRole("button", { name: reviewTitle, exact: true }).click();
+  dialog = page.getByRole("dialog", { name: reviewTitle, exact: true });
+  await dialog
+    .getByLabel(name("decisions.form.outcome"), { exact: true })
+    .fill("The test draft was retained verbatim.");
+  await dialog
+    .getByRole("button", { name: name("decisions.status.closed"), exact: true })
+    .click();
+  const reviewed = await uiCommand(
+    page,
+    "decision-journal",
+    "review-decision",
+    () =>
+      dialog
+        .getByRole("button", {
+          name: name("decisions.record_outcome"),
+          exact: true,
+        })
+        .click(),
+  );
+  const outcome = noteIds(reviewed)[0];
+  await dialog.locator(`a[href="/n/${outcome}"]`).click();
+  await expect(
+    journal.getByText(name("decisions.status.closed"), { exact: true }),
+  ).toBeVisible();
+  await journal.getByRole("button", { name: reviewTitle, exact: true }).click();
+  dialog = page.getByRole("dialog", { name: reviewTitle, exact: true });
+  await dialog
+    .getByLabel(name("decisions.form.outcome"), { exact: true })
+    .fill("Follow up next Tuesday.");
+  await dialog
+    .getByRole("button", { name: name("decisions.status.open"), exact: true })
+    .click();
+  await dialog
+    .getByLabel(name("decisions.form.next_review_on"), { exact: true })
+    .fill("2030-03-01");
+  await dialog
+    .getByRole("button", {
+      name: name("decisions.record_outcome"),
+      exact: true,
+    })
+    .click();
+  await dialog.getByRole("link", { name: decision, exact: true }).click();
+  const history = name("decisions.review_history");
+  await journal.getByRole("button", { name: history, exact: true }).click();
+  dialog = page.getByRole("dialog", { name: history, exact: true });
+  await expect(dialog.locator(`a[href="/n/${outcome}"]`)).toBeVisible();
+  await expect(dialog.getByText(/1 mar 2030/)).toBeVisible();
+  await expect(dialog.getByText(/Open.*Review on/)).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("decision-history-it.png") });
+  await dialog
+    .getByRole("button", { name: name("app.close"), exact: true })
+    .click();
+  expect(commandHeaders.length).toBeGreaterThan(3);
+  expect(new Set(commandHeaders)).toEqual(new Set(["it"]));
+  const mutationCount = mutations.length;
+  await page.evaluate(() => {
+    localStorage.setItem("spunto:language", "en");
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: "spunto:language" }),
+    );
+  });
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(
+    page
+      .getByRole("region", { name: "Decision journal", exact: true })
+      .getByText(/Open for follow-up.*Review on/),
+  ).toBeVisible();
+  expect(commandHeaders.at(-1)).toBe("en");
+  expect(mutations).toHaveLength(mutationCount);
 });
 
 test("context packs curate sources, expose staleness and keep a private note copy", async ({

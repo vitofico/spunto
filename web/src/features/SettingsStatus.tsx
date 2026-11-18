@@ -10,6 +10,7 @@ import { AIHealthResults } from "./AISettings";
 import { formatBytes, formatWhen, humanize, plural } from "./format";
 import { ErrorLine } from "./SettingsParts";
 import { capabilityNames } from "./SettingsPlugins";
+import { pluginDiagnostic } from "./pluginDiagnostics";
 const pluginStates: () => Record<string, string> = () => ({
   enabled: t("settingsplugins.on_3"),
   disabled: t("aisettings.off"),
@@ -37,8 +38,8 @@ export function StatusPage() {
     queryFn: api.catalog,
     select: (data) => localizeCatalog(data),
   });
-  const name = (id: string) =>
-    catalog.data?.plugins.find((p) => p.id === id)?.name ?? humanize(id);
+  const plugin = (id: string) => catalog.data?.plugins.find((p) => p.id === id);
+  const name = (id: string) => plugin(id)?.name ?? humanize(id);
   const data = query.data;
   const ai = data?.ai as
     | {
@@ -125,7 +126,7 @@ export function StatusPage() {
                   })
                 : t("settingsstatus.no_backup_yet")}
           </p>
-          <h2>AI</h2>
+          <h2>{t("settings.ai")}</h2>
           <p>
             {ai?.enabled
               ? ai.capabilities
@@ -163,7 +164,9 @@ export function StatusPage() {
           {plugins?.map((p) => (
             <p className="muted" key={p.id}>
               {name(p.id)} · {pluginStates()[p.state] ?? humanize(p.state)}
-              {p.last_error ? ` · ${p.last_error}` : ""}
+              {p.last_error
+                ? ` · ${pluginDiagnostic(plugin(p.id), p.last_error)}`
+                : ""}
             </p>
           ))}
           {jobs?.map((j, i) => (

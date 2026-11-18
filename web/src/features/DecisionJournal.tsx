@@ -1,3 +1,4 @@
+import CommandResult from "./CommandResult";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "wouter";
@@ -9,14 +10,9 @@ import {
   decisionsPath,
   isDecisionNote,
   isOriginalDecision,
-  localizedDecisionStatus,
+  decisionStatus,
 } from "./decisionJournalData";
-import {
-  activePlugins,
-  CommandResult,
-  type CommandOrigin,
-  usePlugins,
-} from "./Slots";
+import { activePlugins, type CommandOrigin, usePlugins } from "./Slots";
 import { Dialog } from "./Dialog";
 import { askItems } from "./askConversationData";
 import styles from "./Feature.module.css";
@@ -109,7 +105,7 @@ export function DecisionNoteActions({
   note: Note;
   editing: boolean;
 }) {
-  useLanguage();
+  const language = useLanguage();
   const role = useWorkspaceRole();
   const online = useBrowserOnline();
   const manifest = usePlugins();
@@ -118,7 +114,7 @@ export function DecisionNoteActions({
   );
   const show = !!plugin && !note.trashed && isDecisionNote(note);
   const detail = useQuery({
-    queryKey: ["plugin-panel", journal, note.id],
+    queryKey: ["plugin-panel", journal, note.id, language],
     queryFn: () => api.command(journal, "journal", { note_id: note.id }),
     enabled: show && !editing && online && role === "owner",
     staleTime: 0,
@@ -128,15 +124,17 @@ export function DecisionNoteActions({
   });
   if (!show || editing) return null;
   const items = askItems(detail.data);
-  const summary = items.find((item) => item.type === "text");
+  const [summary, root] = items;
+  const originalId =
+    root?.type === "notes" && Array.isArray(root.ids) && root.ids[0];
   const status =
-    typeof summary?.text === "string"
-      ? localizedDecisionStatus(summary.text)
+    typeof originalId === "string" &&
+    summary?.type === "text" &&
+    typeof summary.text === "string"
+      ? decisionStatus(summary.text)
       : null;
   const original = isOriginalDecision(note);
   if (!original && !status) return null;
-  const root = items.find((item) => item.type === "notes");
-  const originalId = Array.isArray(root?.ids) && root.ids[0];
   return (
     <section
       className={styles.decisionTools}

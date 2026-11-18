@@ -2,6 +2,8 @@ package io.theficos.spunto
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.CompositionLocalProvider
@@ -17,6 +21,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -32,6 +39,7 @@ import io.theficos.spunto.data.sync.AuthConfig
 import io.theficos.spunto.data.sync.AuthStore
 import io.theficos.spunto.data.sync.SyncScheduler
 import java.io.File
+import java.util.Locale
 import java.net.URI
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -344,6 +352,47 @@ class NewFeatureWorkflowTest {
         assertEquals("owner", saved["origin"]!!.jsonPrimitive.content)
         assertTrue(saved["body"]!!.jsonPrimitive.content.contains(revised))
         assertTrue(saved["body"]!!.jsonPrimitive.content.contains("## Constraints"))
+    }
+
+    @Test fun italianAppLocaleLocalizesARealPluginFormAndKeepsTheWireValues() {
+        enable("context-packs")
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val configuration = Configuration(base.resources.configuration).apply { setLocale(Locale.ITALIAN) }
+        val context = base.createConfigurationContext(configuration)
+        val result = runBlocking {
+            pluginApi(testConfig, context.resources).requestPayload("/api/v1/plugins/context-packs/commands/edit", "POST", empty)
+        }
+        assertEquals("it", result.contentLanguage)
+        val form = outputComponents(result.body).single { it["type"]?.jsonPrimitive?.content == "form" }
+        val fields = form["schema"]!!.jsonObject["properties"]!!.jsonObject
+        assertEquals("Titolo della scheda", fields["title"]!!.jsonObject["title"]!!.jsonPrimitive.content)
+        assertEquals("save", fields["action"]!!.jsonObject["enum"]!!.jsonArray[0].jsonPrimitive.content)
+        var submitted: JsonObject? = null
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration) {
+                SpuntoTheme("carta", "light") {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                        Text(context.getString(R.string.settings_plugin_context_packs_name), style = MaterialTheme.typography.titleLarge)
+                        Vocabulary(form, onForm = { submitted = it },
+                            choiceLabel = { field, value -> pluginFormChoice(context.resources, "context-packs", field, value) })
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Titolo della scheda").assertIsDisplayed()
+        compose.onNodeWithText("Brief title").assertDoesNotExist()
+        if (InstrumentationRegistry.getArguments().getString("spunto.workflow.screenshot") == "yes") {
+            val directory = requireNotNull(base.getExternalFilesDir(null))
+            File(directory, "plugin-form-it.png").outputStream().use {
+                check(compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        }
+        compose.onNodeWithText("Esegui").performScrollTo().performClick()
+        compose.onNodeWithText("Scegli un valore per «Titolo della scheda».").assertExists()
+        fill("Titolo della scheda", "Synthetic native plugin form")
+        compose.onNodeWithText("Salva").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Esegui").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("save", submitted?.get("action")?.jsonPrimitive?.content) }
     }
 
     @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {

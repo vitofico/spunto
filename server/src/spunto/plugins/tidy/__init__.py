@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 from spunto.ai.output import Output
 from spunto.core.text import labels
 from spunto.host import Ctx, Plugin, validate_output
+from spunto.host.language import tr
 from spunto.plugins._wave2 import eligible, markdown_links, text, unchanged
 
 plugin = Plugin("tidy")
@@ -46,10 +47,10 @@ async def automatic(ctx: Ctx, note_id: str, note_version: int):
 async def tidy(ctx: Ctx, note_id: str):
     note = await eligible(ctx, note_id)
     if not note:
-        return text("This note is unavailable for Tidy.")
+        return text(tr("This note is unavailable for Tidy."))
     prior = await ctx.storage.records.get("processed", note_id)
     if prior and prior["version"] == note["version"]:
-        return text("A Tidy proposal was already offered for this version.")
+        return text(tr("A Tidy proposal was already offered for this version."))
     answer = await ctx.ai.chat(
         Tidy,
         prompt=(
@@ -66,12 +67,12 @@ async def tidy(ctx: Ctx, note_id: str):
         raise ValueError("tidy_changed_links")
     await unchanged(ctx, [note])
     if answer.body == note["body"]:
-        return text("The text is already tidy.")
+        return text(tr("The text is already tidy."))
     # Keep the last empty line so a final newline remains visible in the diff.
     before, after = note["body"].split("\n"), answer.body.split("\n")
     if max(len(before), len(after)) > 4000 or any(len(line) > 4000 for line in before + after):
         preview = text(
-            "Open Review to compare the full original and proposed text before accepting."
+            tr("Open Review to compare the full original and proposed text before accepting.")
         )
     else:
         groups = list(SequenceMatcher(a=before, b=after, autojunk=False).get_grouped_opcodes(2))
@@ -99,7 +100,7 @@ async def tidy(ctx: Ctx, note_id: str):
             {
                 "type": "pill",
                 "action": "accept",
-                "label": "Apply changes",
+                "label": tr("Apply changes"),
                 "suggestion_id": "pending",
             },
         ],

@@ -44,7 +44,7 @@ class TextChangesTest {
   assertEquals("same\nOriginal words\nlast" to "same\nProposed words\nlast",diffHunkTexts(hunk))
  }
  @Test fun whitespaceOnlyEditsDescribeTheVisibleChange() {
-  assertEquals(listOf("Removed 2 spaces","Added 1 space"),whitespaceChangeSummaries(verify("a  b","a b")))
-  assertEquals(listOf("Added 1 line break"),whitespaceChangeSummaries(verify("Paragraph","Paragraph\n")))
+  assertEquals(listOf(WhitespaceChange(TextChangeKind.Removed,WhitespaceUnit.Space,2),WhitespaceChange(TextChangeKind.Added,WhitespaceUnit.Space,1)),whitespaceChanges(verify("a  b","a b")))
+  assertEquals(listOf(WhitespaceChange(TextChangeKind.Added,WhitespaceUnit.Break,1)),whitespaceChanges(verify("Paragraph","Paragraph\n")))
  }
 }

@@ -1,3 +1,4 @@
+import CommandResult from "../src/features/CommandResult";
 import { StrictMode } from "react";
 import {
   act,
@@ -12,7 +13,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PermissionDialog } from "../src/features/SettingsPlugins";
 import type { Plugin } from "../src/lib/types";
 import AskConversation from "../src/features/AskConversation";
-import { CommandResult, PaletteCommands } from "../src/features/Slots";
+import { PaletteCommands } from "../src/features/Slots";
 import { api } from "../src/lib/api";
 import * as queryState from "../src/lib/query";
 import { invalidateRequests } from "../src/lib/identity";

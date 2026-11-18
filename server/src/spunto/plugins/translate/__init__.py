@@ -5,6 +5,7 @@ from pydantic import Field
 from spunto.ai.output import Output
 from spunto.core.text import labels
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._wave2 import (
     cited_body,
     eligible,
@@ -34,7 +35,11 @@ async def translate(ctx: Ctx, note_id: str, language: str | None = None):
                 "required": ["note_id", "language"],
                 "properties": {
                     "note_id": {"type": "string", "default": note_id},
-                    "language": {"type": "string", "enum": ["it", "en"], "title": "Translate to"},
+                    "language": {
+                        "type": "string",
+                        "enum": ["it", "en"],
+                        "title": tr("Translate to"),
+                    },
                 },
             },
         }
@@ -42,7 +47,7 @@ async def translate(ctx: Ctx, note_id: str, language: str | None = None):
         raise ValueError("Choose Italian or English.")
     note = await eligible(ctx, note_id)
     if not note:
-        return text("This note is unavailable for Translate.")
+        return text(tr("This note is unavailable for Translate."))
     answer = await ctx.ai.chat(
         Translation,
         prompt=(
@@ -82,7 +87,7 @@ async def translate(ctx: Ctx, note_id: str, language: str | None = None):
             {
                 "type": "command",
                 "id": "save-translation",
-                "title": "Save as note",
+                "title": tr("Save as note"),
                 "args": {"result_id": key},
             },
         ],

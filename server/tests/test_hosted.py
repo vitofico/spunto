@@ -11,6 +11,7 @@ from urllib.parse import quote
 import httpx
 import psycopg
 import pytest
+from conftest import SYNTHETIC_ISSUER, HostedRows
 
 from spunto.auth import sessions
 from spunto.auth.oidc import OIDCIdentity
@@ -24,7 +25,7 @@ ORIGIN = "http://127.0.0.1:18081"
 
 
 @pytest.fixture
-async def hosted(tmp_path):
+async def hosted(tmp_path, hosted_rows, pending_hosted_rows):
     runtime = os.environ.get("SPUNTO_TEST_POSTGRES_URL")
     identity = os.environ.get("SPUNTO_TEST_IDENTITY_URL")
     admin = os.environ.get("SPUNTO_TEST_POSTGRES_ADMIN_URL")
@@ -35,39 +36,35 @@ async def hosted(tmp_path):
         data_dir=tmp_path,
         database_url=runtime,
         identity_database_url=identity,
-        oidc_issuer="http://127.0.0.1:18082",
+        oidc_issuer=SYNTHETIC_ISSUER,
         oidc_client_id="synthetic-spunto",
         oidc_allow_insecure_loopback=True,
         mcp_enabled=True,
     )
-    ids = []
-    async with hosted_startup(settings) as services:
-        manager = services.hosted
-        users = []
-        for name in ("Alice", "Bob", "Carol"):
-            subject = uuid.uuid4().hex
-            account, workspace = await manager.accounts.sign_in(
-                OIDCIdentity(
-                    "http://127.0.0.1:18082",
-                    subject,
-                    f"{subject}@synthetic.invalid",
-                    True,
-                    name,
+    hosted_rows.admin = admin
+    pending_hosted_rows.append(hosted_rows)
+    try:
+        async with hosted_startup(settings) as services:
+            manager = services.hosted
+            users = []
+            for name in ("Alice", "Bob", "Carol"):
+                subject = "pytest-" + uuid.uuid4().hex
+                hosted_rows.subjects.append(subject)
+                account, workspace = await manager.accounts.sign_in(
+                    OIDCIdentity(
+                        SYNTHETIC_ISSUER, subject, f"{subject}@synthetic.invalid", True, name
+                    )
                 )
-            )
-            ids.append(account["id"])
-            token = await manager.accounts.issue_session(account["id"])
-            users.append({"account": account, "workspace": workspace, "token": token})
-        app = create_hosted_app(services)
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url=ORIGIN
-        ) as client:
-            yield client, manager, users, settings
-    async with await psycopg.AsyncConnection.connect(admin) as conn:
-        for user in ids:
-            await conn.execute("DELETE FROM public.spunto_workspace WHERE created_by=%s", (user,))
-        for user in ids:
-            await conn.execute("DELETE FROM public.spunto_account WHERE id=%s", (user,))
+                token = await manager.accounts.issue_session(account["id"])
+                users.append({"account": account, "workspace": workspace, "token": token})
+            app = create_hosted_app(services)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url=ORIGIN
+            ) as client:
+                yield client, manager, users, settings
+    finally:
+        await hosted_rows.clean()
+        pending_hosted_rows.remove(hosted_rows)
 
 
 def headers(user, workspace=None):
@@ -388,9 +385,11 @@ async def test_generic_account_limits_are_atomic_shared_and_keep_reads_export(ho
         ).status_code == 200
 
 
-async def test_account_closure_requires_choice_revokes_credentials_and_purges_only_owned(hosted):
+async def test_account_closure_requires_choice_revokes_credentials_and_purges_only_owned(
+    hosted, hosted_rows
+):
     client, manager, users, settings = hosted
-    alice, bob, _ = users
+    alice, bob, carol = users
     settings.account_service_token = "synthetic-lifecycle-service-token-0000"
     await client.post("/api/v1/notes", headers=headers(alice), json={"body": "Alice disposable"})
     await client.post("/api/v1/notes", headers=headers(bob), json={"body": "Bob retained"})
@@ -455,6 +454,7 @@ async def test_account_closure_requires_choice_revokes_credentials_and_purges_on
     )
     assert prepared.status_code == 200, prepared.text
     receipt = {"closure_id": prepared.json()["closure_id"]}
+    hosted_rows.receipts.append((receipt["closure_id"], alice["account"]["id"]))
     url = f"/internal/v1/accounts/{alice['account']['id']}"
     assert (await client.post(url + "/close", json=receipt)).status_code == 401
     service = {"Authorization": "Bearer " + settings.account_service_token}
@@ -476,6 +476,39 @@ async def test_account_closure_requires_choice_revokes_credentials_and_purges_on
         )
         is None
     )
+    # Probe teardown in a rolled-back transaction. Carol's workspace and
+    # receipt are independent even though the fixture owns both test accounts.
+    bystander_receipt = "pytest-" + uuid.uuid4().hex
+    hosted_rows.receipts.append((bystander_receipt, carol["account"]["id"]))
+    assert hosted_rows.admin
+    async with await psycopg.AsyncConnection.connect(hosted_rows.admin) as conn:
+        await conn.execute(
+            "INSERT INTO public.spunto_account_closure(id,user_id,shared_choice,created_at) "
+            "VALUES(%s,%s,false,%s)",
+            (bystander_receipt, carol["account"]["id"], now_ms()),
+        )
+        workspace_ids = [bob["workspace"]["id"], carol["workspace"]["id"]]
+        receipt_ids = [receipt["closure_id"], bystander_receipt]
+        workspace_query = "SELECT id FROM public.spunto_workspace WHERE id=ANY(%s)"
+        receipt_query = "SELECT id FROM public.spunto_account_closure WHERE id=ANY(%s)"
+        async with conn.transaction(force_rollback=True):
+            await HostedRows(
+                subjects=[bob["account"]["subject"]],
+                receipts=[(receipt["closure_id"], alice["account"]["id"])],
+            ).remove(conn)
+            assert await (await conn.execute(workspace_query, (workspace_ids,))).fetchall() == [
+                (carol["workspace"]["id"],)
+            ], "cleanup must remove only the selected synthetic workspace owner"
+            assert await (await conn.execute(receipt_query, (receipt_ids,))).fetchall() == [
+                (bystander_receipt,)
+            ]
+        assert {
+            row[0]
+            for row in await (await conn.execute(workspace_query, (workspace_ids,))).fetchall()
+        } == set(workspace_ids)
+        assert {
+            row[0] for row in await (await conn.execute(receipt_query, (receipt_ids,))).fetchall()
+        } == set(receipt_ids)
 
 
 async def test_ai_model_choices_are_owner_managed_scoped_and_survive_restart(hosted, monkeypatch):

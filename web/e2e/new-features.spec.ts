@@ -198,7 +198,9 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   const source = await create("Synthetic link source");
   const first = await create(`# ${title}\nKeep the blue draft.`);
   const second = await create(`# ${title}\nKeep the green draft.`);
-  await page.goto(`/n/${source.id}`);
+  await page
+    .locator(`article.entry[data-note-id="${source.id}"] a.time`)
+    .click();
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page
     .getByRole("menuitem", { name: "Link to note", exact: true })

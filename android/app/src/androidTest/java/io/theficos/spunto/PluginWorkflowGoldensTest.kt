@@ -88,7 +88,7 @@ class PluginWorkflowGoldensTest {
             .assertIsDisplayed().performTextReplacement(value)
         beforeSubmit()
         val button = instrumentation.targetContext.getString(
-            if (decision) R.string.decision_save else R.string.plugin_ui_run,
+            if (decision) R.string.decision_save else io.theficos.spunto.core.plugins.R.string.plugin_ui_run,
         )
         compose.onNodeWithText(button).performScrollTo().performClick()
         return compose.runOnIdle {

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { signInOwner } from "./owner-session";
 
 // Run against a disposable local server, with its real API and packaged client.
 test.skip(
@@ -37,12 +38,7 @@ async function login(page: Page, pluginId: string) {
     ["localhost", "127.0.0.1", "[::1]", "host.docker.internal"],
     "New-feature acceptance must use a disposable local server",
   ).toContain(host);
-  await page.goto("/");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.SPUNTO_E2E_PASSWORD ?? "browser acceptance password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByLabel("New note")).toBeVisible();
+  await signInOwner(page);
   await enablePlugin(page, pluginId);
 }
 

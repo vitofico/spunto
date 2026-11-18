@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { signInOwner } from "./owner-session";
 
 // This opt-in suite needs the synthetic river-ink and broken-pack operator fixtures.
 test.skip(
@@ -11,12 +12,7 @@ test("installed colour pack and accent survive reload, device override and reset
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.SPUNTO_E2E_PASSWORD ?? "browser acceptance password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByLabel("New note")).toBeVisible();
+  await signInOwner(page);
   const originalResponse = await page.request.get("/api/v1/settings");
   expect(originalResponse.ok()).toBe(true);
   const original = await originalResponse.json();

@@ -313,6 +313,9 @@ jobs:
         if: always() && matrix.architecture == 'amd64'
         timeout-minutes: 1
         run: timeout 30s docker rm -f spunto-browser || true
+      - name: Make browser failure evidence readable by the runner
+        if: failure() && steps.browser_acceptance.outcome == 'failure'
+        run: sudo chown -Rh "$(id -u):$(id -g)" web/browser-artifacts
       - name: Retain browser failure evidence
         if: failure() && steps.browser_acceptance.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

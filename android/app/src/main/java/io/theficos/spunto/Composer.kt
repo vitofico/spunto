@@ -89,7 +89,7 @@ import kotlinx.coroutines.flow.flowOf
  var permissionAction by remember {mutableStateOf("dictation")}
  var startingVoice by remember {mutableStateOf(false)}
  var value by remember(id) { mutableStateOf(TextFieldValue(initial,TextRange(initial.length))) }
- if (BuildConfig.DEBUG && draftId.startsWith("share:")) {
+ if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 && draftId.startsWith("share:")) {
   val lock by model.container.appLock.state.collectAsState()
   LaunchedEffect(lock.unlocked) {
    if (!lock.unlocked) value = TextFieldValue("")

@@ -36,7 +36,7 @@ if [[ "${1:-}" == "--ci-app-lock" ]]; then
   [[ "$enrolled" == *"set to"* ]]
   trap '"${adb_command[@]}" shell locksettings clear --old "$pin" >/dev/null' EXIT
   lock=io.theficos.spunto.AppLockTest
-  cases="$lock#actualSystemCredentialCancellationAndSuccessfulPinUnlock,$lock#unsavedShareDraftSurvivesRelockAndIsAbsentFromLockedAccessibilityWindows,$lock#cancellingSettingsAuthenticationDoesNotExitOrChangeSetting"
+  cases="$lock#launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden,$lock#actualSystemCredentialCancellationAndSuccessfulPinUnlock,$lock#unsavedShareDraftSurvivesRelockAndIsAbsentFromLockedAccessibilityWindows,$lock#cancellingSettingsAuthenticationDoesNotExitOrChangeSetting"
   "${gradle[@]}" "${args[@]}" "-Pandroid.testInstrumentationRunnerArguments.spuntoAppLockPin=$pin" \
     "-Pandroid.testInstrumentationRunnerArguments.class=$cases" :app:connectedDebugAndroidTest
   cp -R app/build/outputs/androidTest-results/connected "$results/with-pin"
@@ -46,9 +46,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 expected = {
-    "no-pin": {"launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden",
-               "backExitsLockScreenWhenPhoneAuthenticationIsUnavailable"},
-    "with-pin": {"actualSystemCredentialCancellationAndSuccessfulPinUnlock",
+    "no-pin": {"backExitsLockScreenWhenPhoneAuthenticationIsUnavailable"},
+    "with-pin": {"launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden",
+                 "actualSystemCredentialCancellationAndSuccessfulPinUnlock",
                  "unsavedShareDraftSurvivesRelockAndIsAbsentFromLockedAccessibilityWindows",
                  "cancellingSettingsAuthenticationDoesNotExitOrChangeSetting"},
 }

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="decision_empty">Noch keine Entscheidungen festgehalten.</string>
+    <string name="decision_outcomes">Ergebnisse ansehen</string>
+    <string name="decision_opening">Wird geöffnet…</string>
+    <string name="decision_conflict">Diese Entscheidung wurde geändert. Öffne den aktuellen Stand, bevor du ein Ergebnis festhältst.</string>
+    <string name="decision_title">Titel der Entscheidung</string>
+    <string name="decision_choice">Was hast du entschieden?</string>
+    <string name="decision_alternatives">Erwogene Alternativen</string>
+    <string name="decision_reason">Warum diese Wahl?</string>
+    <string name="decision_expected">Erwartetes Ergebnis</string>
+    <string name="decision_optional_field">%1$s (optional)</string>
+    <string name="decision_actual">Was ist passiert oder warum öffnest du die Entscheidung erneut?</string>
+    <string name="decision_reflection">Was hast du gelernt? (optional)</string>
+    <string name="decision_status">Nach dieser Prüfung</string>
+    <string name="decision_next_review">Nächster Prüftermin (optional)</string>
+    <string name="decision_review_date">Prüftermin (optional)</string>
+    <string name="decision_date_hint">Verwende JJJJ-MM-TT.</string>
+    <string name="decision_invalid_date">Gib ein gültiges Datum im Format JJJJ-MM-TT ein.</string>
+    <string name="decision_open">Für weitere Prüfung offen</string>
+    <string name="decision_reviewed">Geprüft</string>
+    <string name="decision_closed">Abgeschlossen</string>
+    <string name="decision_inherited_privacy">Diese Entscheidung bleibt privat, weil die ursprüngliche Notiz privat ist.</string>
+    <string name="decision_connect_to_save">Verbinde dich zum Speichern mit dem Server. Du kannst hier weiterarbeiten.</string>
+    <string name="decision_check_fields">Fülle die Pflichtfelder aus und prüfe die Länge der Eingaben.</string>
+    <string name="decision_record_outcome">Ergebnis festhalten</string>
+    <string name="decision_save">Entscheidung speichern</string>
+    <string name="decision_resume_review">Prüfung fortsetzen</string>
+    <string name="decision_more_outcomes">Weitere Ergebnisse</string>
+    <string name="decision_more_decisions">Weitere Entscheidungen</string>
+    <string name="decision_saved">Entscheidung gespeichert.</string>
+    <string name="decision_outcome_saved">Ergebnis festgehalten.</string>
+    <string name="decision_open_outcome">Ergebnisnotiz öffnen</string>
+    <string name="decision_open_original">Entscheidungsnotiz öffnen</string>
+    <string name="decision_saved_sync">Synchronisiere, um die gespeicherte Notiz auf diesem Gerät zu öffnen.</string>
+    <string name="decision_sync">Jetzt synchronisieren</string>
+    <string name="decision_add_details">Details hinzufügen</string>
+    <string name="decision_hide_details">Details ausblenden</string>
+    <string name="decision_privacy_hint">Im privaten Modus bleibt diese Notiz von KI- und Netzwerk-Plug-ins ausgeschlossen. Die Zugriffsrechte für den Bereich gelten weiterhin.</string>
+    <string name="decision_status_open">Offen</string>
+    <string name="decision_status_reopened">Wieder geöffnet</string>
+    <string name="decision_review_on">Prüfung am %1$s</string>
+    <string name="decision_review_due">Prüfung fällig am %1$s</string>
+</resources>

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { test, expect } from "@playwright/test";
+import { signInOwner } from "./owner-session";
 
 // Intentional DeleteData acceptance needs its own freshly seeded volume per
 // engine. Never run this against the ordinary 54-case fixture or an owner root.
@@ -42,12 +43,7 @@ test("packaged Removed cards retain metadata and notes while owner cleanup stays
     owner_note_id: string;
   };
   expect(seed.synthetic_fixture).toBe("removed-browser-v1");
-  await page.goto("/");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill(process.env.SPUNTO_E2E_PASSWORD ?? "browser acceptance password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByLabel("New note")).toBeVisible();
+  await signInOwner(page);
   const origin = "http://127.0.0.1:18223";
   async function catalog(): Promise<Catalog> {
     const response = await page.request.get("/api/v1/plugins");

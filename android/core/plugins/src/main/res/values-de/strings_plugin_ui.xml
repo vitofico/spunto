@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_ui_no_notes">Noch keine Notizen vorhanden.</string>
+    <string name="plugin_ui_open_note">Notiz öffnen</string>
+    <string name="plugin_ui_connection">Änderungen erfordern eine Verbindung.</string>
+    <string name="plugin_ui_web">In der Web-App öffnen</string>
+    <string name="plugin_ui_run">Ausführen</string>
+    <string name="plugin_ui_save_settings">Einstellungen speichern</string>
+    <string name="plugin_ui_version">Basierend auf Version %1$s</string>
+    <string name="plugin_ui_environment">In der Umgebung festgelegt</string>
+    <string name="plugin_ui_device">Nur auf diesem Gerät</string>
+    <string name="plugin_ui_choose_field">Wähle einen Wert für „%1$s“.</string>
+    <string name="plugin_ui_choose_label">Wert für „%1$s“ auswählen</string>
+    <string name="plugin_ui_choose">Auswählen…</string>
+    <string name="plugin_ui_find_option">Option suchen</string>
+    <string name="plugin_ui_no_matches">Keine Treffer. Versuche eine andere Suche.</string>
+    <string name="plugin_ui_cancel">Abbrechen</string>
+    <string name="plugin_ui_check">Überprüfe die Formularfelder.</string>
+    <string name="plugin_ui_check_field">Überprüfe „%1$s“.</string>
+    <string name="plugin_ui_whole_number">Gib eine ganze Zahl für „%1$s“ ein.</string>
+    <string name="plugin_ui_number">Gib eine Zahl für „%1$s“ ein.</string>
+    <string name="plugin_ui_range">„%1$s“ liegt außerhalb des gültigen Bereichs.</string>
+    <string name="plugin_ui_length">Überprüfe die Länge von „%1$s“.</string>
+    <string name="plugin_ui_time">Verwende HH:MM für „%1$s“.</string>
+    <string name="plugin_ui_upgrade">Dieses Formular erfordert eine neuere App-Version.</string>
+    <string name="plugin_ui_no_changes">Keine Änderungen am Wortlaut.</string>
+    <string name="plugin_ui_removed">− Entfernt</string>
+    <string name="plugin_ui_added">+ Hinzugefügt</string>
+    <string name="plugin_ui_changes_only">Nur Änderungen anzeigen</string>
+    <string name="plugin_ui_comparison">Vollständigen Vergleich anzeigen</string>
+    <string name="plugin_ui_proposed_text">Vorgeschlagener Text</string>
+    <string name="plugin_ui_unchanged">… unveränderter Text …</string>
+    <plurals name="plugin_ui_added_break">
+        <item quantity="one">%d Zeilenumbruch hinzugefügt</item>
+        <item quantity="other">%d Zeilenumbrüche hinzugefügt</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_break">
+        <item quantity="one">%d Zeilenumbruch entfernt</item>
+        <item quantity="other">%d Zeilenumbrüche entfernt</item>
+    </plurals>
+    <plurals name="plugin_ui_added_space">
+        <item quantity="one">%d Leerzeichen hinzugefügt</item>
+        <item quantity="other">%d Leerzeichen hinzugefügt</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_space">
+        <item quantity="one">%d Leerzeichen entfernt</item>
+        <item quantity="other">%d Leerzeichen entfernt</item>
+    </plurals>
+    <plurals name="plugin_ui_added_tab">
+        <item quantity="one">%d Tabulator hinzugefügt</item>
+        <item quantity="other">%d Tabulatoren hinzugefügt</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_tab">
+        <item quantity="one">%d Tabulator entfernt</item>
+        <item quantity="other">%d Tabulatoren entfernt</item>
+    </plurals>
+</resources>

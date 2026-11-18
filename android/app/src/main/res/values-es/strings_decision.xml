@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="decision_empty">Todavía no hay decisiones registradas.</string>
+    <string name="decision_outcomes">Ver resultados</string>
+    <string name="decision_opening">Abriendo…</string>
+    <string name="decision_conflict">Esta decisión cambió. Abre la revisión más reciente antes de registrar un resultado.</string>
+    <string name="decision_title">Título de la decisión</string>
+    <string name="decision_choice">¿Qué decidiste?</string>
+    <string name="decision_alternatives">Alternativas consideradas</string>
+    <string name="decision_reason">¿Por qué esta opción?</string>
+    <string name="decision_expected">Resultado esperado</string>
+    <string name="decision_optional_field">%1$s (opcional)</string>
+    <string name="decision_actual">¿Qué ocurrió o por qué reabrir la decisión?</string>
+    <string name="decision_reflection">¿Qué aprendiste? (opcional)</string>
+    <string name="decision_status">Después de esta revisión</string>
+    <string name="decision_next_review">Próxima fecha de revisión (opcional)</string>
+    <string name="decision_review_date">Fecha de revisión (opcional)</string>
+    <string name="decision_date_hint">Usa AAAA-MM-DD.</string>
+    <string name="decision_invalid_date">Introduce una fecha válida con el formato AAAA-MM-DD.</string>
+    <string name="decision_open">Abierta para seguimiento</string>
+    <string name="decision_reviewed">Revisada</string>
+    <string name="decision_closed">Cerrada</string>
+    <string name="decision_inherited_privacy">Esta decisión será privada porque la nota de origen es privada.</string>
+    <string name="decision_connect_to_save">Conéctate al servidor para guardar. Puedes seguir editando aquí.</string>
+    <string name="decision_check_fields">Completa los campos obligatorios y comprueba su longitud.</string>
+    <string name="decision_record_outcome">Registrar resultado</string>
+    <string name="decision_save">Guardar decisión</string>
+    <string name="decision_resume_review">Reanudar revisión</string>
+    <string name="decision_more_outcomes">Más resultados</string>
+    <string name="decision_more_decisions">Más decisiones</string>
+    <string name="decision_saved">Decisión guardada.</string>
+    <string name="decision_outcome_saved">Resultado registrado.</string>
+    <string name="decision_open_outcome">Abrir nota del resultado</string>
+    <string name="decision_open_original">Abrir nota de la decisión</string>
+    <string name="decision_saved_sync">Sincroniza para abrir la nota guardada en este dispositivo.</string>
+    <string name="decision_sync">Sincronizar ahora</string>
+    <string name="decision_add_details">Añadir detalles</string>
+    <string name="decision_hide_details">Ocultar detalles</string>
+    <string name="decision_privacy_hint">La opción Privada excluye esta nota de los complementos de IA y de red. El acceso al espacio sigue aplicándose.</string>
+    <string name="decision_status_open">Abierta</string>
+    <string name="decision_status_reopened">Reabierta</string>
+    <string name="decision_review_on">Revisión el %1$s</string>
+    <string name="decision_review_due">Revisión pendiente desde el %1$s</string>
+</resources>

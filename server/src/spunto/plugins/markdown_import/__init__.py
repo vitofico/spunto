@@ -22,6 +22,7 @@ from spunto.api.notes import Source
 from spunto.core.export import _rewrite_links
 from spunto.core.text import label_key, labels
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.host.plugin import ContextError
 
 plugin = Plugin("markdown-import")
@@ -458,30 +459,43 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
     return report
 
 
-def count(value: int, one: str) -> str:
-    return f"{value} {one if value == 1 else one + 's'}"
-
-
 def size(value: int) -> str:
     for unit, scale in (("GB", 10**9), ("MB", 10**6), ("KB", 10**3)):
         if value >= scale:
             amount = value / scale
             text = f"{amount:.1f}" if amount < 10 else f"{amount:.0f}"
             return f"{text.removesuffix('.0')} {unit}"
-    return count(value, "byte")
+    return tr("{count} byte" if value == 1 else "{count} bytes", count=value)
 
 
 def report_output(report: dict) -> list[dict]:
-    text = (
-        f"{count(report['notes'], 'note')} and {count(report['attachments'], 'attachment')} "
-        f"({size(report['attachment_bytes'])}). "
-        f"Created {report['created']}, updated {report['updated']}, "
-        f"unchanged {report['unchanged']}."
+    notes, attachments = report["notes"], report["attachments"]
+    text = tr(
+        "{notes} and {attachments} ({size}). "
+        "Created {created}, updated {updated}, unchanged {unchanged}.",
+        notes=tr("{count} note" if notes == 1 else "{count} notes", count=notes),
+        attachments=tr(
+            "{count} attachment" if attachments == 1 else "{count} attachments", count=attachments
+        ),
+        size=size(report["attachment_bytes"]),
+        created=report["created"],
+        updated=report["updated"],
+        unchanged=report["unchanged"],
     )
-    if report["skipped_owner_edits"]:
-        text += f" Kept {count(report['skipped_owner_edits'], 'note')} you had edited."
-    if report["missing_links"]:
-        text += f" {count(report['missing_links'], 'local link')} could not be found."
+    if kept := report["skipped_owner_edits"]:
+        text += " " + tr(
+            "Kept {count} note you had edited."
+            if kept == 1
+            else "Kept {count} notes you had edited.",
+            count=kept,
+        )
+    if missing := report["missing_links"]:
+        text += " " + tr(
+            "{count} local link could not be found."
+            if missing == 1
+            else "{count} local links could not be found.",
+            count=missing,
+        )
     return [{"type": "text", "text": text}]
 
 
@@ -491,7 +505,7 @@ async def report(ctx: Ctx):
     return (
         report_output(stored)
         if stored
-        else [{"type": "text", "text": "Upload a ZIP to preview the import first."}]
+        else [{"type": "text", "text": tr("Upload a ZIP to preview the import first.")}]
     )
 
 
@@ -550,10 +564,10 @@ async def import_upload(ctx: Ctx, archive_id: str) -> list[dict]:
         if not metadata.get("previewed"):
             raise ValueError("Preview the ZIP before importing")
         if metadata.get("queued"):
-            return [{"type": "text", "text": "This import is already queued."}]
+            return [{"type": "text", "text": tr("This import is already queued.")}]
         job_id = await ctx.enqueue("import", {"archive_id": archive_id})
         await ctx.storage.records.put(
             "uploads", archive_id, {**metadata, "queued": True, "job_id": job_id}
         )
     await ctx.storage.kv.set("last_job", job_id)
-    return [{"type": "text", "text": "Import queued. The report updates when it finishes."}]
+    return [{"type": "text", "text": tr("Import queued. The report updates when it finishes.")}]

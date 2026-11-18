@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from spunto.ai.output import Output, field
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._wave2 import eligible, excerpts, fingerprint, text, versions, write_machine
 
 plugin = Plugin("develop")
@@ -26,7 +27,7 @@ class Development(Output):
 async def develop(ctx: Ctx, note_id: str):
     seed = await eligible(ctx, note_id)
     if not seed:
-        return text("This note is unavailable for Develop.")
+        return text(tr("This note is unavailable for Develop."))
     sources = [seed]
     neighbors = []
     if seed["labels"]:
@@ -45,7 +46,9 @@ async def develop(ctx: Ctx, note_id: str):
     prior = await ctx.storage.kv.get(key)
     if prior:
         note = await ctx.notes.get(prior)
-        return {"type": "notes", "ids": [prior]} if note else text("The follow-up is unavailable.")
+        return (
+            {"type": "notes", "ids": [prior]} if note else text(tr("The follow-up is unavailable."))
+        )
     answer = await ctx.ai.chat(
         Development,
         prompt=(

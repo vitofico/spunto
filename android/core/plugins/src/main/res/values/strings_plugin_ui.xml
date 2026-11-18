@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_ui_no_notes">No notes to show yet.</string>
+    <string name="plugin_ui_open_note">Open note</string>
+    <string name="plugin_ui_connection">Changes need a connection.</string>
+    <string name="plugin_ui_web">Open in the web app</string>
+    <string name="plugin_ui_run">Run</string>
+    <string name="plugin_ui_save_settings">Save settings</string>
+    <string name="plugin_ui_version">Based on version %1$s</string>
+    <string name="plugin_ui_environment">Set in the environment</string>
+    <string name="plugin_ui_device">This phone only</string>
+    <string name="plugin_ui_choose_field">Choose %1$s.</string>
+    <string name="plugin_ui_choose_label">Choose %1$s</string>
+    <string name="plugin_ui_choose">Choose…</string>
+    <string name="plugin_ui_find_option">Find an option</string>
+    <string name="plugin_ui_no_matches">No matches. Try another search.</string>
+    <string name="plugin_ui_cancel">Cancel</string>
+    <string name="plugin_ui_check">Check the form fields.</string>
+    <string name="plugin_ui_check_field">Check %1$s.</string>
+    <string name="plugin_ui_whole_number">Enter a whole number for %1$s.</string>
+    <string name="plugin_ui_number">Enter a number for %1$s.</string>
+    <string name="plugin_ui_range">%1$s is outside its range.</string>
+    <string name="plugin_ui_length">Check the length of %1$s.</string>
+    <string name="plugin_ui_time">Use HH:MM for %1$s.</string>
+    <string name="plugin_ui_upgrade">This form needs a newer app.</string>
+    <string name="plugin_ui_no_changes">No wording changes.</string>
+    <string name="plugin_ui_removed">− Removed</string>
+    <string name="plugin_ui_added">+ Added</string>
+    <string name="plugin_ui_changes_only">Show changes only</string>
+    <string name="plugin_ui_comparison">Show full comparison</string>
+    <string name="plugin_ui_proposed_text">Proposed text</string>
+    <string name="plugin_ui_unchanged">… unchanged text …</string>
+    <plurals name="plugin_ui_added_break">
+        <item quantity="one">Added %d line break</item>
+        <item quantity="other">Added %d line breaks</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_break">
+        <item quantity="one">Removed %d line break</item>
+        <item quantity="other">Removed %d line breaks</item>
+    </plurals>
+    <plurals name="plugin_ui_added_space">
+        <item quantity="one">Added %d space</item>
+        <item quantity="other">Added %d spaces</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_space">
+        <item quantity="one">Removed %d space</item>
+        <item quantity="other">Removed %d spaces</item>
+    </plurals>
+    <plurals name="plugin_ui_added_tab">
+        <item quantity="one">Added %d tab</item>
+        <item quantity="other">Added %d tabs</item>
+    </plurals>
+    <plurals name="plugin_ui_removed_tab">
+        <item quantity="one">Removed %d tab</item>
+        <item quantity="other">Removed %d tabs</item>
+    </plurals>
+</resources>

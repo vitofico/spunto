@@ -24,7 +24,7 @@ const sections = () => [
   ["devices", t("settings.devices")],
   ["tokens", t("settings.access_tokens")],
   ["agents", t("settings.agents")],
-  ["ai", "AI"],
+  ["ai", t("settings.ai")],
   ["data", t("settings.data")],
 ];
 export function SettingsPage({

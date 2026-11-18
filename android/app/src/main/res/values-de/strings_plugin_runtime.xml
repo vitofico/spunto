@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_capture_conflict">Dieses Formular wurde bereits mit anderen Angaben gesendet. Prüfe die Entscheidungen, bevor du es erneut versuchst.</string>
+    <string name="plugin_review_details">Prüfe die aktuellen Angaben zum Plug-in.</string>
+    <string name="plugin_owner_required">Nur der Inhaber des Bereichs kann diese Aktion ausführen.</string>
+    <string name="plugin_command_denied">Diese Plug-in-Aktion ist nicht erlaubt.</string>
+    <string name="plugin_reads_notes">Liest deine Notizen</string>
+    <string name="plugin_needs_attachments">Benötigt Speicher für Anhänge.</string>
+    <string name="plugin_check_secrets">Plug-in-Geheimnisse sind nicht verfügbar. Prüfe die Umgebung.</string>
+    <string name="plugin_needs_index">Der Suchindex für Notizen ist nicht verfügbar. Prüfe die Indexierung in den KI-Einstellungen.</string>
+    <string name="plugin_last_run_failed">Die letzte Ausführung ist fehlgeschlagen.</string>
+    <string name="plugin_working">Wird ausgeführt…</string>
+    <string name="plugin_collision">Ideen verbinden</string>
+    <string name="plugin_builds_on">Baut auf</string>
+    <string name="plugin_challenges">Hinterfragt</string>
+    <string name="plugin_replaces">Ersetzt</string>
+    <string name="plugin_action">Aktion</string>
+    <string name="plugin_translate_to">Übersetzen in</string>
+    <string name="plugin_choose_note">Notiz auswählen</string>
+    <string name="plugin_auto_language">Automatische Erkennung</string>
+    <string name="plugin_delete">Löschen</string>
+    <string name="plugin_accept_title">Titel verwenden</string>
+    <string name="plugin_minutes_read">%1$d Min. Lesezeit</string>
+</resources>

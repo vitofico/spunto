@@ -115,7 +115,12 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
   if(from.isNotBlank() || to.isNotBlank()) Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
   else { Text(context.getString(R.string.core_quiet_place),style=MaterialTheme.typography.titleLarge); Text(context.getString(R.string.core_share_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
  }) {
-  if(writable) item(key="composer") { Box(Modifier.padding(bottom=28.dp)) { Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},onSave={model.saveLocal(it)}) } }
+  if(writable) item(key="composer") {
+   Column(Modifier.padding(bottom=28.dp)) {
+    Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},onSave={model.saveLocal(it)})
+    DecisionRecordAction(model)
+   }
+  }
   if(writable && proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }
   slip?.let { (output,note) -> item(key="slip") { DailySlip(model,output,note,onNote) { slipHidden.value="${LocalDate.now()}/${output.id}";model.container.preferences.edit().putString("slip-hidden",slipHidden.value).apply() } } }
  }
@@ -171,7 +176,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val context=LocalContext.current
  val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
  val outputs by model.outputs.collectAsState()
- val meta=entryMetaText(outputs,note.id,model.container.manifest.plugins())
+ val meta=entryMetaText(outputs,note.id,model.container.manifest.plugins(),context.resources)
  val nav=LocalNavigator.current
  val feedback=LocalFeedback.current
  val writable by model.workspaceCanWrite.collectAsState()
@@ -274,15 +279,18 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  }
  val page=model.paging(spec).collectAsLazyPagingItems()
  val trash=route=="trash"
+ val decisions=spec.valid && route==DecisionViewRoute
  NoteList(model,page,grouped=!trash,rememberLazyListState(),onNote,restore=trash,empty={
   when {
    from.isNotBlank() || to.isNotBlank() -> Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
    trash -> { Text(context.getString(R.string.core_trash_empty),style=MaterialTheme.typography.titleLarge);Text(context.getString(R.string.core_trash_retention),color=MaterialTheme.colorScheme.onSurfaceVariant) }
    route=="archive" -> { Text(context.getString(R.string.core_archive_empty),style=MaterialTheme.typography.titleLarge);Text(context.getString(R.string.core_archive_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
    route.startsWith("label:") -> Text(context.getString(R.string.core_label_empty,route.substringAfter(':')),style=MaterialTheme.typography.titleLarge)
+   decisions -> Text(context.getString(R.string.decision_empty),color=SpuntoColors.ink3)
    else -> Text(context.getString(R.string.core_nothing_here),color=SpuntoColors.ink3)
   }
  }) {
+  if(decisions) item(key="record-decision") { DecisionRecordAction(model) }
   if(trash && page.itemCount>0) item(key="trash-line") { Text(context.getString(R.string.core_trash_retention),Modifier.padding(top=SpuntoSpacing.s12),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3) }
  }
 }

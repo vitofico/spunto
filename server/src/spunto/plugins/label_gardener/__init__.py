@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from spunto.ai.output import Output, field
 from spunto.core.text import label_key
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._wave2 import fingerprint, history, unchanged, versions, week_key
 
 plugin = Plugin("label-gardener")
@@ -48,10 +49,13 @@ def identity(payload):
 
 
 def coverage(notes, vocabulary, sources):
-    return (
-        f"Sample: {len(notes)} recent eligible notes (limit 500), "
-        f"{len(vocabulary)} top labels (from up to 500), "
-        f"{len(sources)} evidence notes. This is a bounded sample, not the full taxonomy."
+    return tr(
+        "Sample: {notes} recent eligible notes (limit 500), "
+        "{labels} top labels (from up to 500), "
+        "{sources} evidence notes. This is a bounded sample, not the full taxonomy.",
+        notes=len(notes),
+        labels=len(vocabulary),
+        sources=len(sources),
     )
 
 
@@ -107,11 +111,11 @@ def capacity(decisions, now):
 async def run(ctx: Ctx, *, manual=False):
     week = week_key(ctx)
     if not manual and await ctx.storage.kv.get("week") == week:
-        return "This week's tag review has already run."
+        return tr("This week's tag review has already run.")
     decisions = await history(ctx)
     available = capacity(decisions, ctx.clock())
     if not available:
-        return "Tag review has reached its three pending or three per-week proposal limit."
+        return tr("Tag review has reached its three pending or three per-week proposal limit.")
     notes = (await ctx.notes.query(limit=500))["notes"]
     all_labels = (await ctx.notes.labels(limit=500))["labels"]
     vocabulary = all_labels[:50]
@@ -119,7 +123,7 @@ async def run(ctx: Ctx, *, manual=False):
     report = coverage(notes, vocabulary, sources)
     if not sources or (not vocabulary and len([n for n in sources if not n["labels"]]) < 2):
         await ctx.storage.kv.set("week", week)
-        return "Not enough eligible usage to propose changes. " + report
+        return tr("Not enough eligible usage to propose changes.") + " " + report
     known = {label_key(x["path"]): x["path"] for x in all_labels}
     shown = {label_key(x["path"]): x["path"] for x in vocabulary}
     grounded = {label_key(path) for note in sources for path in note["labels"]}
@@ -208,8 +212,16 @@ async def run(ctx: Ctx, *, manual=False):
         )
     await ctx.storage.kv.set("week", week)
     count = min(len(payloads), available)
-    noun = "proposal" if count == 1 else "proposals"
-    return f"{count} tag {noun} added to Review. " + report
+    return (
+        tr(
+            "{count} tag proposal added to Review."
+            if count == 1
+            else "{count} tag proposals added to Review.",
+            count=count,
+        )
+        + " "
+        + report
+    )
 
 
 @plugin.schedule("weekly")

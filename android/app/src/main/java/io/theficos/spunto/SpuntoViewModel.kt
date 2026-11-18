@@ -82,7 +82,7 @@ class SpuntoViewModel internal constructor(application:Application,val container
  internal val pluginManager:NativePluginManagerActions by lazy {NativePluginManagerActions(
   container.context.resources,viewModelScope,{auth.value},{online.value},{pluginEpoch.value},
   {config -> object:NativePluginBackend {
-   private val api=ApiClient(config)
+   private val api=pluginApi(config,container.context.resources)
    private suspend fun <T> read(block:suspend ()->T):T=try {block()} catch(error:ApiException) {if(error.status==401 && auth.value==config) reauthenticate.value=true;throw error}
    override suspend fun catalog()=read {api.get("/api/v1/plugins")}
    override suspend fun manifest()=read {api.manifest()}
@@ -201,16 +201,16 @@ class SpuntoViewModel internal constructor(application:Application,val container
    if(config!=null && reachable && !ApiClient(config).signOut()) message.value=container.context.getString(R.string.sys_signed_out_listed)
   }
  }
- fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(ApiClient(config).request(path,method,body)) }
+ fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(pluginApi(config,container.context.resources).request(path,method,body)) }
  fun ask(question:String,continuation:JsonObject?=null,current:()->Boolean={true},onHandle:(JsonObject)->Unit={},onError:((String)->Unit)?=null,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
   val config=auth.value
   val epoch=pluginReplicaEpoch
   fun valid()=config!=null && workspaceCanWrite.value && auth.value==config && pluginReplicaEpoch==epoch && container.manifest.enabled("ask") && current()
   try {
-   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> ApiClient(it).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value,it.workspaceRole))}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
+   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> pluginApi(it,container.context.resources).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value,it.workspaceRole))}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
   } catch(cancelled:CancellationException) {throw cancelled}
   catch(error:Exception) {
-   if(valid() && onError!=null) onError(if(error is ApiException) apiErrorMessage(container.context.resources,error) else container.context.getString(R.string.core_ask_failed))
+   if(valid() && onError!=null) onError(if(error is ApiException) pluginApiError(container.context.resources,error) else container.context.getString(R.string.core_ask_failed))
    else if(valid()) throw error
   }
  }

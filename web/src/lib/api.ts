@@ -1,4 +1,4 @@
-import { t } from "./i18n";
+import { getLanguage, t } from "./i18n";
 import createClient from "openapi-fetch";
 import type { paths } from "./api-types";
 import { ApiError, problem, safeError } from "./errors";
@@ -195,6 +195,8 @@ export async function request<T = unknown>(
       options.workspace === false
         ? actorHeaders(options.headers)
         : workspaceHeaders(options.headers);
+    if (path === "/api/v1/plugins" || path.startsWith("/api/v1/plugins/"))
+      headers.set("Accept-Language", getLanguage());
     if (options.identity === false) {
       headers.delete("X-Spunto-Account");
       headers.delete("X-Spunto-Credential");

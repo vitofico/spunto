@@ -1,65 +1,36 @@
 import {
   invalidateContentFor,
   useManifest,
+  useBrowserOnline,
   useWorkspaceRole,
 } from "../lib/query";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { api } from "../lib/api";
+import { isBundledPlugin, localizeCatalog } from "../lib/localizePlugins";
 import { safeError } from "../lib/errors";
 import { NoteBody } from "../components/core/NoteCard";
 import { useToast } from "../components/core/Toast";
-import { createIdempotencyKey } from "../lib/drafts";
-import { copyText } from "./copy";
-import type {
-  Args,
-  Component,
-  Annotation,
-  Note,
-  Plugin,
-  Schema,
-  Suggestion,
-} from "../lib/types";
+import type { Args, Note, Plugin, Suggestion } from "../lib/types";
 import { SuggestionPreview } from "./LazyPluginViews";
-import { VocabularyOutput } from "./Vocabulary";
-import { outputText, validComponent } from "./vocabularyData";
+import { outputText } from "./vocabularyData";
 import { Dialog } from "./Dialog";
 import {
   appliedSuggestionTitle,
   requiresSuggestionPreview,
   suggestionTitle,
+  suggestionReason,
 } from "./suggestionTitle";
-import {
-  useCommandProposals,
-  useSuggestionFeedback,
-} from "./suggestionFeedback";
+import { useSuggestionFeedback } from "./suggestionFeedback";
 import { labelChangeImpact } from "./labelChange";
 import { plural } from "./format";
 import styles from "./Feature.module.css";
 import { requestGeneration } from "../lib/identity";
-import {
-  askContinuation,
-  askItems,
-  askNoteActionOptions,
-} from "./askConversationData";
-const LinkPicker = lazy(() =>
-  import("./LinkPicker").then((m) => ({ default: m.LinkPicker })),
-);
-const CommandProposal = lazy(() => import("./CommandProposal"));
-const NotePicker = lazy(() =>
-  import("./NotePicker").then((m) => ({ default: m.NotePicker })),
-);
-const AskConversation = lazy(() => import("./AskConversation"));
+import { decisionsPath, isDecisionNote } from "./decisionJournalData";
+import { askContinuation, askNoteActionOptions } from "./askConversationData";
+const CommandResult = lazy(() => import("./CommandResult"));
 export function usePlugins() {
   return useManifest();
 }
@@ -276,12 +247,11 @@ export function SuggestionLine({
                 </button>
               </span>
             );
-          const by = manifest.data?.plugins.find(
-            (p) => p.id === s.plugin,
-          )?.name;
+          const source = manifest.data?.plugins.find((p) => p.id === s.plugin);
+          const reason = suggestionReason(s, source);
           const provenance = t("slots.suggested_by_value1_value2", {
-            value1: by ?? s.plugin,
-            value2: s.reason ? `: ${s.reason}` : "",
+            value1: source?.name ?? s.plugin,
+            value2: reason ? `: ${reason}` : "",
           });
           return (
             <span className={styles.suggestionGroup} key={s.id}>
@@ -394,27 +364,6 @@ export function SuggestionLine({
     </div>
   );
 }
-function outputComponents(payload: unknown): unknown[] {
-  return Array.isArray(payload)
-    ? payload
-    : payload && typeof payload === "object" && "type" in payload
-      ? [payload]
-      : payload && typeof payload === "object"
-        ? ((payload as { items?: unknown[]; components?: unknown[] }).items ??
-          (payload as { components?: unknown[] }).components ??
-          [])
-        : [];
-}
-function annotationComponents(annotation: Annotation) {
-  return outputComponents(annotation.payload);
-}
-function panelItems(items: unknown[]) {
-  return items.reduce<number>((count, item) => {
-    if (validComponent(item) && item.type === "notes")
-      return count + ((item.ids ?? item.items) as unknown[]).length;
-    return count + 1;
-  }, 0);
-}
 export function EntryMeta({ note }: { note: Note }) {
   useLanguage();
   const manifest = usePlugins();
@@ -423,132 +372,25 @@ export function EntryMeta({ note }: { note: Note }) {
       (a) => a.plugin === plugin.id && a.kind === "meta",
     );
     if (annotation) {
-      const text = [...outputText(annotation.payload)].slice(0, 24).join("");
+      let text = outputText(annotation.payload);
+      if (isBundledPlugin(plugin)) {
+        const progress =
+          plugin.id === "tasks" && /^(\d+) of (\d+) done$/.exec(text);
+        const duration =
+          plugin.id === "link-enrichment" && /^(\d+) min read$/.exec(text);
+        if (progress)
+          text = t("pluginui.task_progress", {
+            done: Number(progress[1]),
+            total: Number(progress[2]),
+          });
+        if (duration)
+          text = t("pluginui.reading_time", { count: Number(duration[1]) });
+      }
+      text = [...text].slice(0, 24).join("");
       if (text) return <span className={styles.meta}>{text}</span>;
     }
   }
   return null;
-}
-function PanelSection({
-  plugin,
-  note,
-  annotation,
-}: {
-  plugin: Plugin;
-  note: Note;
-  annotation?: Annotation;
-}) {
-  useLanguage();
-  const panel = plugin.contributes?.panel as
-    { title?: string; mode?: string; route?: string } | undefined;
-  const excludedInput =
-    (note.private || note.machine) &&
-    plugin.permissions.some((permission) => permission.startsWith("ai."));
-  const [opened, setOpened] = useState(() => {
-    try {
-      return localStorage.getItem(`spunto-panel-${plugin.id}`) === "open";
-    } catch {
-      return false;
-    }
-  });
-  const command = useMutation({
-    mutationFn: ({ id, args }: { id: string; args: Args }) =>
-      api.command(plugin.id, id, args),
-    onSuccess: (result, { id, args }) =>
-      window.dispatchEvent(
-        new CustomEvent("spunto:command-result", {
-          detail: {
-            value: result,
-            origin: { plugin: plugin.id, command: id, args },
-          },
-        }),
-      ),
-  });
-  const query = useQuery({
-    queryKey: ["plugin-panel", plugin.id, note.id, note.version],
-    queryFn: ({ signal }) => api.pluginPanel(plugin.id, note.id, signal),
-    enabled: panel?.mode === "live" && navigator.onLine && !excludedInput,
-    retry: false,
-  });
-  const output =
-    panel?.mode === "live" && excludedInput
-      ? undefined
-      : (annotation?.payload ?? query.data);
-  if (!output) return null;
-  const count = panelItems(outputComponents(output));
-  if (!count) return null;
-  return (
-    <details
-      open={opened}
-      onToggle={(event) => {
-        const open = event.currentTarget.open;
-        setOpened(open);
-        try {
-          localStorage.setItem(
-            `spunto-panel-${plugin.id}`,
-            open ? "open" : "closed",
-          );
-        } catch {}
-      }}
-    >
-      <summary>
-        {panel?.title ?? plugin.name} · {plural(count, "item")}
-      </summary>
-      <VocabularyOutput
-        value={output}
-        allow={["text", "markdown", "notes", "command"]}
-        onCommand={(id, args) => command.mutate({ id, args })}
-      />
-      {command.isError && (
-        <p role="alert" className="error">
-          {command.error.message}
-        </p>
-      )}
-    </details>
-  );
-}
-export function NotePanel({ note }: { note: Note }) {
-  useLanguage();
-  const manifest = usePlugins();
-  // Backlinks live in the note's own Linked notes block, next to the links it makes.
-  const plugins = activePlugins(manifest.data?.plugins).filter(
-    (p) =>
-      p.id !== "links" &&
-      (p.contributes?.panel ||
-        note.annotations?.some((a) => a.plugin === p.id && a.kind === "panel")),
-  );
-  if (!plugins.length) return null;
-  return (
-    <aside className={styles.panel} aria-label={t("slots.about_this_note")}>
-      {plugins.map((p) => (
-        <PanelSection
-          key={p.id}
-          plugin={p}
-          note={note}
-          annotation={note.annotations?.find(
-            (a) => a.plugin === p.id && a.kind === "panel",
-          )}
-        />
-      ))}
-    </aside>
-  );
-}
-export function PluginNoteSlots({
-  note,
-  onReview,
-  editing = false,
-}: {
-  note: Note;
-  onReview?: () => void;
-  editing?: boolean;
-}) {
-  useLanguage();
-  return (
-    <>
-      <SuggestionLine note={note} onReview={onReview} editing={editing} />
-      <NotePanel note={note} />
-    </>
-  );
 }
 export function DailySlip() {
   useLanguage();
@@ -641,10 +483,11 @@ export function DailySlip() {
     </section>
   );
 }
-export function PluginRailViews() {
+export function PluginRailViews({ close }: { close?: () => void }) {
   useLanguage();
   const manifest = usePlugins();
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+  const [location] = useLocation();
   const client = useQueryClient();
   const [more, setMore] = useState(false);
   const pin = useMutation({
@@ -659,16 +502,32 @@ export function PluginRailViews() {
       .slice(0, 1)
       .map((v) => ({ ...v, plugin: p.id, key: `${p.id}/${v.id}` })),
   );
-  if (!views.length) return null;
+  const review = activePlugins(manifest.data?.plugins).some((plugin) =>
+    ["duplicates", "label-gardener"].includes(plugin.id),
+  );
+  if (!views.length && !review) return null;
+  const href = (v: (typeof views)[number]) =>
+    `/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`;
   return (
-    <section className={styles.railGroup}>
+    <nav className={styles.railGroup} aria-label={t("slots.views")}>
       <h3>{t("slots.views")}</h3>
+      {review && (
+        <Link
+          href="/review"
+          onClick={close}
+          aria-current={location === "/review" ? "page" : undefined}
+        >
+          {t("review.review")}
+        </Link>
+      )}
       {views
         .filter((v) => !settings.data?.hidden_views.includes(v.key))
         .map((v) => (
           <Link
             key={v.key}
-            href={`/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`}
+            href={href(v)}
+            onClick={close}
+            aria-current={location === href(v) ? "page" : undefined}
           >
             {v.title}
           </Link>
@@ -676,8 +535,7 @@ export function PluginRailViews() {
       {views.some((v) => settings.data?.hidden_views.includes(v.key)) && (
         <>
           <button onClick={() => setMore(!more)} aria-expanded={more}>
-            {t("settingsplugins.show")}
-            {more ? "fewer" : "more"} {t("slots.views_2")}
+            {t(more ? "plugins.show_fewer_views" : "plugins.show_more_views")}
           </button>
           {more &&
             views
@@ -685,7 +543,9 @@ export function PluginRailViews() {
               .map((v) => (
                 <div key={v.key} className={styles.row}>
                   <Link
-                    href={`/v/${encodeURIComponent(v.plugin)}/${encodeURIComponent(v.id)}`}
+                    href={href(v)}
+                    onClick={close}
+                    aria-current={location === href(v) ? "page" : undefined}
                   >
                     {v.title}
                   </Link>
@@ -699,522 +559,10 @@ export function PluginRailViews() {
               ))}
         </>
       )}
-    </section>
+    </nav>
   );
 }
 export type CommandOrigin = { plugin: string; command: string; args?: Args };
-/** A plugin's own save: a command it offers only inside results, titled "Save as note". */
-function saveCommandIds(plugin: Plugin | undefined) {
-  return new Set(
-    (plugin?.contributes?.commands ?? [])
-      .filter(
-        (c) =>
-          !c.where?.length &&
-          (c.id === "save-answer" ||
-            c.id === "save-translation" ||
-            c.id === "save-development"),
-      )
-      .map((c) => c.id),
-  );
-}
-function saveCommand(
-  value: unknown,
-  ids: Set<string>,
-): { id: string; args: Args } | undefined {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const command = saveCommand(item, ids);
-      if (command) return command;
-    }
-  } else if (value && typeof value === "object") {
-    if (
-      validComponent(value) &&
-      value.type === "command" &&
-      ids.has(String(value.id))
-    )
-      return { id: String(value.id), args: (value.args ?? {}) as Args };
-    if (!("type" in value)) {
-      const group = value as { items?: unknown; components?: unknown };
-      return saveCommand(group.items ?? group.components, ids);
-    }
-  }
-}
-export function CommandResult(props: {
-  value: unknown;
-  onDismiss?: () => void;
-  origin?: CommandOrigin;
-}) {
-  const sourceId = props.origin?.args?.note_id;
-  if (
-    props.value === true &&
-    props.origin?.plugin === "links" &&
-    props.origin.command === "link" &&
-    typeof sourceId === "string"
-  )
-    return (
-      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
-        <LinkPicker sourceId={sourceId} onClose={props.onDismiss} />
-      </Suspense>
-    );
-  if (props.origin?.plugin === "tidy" && typeof sourceId === "string") {
-    const items = outputComponents(props.value);
-    const proposal = items.find(
-      (item) =>
-        validComponent(item) &&
-        item.type === "pill" &&
-        item.action === "accept",
-    );
-    const diff = items.find(
-      (item) => validComponent(item) && item.type === "diff",
-    ) as Extract<Component, { type: "diff" }> | undefined;
-    if (validComponent(proposal) && typeof proposal.suggestion_id === "string")
-      return (
-        <TidyResult
-          key={proposal.suggestion_id}
-          id={proposal.suggestion_id}
-          noteId={sourceId}
-          diff={diff}
-          onClose={props.onDismiss}
-        />
-      );
-  }
-  return <PluginResult {...props} />;
-}
-
-function TidyResult({
-  id,
-  noteId,
-  diff,
-  onClose,
-}: {
-  id: string;
-  noteId: string;
-  diff?: Extract<Component, { type: "diff" }>;
-  onClose?: () => void;
-}) {
-  const [done, setDone] = useState(false);
-  const ids = useMemo(() => (done ? [] : [id]), [done, id]);
-  useCommandProposals(noteId, ids);
-  return done ? (
-    <div className={styles.result}>
-      <p>{t("commandproposal.applied")}</p>
-      <footer>
-        {onClose && <button onClick={onClose}>{t("app.close")}</button>}
-      </footer>
-    </div>
-  ) : (
-    <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
-      <CommandProposal
-        id={id}
-        plugin="tidy"
-        noteId={noteId}
-        inline
-        diff={diff}
-        onClose={onClose}
-        onApplied={() => (onClose ? onClose() : setDone(true))}
-      />
-    </Suspense>
-  );
-}
-
-function PluginResult({
-  value,
-  onDismiss,
-  origin,
-}: {
-  value: unknown;
-  onDismiss?: () => void;
-  origin?: CommandOrigin;
-}) {
-  useLanguage();
-  const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState<{ id?: string } | null>(null);
-  const client = useQueryClient();
-  const manifest = usePlugins();
-  const workspaceRole = useWorkspaceRole();
-  const [display, setDisplay] = useState(value);
-  const [currentOrigin, setCurrentOrigin] = useState(origin);
-  const [responseId, setResponseId] = useState(0);
-  const [review, setReview] = useState<{ id: string; response: number }>();
-  const [applied, setApplied] = useState<string[]>([]);
-  const noteId = currentOrigin?.args?.note_id;
-  const session = useMemo(() => ({}), [value, origin]);
-  const activeSession = useRef(session);
-  const appliedSession = useRef(session);
-  activeSession.current = session;
-  const visibleResult = useMemo(() => {
-    if (!applied.length) return display;
-    return outputComponents(display).filter(
-      (item) =>
-        !validComponent(item) ||
-        item.type !== "pill" ||
-        !applied.includes(String(item.suggestion_id)),
-    );
-  }, [display, applied]);
-  const proposalIds = useMemo(
-    () =>
-      outputComponents(visibleResult).flatMap((item) =>
-        validComponent(item) && item.type === "pill" && item.action === "accept"
-          ? [String(item.suggestion_id)]
-          : [],
-      ),
-    [visibleResult],
-  );
-  useCommandProposals(
-    typeof noteId === "string" ? noteId : undefined,
-    proposalIds,
-  );
-  const resultItems = askItems(display);
-  const interactive = resultItems.some(
-    (item) => item.type === "form" || item.type === "pill",
-  );
-  const text = interactive ? "" : outputText(display);
-  const plugin = manifest.data?.plugins.find(
-    (p) => p.id === currentOrigin?.plugin,
-  );
-  const sourceForm =
-    currentOrigin?.command === "sources" &&
-    ["context-packs", "thinking-desk"].includes(currentOrigin.plugin)
-      ? resultItems.find(
-          (item) =>
-            validComponent(item) &&
-            item.type === "form" &&
-            (item.schema as Schema).properties?.selected_ids !== undefined,
-        )
-      : undefined;
-  const sourceFields =
-    sourceForm && validComponent(sourceForm) && sourceForm.type === "form"
-      ? (sourceForm.schema as Schema).properties
-      : undefined;
-  const selectedIds = sourceFields?.selected_ids?.default;
-  const sourceRevision = sourceFields?.expected_revision?.default;
-  const sourceLimit = sourceFields?.max_sources?.default;
-  const sourcePickerArgs =
-    currentOrigin &&
-    Array.isArray(selectedIds) &&
-    typeof sourceRevision === "number"
-      ? {
-          ...(currentOrigin.plugin === "context-packs"
-            ? { pack_id: currentOrigin.args?.pack_id ?? null }
-            : { desk_id: currentOrigin.args?.desk_id ?? null }),
-          expected_revision: sourceRevision,
-          picker: true,
-        }
-      : undefined;
-  const providedSave = saveCommand(display, saveCommandIds(plugin));
-  const askPendingHandle = useRef<Args | undefined>(undefined);
-  const askLifetime = useRef({ active: true, generation: requestGeneration() });
-  useEffect(() => {
-    askLifetime.current.active = true;
-    return () => {
-      askLifetime.current.active = false;
-      if (
-        askPendingHandle.current &&
-        askLifetime.current.generation === requestGeneration()
-      )
-        void api
-          .command("ask", "clear-conversation", {
-            conversation_id: askPendingHandle.current.conversation_id,
-          })
-          .catch(() => {});
-    };
-  }, []);
-  const saveKey = useMemo(createIdempotencyKey, [display]);
-  // Plugins that create notes save their own results; an unknown origin gets no save.
-  const genericSave = !!plugin && !plugin.creates;
-  const formLabel =
-    plugin?.contributes?.commands?.find((c) => c.id === currentOrigin?.command)
-      ?.title ?? t("settingsplugins.run");
-  useEffect(() => {
-    if (appliedSession.current === session) return;
-    appliedSession.current = session;
-    setDisplay(value);
-    setCurrentOrigin(origin);
-    setResponseId((prior) => prior + 1);
-    setCopied(false);
-    setSaved(null);
-    setApplied([]);
-  }, [value, origin, session]);
-  const followup = useMutation({
-    mutationFn: async ({
-      plugin,
-      id,
-      args,
-      session: requestedSession,
-    }: Pick<CommandChoice, "plugin" | "id" | "args"> & { session: object }) => {
-      if (
-        plugin === "ask" &&
-        id === "ask" &&
-        typeof args?.question === "string" &&
-        !args.conversation_id
-      ) {
-        const started = askPendingHandle.current
-          ? undefined
-          : await api.command("ask", "ask", {
-              start: true,
-              ...askNoteActionOptions(manifest.data?.plugins, workspaceRole),
-            });
-        const handle = askPendingHandle.current ?? askContinuation(started);
-        if (!handle) throw new Error(outputText(started) || t("ask.failed"));
-        askPendingHandle.current = handle;
-        if (
-          !askLifetime.current.active ||
-          requestedSession !== activeSession.current ||
-          askLifetime.current.generation !== requestGeneration()
-        ) {
-          if (askLifetime.current.generation === requestGeneration())
-            void api
-              .command("ask", "clear-conversation", {
-                conversation_id: handle.conversation_id,
-              })
-              .catch(() => {});
-          throw new DOMException("Conversation closed", "AbortError");
-        }
-        return api.command(plugin, id, { ...handle, ...args });
-      }
-      return api.command(plugin, id, args ?? {});
-    },
-    onSuccess: (next, choice) => {
-      if (
-        choice.session !== activeSession.current ||
-        !askLifetime.current.active
-      )
-        return;
-      if (choice.plugin === "ask") askPendingHandle.current = undefined;
-      setDisplay(next);
-      setCurrentOrigin({
-        plugin: choice.plugin,
-        command: choice.id,
-        args: choice.args,
-      });
-      setResponseId((prior) => prior + 1);
-      setCopied(false);
-      setSaved(null);
-      setApplied([]);
-      void client.invalidateQueries({ queryKey: ["notes"] });
-    },
-  });
-  const conversationView =
-    currentOrigin?.plugin === "ask" &&
-    !!(
-      askContinuation(display) ||
-      (currentOrigin.command === "ask" &&
-        askNoteActionOptions(manifest.data?.plugins, workspaceRole)
-          .note_actions === true &&
-        askItems(display).some((item) => item.type === "form"))
-    );
-  const save = useMutation({
-    mutationFn: () => api.createNote(text, saveKey),
-    onSuccess: (note) => {
-      setSaved({ id: note?.id });
-      void client.invalidateQueries({ queryKey: ["notes"] });
-    },
-  });
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !document.querySelector("dialog[open]"))
-        onDismiss?.();
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-        e.preventDefault();
-        if (conversationView) return;
-        if (currentOrigin && providedSave && !followup.isPending)
-          followup.mutate({
-            ...providedSave,
-            plugin: currentOrigin.plugin,
-            session,
-          });
-        else if (genericSave && text && !save.isPending && !saved)
-          save.mutate();
-      }
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [
-    onDismiss,
-    text,
-    save,
-    saved,
-    currentOrigin,
-    providedSave,
-    followup,
-    genericSave,
-    session,
-    conversationView,
-  ]);
-  if (conversationView)
-    return (
-      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
-        <AskConversation
-          key={responseId}
-          value={askContinuation(display) ? display : undefined}
-          question={
-            typeof currentOrigin?.args?.question === "string"
-              ? currentOrigin.args.question
-              : ""
-          }
-          onDismiss={onDismiss}
-        />
-      </Suspense>
-    );
-  return (
-    <div className={styles.result}>
-      {currentOrigin?.plugin === "ask" &&
-        typeof currentOrigin?.args?.question === "string" && (
-          <p>{currentOrigin.args.question}</p>
-        )}
-      <VocabularyOutput
-        key={responseId}
-        value={visibleResult}
-        formLabel={
-          sourcePickerArgs ? t("notepicker.update_sources") : formLabel
-        }
-        onCommand={
-          currentOrigin && !followup.isPending
-            ? (id, args) =>
-                followup.mutate({
-                  plugin: currentOrigin.plugin,
-                  id,
-                  args:
-                    id === "sources" &&
-                    !args.action &&
-                    plugin &&
-                    supportsNotePicker(plugin) &&
-                    ["context-packs", "thinking-desk"].includes(
-                      currentOrigin.plugin,
-                    )
-                      ? { ...args, picker: true }
-                      : args,
-                  session,
-                })
-            : undefined
-        }
-        onSuggestion={
-          typeof noteId === "string" &&
-          plugin &&
-          (plugin.id !== "links" || supportsNotePicker(plugin)) &&
-          !followup.isPending
-            ? (id) => setReview({ id, response: responseId })
-            : undefined
-        }
-        onForm={
-          currentOrigin?.command && !followup.isPending
-            ? (args) =>
-                followup.mutate({
-                  plugin: currentOrigin.plugin,
-                  id: currentOrigin.command,
-                  args: sourcePickerArgs
-                    ? {
-                        ...sourcePickerArgs,
-                        remove: args.remove ?? null,
-                        refresh: args.refresh === true,
-                      }
-                    : { ...currentOrigin.args, ...args },
-                  session,
-                })
-            : undefined
-        }
-      />
-      {sourcePickerArgs &&
-        currentOrigin &&
-        Array.isArray(selectedIds) &&
-        (typeof sourceLimit === "number" &&
-        selectedIds.length >= sourceLimit ? (
-          <p role="status">
-            {t("notepicker.source_limit", { count: sourceLimit })}
-          </p>
-        ) : (
-          <Suspense
-            fallback={<p role="status">{t("timeline.loading_notes")}</p>}
-          >
-            <NotePicker
-              exclude={selectedIds.filter(
-                (id): id is string => typeof id === "string",
-              )}
-              action={t("notepicker.add_source")}
-              busy={followup.isPending}
-              onSelect={(note) =>
-                followup.mutate({
-                  plugin: currentOrigin.plugin,
-                  id: currentOrigin.command,
-                  args: {
-                    ...sourcePickerArgs,
-                    add_id: note.id,
-                    add_version: note.version,
-                  },
-                  session,
-                })
-              }
-            />
-          </Suspense>
-        ))}
-      {followup.isPending && currentOrigin?.plugin === "ask" && (
-        <p role="status">{t("timeline.loading_notes")}</p>
-      )}
-      {review?.response === responseId &&
-        typeof noteId === "string" &&
-        plugin && (
-          <Suspense
-            fallback={<p role="status">{t("timeline.loading_notes")}</p>}
-          >
-            <CommandProposal
-              key={review.id}
-              id={review.id}
-              plugin={plugin.id}
-              noteId={noteId}
-              onClose={() => setReview(undefined)}
-              onApplied={() => {
-                setReview(undefined);
-                setApplied((ids) => [...ids, review.id]);
-              }}
-            />
-          </Suspense>
-        )}
-      {applied.length > 0 && <p>{t("commandproposal.applied")}</p>}
-      <footer>
-        {!interactive && (
-          <button
-            disabled={!text}
-            onClick={() => void copyText(text).then(setCopied)}
-          >
-            {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
-          </button>
-        )}
-        {genericSave && !interactive && (
-          <button
-            className="primary"
-            disabled={!text || save.isPending || !!saved}
-            onClick={() => save.mutate()}
-          >
-            {saved
-              ? t("slots.saved_as_note")
-              : save.isPending
-                ? t("app.saving")
-                : t("slots.save_as_note")}
-          </button>
-        )}
-        {saved?.id && (
-          <Link href={`/n/${encodeURIComponent(saved.id)}`}>
-            {t("slots.open_note")}
-          </Link>
-        )}
-        {onDismiss && <button onClick={onDismiss}>{t("slots.back")}</button>}
-      </footer>
-      {save.isError && (
-        <p role="alert" className="error">
-          {save.error.message}
-        </p>
-      )}
-      {followup.error && (
-        <p role="alert" className="error">
-          {followup.error.message}
-          {safeError(followup.error).code === "version_conflict" && (
-            <> {t("slots.stale_form_recovery")}</>
-          )}
-        </p>
-      )}
-    </div>
-  );
-}
 export type CommandChoice = {
   plugin: string;
   id: string;
@@ -1234,10 +582,12 @@ export function SlashCommands({
 export function PaletteCommands({
   query = "",
   noteId,
+  note,
   onResult,
 }: {
   query?: string;
   noteId?: string;
+  note?: Note;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
 }) {
   useLanguage();
@@ -1247,15 +597,63 @@ export function PaletteCommands({
       query={query}
       where={noteId ? ["note-actions", "palette"] : ["palette"]}
       noteId={noteId}
+      note={note}
       onResult={onResult}
       inPalette
     />
   );
 }
+/** Source actions use the same scope in the palette and the note's tools list. */
+export function canRunOnNote(plugin: Plugin, command: string, note?: Note) {
+  if (plugin.id === "decision-journal" && command === "review-decision")
+    return !!note && !note.trashed && isDecisionNote(note);
+  if (!note) return true;
+  if (note.trashed) return false;
+  if (plugin.id === "agent-inbox" && command === "mark-reviewed")
+    return (
+      (note.origin === "agent" || note.updated_via_agent) &&
+      !note.annotations?.some(
+        (item) => item.plugin === plugin.id && item.kind === "member:reviewed",
+      )
+    );
+  if (
+    (note.private || note.machine) &&
+    plugin.permissions.some(
+      (permission) =>
+        permission.startsWith("ai.") || permission.startsWith("net."),
+    )
+  )
+    return false;
+  return true;
+}
+
+export function useWaitingCommandPlugins(enabled: boolean) {
+  useLanguage();
+  const online = useBrowserOnline();
+  const role = useWorkspaceRole();
+  return useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    enabled: enabled && online && role === "owner",
+    select: (catalog) =>
+      localizeCatalog(catalog).plugins.filter(
+        (plugin) =>
+          plugin.state === "waiting" &&
+          plugin.permissions.some(
+            (permission) =>
+              permission.startsWith("ai.") &&
+              !Object.hasOwn(plugin.ai_destinations ?? {}, permission.slice(3)),
+          ),
+      ),
+  });
+}
+
 export function PluginCommands({
   query = "",
   where = "palette",
   noteId,
+  note,
+  skipCommands = [],
   pluginId,
   onChoose,
   onResult,
@@ -1264,6 +662,8 @@ export function PluginCommands({
   query?: string;
   where?: string | string[];
   noteId?: string;
+  note?: Note;
+  skipCommands?: string[];
   pluginId?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
@@ -1272,14 +672,13 @@ export function PluginCommands({
 }) {
   useLanguage();
   const manifest = usePlugins();
-  const waitingCatalog = useQuery({
-    queryKey: ["catalog"],
-    queryFn: api.catalog,
-    enabled: navigator.onLine,
-  });
+  const online = useBrowserOnline();
   const workspaceRole = useWorkspaceRole();
+  const [, navigate] = useLocation();
+  const client = useQueryClient();
   const places = Array.isArray(where) ? where : [where];
   const slash = places.includes("slash");
+  const waitingPlugins = useWaitingCommandPlugins(!slash);
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [origin, setOrigin] = useState<CommandOrigin>();
@@ -1401,6 +800,8 @@ export function PluginCommands({
         command: choice.id,
         args: choice.args,
       };
+      if (choice.args?.note_id && choice.plugin !== "decision-journal")
+        void invalidateContentFor(client);
       if (onResult) onResult(value, nextOrigin);
       else {
         setResult(value);
@@ -1414,7 +815,7 @@ export function PluginCommands({
     question.split(/\s+/).length >= 3 &&
     [...question].length <= 500;
   const commands = (
-    navigator.onLine
+    online && workspaceRole === "owner"
       ? activePlugins(manifest.data?.plugins).filter(
           (p) => !pluginId || p.id === pluginId,
         )
@@ -1430,17 +831,20 @@ export function PluginCommands({
         .filter(
           ({ command, at }) =>
             places.some((place) => at.includes(place)) &&
+            !skipCommands.includes(`${p.id}/${command.id}`) &&
+            (!(noteId && at.includes("note-actions")) ||
+              canRunOnNote(p, command.id, note)) &&
             (p.id !== "links" ||
               command.id !== "link" ||
               supportsNotePicker(p)) &&
             (!("online" in command) ||
               !(command as unknown as { online?: boolean }).online ||
-              navigator.onLine),
+              online),
         )
         .map(({ command, at }): CommandChoice & { name: string } => ({
           plugin: p.id,
           id: command.id,
-          title: [...command.title].slice(0, 24).join(""),
+          title: command.title,
           name: p.name,
           args:
             p.id === "ask" &&
@@ -1459,16 +863,10 @@ export function PluginCommands({
         c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
   const waiting =
-    slash || !navigator.onLine
+    slash || !online || workspaceRole !== "owner"
       ? []
-      : (waitingCatalog.data?.plugins ?? []).flatMap((plugin) =>
-          plugin.state === "waiting" &&
-          (!pluginId || pluginId === plugin.id) &&
-          plugin.permissions.some(
-            (p) =>
-              p.startsWith("ai.") &&
-              !Object.hasOwn(plugin.ai_destinations ?? {}, p.slice(3)),
-          )
+      : (waitingPlugins.data ?? []).flatMap((plugin) =>
+          !pluginId || pluginId === plugin.id
             ? (plugin.contributes?.commands ?? [])
                 .slice(0, 3)
                 .filter(
@@ -1480,6 +878,14 @@ export function PluginCommands({
                       !(command.where ?? command.surfaces ?? []).includes(
                         "note-actions",
                       )) &&
+                    !skipCommands.includes(`${plugin.id}/${command.id}`) &&
+                    (!(
+                      noteId &&
+                      (command.where ?? command.surfaces ?? []).includes(
+                        "note-actions",
+                      )
+                    ) ||
+                      canRunOnNote(plugin, command.id, note)) &&
                     command.title.toLowerCase().includes(query.toLowerCase()),
                 )
                 .map((command) => ({ plugin, command }))
@@ -1487,7 +893,14 @@ export function PluginCommands({
         );
   const highlighted = Math.min(active, commands.length - 1);
   const choose = (c: CommandChoice) => {
-    if (onChoose) onChoose(c);
+    if (
+      !slash &&
+      inPalette &&
+      c.plugin === "decision-journal" &&
+      c.id === "journal"
+    )
+      navigate(decisionsPath);
+    else if (onChoose) onChoose(c);
     else if (
       c.plugin === "links" &&
       c.id === "link" &&
@@ -1530,11 +943,13 @@ export function PluginCommands({
   });
   if (result)
     return (
-      <CommandResult
-        value={result}
-        origin={origin}
-        onDismiss={() => setResult(null)}
-      />
+      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
+        <CommandResult
+          value={result}
+          origin={origin}
+          onDismiss={() => setResult(null)}
+        />
+      </Suspense>
     );
   if (!commands.length && !waiting.length) return null;
   return (
@@ -1560,7 +975,7 @@ export function PluginCommands({
           onClick={() => choose(c)}
         >
           <span>{c.title}</span>
-          <small className="muted">{c.name}</small>
+          {c.name !== c.title && <small className="muted">{c.name}</small>}
         </button>
       ))}
       {waiting.map(({ plugin, command }) => (
@@ -1569,9 +984,7 @@ export function PluginCommands({
           <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
         </p>
       ))}
-      {command.isPending && command.variables?.plugin === "ask" && (
-        <p role="status">{t("timeline.loading_notes")}</p>
-      )}
+      {command.isPending && <p role="status">{t("timeline.loading_notes")}</p>}
       {command.isError && (
         <p role="alert" className="error">
           {command.error.message}

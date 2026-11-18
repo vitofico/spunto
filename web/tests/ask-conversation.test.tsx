@@ -1,3 +1,4 @@
+import CommandResult from "../src/features/CommandResult";
 import { StrictMode } from "react";
 import {
   act,
@@ -10,7 +11,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AskConversation from "../src/features/AskConversation";
-import { CommandResult, PaletteCommands } from "../src/features/Slots";
+import { PaletteCommands } from "../src/features/Slots";
 import { api } from "../src/lib/api";
 import { askContinuation } from "../src/features/askConversationData";
 

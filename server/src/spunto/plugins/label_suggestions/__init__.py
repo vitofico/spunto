@@ -12,6 +12,7 @@ from spunto.ai.output import Output, field
 from spunto.ai.vectors import VectorUnavailable
 from spunto.core.text import label_key
 from spunto.host import ContextError, Ctx, Plugin
+from spunto.host.language import tr
 
 plugin = Plugin("label-suggestions")
 PROMPT = """Suggest up to three useful labels. Prefer the owner's existing vocabulary and
@@ -235,13 +236,17 @@ async def suggest_now(ctx: Ctx, note_id: str):
     if results is None:
         return {
             "type": "text",
-            "text": "Use a non-private, human-written note of at least three words.",
+            "text": tr("Use a non-private, human-written note of at least three words."),
         }
     applied = sum(result["status"] == "accepted" for result in results)
     pending = sum(result["status"] == "pending" for result in results)
     return {
         "type": "text",
-        "text": f"{applied} existing labels applied · {pending} suggestions to review.",
+        "text": tr(
+            "{applied} existing labels applied · {pending} suggestions to review.",
+            applied=applied,
+            pending=pending,
+        ),
     }
 
 

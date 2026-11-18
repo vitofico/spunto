@@ -5,6 +5,7 @@ import re
 from spunto.api.errors import Problem
 from spunto.core.note_links import insert_link, link_text, targets
 from spunto.host import Ctx, Plugin
+from spunto.host.language import tr
 from spunto.plugins._wave2 import text
 
 plugin = Plugin("links")
@@ -95,14 +96,15 @@ async def link(
         inserted = await insert_link(
             ctx, note_id, target_id, base_version=base_version, target_version=target_version
         )
+        # Both installed note pickers consume these receipts and show localized feedback.
         return text("Link inserted." if inserted else _DUPLICATE)
     source = await ctx.notes.get(note_id)
     if source is None:
-        return text("The note is unavailable.")
+        return text(tr("The note is unavailable."))
     if base_version is not None and (
         type(base_version) is not int or source["version"] != base_version
     ):
-        raise Problem(409, "version_conflict", "This note changed. Reopen Link to note.")
+        raise Problem(409, "version_conflict", tr("This note changed. Reopen Link to note."))
     if target != "Choose a note":
         match = re.fullmatch(r"([1-8])\. .{1,60}", target) if isinstance(target, str) else None
         if (
@@ -131,7 +133,7 @@ async def link(
             f"{index}. "
             + (
                 re.sub(r"\s+", " ", note.get("title") or note["body"]).strip()[:60]
-                or "Untitled note"
+                or tr("Untitled note")
             )
             for index, note in enumerate(candidates, 1)
         ]
@@ -139,9 +141,9 @@ async def link(
             "ui": 1,
             "items": [
                 text(
-                    "Search or choose a recent note, then review the proposed link."
+                    tr("Search or choose a recent note, then review the proposed link.")
                     if candidates
-                    else "No matching notes. Change the search and run it again."
+                    else tr("No matching notes. Change the search and run it again.")
                 ),
                 {
                     "type": "form",
@@ -154,13 +156,13 @@ async def link(
                             "base_version": {"type": "integer", "default": source["version"]},
                             "query": {
                                 "type": "string",
-                                "title": "Search notes (blank shows recent)",
+                                "title": tr("Search notes (blank shows recent)"),
                                 "maxLength": 200,
                                 "default": query,
                             },
                             "target": {
                                 "type": "string",
-                                "title": "Link to",
+                                "title": tr("Link to"),
                                 "enum": ["Choose a note", *captions],
                                 "default": "Choose a note",
                             },
@@ -178,13 +180,15 @@ async def link(
         }
     destination = await ctx.notes.get(target_id)
     if not destination:
-        return text("The note is unavailable.")
+        return text(tr("The note is unavailable."))
     if target_version is not None and destination["version"] != target_version:
-        raise Problem(409, "version_conflict", "That note changed. Search again before linking it.")
+        raise Problem(
+            409, "version_conflict", tr("That note changed. Search again before linking it.")
+        )
     if note_id == target_id:
         raise ValueError("Choose another note.")
     if target_id in targets(source["body"]):
-        return text(_DUPLICATE)
+        return text(tr(_DUPLICATE))
     proposal = await ctx.notes.suggest(
         note_id,
         "append_text",

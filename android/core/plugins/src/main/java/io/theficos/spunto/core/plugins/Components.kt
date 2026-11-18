@@ -30,11 +30,16 @@ fun outputComponents(value:JsonElement?,depth:Int=0):List<JsonObject> {
  }
 }
 
+internal class FormInputError(val messageId:Int,val label:String?=null):IllegalArgumentException()
+private fun requireInput(valid:Boolean,messageId:Int,label:String?=null) {
+ if(!valid) throw FormInputError(messageId,label)
+}
+
 /** Parse only on submission so intermediate number input never silently becomes zero. */
 fun formArguments(schema:JsonObject,values:JsonObject):JsonObject {
- require(validSchema(schema)) { "This form needs a newer app." }
+ requireInput(validSchema(schema),R.string.plugin_ui_upgrade)
  val fields=(schema["properties"] as? JsonObject).orEmpty()
- require(values.keys.all { it in fields }) { "Check the form fields." }
+ requireInput(values.keys.all { it in fields },R.string.plugin_ui_check)
  val required=(schema["required"] as? JsonArray)?.map { it.jsonPrimitive.content }?.toSet().orEmpty()
  return buildJsonObject {
   fields.forEach { (key,raw) ->
@@ -42,27 +47,27 @@ fun formArguments(schema:JsonObject,values:JsonObject):JsonObject {
    if(field.bool("x-secret")) return@forEach
    val title=field.string("title").ifEmpty { key.replace('_',' ') }
    val candidate=values[key] ?: field["default"]
-   require(candidate!=null || key !in required) { "Choose $title." }
+   requireInput(candidate!=null || key !in required,R.string.plugin_ui_choose_field,title)
    if(candidate==null) return@forEach
    val result:JsonElement=when(field.string("type")) {
-    "string" -> { require(candidate is JsonPrimitive && candidate.isString) { "Check $title." };candidate }
-    "boolean" -> { require(candidate is JsonPrimitive && !candidate.isString && candidate.booleanOrNull!=null) { "Check $title." };candidate }
-    "integer" -> { val number=(candidate as? JsonPrimitive)?.content?.toLongOrNull();require(number!=null) { "Enter a whole number for $title." };JsonPrimitive(number) }
-    "number" -> { val number=(candidate as? JsonPrimitive)?.content?.toDoubleOrNull();require(number!=null && number.isFinite()) { "Enter a number for $title." };JsonPrimitive(number) }
-    "array" -> { val list=if(candidate is JsonArray) candidate.map { require(it is JsonPrimitive && it.isString) { "Check $title." };it.content } else { require(candidate is JsonPrimitive && candidate.isString) { "Check $title." };candidate.content.split(',') };JsonArray(list.map(String::trim).filter(String::isNotEmpty).distinct().map(::JsonPrimitive)) }
+    "string" -> { requireInput(candidate is JsonPrimitive && candidate.isString,R.string.plugin_ui_check_field,title);candidate }
+    "boolean" -> { requireInput(candidate is JsonPrimitive && !candidate.isString && candidate.booleanOrNull!=null,R.string.plugin_ui_check_field,title);candidate }
+    "integer" -> { val number=(candidate as? JsonPrimitive)?.content?.toLongOrNull();JsonPrimitive(number ?: throw FormInputError(R.string.plugin_ui_whole_number,title)) }
+    "number" -> { val number=(candidate as? JsonPrimitive)?.content?.toDoubleOrNull();JsonPrimitive(number?.takeIf(Double::isFinite) ?: throw FormInputError(R.string.plugin_ui_number,title)) }
+    "array" -> { val list=if(candidate is JsonArray) candidate.map { requireInput(it is JsonPrimitive && it.isString,R.string.plugin_ui_check_field,title);(it as JsonPrimitive).content } else { requireInput(candidate is JsonPrimitive && candidate.isString,R.string.plugin_ui_check_field,title);(candidate as JsonPrimitive).content.split(',') };JsonArray(list.map(String::trim).filter(String::isNotEmpty).distinct().map(::JsonPrimitive)) }
     else -> error("Unsupported form field.")
    }
    val choices=field["enum"] as? JsonArray
-   require(choices==null || result in choices) { "Choose $title." }
+   requireInput(choices==null || result in choices,R.string.plugin_ui_choose_field,title)
    if(result is JsonPrimitive && field.string("type") in setOf("integer","number")) {
     val number=result.double
-    require(number >= ((field["minimum"] as? JsonPrimitive)?.doubleOrNull ?: Double.NEGATIVE_INFINITY) && number <= ((field["maximum"] as? JsonPrimitive)?.doubleOrNull ?: Double.POSITIVE_INFINITY)) { "$title is outside its range." }
+    requireInput(number >= ((field["minimum"] as? JsonPrimitive)?.doubleOrNull ?: Double.NEGATIVE_INFINITY) && number <= ((field["maximum"] as? JsonPrimitive)?.doubleOrNull ?: Double.POSITIVE_INFINITY),R.string.plugin_ui_range,title)
    }
    if(field.string("type")=="string") {
     val text=result.jsonPrimitive.content
     val length=text.codePointCount(0,text.length)
-    require(length>=((field["minLength"] as? JsonPrimitive)?.intOrNull ?: 0) && length<=((field["maxLength"] as? JsonPrimitive)?.intOrNull ?: 100000)) { "Check the length of $title." }
-    require(field.string("format")!="time" || Regex("(?:[01]\\d|2[0-3]):[0-5]\\d").matches(text)) { "Use HH:MM for $title." }
+    requireInput(length>=((field["minLength"] as? JsonPrimitive)?.intOrNull ?: 0) && length<=((field["maxLength"] as? JsonPrimitive)?.intOrNull ?: 100000),R.string.plugin_ui_length,title)
+    requireInput(field.string("format")!="time" || Regex("(?:[01]\\d|2[0-3]):[0-5]\\d").matches(text),R.string.plugin_ui_time,title)
    }
    put(key,result)
   }

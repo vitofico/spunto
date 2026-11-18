@@ -13,9 +13,18 @@ class CommandResultTest {
   fun annotation(plugin:String,text:String)=PluginOutputEntity("annotation",plugin,"note-a",buildJsonObject { put("plugin",plugin);put("kind","meta");put("payload",buildJsonObject { put("type","text");put("text",text) }) }.toString())
   val outputs=listOf(annotation("reading-time","3 min"),annotation("title-summary","A useful title"))
   val plugins=listOf(buildJsonObject { put("id","title-summary");put("position",0) },buildJsonObject { put("id","reading-time");put("position",1) })
-  assertEquals("A useful title",entryMetaText(outputs,"note-a",plugins))
-  assertEquals("A useful title",entryMetaText(outputs.reversed(),"note-a",plugins))
-  assertEquals("3 min",entryMetaText(outputs,"note-a",plugins.map { if(it["id"]==JsonPrimitive("title-summary")) JsonObject(it+mapOf("enabled" to JsonPrimitive(false))) else it }))
+  assertEquals("A useful title",entryMetaText(outputs,"note-a",plugins,settingsTestResources()))
+  assertEquals("A useful title",entryMetaText(outputs.reversed(),"note-a",plugins,settingsTestResources()))
+  assertEquals("3 min",entryMetaText(outputs,"note-a",plugins.map { if(it["id"]==JsonPrimitive("title-summary")) JsonObject(it+mapOf("enabled" to JsonPrimitive(false))) else it },settingsTestResources()))
+ }
+ @Test fun storedTasksAndPillShellFollowTheAppLocale() {
+  val resources=settingsTestResources("it")
+  val data="""{"plugin":"tasks","kind":"meta","payload":{"type":"text","text":"2 of 3 done"}}"""
+  val tasks=PluginOutputEntity("annotation","tasks","note-a",data)
+  val plugins=listOf(buildJsonObject {put("id","tasks")})
+  assertEquals("2 di 3 completate",entryMetaText(listOf(tasks),"note-a",plugins,resources))
+  assertEquals("Applica modifiche",pluginPillCaption(resources,"tidy","Apply changes"))
+  assertEquals("Owner-authored caption",pluginPillCaption(resources,"tidy","Owner-authored caption"))
  }
  @Test fun liveArrayKeepsCommandContextAndCopiesOnlyResultWords() {
   val result=Json.parseToJsonElement("""[{"type":"markdown","text":"Traduzione sintetica."},{"type":"command","id":"save-translation","title":"Save as note","args":{"result_id":"receipt-a"}}]""")

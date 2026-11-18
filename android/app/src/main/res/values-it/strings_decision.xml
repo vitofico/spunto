@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="decision_empty">Nessuna decisione registrata.</string>
+    <string name="decision_outcomes">Vedi gli esiti</string>
+    <string name="decision_opening">Apertura…</string>
+    <string name="decision_conflict">Questa decisione è cambiata. Apri la versione aggiornata prima di registrare un esito.</string>
+    <string name="decision_title">Titolo della decisione</string>
+    <string name="decision_choice">Che cosa hai deciso?</string>
+    <string name="decision_alternatives">Alternative considerate</string>
+    <string name="decision_reason">Perché questa scelta?</string>
+    <string name="decision_expected">Esito atteso</string>
+    <string name="decision_optional_field">%1$s (facoltativo)</string>
+    <string name="decision_actual">Che cosa è successo o perché riaprire la decisione?</string>
+    <string name="decision_reflection">Che cosa hai imparato? (facoltativo)</string>
+    <string name="decision_status">Dopo questa revisione</string>
+    <string name="decision_next_review">Prossima data di revisione (facoltativa)</string>
+    <string name="decision_review_date">Data di revisione (facoltativa)</string>
+    <string name="decision_date_hint">Usa AAAA-MM-GG.</string>
+    <string name="decision_invalid_date">Inserisci una data valida nel formato AAAA-MM-GG.</string>
+    <string name="decision_open">Aperta per il seguito</string>
+    <string name="decision_reviewed">Rivista</string>
+    <string name="decision_closed">Chiusa</string>
+    <string name="decision_inherited_privacy">Questa decisione sarà privata perché la nota di origine è privata.</string>
+    <string name="decision_connect_to_save">Collegati al server per salvare. Puoi continuare a modificare il testo qui.</string>
+    <string name="decision_check_fields">Compila i campi obbligatori e controlla la lunghezza del testo.</string>
+    <string name="decision_record_outcome">Registra esito</string>
+    <string name="decision_save">Salva decisione</string>
+    <string name="decision_resume_review">Riprendi revisione</string>
+    <string name="decision_more_outcomes">Altri esiti</string>
+    <string name="decision_more_decisions">Altre decisioni</string>
+    <string name="decision_saved">Decisione salvata.</string>
+    <string name="decision_outcome_saved">Esito registrato.</string>
+    <string name="decision_open_outcome">Apri nota dell’esito</string>
+    <string name="decision_open_original">Apri nota della decisione</string>
+    <string name="decision_saved_sync">Sincronizza per aprire la nota salvata su questo dispositivo.</string>
+    <string name="decision_sync">Sincronizza ora</string>
+    <string name="decision_add_details">Aggiungi dettagli</string>
+    <string name="decision_hide_details">Nascondi dettagli</string>
+    <string name="decision_privacy_hint">La modalità privata esclude questa nota dai plugin di IA e di rete. I permessi di accesso allo spazio restano validi.</string>
+    <string name="decision_status_open">Aperta</string>
+    <string name="decision_status_reopened">Riaperta</string>
+    <string name="decision_review_on">Revisione il %1$s</string>
+    <string name="decision_review_due">Revisione in scadenza dal %1$s</string>
+</resources>

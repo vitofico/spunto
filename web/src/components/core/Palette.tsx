@@ -1,13 +1,16 @@
+import CommandResult from "../../features/CommandResult";
 import { t, useLanguage } from "../../lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { api, useLabels, useSearch, useWorkspaceRole } from "../../lib";
-import { Icon } from "./Icon";
 import {
-  PaletteCommands,
-  CommandResult,
-  type CommandOrigin,
-} from "../../features/Slots";
+  api,
+  useLabels,
+  useNote,
+  useSearch,
+  useWorkspaceRole,
+} from "../../lib";
+import { Icon } from "./Icon";
+import { PaletteCommands, type CommandOrigin } from "../../features/Slots";
 export function Palette({
   onClose,
   onHelp,
@@ -27,7 +30,9 @@ export function Palette({
   instant?: boolean;
 }) {
   useLanguage();
-  const canEdit = useWorkspaceRole() !== "viewer";
+  const role = useWorkspaceRole();
+  const canEdit = role !== "viewer";
+  const note = useNote(noteId ?? "");
   const [exportError, setExportError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<unknown>(initialResult ?? null);
@@ -269,10 +274,11 @@ export function Palette({
               }
             }}
           >
-            {canEdit && (
+            {role === "owner" && (
               <PaletteCommands
                 query={query}
                 noteId={noteId}
+                note={note.data}
                 onResult={(value, context) => {
                   setResult(value);
                   setOrigin(context);

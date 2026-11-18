@@ -11,7 +11,7 @@ import { api } from "../src/lib/api";
 import { ApiError } from "../src/lib/errors";
 import { AISettings, AIRouting } from "../src/features/AISettings";
 import { StatusPage } from "../src/features/Settings";
-import { NotePanel } from "../src/features/Slots";
+import { NotePanel } from "../src/features/NotePluginPanel";
 import { Palette } from "../src/components/core/Palette";
 import Search from "../src/pages/Search";
 import type { AIStatus, Note, Plugin, SearchPage } from "../src/lib/types";

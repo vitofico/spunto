@@ -205,6 +205,8 @@ jobs:
           PY
 
   image:
+    env:
+      PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
     name: Image (${{ matrix.architecture }})
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -277,44 +279,14 @@ jobs:
         run: |
           npm install --global pnpm@12.11.2
           pnpm install --frozen-lockfile
-      - name: Install browser system dependencies
+      - name: Pull matching browser engines and system libraries
         if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 10
         working-directory: web
         run: |
-          # The hosted Azure mirror can trickle for tens of minutes. Change only
-          # its Ubuntu archive URL; leave Ubuntu security mirrors untouched.
-          sudo python3 - <<'PYAPT'
-          import re
-          from pathlib import Path
-
-          apt = Path("/etc/apt")
-          paths = [apt / "sources.list", apt / "apt-mirrors.txt"]
-          paths += list((apt / "sources.list.d").glob("*.sources"))
-          paths += list((apt / "sources.list.d").glob("*.list"))
-          archive = re.compile(
-              r"(?<![\w+./-])(https?://)azure\.archive\.ubuntu\.com/ubuntu(/?)(?=\s|$)"
-          )
-          for path in paths:
-              if not path.is_file():
-                  continue
-              original = path.read_text()
-              updated = archive.sub(r"\1archive.ubuntu.com/ubuntu\2", original)
-              if updated != original:
-                  path.write_text(updated)
-                  print(f"Updated Ubuntu archive mirror in {path}")
-          (apt / "apt.conf.d" / "99-spunto-ci-network").write_text(
-              'Acquire::Retries "2";\n'
-              'Acquire::http::Timeout "30";\n'
-              'Acquire::https::Timeout "30";\n'
-          )
-          PYAPT
-          pnpm exec playwright install-deps chromium firefox webkit
-      - name: Install browser engines
-        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
-        timeout-minutes: 10
-        working-directory: web
-        run: pnpm exec playwright install chromium firefox webkit
+          version=$(node -p "require('@playwright/test/package.json').version")
+          [[ "$PLAYWRIGHT_IMAGE" == *":v${version}-noble@"* ]]
+          docker pull "$PLAYWRIGHT_IMAGE"
       - name: Start disposable browser server
         if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 2
@@ -336,20 +308,27 @@ jobs:
         timeout-minutes: 22
         working-directory: web
         run: |
-          # Keep every real-API flow and browser; fail rather than hang a merge.
-          SPUNTO_E2E_URL=http://127.0.0.1:18081 pnpm test:e2e \
+          mkdir -p browser-artifacts
+          docker run --rm --init --network host --shm-size=1g \
+            --env CI=true --env SPUNTO_E2E_URL=http://127.0.0.1:18081 \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" \
+            --env PLAYWRIGHT_HTML_OUTPUT_DIR=/artifacts/report \
+            --volume "$PWD/browser-artifacts:/artifacts" \
+            --workdir "$PWD" "$PLAYWRIGHT_IMAGE" \
+            node node_modules/@playwright/test/cli.js test --output=/artifacts/results \
             --project=chromium --project=firefox --project=webkit \
             --global-timeout=1200000
       - name: Remove disposable browser server
         if: always() && github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 1
         run: timeout 30s docker rm -f spunto-browser || true
+      - name: Make browser failure evidence readable by the runner
+        if: failure() && steps.browser_acceptance.outcome == 'failure'
+        run: sudo chown -Rh "$(id -u):$(id -g)" web/browser-artifacts
       - name: Retain browser failure evidence
         if: failure() && steps.browser_acceptance.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: browser-failure-evidence
-          path: |
-            web/test-results/
-            web/playwright-report/
+          path: web/browser-artifacts/
           retention-days: 7

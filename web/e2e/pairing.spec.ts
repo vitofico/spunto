@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { signInOwner } from "./owner-session";
 
 test.skip(!process.env.SPUNTO_E2E_URL, "Pairing needs the real local server");
 
@@ -6,12 +7,7 @@ test("owner pairs a device once and can revoke its access", async ({
   page,
   request,
 }, info) => {
-  await page.goto("/");
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill("browser acceptance password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByLabel("New note")).toBeVisible();
+  await signInOwner(page);
   await page.goto("/settings/devices");
   const grantReply = page.waitForResponse(
     (response) =>

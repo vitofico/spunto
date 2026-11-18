@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NotePanel } from "../src/features/NotePluginPanel";
 import {
   act,
   cleanup,
@@ -14,7 +15,6 @@ import { SettingsPage } from "../src/features/Settings";
 import {
   DailySlip,
   EntryMeta,
-  NotePanel,
   ReviewLine,
   SuggestionLine,
 } from "../src/features/Slots";
@@ -632,7 +632,8 @@ describe("review and result safety", () => {
     });
   });
   it("retries an uncertain Save as note with the same idempotency key", async () => {
-    const { CommandResult } = await import("../src/features/Slots");
+    const { default: CommandResult } =
+      await import("../src/features/CommandResult");
     const create = vi
       .spyOn(api, "createNote")
       .mockRejectedValueOnce(new Error("Connection interrupted"))

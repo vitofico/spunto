@@ -47,23 +47,24 @@ fun textChanges(before:String,after:String):List<TextChange> {
 }
 
 /** Hide only long unchanged passages; every inserted and removed character remains visible. */
-fun focusedTextChanges(changes:List<TextChange>):List<TextChange> = changes.mapIndexed { index,change ->
+fun focusedTextChanges(changes:List<TextChange>,unchangedLabel:String="…"):List<TextChange> = changes.mapIndexed { index,change ->
  if(change.kind!=TextChangeKind.Unchanged || change.text.length<=240) change
  else change.copy(text=when(index) {
   0 -> "…\n"+change.text.takeLast(120)
   changes.lastIndex -> change.text.take(120)+"\n…"
-  else -> change.text.take(100)+"\n… unchanged text …\n"+change.text.takeLast(100)
+  else -> change.text.take(100)+"\n$unchangedLabel\n"+change.text.takeLast(100)
  })
 }
 
 /** Colour cannot expose an empty paragraph or a removed space on its own. */
-fun whitespaceChangeSummaries(changes:List<TextChange>):List<String> = listOf(TextChangeKind.Removed,TextChangeKind.Added).flatMap {kind ->
+internal enum class WhitespaceUnit { Break, Space, Tab }
+internal data class WhitespaceChange(val kind:TextChangeKind,val unit:WhitespaceUnit,val count:Int)
+internal fun whitespaceChanges(changes:List<TextChange>):List<WhitespaceChange> = listOf(TextChangeKind.Removed,TextChangeKind.Added).flatMap {kind ->
  val whitespace=changes.filter {it.kind==kind && it.text.all(Char::isWhitespace)}.joinToString("") {it.text}
  val breaks=Regex("\\r\\n|\\r|\\n").findAll(whitespace).count()
  val spaces=whitespace.count {it!='\r' && it!='\n' && it!='\t'}
  val tabs=whitespace.count {it=='\t'}
- val verb=if(kind==TextChangeKind.Added) "Added" else "Removed"
- listOf(breaks to "line break",spaces to "space",tabs to "tab").filter {it.first>0}.map {(count,unit) -> "$verb $count $unit${if(count==1) "" else "s"}"}
+ listOf(breaks to WhitespaceUnit.Break,spaces to WhitespaceUnit.Space,tabs to WhitespaceUnit.Tab).filter {it.first>0}.map {(count,unit) -> WhitespaceChange(kind,unit,count)}
 }
 
 /** The combined-lines vocabulary prefixes changes, while paired hunks carry plain text. */

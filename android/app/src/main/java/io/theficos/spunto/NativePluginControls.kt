@@ -55,7 +55,7 @@ import java.time.format.DateTimeFormatter
   }
   val state=when {
    plugin.removed -> listOfNotNull(resources.getString(R.string.settings_removed),plugin.raw.pluginLong("data_count")?.let {"${resources.getQuantityString(R.plurals.settings_records_kept,it.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),it)}"}).joinToString(" · ")
-   plugin.availabilityReason!=null -> plugin.availabilityReason
+   plugin.availabilityReason!=null -> pluginAvailabilityText(resources,plugin)
    plugin.state=="waiting" -> pluginWaitingLine(resources,plugin)
    plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs)
    else -> null
@@ -127,12 +127,27 @@ import java.time.format.DateTimeFormatter
    Text("SPUNTO_PLUGIN_${plugin.id.replace('-','_').uppercase()}_${key.uppercase()}",fontFamily=monoFont(),style=MaterialTheme.typography.bodySmall)
   } else {
    val value=page.values[key]
-   val display=when(value) {is JsonArray -> value.joinToString(", ") {(it as? JsonPrimitive)?.content.orEmpty()}.ifEmpty {resources.getString(R.string.settings_none)};is JsonPrimitive -> if(!value.isString && value.booleanOrNull!=null) if(value.boolean) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off) else value.content;else -> resources.getString(R.string.settings_unavailable_2c9c1)}
+   val display=when(value) {is JsonArray -> value.joinToString(", ") {(it as? JsonPrimitive)?.content.orEmpty()}.ifEmpty {resources.getString(R.string.settings_none)};is JsonPrimitive -> if(!value.isString && value.booleanOrNull!=null) if(value.boolean) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off) else pluginSettingValue(resources,plugin,key,value.content);else -> resources.getString(R.string.settings_unavailable_2c9c1)}
    Text("$title · $display")
    if(field.pluginText("x-scope")=="device") Text(resources.getString(R.string.settings_this_phone_only),style=MaterialTheme.typography.bodySmall)
   }
  }
  if(fields.keys.any {it!="change_mode"}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online && plugin.valid) {Text(resources.getString(R.string.settings_manage_settings_in_the_web_app_owner))}
+}
+
+internal fun pluginSettingValue(resources:android.content.res.Resources,plugin:NativePluginFacts,key:String,value:String):String {
+ if(plugin.raw.pluginText("origin")!="bundled") return value
+ val locale=resources.configuration.locales[0]
+ return when(key) {
+  "weekday" -> pluginWeekday(resources,value) ?: value
+  "change_mode" -> when(value) {"ask_first" -> resources.getString(R.string.plugin_ask_first);"automatic" -> resources.getString(R.string.plugin_automatic);else -> value}
+  "language" -> when {
+   value.isBlank() || value=="auto" -> resources.getString(R.string.plugin_auto_language)
+   Regex("[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*").matches(value) -> java.util.Locale.forLanguageTag(value).getDisplayName(locale)
+   else -> value
+  }
+  else -> value
+ }
 }
 
 @Composable internal fun NativePluginDetailFacts(plugin:NativePluginFacts,online:Boolean,commandBusy:Boolean,onCommand:(JsonObject)->Unit,onWeb:(String)->Unit) {
@@ -143,7 +158,9 @@ import java.time.format.DateTimeFormatter
   PluginHeading(resources.getString(R.string.settings_ai));pluginDestinationFacts(resources,plugin).forEach {Text(it)}
   if(plugin.permissions.orEmpty().any {it.startsWith("ai.")}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online) {Text(resources.getString(R.string.settings_change_route_in_the_web_app_owner))}
   PluginHeading(resources.getString(R.string.settings_run))
-  val commands=(plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.take(3)
+  val commands=(plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.filter {command ->
+   command.pluginStrings("where").orEmpty().any {it in setOf("global","palette","note-actions")}
+  }.take(3)
   if(commands.isEmpty()) Text(resources.getString(R.string.settings_no_commands_are_declared))
   commands.forEach {command ->
    val where=command.pluginStrings("where").orEmpty()
@@ -155,9 +172,9 @@ import java.time.format.DateTimeFormatter
  PluginHeading(resources.getString(R.string.settings_activity))
  val time=plugin.raw.pluginLong("last_run_at")
  Text(if(time==null) resources.getString(R.string.settings_no_runs_yet) else resources.getString(R.string.settings_last_run,java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM,java.text.DateFormat.SHORT,locale).format(java.util.Date(time))))
- plugin.raw.pluginText("last_error")?.takeIf {it.isNotBlank()}?.let {Text(it)}
+ pluginActivityError(resources,plugin)?.let {Text(it)}
  // On and off show in the switch above; only the states it can't show get a line.
- when {plugin.removed -> resources.getString(R.string.settings_removed);plugin.availabilityReason!=null -> plugin.availabilityReason;plugin.state=="waiting" -> pluginWaitingLine(resources,plugin);plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs);else -> null}?.let {Text(it)}
+ when {plugin.removed -> resources.getString(R.string.settings_removed);plugin.availabilityReason!=null -> pluginAvailabilityText(resources,plugin);plugin.state=="waiting" -> pluginWaitingLine(resources,plugin);plugin.state=="failed" -> resources.getString(R.string.settings_paused_after_failed_runs);else -> null}?.let {Text(it)}
  PluginHeading(if(plugin.removed) resources.getString(R.string.settings_access_history) else resources.getString(R.string.settings_access))
  plugin.permissionLines(resources).forEach {Text(it)}
  if(!plugin.removed) {

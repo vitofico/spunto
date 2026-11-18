@@ -30,7 +30,7 @@ Polls are persistent jobs, normally one minute apart. UIDVALIDITY/UID and Telegr
 
 ## Context packs
 
-Enable **Context packs** in Settings → Plugins. Open its command from the web palette, the composer's `/` menu or a note's actions; Android uses the `/` menu and note actions. Start a pack with a title, project, goals, constraints, decisions and open questions. These are your own words: the plugin works with AI off and never drafts or rewrites the brief automatically. Reopen saved packs from **Context packs**, then use **Edit brief** to change or delete one. A concurrent edit asks you to reopen rather than overwriting the other edit.
+Enable **Context packs** in Settings → Plugins. On web, open it from the command palette, the composer’s `/` menu, or a note’s actions. On Android, open **Tools** from the home menu or start from a note’s actions. Start a pack with a title, project, goals, constraints, decisions and open questions. These are your own words: the plugin works with AI off and never drafts or rewrites the brief automatically. Reopen saved packs from **Context packs**, then use **Edit brief** to change or delete one. A concurrent edit asks you to reopen rather than overwriting the other edit.
 
 Use **Review sources** to search or browse notes. Select a note and use **Add source**. The picker stays open for the next source. Use **Update sources** to remove a source or acknowledge current revisions. A pack supports up to ten source notes and a complete Markdown brief of at most 4,000 characters; each curated section allows 500 characters. The pack stores IDs and revision baselines rather than source-body snapshots. The brief reports whether a source's current revision changed or the note became unavailable. **Acknowledge all current source revisions** explicitly updates those baselines while retaining your prose. Remove unavailable sources before acknowledging the remaining ones.
 
@@ -40,11 +40,13 @@ Agents with read access can discover `context-packs_list` and `context-packs_get
 
 ## Decision journal
 
-Enable **Decision journal** in Settings → Plugins. Use **Record decision** from the web palette, the `/` menu or a note's actions to record a title, the decision, alternatives considered, rationale and expected outcome. An optional review date uses `YYYY-MM-DD`; choose **Private** when appropriate. Starting from a private source also makes the created note private. The result is an ordinary owner-authored note, with a link to the optional source and the time it was recorded. It syncs and exports normally and needs no AI service.
+A space owner can enable **Decision journal** in Settings → Plugins. Choose **Record decision** beside the timeline composer or in **Decisions**. To keep a link to a note that prompted the choice, start from that note’s actions. Write what you decided. You can also give it a title, explain your reasoning, list alternatives, describe the result you expect, or pick a date to revisit it.
 
-Find entries in the **Decisions** view or through the **Decision journal** command. Open a decision and use **Review decision** or the panel's **Review or reopen** action to record what happened, an optional reflection and the next review date. Choose `reviewed`, `closed` or `open`; `open` reopens the decision and asks you to record why. Every outcome is a separate dated note linked to the original, so later reviews retain the original decision, alternatives and reasoning. The journal can page through earlier outcomes. Concurrent or interrupted reviews preserve the pending review for an explicit resume instead of replacing it.
+The decision is an ordinary, editable note that syncs and exports with your library. Choose **Private** to exclude the decision from AI processing. Members of a shared space can still read its private notes. A decision started from a private note inherits its privacy. The journal works without AI.
 
-Recording and reviewing need a connection. Synced decision/outcome notes, the Decisions view and stored panel information remain readable offline; online action buttons are unavailable then. Review dates supply a due status, not scheduled reminders or notifications. The journal adds no plugin MCP tools; agents use the ordinary note search/read tools subject to each note's current permissions. There is no automatic AI evaluation or outcome generation.
+Return to **Decisions** to find an entry. Open it to record what happened or read its review history. Each outcome becomes a dated note linked to the original. You can mark the decision reviewed, close it, or reopen it and set another review date. An interrupted review can be resumed. A review date appears in the journal without sending a notification.
+
+Recording and reviewing require a connection. On Android you can read synced decisions and outcomes offline. Agents with permission to read these notes can find them through ordinary note search.
 
 ## Smart tag suggestions
 
@@ -78,7 +80,7 @@ After repairing a provider or upgrading the server, use the failed plugin card's
 
 ## Periodic tag curation
 
-Enable **Label gardener** with chat and embedding profiles available. Its settings choose the weekly day and time, initially Sunday at `18:00` in the instance's time zone. **Review tags now** in the web palette or the `/` menu starts an immediate pass. Scheduled and manual runs share the same limit: at most three pending proposals and three proposals created per week. Dismissing a proposal does not grant another weekly slot, and a refused change is not offered again.
+Enable **Label gardener** with chat and embedding profiles available. Its settings choose the weekly day and time, initially Sunday at `18:00` in the instance's time zone. **Review labels** in the web palette or the `/` menu starts an immediate pass. Scheduled and manual runs share the same limit: at most three pending proposals and three proposals created per week. Dismissing a proposal does not grant another weekly slot, and a refused change is not offered again.
 
 Each pass samples up to 500 recent eligible non-private, non-machine notes and up to 50 top labels from a vocabulary limited to 500 labels. It supplies bounded labeled and unlabeled evidence, with full evidence notes no longer than 20,000 characters each and a combined 50,000-character note-text budget. The command reports its sample coverage. This is not a full taxonomy audit: absence from a sample does not prove a tag is unused, and sampled note-creation dates are not a history of when tags were added.
 
@@ -100,6 +102,6 @@ Enable the optional **Thinking desk** plugin to follow a topic through selected 
 
 ## Library stats
 
-Enable **Library stats** in **Settings → Plugins**, then run **Library stats** from its plugin page or the command palette. It uses the existing result sheet on web and Android and needs a connection. It stays off by default, adds no timeline or capture controls, and requires only read access to notes. Under the existing hosted plugin-command policy, the space owner runs commands; an individual-note grant never opens another library's statistics.
+Enable **Library stats** in **Settings → Plugins**, then run **Library stats** from the web command palette, the plugin page, or the Android home menu under **Tools**. It uses the existing result sheet on web and Android and needs a connection. It stays off by default, adds no timeline or capture controls, and requires only read access to notes. Under the existing hosted plugin-command policy, the space owner runs commands; an individual-note grant never opens another library's statistics.
 
 The summary shows saved, active and archived notes; captures in the last 30 days; active notes without labels; active pinned notes; and open tasks in active notes. Counts cover accessible private, imported and machine-written notes in the selected space. Trash is excluded, and future timestamps do not inflate recent captures. Viewing the summary does not change notes or store a stats history. It uses existing note metadata, with no tracking, background jobs, model calls or external requests. Android does not estimate a whole-server count from a potentially incomplete replica. Copying or saving a result remains an explicit action in the shared result sheet.

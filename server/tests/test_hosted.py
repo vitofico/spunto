@@ -15,6 +15,8 @@ from spunto.auth import sessions
 from spunto.auth.oidc import OIDCIdentity
 from spunto.config import Settings
 from spunto.hosted import create_hosted_app, hosted_startup
+from spunto.jobs.maintenance import DAY_MS, prune
+from spunto.store.db import now_ms
 
 pytestmark = pytest.mark.anyio
 ORIGIN = "http://127.0.0.1:18081"
@@ -121,6 +123,87 @@ async def test_hosted_link_insert_serializes_retries_and_obeys_workspace_visibil
     saved = (await client.get(f"/api/v1/notes/{source['id']}", headers=headers(alice))).json()
     assert saved["version"] == source["version"] + 1
     assert saved["body"] == f"Synthetic source\n\n[Linked note](/n/{target['id']})"
+
+
+async def test_hosted_decision_journal_owner_privacy_and_purge_replay(hosted):
+    client, manager, users, settings = hosted
+    alice, bob, carol = users
+    created = await client.post(
+        "/api/v1/workspaces", headers=headers(alice), json={"name": "Synthetic decisions"}
+    )
+    assert created.status_code == 201, created.text
+    space = created.json()["id"]
+    owner = headers(alice, space)
+    for member, role in ((bob, "editor"), (carol, "viewer")):
+        added = await client.post(
+            f"/api/v1/workspaces/{space}/members",
+            headers=owner,
+            json={"user_id": member["account"]["id"], "role": role},
+        )
+        assert added.status_code == 200, added.text
+    prefix = "/api/v1/plugins/decision-journal"
+    enabled = await client.post(
+        prefix + "/enable",
+        headers=owner,
+        json={"permissions": ["notes.read", "notes.create", "annotate"]},
+    )
+    assert enabled.status_code == 200, enabled.text
+
+    async def journal_command(name, args, actor=owner, status=200):
+        response = await client.post(prefix + "/commands/" + name, headers=actor, json=args)
+        assert response.status_code == status, response.text
+        return response.json()
+
+    async def purge_note(note_id):
+        path = f"/api/v1/notes/{note_id}"
+        trashed = await client.post(path + "/flags", headers=owner, json={"trashed": True})
+        assert trashed.status_code == 200, trashed.text
+        removed = await client.delete(path, headers=owner)
+        assert removed.status_code == 204, removed.text
+
+    decision = {
+        "decision": "Keep the confidential synthetic decision.",
+        "private": True,
+        "request_id": str(uuid.uuid7()),
+    }
+    [note_id] = (await journal_command("record-decision", decision))["ids"]
+    outcome = {
+        "note_id": note_id,
+        "outcome": "The synthetic outcome is complete.",
+        "status": "closed",
+        "base_version": 1,
+        "request_id": str(uuid.uuid7()),
+    }
+    outcome_id, _ = (await journal_command("review-decision", outcome))["ids"]
+    detail = await journal_command("journal", {"note_id": note_id})
+    assert detail["items"][0]["text"] == "Closed"
+    for member, code in ((bob, "owner_required"), (carol, "read_only_space")):
+        actor = headers(member, space)
+        for name, args in (
+            ("journal", {"note_id": note_id}),
+            ("record-decision", decision),
+            ("review-decision", outcome),
+        ):
+            rejected = await journal_command(name, args, actor, status=403)
+            assert rejected["code"] == code
+        for private_id in (note_id, outcome_id):
+            # The private flag controls egress, while workspace membership controls note access.
+            shared = await client.get(f"/api/v1/notes/{private_id}", headers=actor)
+            assert shared.status_code == 200 and shared.json()["private"] is True
+            hidden = await client.get(f"/api/v1/notes/{private_id}", headers=headers(member))
+            assert hidden.status_code == 404
+
+    runtime = manager._runtimes[space]
+    async with runtime.store.write() as conn:
+        await conn.execute("DELETE FROM applied_op WHERE credential_id='plugin:decision-journal'")
+    await purge_note(outcome_id)
+    outcome_replay = await journal_command("review-decision", outcome)
+    assert outcome_replay["type"] == "text" and "unavailable" in outcome_replay["text"]
+    await purge_note(note_id)
+    await prune(runtime.store, settings, now=now_ms() + 31 * DAY_MS)
+    decision_replay = await journal_command("record-decision", decision)
+    assert decision_replay["type"] == "text" and "unavailable" in decision_replay["text"]
+    assert (await client.get("/api/v1/notes", headers=owner)).json()["notes"] == []
 
 
 async def test_http_policy_changes_atomic_account_allowance_without_resetting_usage(hosted):

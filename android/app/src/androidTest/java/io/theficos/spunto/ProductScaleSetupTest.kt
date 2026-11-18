@@ -27,6 +27,7 @@ import java.nio.file.StandardCopyOption
 
 /** PROPOSAL ONLY: root must release/copy this AndroidTest source before compiling/executing. */
 @RunWith(AndroidJUnit4::class)
+@ManualFixture
 class ProductScaleSetupTest {
  @get:Rule val timeout=org.junit.rules.Timeout(20,java.util.concurrent.TimeUnit.MINUTES)
  @Test fun seedAndVerifyExplicitlyDisposableProductReplica():Unit=runBlocking {

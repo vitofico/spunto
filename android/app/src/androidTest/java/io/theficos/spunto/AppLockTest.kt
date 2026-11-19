@@ -64,10 +64,10 @@ class AppLockTest {
   val current=authenticationNodes()
   return customKeypad(current) || current.any {it.isPassword || it.className?.toString()?.contains("EditText")==true}
  }
+ private fun authenticationVisible():Boolean =
+  credentialVisible() || authenticationNodes().any {it.viewIdResourceName=="com.android.systemui:id/biometric_icon" && it.isVisibleToUser}
  private fun waitForAuthentication() {
-  waitFor("automatic system authentication") {
-   credentialVisible() || authenticationNodes().any {it.viewIdResourceName=="com.android.systemui:id/biometric_icon" && it.isVisibleToUser}
-  }
+  waitFor("automatic system authentication",::authenticationVisible)
   assertFalse(app.container.appLock.state.value.unlocked)
  }
  private fun waitForCredential() {
@@ -139,6 +139,9 @@ class AppLockTest {
     waitForAuthentication()
     recreateDuringAuthentication(scenario)
     waitForAuthentication()
+    // Let SystemUI finish cancelling the recreated launcher before capture asks again.
+    cancelAuthentication()
+    waitFor("the launcher authentication prompt to close") {!authenticationVisible()}
    }
    val selection=Intent(instrumentation.targetContext,CaptureActivity::class.java).setAction(Intent.ACTION_PROCESS_TEXT).putExtra(Intent.EXTRA_PROCESS_TEXT,"Synthetic locked selection").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
    ActivityScenario.launch<CaptureActivity>(selection).use {

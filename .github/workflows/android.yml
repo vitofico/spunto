@@ -1,11 +1,8 @@
 name: Android
 
 on:
-  push:
-    branches: [main]
-    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   pull_request:
-    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
+    paths: ["android/**", "server/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:

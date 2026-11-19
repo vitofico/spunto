@@ -47,7 +47,7 @@ async def test_question_uses_ask_vectors_independently_of_search_extension(
     assert any(item["type"] == "markdown" for item in result["items"])
     assert next(item for item in result["items"] if item["type"] == "notes")["ids"] == [note["id"]]
     assert calls[0]["plugin_id"] == "ask" and calls[0]["profile"] == "fixture"
-    assert any("messages" in request for request in provider.requests)
+    assert provider.chat_bodies
 
 
 @pytest.mark.parametrize(
@@ -101,7 +101,7 @@ async def test_long_source_cannot_starve_other_sources(ai_host):
     first = await notes.create("Spunto SQLite LONG-SOURCE " + "context " * 1800)
     second = await notes.create("Spunto SQLite SECOND-SOURCE " + "evidence " * 1800)
     await ask.ask(Ctx(host, "ask", principal=OWNER), "Spunto SQLite")
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     bodies = {
         match[1]: html.unescape(match[2])
         for match in re.finditer(r'<note id="([^"]+)"[^>]*>(.*?)</note>', content, re.DOTALL)
@@ -127,7 +127,7 @@ async def test_semantic_sources_preserve_inline_label_scope_and_descendants(ai_h
 
     monkeypatch.setattr(host.vectors, "nearest", candidates)
     await ask.ask(Ctx(host, "ask", principal=OWNER), "Spunto SQLite #project #database")
-    content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+    content = provider.chat_bodies[0]["messages"][1]["content"]
     assert wanted["id"] in content
     assert wrong["id"] not in content and partial["id"] not in content
 

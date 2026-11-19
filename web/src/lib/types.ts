@@ -295,6 +295,7 @@ export interface Manifest {
   ui: number;
   plugins_rev: number;
   plugins: Plugin[];
+  features?: string[];
   theme_catalog?: ThemeCard[];
 }
 export type ThemeCard = {

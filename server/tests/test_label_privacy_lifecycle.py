@@ -4,8 +4,6 @@ import asyncio
 import json
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from test_plugins_ai import OWNER, seed
 from test_plugins_ai import ai_host as ai_host
 
@@ -159,7 +157,7 @@ async def test_private_while_gateway_capacity_queued_retries_fresh_hook_without_
         await running
 
 
-@pytest.mark.parametrize("mode", ["wrong-types", "provider-refusal"])
+@pytest.mark.parametrize("mode", ["wrong_types", "refusal"])
 async def test_malformed_output_and_provider_refusal_still_open_failure_circuit(
     ai_host, monkeypatch, mode
 ):
@@ -168,18 +166,6 @@ async def test_malformed_output_and_provider_refusal_still_open_failure_circuit(
     await fresh_queue(host, monkeypatch)
     provider.mode = mode
     provider.requests.clear()
-
-    if mode == "provider-refusal":
-        refusal_app = FastAPI()
-
-        @refusal_app.post("/v1/chat/completions")
-        async def refusal(request: Request):
-            provider.requests.append(await request.json())
-            return JSONResponse(
-                {"choices": [{"finish_reason": "stop", "message": {"refusal": "fixture"}}]}
-            )
-
-        monkeypatch.setattr(host.gateway.transport, "app", refusal_app)
 
     for attempt in range(1, 6):
         target = await notes.create("Eligible label inference fixture " + str(attempt))
@@ -193,4 +179,4 @@ async def test_malformed_output_and_provider_refusal_still_open_failure_circuit(
             assert (job["status"], job["attempts"], job["lease_until"]) == ("dead", 1, None)
         assert host.failures["label-suggestions"] == attempt
     assert host.states["label-suggestions"]["state"] == "failed"
-    assert len(provider.requests) == (10 if mode == "wrong-types" else 5)
+    assert len(provider.requests) == (10 if mode == "wrong_types" else 5)

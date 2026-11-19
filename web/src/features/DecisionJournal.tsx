@@ -74,7 +74,11 @@ function DecisionCommand({
             </>
           )}
           {result.isSuccess && (
-            <CommandResult value={result.data} origin={origin} />
+            <CommandResult
+              value={result.data}
+              origin={origin}
+              onOpenNote={close}
+            />
           )}
         </Dialog>
       )}

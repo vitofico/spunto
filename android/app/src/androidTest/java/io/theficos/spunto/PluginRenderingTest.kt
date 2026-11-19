@@ -1,9 +1,16 @@
 package io.theficos.spunto
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.plugins.Vocabulary
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -12,6 +19,34 @@ import org.junit.Test
 class PluginRenderingTest {
  @get:Rule val compose=createComposeRule()
  @get:Rule val timeout=org.junit.rules.Timeout(10,java.util.concurrent.TimeUnit.MINUTES)
+ @Test fun longResultsScrollWithoutMovingTheResultHeadingOrActions() {
+  val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+  lateinit var model:SpuntoViewModel
+  compose.runOnIdle {model=SpuntoViewModel(app)}
+  val mounted=mutableStateOf(true)
+  val end="End of the synthetic result."
+  val markdown=(1..30).joinToString("\n\n") {"Synthetic paragraph $it. It should scroll without moving the controls."}+"\n\n"+end
+  val result=commandEnvelope("library-stats","summary",JsonObject(emptyMap()),buildJsonObject {put("type","markdown");put("text",markdown)})
+  try {
+   runBlocking {LocalFixtureAuthority.require(model.container)}
+   compose.setContent {SpuntoTheme {
+    val scope=rememberCoroutineScope()
+    val feedback=remember {Feedback(SnackbarHostState(),scope)}
+    CompositionLocalProvider(LocalFeedback provides feedback) {
+     if(mounted.value) CommandResultSheet(model,result,{}, {}, {})
+    }
+   }}
+   val heading=compose.onNodeWithText(app.getString(R.string.settings_tool_result)).assertIsDisplayed()
+   val close=compose.onNodeWithText(app.getString(R.string.settings_close)).assertIsDisplayed()
+   val copy=compose.onNodeWithText(app.getString(R.string.settings_copy)).assertIsDisplayed()
+   compose.onNodeWithText(end).performScrollTo().assertIsDisplayed()
+   heading.assertIsDisplayed()
+   close.assertIsDisplayed()
+   copy.assertIsDisplayed()
+  } finally {
+   compose.runOnIdle {mounted.value=false;model.retire()}
+  }
+ }
  @Test fun translationFormSubmitsLanguageWithHiddenNoteContext() {
   val form=Json.parseToJsonElement("""{"type":"form","schema":{"type":"object","required":["note_id","language"],"properties":{"note_id":{"type":"string","default":"synthetic-note-a"},"language":{"type":"string","enum":["it","en"],"title":"Translate to"}}}}""").jsonObject
   var result:JsonObject?=null

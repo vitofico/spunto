@@ -47,6 +47,7 @@ import kotlinx.serialization.json.*
  val context=LocalContext.current
  val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
  val manifest=model.manifest.collectAsState().value
+ val catalog by model.catalog.collectAsState()
  // Loading and missing differ: a note still being read shows nothing rather than "unavailable".
  val loaded by remember(id) { model.repository.observe(id).map { it to true } }.collectAsState(null to false)
  val note=loaded.first
@@ -82,6 +83,8 @@ import kotlinx.serialization.json.*
  LaunchedEffect(writable) {if(!writable) {editing=false;commandResult=null}}
  val refused by model.repository.refused.collectAsState(emptyMap())
  val outputs by model.outputs.collectAsState()
+ val owner by model.workspaceIsOwner.collectAsState()
+ val acceptance=remember(value,outputs,manifest,writable,owner) {noteAcceptanceActions(value,outputs,manifest,writable,owner)}
  val linksTo=remember(value.body,id) {noteLinkIds(value.body)-id}
  val linkedFrom=if(model.container.manifest.enabled("links")) backlinkIds(outputs,id) else emptyList()
  val linked by remember(linksTo,linkedFrom) {model.repository.observeAll((linksTo+linkedFrom).distinct())}.collectAsState(emptyList())
@@ -110,10 +113,20 @@ import kotlinx.serialization.json.*
  LaunchedEffect(history,online,id,value.serverRev) { if(history && online) historyResult=model.refreshHistory(id) }
  LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
   item {
-   val meta=listOfNotNull(noteDay(value.createdAt,locale),if(value.privateNote) context.getString(R.string.core_private) else null,if(value.archived) context.getString(R.string.core_archived) else null,if(value.trashed) context.getString(R.string.core_in_trash) else null).joinToString(" · ")
+   val provenance=when {
+    value.origin=="agent" -> context.getString(R.string.core_via,value.sourceRef?.takeIf(String::isNotBlank) ?: context.getString(R.string.core_agent))
+    value.sourceKind=="plugin" -> {
+     val origin=catalog.objects("plugins").firstOrNull {it.string("id")==value.sourceRef}
+     context.getString(R.string.core_via,origin?.let {localizedPluginName(context.resources,it,catalog)} ?: context.getString(R.string.core_plugin))
+    }
+    else -> null
+   }
+   val agentEdit=context.getString(R.string.core_edited_agent).takeIf {value.updatedViaAgent && value.origin!="agent"}
+   val meta=listOfNotNull(noteDay(value.createdAt,locale),provenance,agentEdit,if(value.privateNote) context.getString(R.string.core_private) else null,if(value.archived) context.getString(R.string.core_archived) else null,if(value.trashed) context.getString(R.string.core_in_trash) else null).joinToString(" · ")
    Text(meta.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {contentDescription=meta})
    if(!editing && isJournalNote(value)) DecisionNoteActions(model,value)
   }
+  if(!editing && !restoring && acceptance.isNotEmpty()) item(key="acceptance") {NoteAcceptancePanel(model,value,acceptance,editorScope,onHistory={history=true},onEdit={caret=null;editing=true})}
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
   refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code)}}
   item {
@@ -279,7 +292,7 @@ internal fun relativeTime(context:Context,at:Long,now:Long=System.currentTimeMil
  val minutes=(now-at)/60_000
  return when {minutes<1 -> context.getString(R.string.core_just_now);minutes<60 -> context.resources.getQuantityString(R.plurals.core_minutes_ago,minutes.toInt(),minutes);minutes<24*60 -> context.resources.getQuantityString(R.plurals.core_hours_ago,(minutes/60).toInt(),minutes/60);else -> noteTime(at,context.resources.configuration.locales[0])}
 }
-internal fun changeKindName(context:Context,kind:String)=when(kind) {"create" -> context.getString(R.string.core_created);"edit" -> context.getString(R.string.core_edited);"append" -> context.getString(R.string.core_added_to);"merge" -> context.getString(R.string.core_merged);"restore" -> context.getString(R.string.core_restored);"accept" -> context.getString(R.string.core_suggestion_accepted);else -> kind.replace('_',' ').replaceFirstChar(Char::uppercase)}
+internal fun changeKindName(context:Context,kind:String)=when(kind) {"create" -> context.getString(R.string.core_created);"edit" -> context.getString(R.string.core_edited);"append" -> context.getString(R.string.core_added_to);"merge" -> context.getString(R.string.core_merged);"restore" -> context.getString(R.string.core_restored);"accept" -> context.getString(R.string.core_suggestion_accepted);"adopt" -> context.getString(R.string.accept_note_done);else -> kind.replace('_',' ').replaceFirstChar(Char::uppercase)}
 /** One line per revision; tap to read it. Server versions keep their number; versions only on this phone have none yet, so numbers never shift after a sync. */
 internal fun LazyListScope.revisionHistoryItems(context:Context,revisions:List<RevisionEntity>,online:Boolean,result:HistoryRefreshResult?,editing:Boolean,current:String?=null,canRestore:Boolean=true,onRestore:(RevisionEntity)->Unit) {
  item {

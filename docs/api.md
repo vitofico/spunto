@@ -99,6 +99,7 @@ The command prints the token once. Store it in the agent's secret configuration 
 | `GET /notes/{id}` | Read a note; optional `render=html` |
 | `PATCH /notes/{id}` | Replace body with `If-Match: "<version>"`; nonoverlapping stale edits merge |
 | `POST /notes/{id}/append` | Append text; optional expected version and paragraph/line separator |
+| `POST /notes/{id}/adopt` | Accept the saved text of a machine-written note. Send its displayed `base_version`. Returns the note. |
 | `POST /notes/{id}/flags` | Pin, archive, trash or mark private; optional per-flag clocks |
 | `DELETE /notes/{id}` | Permanently delete; owner session required |
 | `POST /trash/empty` | Empty trash; owner session required |
@@ -114,6 +115,17 @@ The command prints the token once. Store it in the agent's secret configuration 
 New captures require a nonempty body; edits can leave an existing note empty, including when removing its final inline label. Writes update the note, revision, labels and FTS index in the same short transaction. A missing/malformed `If-Match` returns 428. Overlapping stale edits return 409 with `conflict_id`: the incoming text is preserved in a separate note. Errors use `application/problem+json` with a stable `code`. Clients must retain their edited text until a successful save or resolve the returned conflict; replacing it with the server's body would lose their work.
 
 Creation retains revision 1. Revision coalescing reduces rapid edits in the same session without dropping that creation ancestor. The initial M1 implementation uses token identity for agent provenance: an agent token's name becomes `source.ref`, and its `origin`/`machine` state is set by the server. `source.url` separately preserves an optional link supplied with the capture; it does not replace that provenance.
+
+A person with write access can adopt a machine-written note as it stands. Adoption
+retains the Markdown and source attribution and clears the machine-written flag.
+A private note stays private. A stale submission returns `409 version_conflict`
+so the person can read the current revision before deciding.
+
+With **From agents** enabled, the owner can accept the displayed revision of an
+agent-created or agent-edited note. The `agent-inbox/commands/mark-reviewed`
+command takes `note_id` and `base_version`. Acceptance clears the note from the
+inbox and preserves its text and history. A later agent edit returns the note
+to the inbox.
 
 A simple read after obtaining a token:
 

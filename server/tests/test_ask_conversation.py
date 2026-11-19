@@ -26,7 +26,7 @@ def save_args(output):
 
 
 def prompt(provider):
-    return [item for item in provider.requests if "messages" in item][-1]["messages"][1]["content"]
+    return provider.chat_bodies[-1]["messages"][1]["content"]
 
 
 async def test_allocate_then_follow_up_with_fresh_sources_without_persisting_history(ai_host):

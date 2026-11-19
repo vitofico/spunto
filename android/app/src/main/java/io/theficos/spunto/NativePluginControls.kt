@@ -150,7 +150,13 @@ internal fun pluginSettingValue(resources:android.content.res.Resources,plugin:N
  }
 }
 
-@Composable internal fun NativePluginDetailFacts(plugin:NativePluginFacts,online:Boolean,commandBusy:Boolean,onCommand:(JsonObject)->Unit,onWeb:(String)->Unit) {
+internal fun pluginDetailCommands(plugin:NativePluginFacts,versionedAgentReview:Boolean):List<JsonObject> =
+ (plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.filter {command ->
+  command.pluginStrings("where").orEmpty().any {it in setOf("global","palette","note-actions")} &&
+   !handledByAgentReviewPanel(plugin.id,command.pluginText("id"),versionedAgentReview)
+ }.take(3)
+
+@Composable internal fun NativePluginDetailFacts(plugin:NativePluginFacts,online:Boolean,commandBusy:Boolean,versionedAgentReview:Boolean,onCommand:(JsonObject)->Unit,onWeb:(String)->Unit) {
  val locale=LocalConfiguration.current.locales[0]
  val resources=LocalContext.current.resources
  if(plugin.pin==EnvironmentPin.Managed) {Text(resources.getString(R.string.settings_set_in_the_environment ,if(plugin.wantedOn) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off)));Text("SPUNTO_PLUGINS",fontFamily=monoFont())}
@@ -158,9 +164,7 @@ internal fun pluginSettingValue(resources:android.content.res.Resources,plugin:N
   PluginHeading(resources.getString(R.string.settings_ai));pluginDestinationFacts(resources,plugin).forEach {Text(it)}
   if(plugin.permissions.orEmpty().any {it.startsWith("ai.")}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online) {Text(resources.getString(R.string.settings_change_route_in_the_web_app_owner))}
   PluginHeading(resources.getString(R.string.settings_run))
-  val commands=(plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.filter {command ->
-   command.pluginStrings("where").orEmpty().any {it in setOf("global","palette","note-actions")}
-  }.take(3)
+  val commands=pluginDetailCommands(plugin,versionedAgentReview)
   if(commands.isEmpty()) Text(resources.getString(R.string.settings_no_commands_are_declared))
   commands.forEach {command ->
    val where=command.pluginStrings("where").orEmpty()

@@ -516,7 +516,7 @@ export function useLabels() {
 }
 export function useManifest() {
   const language = useLanguage();
-  // The compact manifest omits provenance; the catalog owns trusted bundled IDs.
+  // Older manifests rely on the catalog for bundled plugin provenance.
   const catalog = useQuery({
     queryKey: ["catalog"],
     queryFn: api.catalog,
@@ -529,11 +529,11 @@ export function useManifest() {
       localizeCatalog(data, language === "en" ? [] : catalog.data?.plugins),
   });
 }
-export function useHistory(id: string) {
+export function useHistory(id: string, enabled = true) {
   return useQuery({
     queryKey: ["history", id],
     queryFn: () => api.history(id),
-    enabled: !!id,
+    enabled: !!id && enabled,
   });
 }
 export function useApiQuery<T>(

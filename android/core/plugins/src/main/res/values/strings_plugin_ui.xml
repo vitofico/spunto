@@ -54,4 +54,7 @@
         <item quantity="one">Removed %d tab</item>
         <item quantity="other">Removed %d tabs</item>
     </plurals>
+    <string name="plugin_ui_before">Before</string>
+    <string name="plugin_ui_after">After</string>
+    <string name="plugin_ui_empty_text">Empty</string>
 </resources>

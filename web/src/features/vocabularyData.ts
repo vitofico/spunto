@@ -1,7 +1,7 @@
 import { validSchema } from "./validSchema";
 import type { Vocabulary } from "./types";
 const fields: Record<string, string[]> = {
-  text: ["text"],
+  text: ["text", "feedback"],
   markdown: ["text", "markdown", "html"],
   notes: ["ids", "items"],
   pill: ["suggestion_id", "label", "action"],
@@ -25,7 +25,10 @@ export function validComponent(value: unknown): value is Vocabulary {
     return false;
   switch (value.type) {
     case "text":
-      return string(value.text, 280);
+      return (
+        string(value.text, 280) &&
+        (value.feedback === undefined || value.feedback === "success")
+      );
     case "markdown":
       return (
         string(value.text ?? value.markdown, 4000) &&
@@ -91,6 +94,19 @@ export function validComponent(value: unknown): value is Vocabulary {
       return false;
   }
 }
+
+/** Only a standalone, explicitly marked confirmation can replace a result panel. */
+export function commandSuccessMessage(value: unknown) {
+  if (
+    validComponent(value) &&
+    value.type === "text" &&
+    value.feedback === "success" &&
+    typeof value.text === "string" &&
+    value.text.trim()
+  )
+    return value.text;
+}
+
 export function outputText(value: unknown, depth = 0): string {
   if (depth > 3) return "";
   if (Array.isArray(value))

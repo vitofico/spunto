@@ -180,6 +180,13 @@ async def test_hosted_note_acceptance_checks_roles_and_preserves_provenance(host
     )
     assert enabled.status_code == 200, enabled.text
     command = plugin + "/commands/mark-reviewed"
+    path = f"/api/v1/notes/{draft['id']}"
+    detail = (await client.get(path, headers=owner)).json()
+    assert detail["agent_review"] == {"kind": "created", "before": None}
+    for actor in (editor, viewer, pat):
+        visible = await client.get(path, headers=actor)
+        assert visible.status_code == 200, visible.text
+        assert "agent_review" not in visible.json() and "note_tool_inputs" not in visible.json()
     review = {"note_id": draft["id"], "base_version": draft["version"]}
     denied = await client.post(command, headers=editor, json=review)
     assert denied.status_code == 403 and denied.json()["code"] == "owner_required"
@@ -187,10 +194,12 @@ async def test_hosted_note_acceptance_checks_roles_and_preserves_provenance(host
     assert receipt.status_code == 200 and receipt.json()["text"] == "Note accepted"
     view = "/api/v1/notes?view=agent-inbox/reviewed"
     assert (await client.get(view, headers=owner)).json()["notes"] == []
-    changed = await client.post(
-        f"/api/v1/notes/{draft['id']}/append", headers=pat, json={"text": "New agent revision"}
-    )
+    changed = await client.post(path + "/append", headers=pat, json={"text": "New agent revision"})
     assert changed.status_code == 200, changed.text
+    assert (await client.get(path, headers=owner)).json()["agent_review"] == {
+        "kind": "edited",
+        "before": {"version": draft["version"], "body": draft["body"]},
+    }
     [pending] = (await client.get(view, headers=owner)).json()["notes"]
     assert pending["id"] == draft["id"] and pending["origin"] == "agent"
     stale = await client.post(command, headers=owner, json=review)

@@ -49,6 +49,136 @@ async def post_note(server, body="An idea", **options):
     return response.json()
 
 
+async def test_agent_review_detail_tracks_the_exact_pending_batch(signed_in):
+    server = signed_in
+    client = server.client
+    plugin = "/api/v1/plugins/agent-inbox"
+    enabled = await client.post(
+        plugin + "/enable", headers=ORIGIN, json={"permissions": ["notes.read", "annotate"]}
+    )
+    assert enabled.status_code == 200, enabled.text
+    manifest = (await client.get("/api/v1/plugins/manifest")).json()
+    entry = next(item for item in manifest["plugins"] if item["id"] == "agent-inbox")
+    assert entry["origin"] == entry["source_kind"] == "bundled"
+    first_agent = await bearer(server, "write", private_ok=True)
+    second_agent = await bearer(server, "write", private_ok=True)
+    start = await post_note(server, "Original private note", private=True)
+    path = f"/api/v1/notes/{start['id']}"
+
+    async def append(agent, text, path=path):
+        response = await client.post(path + "/append", headers=agent, json={"text": text})
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    async def review(version, note_id=start["id"]):
+        return await client.post(
+            plugin + "/commands/mark-reviewed",
+            headers=ORIGIN,
+            json={"note_id": note_id, "base_version": version},
+        )
+
+    assert "agent_review" not in (await client.get(path)).json()
+    first = await append(first_agent, "First agent edit")
+    second = await append(first_agent, "Second same-agent edit")
+    assert first["version"] not in {
+        r["version"] for r in (await client.get(path + "/revisions")).json()
+    }
+    pinned = await client.post(path + "/flags", headers=ORIGIN, json={"pinned": True})
+    assert pinned.status_code == 200, pinned.text
+    latest = await append(second_agent, "Third edit from another agent")
+    before = {"version": start["version"], "body": start["body"]}
+    detail = (await client.get(path)).json()
+    assert detail["agent_review"] == {"kind": "edited", "before": before}
+    assert detail["body"] == latest["body"] and detail["version"] == latest["version"]
+    assert not any(detail["note_tool_inputs"].values())
+    tool_inputs = {"agent_review", "note_tool_inputs"}
+    assert tool_inputs.isdisjoint((await client.get(path, headers=first_agent)).json())
+    assert tool_inputs.isdisjoint((await client.get("/api/v1/notes")).json()["notes"][0])
+    stale = await review(second["version"])
+    assert stale.status_code == 409 and stale.json()["code"] == "version_conflict"
+    assert (await review(latest["version"])).status_code == 200
+    assert "agent_review" not in (await client.get(path)).json()
+    await append(second_agent, "Edit after acceptance using the same token")
+    detail = (await client.get(path)).json()
+    assert detail["agent_review"]["before"] == {
+        "version": latest["version"],
+        "body": latest["body"],
+    }
+    edited = await client.patch(
+        path,
+        headers={**ORIGIN, "If-Match": f'"{detail["version"]}"'},
+        json={"body": "Owner's new text"},
+    )
+    assert edited.status_code == 200, edited.text
+    assert "agent_review" not in (await client.get(path)).json()
+    await append(first_agent, "Edit after a human write")
+    assert (await client.get(path)).json()["agent_review"]["before"] == {
+        "version": edited.json()["version"],
+        "body": edited.json()["body"],
+    }
+
+    created = (
+        await client.post("/api/v1/notes", headers=first_agent, json={"body": "Agent creation"})
+    ).json()
+    created_path = f"/api/v1/notes/{created['id']}"
+    draft = await append(second_agent, "Edit before initial review", created_path)
+    assert (await client.get(created_path)).json()["agent_review"] == {
+        "kind": "created",
+        "before": None,
+    }
+    assert (await review(draft["version"], created["id"])).status_code == 200
+    await append(second_agent, "Edit after initial review", created_path)
+    assert (await client.get(created_path)).json()["agent_review"] == {
+        "kind": "edited",
+        "before": {"version": draft["version"], "body": draft["body"]},
+    }
+
+
+async def test_agent_review_handles_expired_and_unknown_legacy_bases(signed_in):
+    from spunto.core.agent_review import forget_base
+    from spunto.jobs.maintenance import prune
+
+    server = signed_in
+    client, store = server.client, server.services.store
+    plugin = "/api/v1/plugins/agent-inbox"
+    enabled = await client.post(
+        plugin + "/enable", headers=ORIGIN, json={"permissions": ["notes.read", "annotate"]}
+    )
+    assert enabled.status_code == 200, enabled.text
+    # Alternate credentials so these writes create more than twenty retained revisions.
+    agents = [await bearer(server, "write"), await bearer(server, "write")]
+    base = await post_note(server, "Original owner text")
+    path = f"/api/v1/notes/{base['id']}"
+    for index in range(22):
+        appended = await client.post(
+            path + "/append", headers=agents[index % 2], json={"text": f"Agent edit {index}"}
+        )
+        assert appended.status_code == 200, appended.text
+    assert (await client.get(path)).json()["agent_review"]["before"]["body"] == base["body"]
+    now = now_ms() + (server.services.settings.revision_days + 1) * 86_400_000
+    await prune(store, server.services.settings, now=now)
+    history = (await client.get(path + "/revisions")).json()
+    assert len(history) == 20 and base["version"] not in {row["version"] for row in history}
+    assert (await client.get(path)).json()["agent_review"] == {"kind": "edited", "before": None}
+
+    # Missing state from a pre-upgrade edit cannot be reconstructed from history.
+    async with store.write() as connection:
+        await forget_base(connection, base["id"])
+    appended = await client.post(
+        path + "/append", headers=agents[0], json={"text": "One more edit"}
+    )
+    assert appended.status_code == 200, appended.text
+    detail = (await client.get(path)).json()
+    assert detail["agent_review"] == {"kind": "edited", "before": None}
+    accepted = await client.post(
+        plugin + "/commands/mark-reviewed",
+        headers=ORIGIN,
+        json={"note_id": base["id"], "base_version": detail["version"]},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert "agent_review" not in (await client.get(path)).json()
+
+
 async def test_domain_save_derives_labels_search_title_hash_and_real_tasks_atomically(domain):
     body = (
         "# Plan\n- [ ] Call Marco\n- [x] Buy milk\n```\n"

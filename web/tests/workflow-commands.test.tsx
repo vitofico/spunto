@@ -434,7 +434,11 @@ it("lists a command that is both a note action and a palette command once, on th
     wrap(
       <Router hook={memory.hook}>
         <Location />
-        <PaletteCommands noteId="note-1" onResult={() => {}} />
+        <PaletteCommands
+          noteId="note-1"
+          note={{ id: "note-1" } as Note}
+          onResult={() => {}}
+        />
       </Router>,
     ),
   );
@@ -642,9 +646,13 @@ it.each(["inline", "long", "stale"] as const)(
       expect(decide).not.toHaveBeenCalled();
       return;
     }
-    await screen.findByText(after);
+    await waitFor(() => {
+      expect(document.querySelector(".note-diff ins")?.textContent).toContain(
+        after,
+      );
+      expect(apply.disabled).toBe(false);
+    });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(apply.disabled).toBe(false);
     fireEvent.click(apply);
     await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
     expect(decide).toHaveBeenCalledExactlyOnceWith("tidy-proposal", "accept");

@@ -67,6 +67,52 @@
         "title": "Adopt",
         "type": "object"
       },
+      "AgentReview": {
+        "properties": {
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentReviewBase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "created",
+              "edited"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "before"
+        ],
+        "title": "AgentReview",
+        "type": "object"
+      },
+      "AgentReviewBase": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "body"
+        ],
+        "title": "AgentReviewBase",
+        "type": "object"
+      },
       "Append": {
         "additionalProperties": false,
         "properties": {
@@ -712,6 +758,233 @@
           "conflict_of"
         ],
         "title": "Note",
+        "type": "object"
+      },
+      "NoteDetail": {
+        "properties": {
+          "agent_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "annotations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Annotations",
+            "type": "array"
+          },
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "change_seq": {
+            "title": "Change Seq",
+            "type": "integer"
+          },
+          "conflict_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict Of"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "duplicate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate"
+          },
+          "flag_times": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Flag Times",
+            "type": "object"
+          },
+          "html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "machine": {
+            "title": "Machine",
+            "type": "boolean"
+          },
+          "merged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged"
+          },
+          "note_tool_inputs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NoteToolInputs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_tasks": {
+            "title": "Open Tasks",
+            "type": "integer"
+          },
+          "origin": {
+            "enum": [
+              "owner",
+              "agent",
+              "plugin",
+              "external"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "private": {
+            "title": "Private",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "suggestions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trashed": {
+            "title": "Trashed",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_via_agent": {
+            "default": false,
+            "title": "Updated Via Agent",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "title",
+          "labels",
+          "version",
+          "change_seq",
+          "created_at",
+          "updated_at",
+          "pinned",
+          "archived",
+          "trashed",
+          "private",
+          "open_tasks",
+          "source",
+          "origin",
+          "machine",
+          "conflict_of"
+        ],
+        "title": "NoteDetail",
+        "type": "object"
+      },
+      "NoteToolInputs": {
+        "properties": {
+          "audio": {
+            "title": "Audio",
+            "type": "boolean"
+          },
+          "image": {
+            "title": "Image",
+            "type": "boolean"
+          },
+          "labels": {
+            "title": "Labels",
+            "type": "boolean"
+          },
+          "link": {
+            "title": "Link",
+            "type": "boolean"
+          },
+          "short_text": {
+            "title": "Short Text",
+            "type": "boolean"
+          },
+          "title_summary": {
+            "title": "Title Summary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "image",
+          "audio",
+          "link",
+          "title_summary",
+          "labels",
+          "short_text"
+        ],
+        "title": "NoteToolInputs",
         "type": "object"
       },
       "Page": {
@@ -2638,7 +2911,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Note"
+                  "$ref": "#/components/schemas/NoteDetail"
                 }
               }
             },

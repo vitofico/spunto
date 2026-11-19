@@ -18,7 +18,7 @@ class PluginPresentationTest {
    {"id":"off","enabled":false,"contributes":{"commands":[{"id":"off","where":["note-actions"]}]}},
    {"id":"waiting","state":"waiting","contributes":{"commands":[{"id":"waiting","where":["note-actions"]}]}}
   ]""").jsonArray.map {it.jsonObject}
-  val tools=noteTools(settingsTestResources(),plugins)
+  val tools=noteTools(settingsTestResources(),plugins,inputs=NoteToolInputs(shortText=true,labels=true))
   assertEquals(listOf("Link to note","Tidy text","Suggest labels"),tools.map {it.title})
  }
  @Test fun legacyAgentReviewRemainsInOrdinaryPluginMenusUntilVersionedCapabilityIsAdvertised() {
@@ -49,14 +49,50 @@ class PluginPresentationTest {
   assertTrue(decisionActionIds(manifest(plugin),owner=true,online=false).isEmpty())
   assertTrue(decisionActionIds(manifest(plugin),owner=false,online=true).isEmpty())
   assertTrue(decisionActionIds(manifest(JsonObject(plugin+("enabled" to JsonPrimitive(false)))),owner=true,online=true).isEmpty())
-  assertEquals(listOf("record-decision"),noteTools(settingsTestResources(),listOf(plugin)).map {it.id})
-  assertTrue(noteTools(settingsTestResources(),listOf(plugin),allowDecisionJournal=false).isEmpty())
+  assertTrue(noteTools(settingsTestResources(),listOf(plugin)).isEmpty())
   val ordinary=Note("note","Owner's decision words")
   val journal=ordinary.copy(sourceKind="plugin",sourceRef="decision-journal")
   assertFalse(isJournalNote(ordinary))
   assertTrue(isJournalNote(journal))
   assertFalse(isJournalNote(journal.copy(trashed=true)))
   assertFalse(isJournalNote(journal.copy(conflictOf="other-note")))
+ }
+ @Test fun contextualToolsUseExactInputsAndDoNotHideOperatorCommands() {
+  fun command(plugin:String,id:String,origin:String="bundled")=Json.parseToJsonElement("""{
+   "id":"$plugin","origin":"$origin","permissions":["ai.chat"],"contributes":{"commands":[
+    {"id":"setup","where":[]},{"id":"batch","where":[]},{"id":"export","where":[]},
+    {"id":"$id","title":"$id","where":["note-actions"]}]}}
+  """).jsonObject
+  val plugins=listOf(command("image-text","read"),command("voice-memos","transcribe"),command("link-enrichment","fetch"),
+   command("title-summary","summarize"),command("label-suggestions","suggest-now"),command("tidy","tidy"),
+   command("operator-tool","operator-action","local"))
+  val resources=settingsTestResources()
+  assertEquals(listOf("operator-action"),noteTools(resources,plugins).map {it.id})
+  assertEquals(listOf("read","fetch","summarize","tidy","operator-action"),noteTools(resources,plugins,
+   inputs=NoteToolInputs(image=true,link=true,titleSummary=true,shortText=true)).map {it.id})
+  assertEquals(listOf("transcribe","suggest-now","operator-action"),noteTools(resources,plugins,
+   inputs=NoteToolInputs(audio=true,labels=true)).map {it.id})
+ }
+ @Test fun onlyMarkedStandaloneTextBecomesTransientFeedback() {
+  fun result(body:String)=commandEnvelope("tidy","tidy",JsonObject(emptyMap()),Json.parseToJsonElement(body))
+  assertEquals("Done",commandSuccess(result("""{"type":"text","text":"Done","feedback":"success"}""")))
+  assertNull(commandSuccess(result("""{"type":"text","text":"Something changed"}""")))
+  assertNull(commandSuccess(result("""{"ui":1,"items":[{"type":"text","text":"Done","feedback":"success"},{"type":"notes","ids":["id"]}]}""")))
+ }
+ @Test fun pinnedToolsKeepTwoOrderedChoicesAndPersistPerReplica() {
+  val application=org.robolectric.RuntimeEnvironment.getApplication()
+  val preferences=application.getSharedPreferences("synthetic-pins",0)
+  val other=application.getSharedPreferences("synthetic-other-pins",0)
+  val tools=listOf(NoteTool("links","link","Link"),NoteTool("tidy","tidy","Tidy"),NoteTool("image-text","read","OCR"))
+  val pins=NoteToolPins(preferences)
+  tools.forEach(pins::toggle)
+  assertEquals(listOf("links/link","tidy/tidy"),NoteToolPins(preferences).ids)
+  assertTrue(NoteToolPins(other).ids.isEmpty())
+  pins.toggle(tools.first())
+  pins.toggle(tools.last())
+  assertEquals(listOf("tidy/tidy","image-text/read"),NoteToolPins(preferences).ids)
+  pins.removeUnavailable(listOf(tools.last()))
+  assertEquals(listOf("image-text/read"),NoteToolPins(preferences).ids)
  }
  @Test fun toolsExposePrimaryGlobalCommandsAndLeaveJournalInItsOwnViews() {
   fun tool(id:String,command:String,state:String="enabled")=Json.parseToJsonElement("""{

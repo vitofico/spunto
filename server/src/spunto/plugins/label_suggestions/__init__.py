@@ -13,8 +13,10 @@ from spunto.ai.vectors import VectorUnavailable
 from spunto.core.text import label_key
 from spunto.host import ContextError, Ctx, Plugin
 from spunto.host.language import tr
+from spunto.host.vocabulary import success_feedback
 
 plugin = Plugin("label-suggestions")
+MIN_LABEL_WORDS = 3
 PROMPT = """Suggest up to three useful labels. Prefer the owner's existing vocabulary and
 its exact display spelling, most-specific suitable path first. Do not repeat existing
 or dismissed labels. At most one new label, at most three path segments, confidence
@@ -149,7 +151,7 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None, *, forc
         not note
         or note["machine"]
         or note["private"]
-        or len(note["body"].split()) < 3
+        or len(note["body"].split(maxsplit=MIN_LABEL_WORDS - 1)) < MIN_LABEL_WORDS
         or (note_version is not None and note_version != note["version"])
     ):
         return
@@ -240,14 +242,12 @@ async def suggest_now(ctx: Ctx, note_id: str):
         }
     applied = sum(result["status"] == "accepted" for result in results)
     pending = sum(result["status"] == "pending" for result in results)
-    return {
-        "type": "text",
-        "text": tr(
-            "{applied} existing labels applied · {pending} suggestions to review.",
-            applied=applied,
-            pending=pending,
-        ),
-    }
+    message = tr(
+        "{applied} existing labels applied · {pending} suggestions to review.",
+        applied=applied,
+        pending=pending,
+    )
+    return success_feedback(message) if applied or pending else {"type": "text", "text": message}
 
 
 @plugin.on("suggestion.decided")

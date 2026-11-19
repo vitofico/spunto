@@ -1,6 +1,7 @@
 package io.theficos.spunto
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -89,24 +90,34 @@ class NativePluginControlsTest {
    put("action","add_label")
    put("payload",buildJsonObject {put("path",label)})
   }
-  val waiting=(1..3).map {index -> buildJsonObject {
-   put("id","pending-$index")
-   put("title","Add #pending-$index")
-   put("action","add_label")
-  }}
   var undone=""
   compose.setContent {SpuntoTheme {
    val density=LocalDensity.current.density
    CompositionLocalProvider(LocalDensity provides Density(density,1.8f)) {
     Column(Modifier.width(240.dp).verticalScroll(rememberScrollState())) {
-     ProposalLine(waiting,emptyMap(),{},{},listOf(receipt),{undone=it})
+     RecentLabelChanges(listOf(receipt)) {undone=it}
     }
    }
   }}
-  compose.onNodeWithText("+1").performScrollTo().performClick()
+  compose.onNodeWithText("Undo").assertDoesNotExist()
+  compose.onNodeWithText("Recent changes").performScrollTo().performClick()
   compose.onNodeWithText("Added #$label").performScrollTo().assertIsDisplayed()
   compose.onNodeWithText("Undo").performScrollTo().performClick()
   compose.runOnIdle {assertEquals("applied",undone)}
+ }
+ @OptIn(ExperimentalLayoutApi::class)
+ @Test fun noteToolTilesKeepLongLabelsReachableAtLargeTextSizes() {
+  val titles=listOf("Text aus Bildern lesen", "Details zum gespeicherten Link abrufen", "Aufnahme transkribieren")
+  val clicked=mutableListOf<String>()
+  compose.setContent {SpuntoTheme {
+   CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density,2f)) {
+    Column(Modifier.width(240.dp).verticalScroll(rememberScrollState())) {
+     NoteActionGrid {titles.forEach {title -> NoteActionTile(R.drawable.ic_link,title,Modifier.weight(1f)) {clicked+=title}}}
+    }
+   }
+  }}
+  titles.forEach {title -> compose.onNode(hasText(title) and hasClickAction()).performScrollTo().assertIsDisplayed().performClick()}
+  compose.runOnIdle {assertEquals(titles,clicked)}
  }
  @Test fun renderedUndoAppearsOnlyAfterRealControllerAcknowledgement()=runBlocking {
   val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)

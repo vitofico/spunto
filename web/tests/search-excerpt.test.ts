@@ -44,3 +44,20 @@ it("retains link destinations when they explain a search match", () => {
     "Closing ".repeat(80);
   expect(searchExcerpt(body, ["needle"], 90)).toContain("example.org/needle");
 });
+
+it("drops a title that the result already displays without discarding a matching URL", () => {
+  expect(
+    searchExcerpt("# Note title\nNote content", [], 240, "Note title"),
+  ).toBe("Note content");
+  expect(
+    searchExcerpt("# **Note** `title`\nNote content", [], 240, "Note title"),
+  ).toBe("Note content");
+  expect(
+    searchExcerpt(
+      "# [Reference](https://example.org/needle)",
+      ["needle"],
+      240,
+      "Reference",
+    ),
+  ).toBe("(https://example.org/needle)");
+});

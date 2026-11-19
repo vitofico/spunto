@@ -345,6 +345,7 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
             {
               ...note,
               id: "meaning",
+              title: "Caffè",
               body: "Caffè in Milan",
               html: "<p>Caffè in Milan</p>",
               match: "meaning",
@@ -399,12 +400,20 @@ test("model inventory choices and environment reset require Save on mobile", asy
   await expect(
     embedding.locator("option").filter({ hasText: "fixture-embedding-v2" }),
   ).toHaveCount(1);
-  // Phone targets: a model choice and the short "AI" tab are at least 44 px.
+  // Phone targets: a model choice and the AI destination are at least 44 px.
   expect((await embedding.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  expect(
-    (await page.getByRole("link", { name: "AI", exact: true }).boundingBox())!
-      .width,
-  ).toBeGreaterThanOrEqual(44);
+  const settings = page.getByRole("navigation", {
+    name: "Settings",
+    exact: true,
+  });
+  const browse = settings.getByRole("button", { name: "Browse settings" });
+  await browse.click();
+  const aiSection = settings.getByRole("link", { name: "AI", exact: true });
+  await expect(aiSection).toHaveAttribute("aria-current", "page");
+  const target = (await aiSection.boundingBox())!;
+  expect(target.width).toBeGreaterThanOrEqual(44);
+  expect(target.height).toBeGreaterThanOrEqual(44);
+  await browse.click();
   await embedding.selectOption(
     JSON.stringify(["local", "fixture-embedding-v2"]),
   );
@@ -493,12 +502,15 @@ test("keyword results render before hybrid replaces the list", async ({
 }) => {
   const state = await fixture(page);
   await page.goto("/search?q=coffee");
-  await expect(page.getByText("Coffee in Rome", { exact: true })).toBeVisible();
+  const keyword = page.getByRole("link", { name: "Coffee", exact: true });
+  await expect(keyword.locator("mark")).toHaveText("Coffee");
+  await expect(page.locator(".search-excerpt")).toHaveText("in Rome");
   state.releaseHybrid();
-  await expect(page.getByText("Caffè in Milan", { exact: true })).toBeVisible();
-  await expect(page.getByText("Coffee in Rome", { exact: true })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("link", { name: "Caffè", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".search-excerpt")).toHaveText("in Milan");
+  await expect(keyword).toHaveCount(0);
   await expect(page.getByText("≈ similar meaning")).toBeVisible();
 });
 
@@ -542,7 +554,7 @@ test("a typed question asks directly and keeps citations and explicit save", asy
   const state = await fixture(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Search and commands" }).click();
-  const input = page.getByRole("textbox", { name: "Search and commands" });
+  const input = page.getByRole("searchbox", { name: "Search and commands" });
   await input.fill("Where did I have coffee?");
   await expect(
     page.getByRole("option", { name: /Ask your notes/ }),
@@ -651,10 +663,10 @@ test("reviewed Ask note writes show a preview and require explicit confirmation 
   await page.goto("/");
   await page.getByRole("button", { name: "Search and commands" }).click();
   await page
-    .getByRole("textbox", { name: "Search and commands" })
+    .getByRole("searchbox", { name: "Search and commands" })
     .fill("Create a note for the weekend?");
   await page
-    .getByRole("textbox", { name: "Search and commands" })
+    .getByRole("searchbox", { name: "Search and commands" })
     .press("Enter");
   const chat = page.getByRole("region", { name: "Conversation" });
   await expect(chat.getByText(/Target: New note/)).toBeVisible();

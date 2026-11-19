@@ -38,17 +38,16 @@ import kotlinx.coroutines.delay
    conflict!=null -> StatusLine(resources.getString(R.string.settings_edited_on_two_devices_both_versions_are),resources.getString(R.string.settings_compare),warn=true) {nav.open("note:${conflict.id}")}
    review!=null -> StatusLine(resources.getQuantityString(R.plurals.settings_refused_notes,refused.size,refused.size),resources.getString(R.string.settings_review),warn=true) {nav.open("note:$review")}
    auth!=null && !connected -> StatusLine(resources.getString(R.string.settings_offline_notes_stay_on_this_phone))
-   auth!=null && sync is SyncStatus.Waiting && pending==0 -> StatusLine(syncSummary(resources,sync,0,connected,null),resources.getString(R.string.settings_sync),wrap=true) {model.synchronize()}
+   auth!=null && sync is SyncStatus.Waiting && pending==0 -> StatusLine(syncSummary(resources,sync,0,connected,null),resources.getString(R.string.settings_sync)) {model.synchronize()}
    auth!=null && (backlog || sync is SyncStatus.Waiting) && pending>0 -> SyncStatusNotice(pending,sync is SyncStatus.Waiting) {model.synchronize()}
    auth?.serverUrl?.startsWith("http://")==true -> StatusLine(resources.getString(R.string.settings_not_encrypted_this_server_uses_plain_http))
   }
  }
 }
-@Composable private fun StatusLine(text:String,action:String?=null,warn:Boolean=false,dismiss:Boolean=false,wrap:Boolean=false,onAction:()->Unit={}) {
- val resources=LocalContext.current.resources
+@Composable private fun StatusLine(text:String,action:String?=null,warn:Boolean=false,dismiss:Boolean=false,onAction:()->Unit={}) {
  Row(Modifier.fillMaxWidth().heightIn(min=48.dp).padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
   if(warn) Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
-  Text(text,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=if(dismiss || wrap) 3 else 1,overflow=TextOverflow.Ellipsis)
+  Text(text,Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=if(dismiss) 3 else Int.MAX_VALUE,overflow=TextOverflow.Ellipsis)
   if(action!=null) {
    if(dismiss) IconButton(onClick=onAction,modifier=Modifier.size(48.dp).semantics {contentDescription=action}) {Text("×",style=MaterialTheme.typography.titleMedium)}
    else TextButton(onClick=onAction,modifier=Modifier.heightIn(min=48.dp)) {Text(action)}
@@ -61,7 +60,7 @@ import kotlinx.coroutines.delay
 }
 internal fun notesCount(resources:Resources,count:Int)=resources.getQuantityString(R.plurals.settings_notes,count,count)
 /** On a note whose change the server refused: what happened, and the way out that keeps every word. */
-@Composable internal fun RefusedChangeNotice(model:SpuntoViewModel,id:String,code:String) {
+@Composable internal fun RefusedChangeNotice(model:SpuntoViewModel,id:String,code:String,onEdit:(()->Unit)?=null) {
  val resources=LocalContext.current.resources
  val nav=LocalNavigator.current; val feedback=LocalFeedback.current
  val writable by model.workspaceCanWrite.collectAsState()
@@ -71,8 +70,12 @@ internal fun notesCount(resources:Resources,count:Int)=resources.getQuantityStri
     Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
     Text(refusedChangeMessage(resources,code),style=MaterialTheme.typography.bodyMedium)
    }
-   // Shortening a note that is too long lets it sync, so only the other refusals need a new note.
-   if(writable && code!="too_large") Button(onClick={model.task {model.requireWorkspaceWrite();val copy=model.repository.keepRefusedAsNewNote(id);nav.back();nav.open("note:$copy");feedback.show(resources.getString(R.string.settings_kept_as_a_new_note))}},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_keep_as_new_note))}
+   if(writable) {
+    if(code=="too_large") onEdit?.let {edit ->
+     Button(onClick=edit,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.core_edit_note))}
+    }
+    else Button(onClick={model.task {model.requireWorkspaceWrite();val copy=model.repository.keepRefusedAsNewNote(id);nav.back();nav.open("note:$copy");feedback.show(resources.getString(R.string.settings_kept_as_a_new_note))}},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_keep_as_new_note))}
+   }
   }
  }
 }

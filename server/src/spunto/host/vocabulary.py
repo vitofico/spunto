@@ -20,11 +20,16 @@ def _text(value: object, limit: int) -> None:
         raise ManifestError(f"component text must contain at most {limit} characters")
 
 
-def validate_component(value: dict) -> dict:
+def validate_component(value: dict, *, command_feedback: bool = False) -> dict:
     if not isinstance(value, dict) or value.get("type") not in FIELDS:
         raise ManifestError("unknown component")
     kind = value["type"]
-    closed(value, FIELDS[kind] | {"type", "fallback"}, "component")
+    allowed = FIELDS[kind] | {"type", "fallback"}
+    if command_feedback and kind == "text":
+        allowed.add("feedback")
+        if "feedback" in value and value["feedback"] != "success":
+            raise ManifestError("unsupported command feedback")
+    closed(value, allowed, "component")
     if kind in {"text", "markdown"}:
         _text(value.get("text", value.get("markdown")), 280 if kind == "text" else 4000)
     elif kind == "notes":
@@ -69,14 +74,14 @@ def validate_component(value: dict) -> dict:
     return value
 
 
-def validate_output(value: object) -> object:
+def validate_output(value: object, *, command_feedback: bool = False) -> object:
     if isinstance(value, list):
         if len(value) > 10:
             raise ManifestError("panel allows at most 10 items")
         for item in value:
             validate_component(item)
     elif isinstance(value, dict) and "type" in value:
-        validate_component(value)
+        validate_component(value, command_feedback=command_feedback)
     elif isinstance(value, dict):
         closed(value, {"ui", "items", "components"}, "output")
         if value.get("ui", 1) != 1:
@@ -85,6 +90,11 @@ def validate_output(value: object) -> object:
     else:
         raise ManifestError("output must use the component vocabulary")
     return value
+
+
+def success_feedback(value):
+    component = {"type": "text", "text": value}
+    return {**component, "feedback": "success", "fallback": component}
 
 
 def validate_annotation(kind: str, value: object) -> None:

@@ -403,14 +403,18 @@ async def test_reference_is_static_offline_and_openapi_describes_note_responses(
     assert {"id", "body", "version", "labels", "source", "origin", "private", "created_at"} <= set(
         note["properties"]
     )
-    for path, method, status in (
-        ("/api/v1/notes", "post", "201"),
-        ("/api/v1/notes/{id}", "get", "200"),
+    for path, method, status, model in (
+        ("/api/v1/notes", "post", "201", "Note"),
+        ("/api/v1/notes/{id}", "get", "200", "NoteDetail"),
     ):
         schema = document["paths"][path][method]["responses"][status]["content"][
             "application/json"
         ]["schema"]
-        assert schema["$ref"] == "#/components/schemas/Note"
+        assert schema["$ref"] == f"#/components/schemas/{model}"
+    detail = document["components"]["schemas"]["NoteDetail"]
+    additions = {"agent_review", "note_tool_inputs"}
+    assert set(detail["properties"]) == set(note["properties"]) | additions
+    assert additions.isdisjoint(detail["required"])
     assert (
         document["paths"]["/api/v1/search"]["get"]["responses"]["200"]["content"][
             "application/json"

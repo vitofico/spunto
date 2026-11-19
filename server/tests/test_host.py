@@ -92,6 +92,20 @@ def test_vocabulary_rejects_unknown_fields_and_caps():
         validate_annotation("panel", [{"type": "markdown", "text": "é" * 3000}])
 
 
+def test_success_feedback_only_extends_standalone_bundled_command_text():
+    from spunto.host.vocabulary import success_feedback
+
+    marked = success_feedback("Done")
+    assert validate_output(marked, command_feedback=True) is marked
+    assert validate_output(marked["fallback"]) == {"type": "text", "text": "Done"}
+    with pytest.raises(ManifestError):
+        validate_output(marked)
+    with pytest.raises(ManifestError):
+        validate_output({"ui": 1, "items": [marked]}, command_feedback=True)
+    with pytest.raises(ManifestError):
+        validate_output({**marked, "feedback": "unknown"}, command_feedback=True)
+
+
 def test_plugin_failure_logs_include_safe_diagnostics_without_error_messages(caplog):
     from spunto.host.runtime import _log_failure
 

@@ -8,6 +8,11 @@ export type Note = Omit<
   annotations: Annotation[];
   match?: "keyword" | "meaning" | "both";
 };
+export type NoteDetail = Note &
+  Pick<
+    components["schemas"]["NoteDetail"],
+    "agent_review" | "note_tool_inputs"
+  >;
 export type NotePage = { notes: Note[]; next_cursor: string | null };
 export type SearchPage = {
   hits: Note[];

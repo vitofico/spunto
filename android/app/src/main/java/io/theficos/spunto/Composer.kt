@@ -51,7 +51,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,focusCapture:Boolean=false,onCaptureFocused:()->Unit={},onSave:suspend (String)->Unit) {
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -166,6 +166,14 @@ import kotlinx.coroutines.flow.flowOf
   ready=true
   androidx.compose.runtime.withFrameNanos { }
   if(autoDictate && mic) micTap() else if(autoFocus && !focusSpent) { focusSpent=true; focus.requestFocus(); keyboard?.show() }
+ }
+ LaunchedEffect(focusCapture,ready,canWrite) {
+  if(focusCapture && ready && canWrite) {
+   withFrameNanos { }
+   focus.requestFocus()
+   keyboard?.show()
+   onCaptureFocused()
+  }
  }
  LaunchedEffect(dictation.phase) { if(previousPhase in setOf(DictationPhase.Listening,DictationPhase.Stopping) && dictation.phase !in setOf(DictationPhase.Listening,DictationPhase.Stopping)) { val words=(dictation.text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }-wordsBefore).coerceAtLeast(0);view.announceForAccessibility(context.resources.getQuantityString(R.plurals.core_words_added,words,words)) };previousPhase=dictation.phase }
  LaunchedEffect(dictation.text) { if(!saved && !voice.hasSession && dictation.phase!=DictationPhase.NeedsPermission && dictation.text.isNotEmpty()) {if(dictation.text!=value.text) dictatedText=true;value=TextFieldValue(dictation.text,TextRange(dictation.text.length))} }

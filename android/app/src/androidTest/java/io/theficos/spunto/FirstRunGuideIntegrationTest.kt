@@ -62,6 +62,7 @@ class FirstRunGuideIntegrationTest {
    waitFor("Getting started · 2 of 4")
    repeat(2) {nextStep(it+3)}
    reachableAction("Start writing").performClick();waitForEditor()
+   compose.waitUntil(10_000) {compose.onAllNodes(hasContentDescription("Note text") and isFocused()).fetchSemanticsNodes().isNotEmpty()}
    assertTrue(store.completed)
    scenario.recreate();waitForEditor()
    compose.onNodeWithText("Getting started",substring=true).assertDoesNotExist()

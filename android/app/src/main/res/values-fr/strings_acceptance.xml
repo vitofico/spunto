@@ -17,4 +17,13 @@
     <string name="accept_note_connect">Connectez-vous au serveur pour accepter cette version.</string>
     <string name="accept_note_wait_sync">Synchronisez la note avant d’accepter cette version.</string>
     <string name="accept_note_working">Acceptation en cours…</string>
+    <string name="note_actions_heading">Actions de la note</string>
+    <string name="note_recent_changes">Modifications récentes</string>
+    <string name="accept_changes_loading">Chargement de la comparaison…</string>
+    <string name="accept_changes_unavailable">La version précédente est indisponible. Vous pouvez ouvrir l’historique ou relire le texte actuel.</string>
+    <string name="note_tool_manage_pins">Épingler des outils</string>
+    <string name="note_tool_pin_hint">Épinglez jusqu’à deux outils pour y accéder rapidement.</string>
+    <string name="note_tool_pin">Épingler %1$s pour y accéder rapidement</string>
+    <string name="note_tool_unpin">Désépingler %1$s</string>
+    <string name="note_tool_clear_unavailable">Supprimer les raccourcis indisponibles pour cette note</string>
 </resources>

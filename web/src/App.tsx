@@ -27,12 +27,14 @@ import { useInstanceAppearance } from "./features/Appearance";
 import { PluginRailViews, type CommandOrigin } from "./features/Slots";
 import Timeline from "./pages/Timeline";
 import { Icon } from "./components/core/Icon";
+import { useToast } from "./components/core/Toast";
 import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
 import { AccountIdentityLink } from "./features/AccountIdentity";
 import { SpaceSwitcher } from "./features/Collaboration";
 import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
+import { commandSuccessMessage } from "./features/vocabularyData";
 const loadNote = () => import("./pages/Note");
 // React.lazy keeps a failed import for good, so "Try again" builds fresh ones.
 function lazyPages() {
@@ -499,6 +501,7 @@ function useSync() {
 }
 export default function App() {
   useLanguage();
+  const toast = useToast();
   const auth = useAuth();
   const owner = useOwner();
   const workspaceIssue = useWorkspaceIssue();
@@ -621,7 +624,13 @@ export default function App() {
     const handler = (event: Event) => {
       if (guideOpen) return;
       const detail = (event as CustomEvent).detail;
-      setCommandResult(detail?.origin ? detail.value : detail);
+      const value = detail?.origin ? detail.value : detail;
+      const success = commandSuccessMessage(value);
+      if (success) {
+        toast.show({ message: success });
+        return;
+      }
+      setCommandResult(value);
       setCommandOrigin(detail?.origin);
       setInstant(false);
       overlayTrigger.current = document.activeElement as HTMLElement;
@@ -631,7 +640,7 @@ export default function App() {
     };
     window.addEventListener("spunto:command-result", handler);
     return () => window.removeEventListener("spunto:command-result", handler);
-  }, [guideOpen]);
+  }, [guideOpen, toast]);
   useEffect(() => {
     if (
       auth.status === "authenticated" &&

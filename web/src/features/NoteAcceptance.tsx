@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { NoteDiff } from "../components/core/NoteDiff";
 import { api } from "../lib/api";
 import { safeError } from "../lib/errors";
 import { t } from "../lib/i18n";
 import { invalidateContentFor } from "../lib/query";
-import type { Note } from "../lib/types";
+import type { NoteDetail } from "../lib/types";
 import styles from "./Feature.module.css";
 
 type Acceptance = "machine" | "agent-note" | "agent-changes";
@@ -16,13 +17,14 @@ export function NoteAcceptance({
   blocked,
   online,
 }: {
-  note: Note;
+  note: NoteDetail;
   machine: boolean;
   agent: boolean;
   blocked: boolean;
   online: boolean;
 }) {
   const client = useQueryClient();
+  const comparisonHeading = useId();
   const [accepted, setAccepted] = useState<{
     mode: Acceptance;
     version: number;
@@ -54,9 +56,11 @@ export function NoteAcceptance({
     },
     onError: (error) => {
       if (
-        ["version_conflict", "note_not_machine_written"].includes(
-          safeError(error).code,
-        )
+        [
+          "version_conflict",
+          "note_not_machine_written",
+          "note_not_from_agent",
+        ].includes(safeError(error).code)
       )
         void client.invalidateQueries({ queryKey: ["note", note.id] });
     },
@@ -75,7 +79,10 @@ export function NoteAcceptance({
       ? safeError(accept.error)
       : undefined;
   if (blocked || (!machine && !agent && !receipt && !error)) return null;
-  const agentChanges = note.source?.kind !== "agent" || machine;
+  const agentChanges = note.agent_review
+    ? note.agent_review.kind === "edited"
+    : note.source?.kind !== "agent" || machine;
+  const before = note.agent_review?.before;
   const run = (mode: Acceptance, button: HTMLButtonElement) => {
     if (!online || accept.isPending) return;
     trigger.current = button;
@@ -104,27 +111,56 @@ export function NoteAcceptance({
         </div>
       )}
       {agent && (
-        <div className={styles.acceptanceAction}>
-          <p>{t("note.accept_agent_help")}</p>
-          <button
-            type="button"
-            className="button"
-            disabled={!online || accept.isPending}
-            onClick={(event) =>
-              run(
-                agentChanges ? "agent-changes" : "agent-note",
-                event.currentTarget,
-              )
-            }
-          >
-            {t(
-              machine
-                ? "note.accept_agent_changes"
-                : agentChanges
-                  ? "note.accept_changes"
+        <div
+          className={styles.agentAcceptance}
+          data-comparing={agentChanges || undefined}
+        >
+          {agentChanges && (
+            <div className={styles.agentComparison}>
+              <h2 id={comparisonHeading}>{t("note.agent_changes")}</h2>
+              {!before ? (
+                <p>{t("note.agent_comparison_unavailable")}</p>
+              ) : before.body === note.body ? (
+                <p>{t("note.agent_comparison_unchanged")}</p>
+              ) : (
+                <NoteDiff
+                  before={before.body}
+                  after={note.body}
+                  labelledBy={comparisonHeading}
+                  labels={{
+                    before: t("note.before_agent_edit", {
+                      version: before.version,
+                    }),
+                    after: t("note.after_agent_edit", {
+                      version: note.version,
+                    }),
+                  }}
+                />
+              )}
+            </div>
+          )}
+          <div className={styles.acceptanceAction}>
+            <p>{t("note.accept_agent_help")}</p>
+            <button
+              type="button"
+              className={agentChanges ? "primary" : "button"}
+              disabled={!online || accept.isPending}
+              onClick={(event) =>
+                run(
+                  agentChanges ? "agent-changes" : "agent-note",
+                  event.currentTarget,
+                )
+              }
+            >
+              {t(
+                agentChanges
+                  ? machine
+                    ? "note.accept_agent_changes"
+                    : "note.accept_changes"
                   : "note.accept_note",
-            )}
-          </button>
+              )}
+            </button>
+          </div>
         </div>
       )}
       {!online && (machine || agent) && (

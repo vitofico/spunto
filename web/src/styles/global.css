@@ -821,6 +821,24 @@ kbd {
   height: 16px;
   margin-right: var(--s-4);
 }
+.note-tools .note-command-trigger {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.note-tools .note-command-trigger:hover {
+  border-color: var(--accent);
+}
+.note-tools .pinned-note-tool {
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  color: var(--accent);
+  background: var(--raised);
+  overflow-wrap: anywhere;
+}
+.note-tools .pinned-note-tool .icon {
+  flex: none;
+}
 .note-header > .row,
 .history-item > .row,
 .card > .row {
@@ -867,14 +885,23 @@ kbd {
 }
 .diff > * {
   display: block;
-  padding: 0 var(--s-12);
+  padding: 0 var(--s-12) 0 var(--s-32);
+  position: relative;
+}
+.diff-sign {
+  position: absolute;
+  inset-inline-start: var(--s-12);
+  font-weight: 600;
 }
 .diff del,
 .diff-legend del {
   text-decoration: none;
   background: var(--sunken);
-  color: var(--ink-3);
-  box-shadow: inset 2px 0 var(--rule-strong);
+  color: var(--ink-2);
+  box-shadow: inset 2px 0 var(--danger);
+}
+.diff del .diff-sign {
+  color: var(--danger);
 }
 .diff ins,
 .diff-legend ins {
@@ -891,6 +918,54 @@ kbd {
   color: var(--ink-3);
   font-family: var(--f-sans);
   font-size: var(--t-meta-size);
+}
+.diff.note-diff {
+  font: var(--t-body-size) / 1.6 var(--f-sans);
+  white-space: break-spaces;
+}
+.note-diff > * {
+  padding-inline: var(--s-12);
+}
+.note-diff > .note-diff-group {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-4) 0;
+}
+.note-diff-group > :is(del, ins) {
+  display: block;
+  color: var(--ink);
+  padding: var(--s-8) var(--s-12);
+}
+.note-diff-label {
+  display: block;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--f-sans);
+  font-weight: 600;
+  margin-block-end: var(--s-4);
+}
+.note-diff del .note-diff-phrase {
+  text-decoration: line-through;
+}
+.note-diff ins .note-diff-phrase {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+.note-diff-phrase[data-spacing] {
+  position: relative;
+}
+.note-diff-phrase[data-spacing]::after {
+  content: attr(data-spacing);
+  position: absolute;
+  inset-inline-start: 0;
+  color: var(--ink-2);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.note-diff-blank::before {
+  content: "↵";
+  color: var(--ink-2);
 }
 .note-editor .editor-wrap,
 .note-editor textarea {
@@ -964,6 +1039,12 @@ kbd {
   cursor: pointer;
   color: var(--ink-2);
 }
+.history-unread {
+  display: inline-block;
+  margin-inline-start: var(--s-8);
+  color: var(--accent);
+  font: var(--t-meta) var(--f-sans);
+}
 .history-item {
   padding: var(--s-16) 0;
   border-bottom: 1px solid var(--rule);
@@ -980,8 +1061,8 @@ kbd {
 .search-form {
   display: flex;
   flex-direction: column;
-  gap: var(--s-16);
-  margin-bottom: var(--s-32);
+  gap: var(--s-8);
+  margin-bottom: var(--s-20);
 }
 .search-form > .row {
   display: grid;
@@ -993,6 +1074,49 @@ kbd {
   align-items: center;
   gap: var(--s-12) var(--s-16);
   color: var(--ink-2);
+  padding: var(--s-12);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-8);
+}
+.search-filter-disclosure summary {
+  gap: var(--s-8);
+  cursor: pointer;
+  list-style: none;
+  min-height: 44px;
+}
+.search-filter-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+.search-filter-disclosure summary .icon {
+  width: 16px;
+  height: 16px;
+}
+.search-filter-disclosure[open] summary .icon:last-child {
+  rotate: 180deg;
+}
+.search-clear-filters {
+  color: var(--accent);
+  margin-inline-start: auto;
+  min-height: 44px;
+}
+.search-filters .error {
+  flex-basis: 100%;
+}
+.search-count {
+  margin: 0 0 var(--s-8);
+  color: var(--ink-2);
+  font: var(--t-meta) var(--f-sans);
+}
+.search-results .entry {
+  margin-bottom: var(--s-8);
+}
+.search-meaning {
+  color: var(--ink-2);
+  font: var(--t-meta) var(--f-sans);
+  padding: var(--s-4) var(--s-8);
+  background: var(--sunken);
+  border-radius: var(--r-4);
 }
 .search-filters label {
   display: flex;
@@ -1100,6 +1224,24 @@ mark[data-match] {
 }
 .palette-row > :is(kbd, .muted) {
   margin-left: auto;
+}
+.palette-row.palette-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0 var(--s-8);
+}
+.palette-note > :is(span, time) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-note > :is(time, .palette-excerpt) {
+  color: var(--ink-2);
+  font: var(--t-meta) var(--f-sans);
+}
+.palette-note > .palette-excerpt {
+  grid-column: 1 / -1;
 }
 /* ↵ opens the highlighted row, so its hint follows the highlight. */
 .palette [aria-selected="true"]::after {

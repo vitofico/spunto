@@ -7,7 +7,9 @@ import re
 import struct
 import wave
 from html.parser import HTMLParser
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
+
+from spunto.net.fetch import FetchError, parse_fetch_url
 
 
 def text(value):
@@ -206,8 +208,11 @@ def source_url(note):
         found = re.search(r"https?://[^\s<>\]\)]+", note["body"])
         value = found[0] if found else None
     if value and len(value) <= 2048:
-        parsed = urlsplit(value)
-        if parsed.scheme in {"http", "https"} and parsed.hostname:
+        try:
+            parse_fetch_url(value)
+        except FetchError:
+            return None
+        else:
             return value
     return None
 

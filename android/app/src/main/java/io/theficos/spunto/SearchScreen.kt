@@ -34,6 +34,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import java.time.*
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun SearchScreen(model:SpuntoViewModel,onNote:(String)->Unit,from:String="",to:String="") {
@@ -134,11 +136,19 @@ import java.time.*
  val context=LocalContext.current
  val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
  val mark=SpanStyle(background=SpuntoColors.highlight,color=MaterialTheme.colorScheme.onSurface)
- Column(Modifier.fillMaxWidth().clickable(onClickLabel=context.getString(R.string.core_open)) { onOpen() }.padding(vertical=SpuntoSpacing.s12).semantics(mergeDescendants=true) {},verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
-  Text(marked(note.title.ifBlank { context.getString(R.string.core_untitled) },terms,mark),style=SpuntoType.reading,maxLines=2,overflow=TextOverflow.Ellipsis)
-  searchSnippet(note.body,terms)?.let { Text(marked(it,terms,mark),style=SpuntoType.readingSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=3,overflow=TextOverflow.Ellipsis) }
-  Text(listOfNotNull(noteTime(note.createdAt,locale),labels(note.body).map { "#${it.path}" }.distinct().take(3).joinToString(" ").ifEmpty { null },context.getString(if(similar) R.string.core_similar_meaning else R.string.core_search_terms_match)).joinToString(" · "),style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
+ val snippet=remember(note.body,note.title,terms) {searchSnippet(note.body,terms,title=note.title)}
+ val noteLabels=remember(note.body) {labels(note.body).map { "#${it.path}" }.distinct().take(3).joinToString(" ")}
+ val date=remember(note.createdAt,locale) {
+  Instant.ofEpochMilli(note.createdAt).atZone(ZoneId.systemDefault())
+   .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
  }
+ Column(Modifier.fillMaxWidth().clickable(role=Role.Button,onClickLabel=context.getString(R.string.core_open)) { onOpen() }.padding(vertical=SpuntoSpacing.s12),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
+  Text(marked(note.title.ifBlank { context.getString(R.string.core_untitled) },terms,mark),style=SpuntoType.reading,maxLines=2,overflow=TextOverflow.Ellipsis)
+  snippet?.let { Text(marked(it,terms,mark),style=SpuntoType.readingSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=3,overflow=TextOverflow.Ellipsis) }
+  Text(listOfNotNull(date,noteLabels.ifEmpty {null},context.getString(R.string.core_similar_meaning).takeIf {similar}).joinToString(" · "),
+   style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+ }
+ HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
 }
 private fun marked(text:String,terms:List<String>,style:SpanStyle):AnnotatedString=buildAnnotatedString { append(text);matchRanges(text,terms).forEach { addStyle(style,it.first,it.last+1) } }
 
@@ -161,15 +171,27 @@ internal fun matchRanges(text:String,terms:List<String>):List<IntRange> {
   .fold(mutableListOf<IntRange>()) { merged,range -> merged.apply { if(isNotEmpty() && range.first<=last().last+1) set(lastIndex,last().first..maxOf(last().last,range.last)) else add(range) } }
 }
 private val lineMarker=Regex("^\\s*(?:#{1,6}\\s+|>\\s*|[-+*]\\s+(?:\\[[ xX]]\\s+)?|\\d+[.)]\\s+(?:\\[[ xX]]\\s+)?)")
-/** The line after the title that holds the first match, cut to about [width] characters around it; without a match, the next line of the note. */
-internal fun searchSnippet(body:String,terms:List<String>,width:Int=160):String? {
- val all=body.lines().map { it.replace(lineMarker,"").trim() }.filter { it.isNotEmpty() }
- val lines=all.drop(1)
- val first=all.firstOrNull()?.takeIf { line -> matchRanges(line,terms).any { it.first>=80 } }
- val line=lines.firstOrNull { matchRanges(it,terms).isNotEmpty() } ?: first ?: return lines.firstOrNull()?.let { if(it.length>width) it.take(width).trimEnd()+"…" else it }
- if(line.length<=width) return line
- val start=(matchRanges(line,terms).first().first-width/3).coerceIn(0,line.length-width)
- return (if(start>0) "…" else "")+line.substring(start,start+width).trim()+(if(start+width<line.length) "…" else "")
+/** Prefer distinct context with a match. For single-line notes, expose matches outside the visible title. */
+internal fun searchSnippet(body:String,terms:List<String>,width:Int=160,title:String=titleOf(body)):String? {
+ val lines=body.lineSequence().map { it.replace(lineMarker,"").trim() }.filter { it.isNotEmpty() }.iterator()
+ if(!lines.hasNext()) return null
+ val first=lines.next()
+ val titleKey=fold(title)
+ var fallback:String?=null
+ fun excerpt(line:String,match:Int=0):String {
+  val points=line.codePointCount(0,line.length)
+  if(points<=width) return line
+  val from=(line.codePointCount(0,match)-width/3).coerceIn(0,points-width)
+  return (if(from>0) "…" else "")+line.substring(line.offsetByCodePoints(0,from),line.offsetByCodePoints(0,from+width)).trim()+
+   (if(from+width<points) "…" else "")
+ }
+ for(line in lines) {
+  if(fold(titleOf(line,title.length+1))==titleKey) continue
+  if(fallback==null) fallback=line
+  matchRanges(line,terms).firstOrNull()?.let {return excerpt(line,it.first)}
+ }
+ val distant=matchRanges(first,terms).firstOrNull {it.first>=80}
+ return if(distant!=null) excerpt(first,distant.first) else fallback?.let {excerpt(it)}
 }
 
 /** REST relevance order with authoritative unsynced bodies and pending local matches. */

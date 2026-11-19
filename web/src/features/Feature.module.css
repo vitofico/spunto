@@ -9,12 +9,16 @@
   align-items: start;
 }
 .nav {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
   position: sticky;
   top: var(--s-24);
   min-width: 0;
+}
+.settingsChooser {
+  display: none;
+}
+.settingsChoices {
+  display: grid;
+  gap: var(--s-4);
 }
 .nav a {
   display: flex;
@@ -699,6 +703,69 @@
 .slash .command {
   padding-inline: var(--s-12);
 }
+.noteCommandGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+.noteCommandGrid > p {
+  grid-column: 1 / -1;
+  margin: var(--s-4) 0;
+}
+.noteCommand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-12);
+  align-items: center;
+  text-align: start;
+  min-block-size: 56px;
+  min-inline-size: 0;
+  padding: var(--s-12);
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-8);
+  overflow-wrap: anywhere;
+}
+.noteCommand:hover:not(:disabled) {
+  background: var(--sunken);
+  border-color: var(--rule-strong);
+}
+.noteCommand[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.notePinsControl {
+  display: flex;
+  justify-content: flex-end;
+  margin: calc(-1 * var(--s-8)) 0 var(--s-12);
+}
+.notePinsControl button {
+  gap: var(--s-4);
+  min-height: 44px;
+}
+.notePinsControl button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.noteCommand small {
+  grid-column: 2;
+  margin-top: calc(-1 * var(--s-8));
+}
+.noteCommandIcon {
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: var(--r-8);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (max-width: 480px) {
+  .noteCommandGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .result {
   padding: var(--s-12) 0;
 }
@@ -766,9 +833,36 @@
   margin: var(--s-4) 0;
   color: var(--ink-2);
 }
-.acceptanceAction button {
+.acceptanceAction :global(.button) {
   color: var(--accent);
+}
+.acceptanceAction button {
   min-height: 44px;
+}
+.agentAcceptance {
+  display: grid;
+  gap: var(--s-12);
+  margin-block: var(--s-8);
+}
+.agentAcceptance[data-comparing] {
+  min-width: 0;
+  padding: var(--s-12);
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-12);
+}
+.agentComparison h2 {
+  margin: 0;
+  font: var(--t-heading) var(--f-sans);
+}
+.agentComparison p {
+  margin: var(--s-8) 0 0;
+  color: var(--ink-2);
+}
+.agentComparison :global(.diff) {
+  margin-top: var(--s-12);
+  max-block-size: min(18rem, 42dvh);
+  border: 1px solid var(--rule);
 }
 .copy {
   overflow-wrap: anywhere;
@@ -868,19 +962,43 @@
     display: block;
   }
   .nav {
-    flex-direction: row;
-    overflow-x: auto;
     position: static;
     margin-bottom: var(--s-24);
-    padding: var(--s-4) var(--s-2) var(--s-12);
-    border-bottom: 1px solid var(--rule);
+  }
+  .settingsChooser {
+    display: flex;
+    align-items: center;
+    gap: var(--s-8);
+    width: 100%;
+    min-height: 44px;
+    padding: var(--s-8) var(--s-12);
+    border: 1px solid var(--field);
+    border-radius: var(--r-8);
+    color: var(--ink-2);
+    text-align: start;
+  }
+  .settingsChooser > :last-child {
+    flex: none;
+    margin-inline-start: auto;
+  }
+  .settingsChooser[aria-expanded="true"] > :last-child {
+    rotate: 180deg;
+  }
+  .settingsChoices {
+    display: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: var(--s-8);
+    padding: var(--s-4);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-8);
+  }
+  .settingsChoices[data-expanded] {
+    display: grid;
   }
   .nav a {
-    flex-shrink: 0;
-    white-space: nowrap;
     min-height: 44px;
-    min-width: 44px;
-    justify-content: center;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .themes {
     --theme-gap: var(--s-8);
@@ -1001,6 +1119,35 @@
 .receiptUndo {
   flex: none;
   text-decoration: underline;
+}
+.labelReceipts {
+  margin-block: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-8);
+  background: var(--sunken);
+}
+.labelReceipts h2 {
+  margin: 0;
+  font: var(--t-ui) var(--f-sans);
+  font-weight: 600;
+}
+.labelReceipts ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.labelReceipts li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+.labelReceipts li > span {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+.labelReceipts button {
+  min-block-size: 44px;
 }
 
 .commandComparison {

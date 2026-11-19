@@ -9,4 +9,6 @@
     <string name="whats_new_open_appearance">Open Appearance</string>
     <string name="whats_new_plain_title">Keep the background plain</string>
     <string name="whats_new_plain_body">Choose Plain in Appearance to hide the artwork behind your notes.</string>
+    <string name="whats_new_note_tools_title">Review agent edits and find the right note tools</string>
+    <string name="whats_new_note_tools_body">Compare what an agent added or removed before accepting an edit. Open note actions to see the tools that fit the current note.</string>
 </resources>

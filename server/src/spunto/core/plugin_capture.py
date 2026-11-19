@@ -6,6 +6,10 @@ from spunto.host.plugin import ContextError
 from spunto.host.storage import encoded, key
 
 
+def capture_source_eligible(row):
+    return not (row["private"] or row["machine"] or row["trashed_at"] is not None)
+
+
 class ScopedCapture:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -51,7 +55,7 @@ class ScopedCapture:
         if not rows:
             return None
         row = dict(rows[0])
-        if row["private"] or row["machine"] or row["trashed_at"] is not None:
+        if not capture_source_eligible(row):
             return None
         if version is not None and row["version"] != version:
             return None

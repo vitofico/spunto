@@ -130,9 +130,10 @@ export function diffLines(before: string, after: string): DiffLine[] {
   const del = (text: string): DiffLine => ({ kind: "del", text });
   const add = (text: string): DiffLine => ({ kind: "add", text });
   const middle: DiffLine[] = [];
-  if (x.length * y.length > 1_000_000)
-    middle.push(...x.map(del), ...y.map(add));
-  else {
+  if (!x.length || !y.length || x.length * y.length > 1_000_000) {
+    for (const line of x) middle.push(del(line));
+    for (const line of y) middle.push(add(line));
+  } else {
     const table = Array.from(
       { length: x.length + 1 },
       () => new Uint32Array(y.length + 1),
@@ -150,7 +151,8 @@ export function diffLines(before: string, after: string): DiffLine[] {
       else if (table[i + 1]![j]! >= table[i]![j + 1]!)
         middle.push(del(x[i++]!));
       else middle.push(add(y[j++]!));
-    middle.push(...x.slice(i).map(del), ...y.slice(j).map(add));
+    for (; i < x.length; i++) middle.push(del(x[i]!));
+    for (; j < y.length; j++) middle.push(add(y[j]!));
   }
   return [
     ...a.slice(0, start).map(same),

@@ -188,7 +188,7 @@ it("shows keyword hits while hybrid is pending and then swaps one list", async (
       : Promise.resolve({ hits: [note], semantic: "off", next_cursor: null }),
   );
   wrap(<Search />);
-  expect(await screen.findByText(body("Coffee in Rome"))).toBeTruthy();
+  expect(await screen.findByText(body("in Rome"))).toBeTruthy();
   expect(document.querySelector("mark[data-match]")?.textContent).toBe(
     "Coffee",
   );
@@ -212,7 +212,7 @@ it("shows keyword hits while hybrid is pending and then swaps one list", async (
     next_cursor: null,
   });
   expect(await screen.findByText("A caffè in Milan")).toBeTruthy();
-  expect(screen.queryByText(body("Coffee in Rome"))).toBeNull();
+  expect(screen.queryByText(body("in Rome"))).toBeNull();
   expect(screen.getByText("≈ similar meaning")).toBeTruthy();
 });
 it("keeps keyword search when semantic service is unavailable", async () => {
@@ -230,7 +230,7 @@ it("keeps keyword search when semantic service is unavailable", async () => {
       "Similar meaning is unavailable. Showing keyword matches.",
     ),
   ).toBeTruthy();
-  expect(screen.getByText(body("Coffee in Rome"))).toBeTruthy();
+  expect(screen.getByText(body("in Rome"))).toBeTruthy();
 });
 it("loads live related output through the core panel endpoint", async () => {
   const related: Plugin = {
@@ -508,7 +508,7 @@ it("shows the server's pause reason when Ask has used its allowance", async () =
   expect(create).not.toHaveBeenCalled();
 });
 
-it("shows a bounded excerpt around a deep match and distinguishes search terms from meaning", async () => {
+it("shows a bounded excerpt around a deep match without repeating keyword metadata", async () => {
   window.history.replaceState(null, "", "/search?q=needle");
   const longBody =
     "Opening ".repeat(100) + "needle in a long note " + "Closing ".repeat(100);
@@ -518,12 +518,48 @@ it("shows a bounded excerpt around a deep match and distinguishes search terms f
     next_cursor: null,
   });
   wrap(<Search />);
-  await screen.findByText("Search terms match");
+  await screen.findByText("1 note found");
   const excerpt = document.querySelector(".note-body")!;
   expect(excerpt.textContent).toContain("needle in a long note");
   expect(excerpt.textContent!.length).toBeLessThanOrEqual(242);
   expect(excerpt.querySelector("mark")?.textContent).toBe("needle");
-  expect(screen.queryByText("Similar meaning")).toBeNull();
+  expect(screen.queryByText("Search terms match")).toBeNull();
+  expect(screen.queryByText(/similar meaning/i)).toBeNull();
+});
+
+it("highlights the title once and identifies meaning-only hits", async () => {
+  window.history.replaceState(null, "", "/search?q=needle");
+  vi.mocked(api.search).mockResolvedValue({
+    hits: [
+      {
+        ...note,
+        id: "keyword",
+        title: "Needle plans",
+        body: "# Needle plans\nFind the supplies.",
+        match: "keyword",
+      },
+      {
+        ...note,
+        id: "meaning",
+        title: "Sewing kit",
+        body: "Sewing kit\nLook in the tall cabinet.",
+        match: "meaning",
+      },
+    ],
+    semantic: "on",
+    next_cursor: null,
+  });
+  wrap(<Search />);
+  expect(await screen.findByText("2 notes found")).toBeTruthy();
+  const title = screen.getByRole("link", { name: "Needle plans" });
+  expect(title.querySelector("mark")?.textContent).toBe("Needle");
+  expect(
+    title.closest("article")?.querySelector(".search-excerpt")?.textContent,
+  ).toBe("Find the supplies.");
+  expect(screen.getAllByText(/similar meaning/i)).toHaveLength(1);
+  expect(screen.getByText(/similar meaning/i).closest("article")).toBe(
+    screen.getByRole("link", { name: "Sewing kit" }).closest("article"),
+  );
 });
 
 it("retains saved checklist state and original-offset toggle actions alongside search excerpts", async () => {
@@ -572,7 +608,7 @@ it("escapes excerpt markup and reapplies highlights without duplicating marks", 
     next_cursor: null,
   });
   const view = wrap(<Search />);
-  await screen.findByText("Search terms match");
+  await screen.findByText("1 note found");
   expect(document.querySelector(".note-body")?.textContent).toContain(
     '<img src=x onerror="bad()">',
   );

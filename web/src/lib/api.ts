@@ -2,6 +2,7 @@ import { getLanguage, t } from "./i18n";
 import createClient from "openapi-fetch";
 import type { paths } from "./api-types";
 import { ApiError, problem, safeError } from "./errors";
+import { rememberAttachmentMime } from "./noteToolInputs";
 import {
   assertCurrentRequest,
   actorHeaders,
@@ -17,6 +18,7 @@ import type {
   Manifest,
   Meta,
   Note,
+  NoteDetail,
   NoteFilters,
   NotePage,
   Plugin,
@@ -390,7 +392,7 @@ export const api = {
     );
   },
   note: (id: string, signal?: AbortSignal) =>
-    result<Note>(
+    result<NoteDetail>(
       generatedClient.GET("/api/v1/notes/{id}", {
         params: { path: { id }, query: { render: "html" } },
         signal,
@@ -592,6 +594,6 @@ export const api = {
     return request<Attachment>("/api/v1/attachments", {
       method: "POST",
       body: form,
-    });
+    }).then(rememberAttachmentMime);
   },
 };

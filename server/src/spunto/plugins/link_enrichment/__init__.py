@@ -11,6 +11,7 @@ from spunto.core.text import label_key
 from spunto.host import Ctx, Plugin
 from spunto.host.language import tr
 from spunto.host.plugin import ContextError
+from spunto.host.vocabulary import success_feedback
 from spunto.plugins._capture import (
     bounded,
     clean,
@@ -84,7 +85,7 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
         return text(tr("That source is unavailable."))
     url = source_url(note)
     if url is None:
-        return None
+        return text(tr("This note has no supported web link."))
     key = identity(note_id, url)
     prior = await ctx.storage.records.get("sources", key)
     if prior and prior.get("complete"):
@@ -160,7 +161,9 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
     )
     receipt["complete"] = True
     receipt.pop("page", None)
-    proposal = await finish_source(ctx, note, key, receipt)
+    completed, proposal = await finish_source(ctx, note, key, receipt)
+    if not completed:
+        return text(tr("The note changed."))
     return (
         {
             "type": "pill",
@@ -169,7 +172,7 @@ async def enrich(ctx: Ctx, note_id: str, note_version: int | None = None):
             "suggestion_id": proposal["id"],
         }
         if proposal
-        else text(tr("Source details saved."))
+        else success_feedback(tr("Source details saved."))
     )
 
 

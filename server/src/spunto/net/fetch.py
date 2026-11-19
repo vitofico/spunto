@@ -77,7 +77,7 @@ def _host(value: str) -> str:
         raise FetchError("fetch_host_blocked") from None
 
 
-def _url(value: str) -> httpx.URL:
+def parse_fetch_url(value: str) -> httpx.URL:
     try:
         if any(ord(character) <= 32 or ord(character) == 127 for character in value):
             raise ValueError
@@ -347,7 +347,7 @@ async def guarded_fetch(
     if body is not None and (not isinstance(body, bytes) or len(body) > max_bytes):
         raise FetchError("fetch_too_large")
     request_headers = _headers(headers)
-    current = _url(url)
+    current = parse_fetch_url(url)
 
     def exact_origin(value):
         return (
@@ -357,7 +357,7 @@ async def guarded_fetch(
         )
 
     origins = (
-        {exact_origin(_url(value)) for value in allowed_origins}
+        {exact_origin(parse_fetch_url(value)) for value in allowed_origins}
         if allowed_origins is not None
         else None
     )
@@ -438,7 +438,7 @@ async def guarded_fetch(
                         ):
                             raise FetchError("fetch_invalid_redirect")
                         try:
-                            destination = _url(str(current.join(location)))
+                            destination = parse_fetch_url(str(current.join(location)))
                         except httpx.InvalidURL:
                             raise FetchError("fetch_invalid_redirect") from None
                         if (

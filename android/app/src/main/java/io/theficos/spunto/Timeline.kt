@@ -84,7 +84,8 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  }.joinToString(". ")
 }
 
-@Composable fun Timeline(model:SpuntoViewModel,onNote:(String)->Unit,onReview:()->Unit,from:String="",to:String="") {
+@Composable fun Timeline(model:SpuntoViewModel,onNote:(String)->Unit,onReview:()->Unit,from:String="",to:String="",
+ focusCapture:Boolean=false,onCaptureFocused:()->Unit={}) {
  val context=LocalContext.current
  val range=remember(from,to) { runCatching { CreatedRange.parse(from,to) } }
  val spec=remember(range.getOrNull(),range.isSuccess) { TimelineSpec(created=range.getOrDefault(CreatedRange()),valid=range.isSuccess) }
@@ -94,6 +95,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val writable by model.workspaceCanWrite.collectAsState()
  val proposals=waitingProposals(model,outputs).size
  val listState=rememberLazyListState()
+ LaunchedEffect(focusCapture) {if(focusCapture) listState.scrollToItem(0)}
  val feedback=LocalFeedback.current
  // Only a launch onto the timeline focuses the composer; opening the app on a note and coming back must not.
  val launchedOnNote=(LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("noteId")!=null
@@ -117,7 +119,8 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  }) {
   if(writable) item(key="composer") {
    Column(Modifier.padding(bottom=28.dp)) {
-    Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},onSave={model.saveLocal(it)})
+    Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},focusCapture=focusCapture,
+     onCaptureFocused=onCaptureFocused,onSave={model.saveLocal(it)})
     DecisionRecordAction(model)
    }
   }

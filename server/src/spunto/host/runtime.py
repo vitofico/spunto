@@ -468,6 +468,7 @@ class Host:
             "plugins": [
                 {
                     **copy.deepcopy(self.manifests[item["id"]]),
+                    **self.catalog_metadata[item["id"]],
                     "settings_values": self.get_settings(item["id"]),
                     "position": item["position"],
                 }
@@ -1484,7 +1485,11 @@ class Host:
             raise
         ctx.check()
         if vocabulary and result is not None:
-            validate_output(result)
+            validate_output(
+                result,
+                command_feedback=kind == "command"
+                and self.catalog_metadata[plugin_id]["origin"] == "bundled",
+            )
             result = render_output(result)
         return result
 

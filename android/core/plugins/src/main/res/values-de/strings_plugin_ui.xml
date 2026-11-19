@@ -54,4 +54,7 @@
         <item quantity="one">%d Tabulator entfernt</item>
         <item quantity="other">%d Tabulatoren entfernt</item>
     </plurals>
+    <string name="plugin_ui_before">Vorher</string>
+    <string name="plugin_ui_after">Nachher</string>
+    <string name="plugin_ui_empty_text">Leer</string>
 </resources>

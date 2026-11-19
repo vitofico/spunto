@@ -65,6 +65,7 @@ const glyphs = {
       <path d="M19.5 12h-15M10.5 6l-6 6 6 6" />
     </>
   ),
+  chevron: <path d="m6 9 6 6 6-6" />,
   more: (
     <>
       <circle cx="6" cy="12" r="1.5" fill="currentColor" stroke="none" />
@@ -89,12 +90,33 @@ const glyphs = {
       <path d="M13.5 6.5l4 4" />
     </>
   ),
+  tools: (
+    <path d="M12 3.5 14.3 9.7 20.5 12 14.3 14.3 12 20.5 9.7 14.3 3.5 12 9.7 9.7z" />
+  ),
+  link: (
+    <>
+      <path d="m9 15 6-6m-5.8 8.8-1 1a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0m2.6-3.6 1-1a3.5 3.5 0 0 1 5 5l-4 4a3.5 3.5 0 0 1-5 0" />
+    </>
+  ),
+  audio: <path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4" />,
+  translate: (
+    <path d="M3 6h11M8.5 3.5V6m3 0c0 5-4 8-8 10m2-7c1 3 3 5 6 7m2.5 4 3.5-9 3.5 9m-5.8-3h4.6" />
+  ),
+  branch: (
+    <>
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="6" cy="18" r="2" />
+      <circle cx="18" cy="6" r="2" />
+      <path d="M6 8v8m12-8c0 6-12 2-12 8" />
+    </>
+  ),
 };
+export type IconName = keyof typeof glyphs;
 export function Icon({
   name,
   style,
 }: {
-  name: keyof typeof glyphs;
+  name: IconName;
   style?: CSSProperties;
 }) {
   useLanguage();

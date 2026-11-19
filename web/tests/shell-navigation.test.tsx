@@ -44,7 +44,7 @@ afterEach(() => {
 it("palette rows are chosen with the arrows and opened with Enter", async () => {
   const close = vi.fn();
   wrap(<Palette onClose={close} />);
-  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  const input = screen.getByRole("searchbox", { name: "Search and commands" });
   fireEvent.change(input, { target: { value: "trash" } });
   // The search row is active as soon as there is a query.
   await waitFor(() =>
@@ -128,7 +128,7 @@ it("the highlighted row stays highlighted when plugin rows arrive above it", asy
   );
   const close = vi.fn();
   wrap(<Palette onClose={close} />);
-  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  const input = screen.getByRole("searchbox", { name: "Search and commands" });
   await act(() => new Promise((settle) => setTimeout(settle, 50)));
   fireEvent.keyDown(input, { key: "ArrowDown" });
   fireEvent.keyDown(input, { key: "ArrowDown" });
@@ -145,7 +145,7 @@ it("the highlighted row stays highlighted when plugin rows arrive above it", asy
 
 it("palette leaves out groups with nothing to offer", async () => {
   wrap(<Palette onClose={() => {}} />);
-  fireEvent.change(screen.getByRole("textbox"), {
+  fireEvent.change(screen.getByRole("searchbox"), {
     target: { value: "zzzz" },
   });
   expect(await screen.findByText("No notes match this search.")).toBeTruthy();
@@ -174,6 +174,10 @@ it("search keeps its filters in the address and checks the date range", async ()
   expect(screen.getByLabelText("From date").getAttribute("aria-invalid")).toBe(
     "true",
   );
+  const filterSummary = screen.getByText("Filters (1)", {
+    selector: "summary",
+  });
+  expect(filterSummary.closest("details")?.open).toBe(true);
   expect(api.search).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText("To date"), {
     target: { value: "2026-10-20" },
@@ -193,6 +197,10 @@ it("search keeps its filters in the address and checks the date range", async ()
   expect(window.location.search).toBe(
     "?q=coffee&from=2026-10-10&to=2026-10-20&archived=1",
   );
+  expect(filterSummary.textContent).toBe("Filters (2)");
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(window.location.search).toBe("?q=coffee");
+  expect(document.activeElement).toBe(filterSummary);
 });
 
 it("search explains an over-long query instead of sending it", async () => {
@@ -252,7 +260,7 @@ it("asks a typed question with Enter and retains it beside the answer", async ()
       args?.start === true ? allocatedAsk : answeredAsk(),
     );
   wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  const input = screen.getByRole("searchbox", { name: "Search and commands" });
   fireEvent.change(input, { target: { value: "What did I decide?" } });
   await waitFor(() =>
     expect(screen.getByRole("option", { selected: true }).textContent).toMatch(
@@ -285,7 +293,9 @@ it.each(["ctrlKey", "metaKey"])(
         args?.start === true ? allocatedAsk : answeredAsk(),
       );
     wrap(<Palette onClose={() => {}} />);
-    const input = screen.getByRole("textbox", { name: "Search and commands" });
+    const input = screen.getByRole("searchbox", {
+      name: "Search and commands",
+    });
     fireEvent.change(input, { target: { value: "What did I decide" } });
     await screen.findByRole("option", { name: /^Ask your notes/ });
     expect(screen.getByRole("option", { selected: true }).textContent).toMatch(
@@ -310,7 +320,7 @@ it.each(["ctrlKey", "metaKey"])(
 it("does not offer a question shortcut under three words or above 500 characters", async () => {
   enableAsk();
   wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  const input = screen.getByRole("searchbox", { name: "Search and commands" });
   await screen.findByRole("option", { name: /^Ask your notes/ });
   fireEvent.change(input, { target: { value: "two words?" } });
   expect(screen.queryByRole("option", { name: /^Ask your notes/ })).toBeNull();
@@ -330,7 +340,7 @@ it("keeps command-by-title opening the question form", async () => {
     },
   });
   wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  const input = screen.getByRole("searchbox", { name: "Search and commands" });
   fireEvent.change(input, { target: { value: "Ask your notes" } });
   fireEvent.click(
     await screen.findByRole("option", { name: /^Ask your notes/ }),
@@ -352,7 +362,7 @@ it("forgets an in-flight answer when the search question changes", async () => {
       });
     });
   wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("textbox", { name: "Search and commands" });
+  const input = screen.getByRole("searchbox", { name: "Search and commands" });
   fireEvent.change(input, { target: { value: "What did I decide?" } });
   fireEvent.click(
     await screen.findByRole("option", { name: /^Ask your notes/ }),

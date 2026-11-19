@@ -337,10 +337,10 @@ export function queueTick(
 }
 export const NoteCard = memo(function NoteCard({
   note,
-  excerpt,
+  searchPreview,
 }: {
   note: Note;
-  excerpt?: string;
+  searchPreview?: { title: ReactNode; excerpt: ReactNode; meaning: boolean };
 }) {
   useLanguage();
   const canEdit = useWorkspaceRole() !== "viewer";
@@ -414,21 +414,16 @@ export const NoteCard = memo(function NoteCard({
           navigate("/n/" + note.id);
         }}
       >
-        {excerpt !== undefined ? (
+        {searchPreview ? (
           <div>
             <h3 className="entry-title">
-              <Link href={"/n/" + note.id}>{name}</Link>
+              <Link href={"/n/" + note.id}>{searchPreview.title || name}</Link>
             </h3>
-            <p
-              className="note-body"
-              dangerouslySetInnerHTML={{
-                // Search marks text nodes after render; React must not own those descendants.
-                __html: excerpt
-                  .replace(/&/g, "&amp;")
-                  .replace(/</g, "&lt;")
-                  .replace(/>/g, "&gt;"),
-              }}
-            />
+            {searchPreview.excerpt && (
+              <p className="note-body search-excerpt">
+                {searchPreview.excerpt}
+              </p>
+            )}
             {note.html?.includes("data-checkbox-offset") && (
               <NoteBody
                 note={note}
@@ -466,6 +461,9 @@ export const NoteCard = memo(function NoteCard({
         )}
       </div>
       <div className="entry-meta">
+        {searchPreview?.meaning && (
+          <span className="search-meaning">{t("search.similar_meaning")}</span>
+        )}
         {(note.labels ?? []).map((label) => (
           <Link
             key={label}

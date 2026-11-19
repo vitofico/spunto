@@ -80,7 +80,7 @@ async def finish_summary(ctx, note, title):
     async with adapter.store.write() as conn:
         row = await adapter.core._row(conn, note["id"])
         if row["version"] != note["version"]:
-            return None
+            return False, None
         proposal = await _title(ctx, conn, row, title)
         # On an automatic edit the saved hook observes this new revision.
         await conn.execute(
@@ -96,7 +96,7 @@ async def finish_summary(ctx, note, title):
             ),
         )
         ctx.check("suggest")
-        return proposal
+        return True, proposal
 
 
 async def finish_source(ctx, note, key, facts):
@@ -104,7 +104,7 @@ async def finish_source(ctx, note, key, facts):
     async with ctx._host.store.write() as conn:
         row = await capture._row(conn, note["id"], note["version"])
         if row is None:
-            return None
+            return False, None
         await capture._store_result(conn, "sources", key, row["id"], row["version"], facts)
         # A new URL replaces this plugin's previous suggestions on the note.
 
@@ -127,7 +127,7 @@ async def finish_source(ctx, note, key, facts):
                 confidence=facts.get("label_confidence", {}).get(path),
                 connection=conn,
             )
-        return proposal
+        return True, proposal
 
 
 def _recording_body(body, seconds):
@@ -142,7 +142,7 @@ async def finish_recordings(ctx, note, proposed, values, pending):
     async with ctx._host.store.write() as conn:
         row = await capture._row(conn, note["id"], note["version"])
         if row is None:
-            return False
+            return None
         suggestion = await suggest(
             ctx,
             row["id"],

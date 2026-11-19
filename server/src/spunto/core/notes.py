@@ -439,13 +439,20 @@ class Notes:
         ):
             self.store.emit("note.embed", row["id"], row["version"])
         await self._index(conn, row)
+
+        from spunto.core import agent_review
+
+        if previous_body == body:
+            await agent_review.remember_metadata(conn, row)
+        elif self.principal.kind == "pat":
+            if await agent_review.remember_edit(conn, row, previous_credential):
+                coalesce = False
+            await agent_review.clear(conn, row["id"], row["updated_at"])
+        elif previous_credential != self.principal.id:
+            await agent_review.forget_base(conn, row["id"])
         await self._revision(
             conn, row, kind, coalesce=coalesce and previous_credential == self.principal.id
         )
-        if self.principal.kind == "pat" and previous_body != body:
-            from spunto.core.agent_review import clear
-
-            await clear(conn, row["id"], row["updated_at"])
         await self._advance_proposals(conn, row, previous_body, kind)
         self.store.emit("note.saved", row["id"], row["version"])
         return await self._serialize(conn, row)
@@ -540,6 +547,10 @@ class Notes:
         )
         await self._index(conn, row)
         await self._revision(conn, row, "create", coalesce=False)
+        if agent:
+            from spunto.core.agent_review import remember_creation
+
+            await remember_creation(conn, row)
         if not row["private"] and not row["machine"]:
             self.store.emit("note.embed", row["id"], row["version"])
         self.store.emit("note.saved", row["id"], row["version"])
@@ -641,11 +652,28 @@ class Notes:
                 )
             return result
 
-    async def get(self, id: str, include_trashed: bool = False, render: bool = False) -> dict:
+    async def get(
+        self,
+        id: str,
+        include_trashed: bool = False,
+        render: bool = False,
+        *,
+        note_tools: bool = False,
+        agent_review: bool = False,
+    ) -> dict:
         async with self.store.read() as conn:
-            return await self._serialize(
-                conn, await self._row(conn, id, include_trashed=include_trashed), render=render
-            )
+            row = await self._row(conn, id, include_trashed=include_trashed)
+            note = await self._serialize(conn, row, render=render)
+            if note_tools:
+                from spunto.core.note_tools import inputs
+
+                note["note_tool_inputs"] = await inputs(conn, row, note)
+            if agent_review:
+                from spunto.core.agent_review import comparison
+
+                if review := await comparison(conn, row, note):
+                    note["agent_review"] = review
+            return note
 
     async def adopt(self, id: str, base_version: int) -> dict:
         if not self.principal.owner:

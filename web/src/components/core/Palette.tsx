@@ -11,6 +11,10 @@ import {
 } from "../../lib";
 import { Icon } from "./Icon";
 import { PaletteCommands, type CommandOrigin } from "../../features/Slots";
+import { noteSummary } from "../../lib/text";
+
+const searchDelay = 220;
+
 export function Palette({
   onClose,
   onHelp,
@@ -29,12 +33,13 @@ export function Palette({
   /** Opened from the keyboard: no entrance motion (03 §9.1). */
   instant?: boolean;
 }) {
-  useLanguage();
+  const language = useLanguage();
   const role = useWorkspaceRole();
   const canEdit = role !== "viewer";
   const note = useNote(noteId ?? "");
   const [exportError, setExportError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [settledQuery, setSettledQuery] = useState("");
   const [result, setResult] = useState<unknown>(initialResult ?? null);
   const [origin, setOrigin] = useState(initialOrigin);
   // The highlighted row itself, not its place, so it stays highlighted when rows arrive above it.
@@ -49,9 +54,24 @@ export function Palette({
   const list = useRef<HTMLDivElement>(null);
   const defaultSelection = useRef(true);
   const labels = useLabels();
-  const results = useSearch(query, { mode: "keyword", limit: 6 });
-  const notes =
-    results.data?.pages.flatMap((page) => page.hits).slice(0, 6) ?? [];
+  const keyword = query.trim();
+  const searchReady = !!keyword && keyword === settledQuery && !result;
+  useEffect(() => {
+    if (!keyword || result) return;
+    const timer = window.setTimeout(
+      () => setSettledQuery(keyword),
+      searchDelay,
+    );
+    return () => window.clearTimeout(timer);
+  }, [keyword, result]);
+  const results = useSearch(
+    searchReady ? keyword : "",
+    { mode: "keyword", limit: 6 },
+    searchReady,
+  );
+  const notes = searchReady
+    ? (results.data?.pages.flatMap((page) => page.hits).slice(0, 6) ?? [])
+    : [];
   const matchingLabels = (labels.data?.labels ?? [])
     .filter((label) => label.path.includes(query.replace(/^#/, "")))
     .slice(0, 4);
@@ -209,7 +229,9 @@ export function Palette({
         <div className="palette-head">
           <input
             ref={input}
+            type="search"
             aria-label={t("app.search_and_commands")}
+            aria-autocomplete={result ? undefined : "list"}
             aria-controls={result ? undefined : "palette-options"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -294,16 +316,16 @@ export function Palette({
                 }}
               />
             )}
-            {query.trim() && (
+            {keyword && (
               <div className="palette-group">
                 <button
                   className="palette-row"
                   data-search-query
-                  onClick={() => go("/search?q=" + encodeURIComponent(query))}
+                  onClick={() => go("/search?q=" + encodeURIComponent(keyword))}
                 >
                   <span>
                     {t("palette.search_for")}
-                    <q>{query.trim()}</q>
+                    <q>{keyword}</q>
                   </span>
                 </button>
               </div>
@@ -333,7 +355,7 @@ export function Palette({
                 </button>
               </div>
             )}
-            {query.trim() && (
+            {keyword && (
               <div
                 className="palette-group"
                 role="group"
@@ -342,30 +364,47 @@ export function Palette({
                 <div className="overline" aria-hidden="true">
                   {t("review.notes")}
                 </div>
-                {results.isPending && (
+                {searchReady && results.isPending && (
                   <p className="palette-status" role="status">
                     {t("search.searching_your_notes")}
                   </p>
                 )}
-                {results.error && (
+                {searchReady && results.error && (
                   <p className="palette-status error" role="alert">
                     {results.error.message}
                   </p>
                 )}
-                {!results.isPending && !results.error && !notes.length && (
-                  <p className="palette-status">
-                    {t("palette.no_notes_match_this_search")}
-                  </p>
-                )}
-                {notes.map((note) => (
-                  <button
-                    className="palette-row"
-                    key={note.id}
-                    onClick={() => go("/n/" + note.id)}
-                  >
-                    {note.title || note.body.slice(0, 80)}
-                  </button>
-                ))}
+                {searchReady &&
+                  !results.isPending &&
+                  !results.error &&
+                  !notes.length && (
+                    <p className="palette-status">
+                      {t("palette.no_notes_match_this_search")}
+                    </p>
+                  )}
+                {notes.map((note) => {
+                  const { name, excerpt } = noteSummary(note);
+                  return (
+                    <button
+                      className="palette-row palette-note"
+                      key={note.id}
+                      onClick={() => go("/n/" + note.id)}
+                    >
+                      <span>{name || t("vocabulary.untitled_note")}</span>
+                      <time dateTime={note.created_at}>
+                        {new Date(note.created_at).toLocaleDateString(
+                          language,
+                          {
+                            dateStyle: "medium",
+                          },
+                        )}
+                      </time>
+                      {excerpt && (
+                        <span className="palette-excerpt">{excerpt}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {matchingLabels.length > 0 && (

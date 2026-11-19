@@ -9,4 +9,6 @@
     <string name="whats_new_open_appearance">Darstellung öffnen</string>
     <string name="whats_new_plain_title">Den Hintergrund schlicht halten</string>
     <string name="whats_new_plain_body">Wähle in der Darstellung den schlichten Hintergrund, um das Motiv hinter deinen Notizen auszublenden.</string>
+    <string name="whats_new_note_tools_title">Agentenänderungen prüfen und passende Notizwerkzeuge finden</string>
+    <string name="whats_new_note_tools_body">Vergleiche vor dem Akzeptieren, was ein Agent hinzugefügt oder entfernt hat. Öffne die Notizaktionen, um die passenden Werkzeuge für die aktuelle Notiz zu sehen.</string>
 </resources>

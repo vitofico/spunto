@@ -11,6 +11,8 @@ const rgb = (hex: string) =>
 test("live theme controls recolor the wordmark, labels, Ask, and ambient artwork without reloading", async ({
   page,
 }) => {
+  // Every palette/mode check visits Appearance, the command palette and All notes.
+  test.setTimeout(120_000);
   let settings = {
     theme: "carta",
     plugin_order: [],

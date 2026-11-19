@@ -1,17 +1,17 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.theficos.spunto
 
-import android.content.SharedPreferences
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
@@ -25,33 +25,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-private val noteToolCommandPattern = Regex("[a-z][a-z0-9-]{0,127}")
-private fun NoteTool.pinKey() = "$pluginId/$id"
-
-@Stable
-internal class NoteToolPins(private val preferences: SharedPreferences) {
-    var ids by mutableStateOf(preferences.getString("pinned-note-tools", "").orEmpty().lineSequence().filter { key ->
-        val plugin = key.substringBefore('/')
-        val command = key.substringAfter('/', "")
-        pluginIdPattern.matches(plugin) && noteToolCommandPattern.matches(command)
-    }.distinct().take(2).toList())
-        private set
-
-    fun toggle(tool: NoteTool) {
-        val key = tool.pinKey()
-        if (key in ids) save(ids - key)
-        else if (ids.size < 2 && pluginIdPattern.matches(tool.pluginId) && noteToolCommandPattern.matches(tool.id))
-            save(ids + key)
-    }
-
-    fun removeUnavailable(tools: List<NoteTool>) = save(ids.intersect(tools.map { it.pinKey() }.toSet()).toList())
-
-    private fun save(selection: List<String>) {
-        ids = selection
-        preferences.edit().putString("pinned-note-tools", selection.joinToString("\n")).apply()
-    }
-}
-
 @Stable
 internal class NoteToolRunner(private val model: SpuntoViewModel, private val noteId: String, private val scope: CoroutineScope) {
     var running by mutableStateOf(false)
@@ -63,7 +36,7 @@ internal class NoteToolRunner(private val model: SpuntoViewModel, private val no
         if (running || !model.workspaceIsOwner.value || !model.online.value) return
         val resources = model.container.context.resources
         error = ""
-        if (tool.pluginId == "links" && tool.id == "link") {
+        if (tool.bundled && tool.pluginId == "links" && tool.id == "link") {
             if (!supportsNotePicker(manifest, "links")) error = resources.getString(R.string.core_link_upgrade_server)
             else if (!onLink()) error = resources.getString(R.string.settings_this_command_is_unavailable)
             return
@@ -82,8 +55,8 @@ internal fun rememberNoteToolRunner(model: SpuntoViewModel, noteId: String): Not
 
 @Composable
 internal fun NoteCommands(
-    model: SpuntoViewModel, note: Note, detail: NoteToolDetail?, pins: NoteToolPins, runner: NoteToolRunner,
-    shortcuts: Boolean = false, onLink: () -> Boolean, onResult: (JsonObject) -> Unit,
+    model: SpuntoViewModel, note: Note, detail: NoteToolDetail?, runner: NoteToolRunner,
+    shortcuts: Boolean = false, tidyShortcutFocus: FocusRequester? = null, onLink: () -> Boolean, onResult: (JsonObject) -> Unit,
 ) {
     val catalog by model.catalog.collectAsState()
     val manifest by model.manifest.collectAsState()
@@ -94,7 +67,6 @@ internal fun NoteCommands(
     val locale = resources.configuration.locales[0]
     val running = runner.running
     val error = runner.error
-    var pinning by remember(note.id) { mutableStateOf(false) }
     val legacy = toolDetail.legacyScope
     val inputs = if (legacy == null) remember(toolDetail.data) { parseNoteToolInputs(toolDetail.data) } else {
         val attachments by remember(note.id, model) { model.repository.dao.attachments(note.id) }.collectAsState(emptyList())
@@ -117,35 +89,26 @@ internal fun NoteCommands(
             candidates.filter { it.id in toolPlugins }
         }
     }
-    val shown = if (shortcuts) pins.ids.mapNotNull { key -> commands.firstOrNull { it.pinKey() == key } } else commands
-    if (shown.isEmpty() && waiting.isEmpty() && !running && error.isBlank() && (shortcuts || pins.ids.isEmpty())) return
+    val shown = when {
+        !shortcuts -> commands
+        toolDetail.loading && !note.privateNote && !note.machine && needsNoteShortcutInputs(manifest, catalog) -> emptyList()
+        else -> automaticNoteTools(commands, inputs, supportsNotePicker(manifest, "links"))
+    }
+    if (shown.isEmpty() && waiting.isEmpty() && !running && error.isBlank()) return
 
     Column(if (shortcuts) Modifier else Modifier.padding(horizontal = SpuntoSpacing.s20),
         verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
-        if (!shortcuts) FlowRow(horizontalArrangement = Arrangement.spacedBy(SpuntoSpacing.s12),
-            itemVerticalAlignment = Alignment.CenterVertically) {
-            Text(resources.getString(R.string.settings_note_tools), style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.semantics { heading() })
-            if (commands.isNotEmpty() || pins.ids.isNotEmpty()) TextButton(enabled = !running && !toolDetail.loading,
-                onClick = { pinning = !pinning }) { Text(resources.getString(if (pinning) R.string.core_done else R.string.note_tool_manage_pins)) }
-        }
-        if (pinning) Text(resources.getString(R.string.note_tool_pin_hint), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!shortcuts) Text(resources.getString(R.string.settings_note_tools), style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() })
         NoteActionGrid {
             shown.forEach { tool ->
                 key(tool.pluginId, tool.id) {
-                    val pinned = tool.pinKey() in pins.ids
-                    val label = if (pinning) resources.getString(if (pinned) R.string.note_tool_unpin else R.string.note_tool_pin, tool.title) else null
-                    val icon = if (!pinning) tool.icon else if (pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin
-                    NoteActionTile(icon, tool.title, Modifier.weight(1f).semantics { if (label != null) contentDescription = label },
-                        enabled = !running && (!pinning || pinned || pins.ids.size < 2),
-                        onClick = { if (pinning) pins.toggle(tool) else runner.run(tool, manifest, onLink, onResult) })
+                    val tile = Modifier.weight(1f)
+                    val target = tidyShortcutFocus?.takeIf { tool.bundled && tool.pluginId == "tidy" && tool.id == "tidy" }
+                    NoteActionTile(tool.icon, tool.title, if (target != null) tile.focusRequester(target) else tile, enabled = !running,
+                        onClick = { runner.run(tool, manifest, onLink, onResult) })
                 }
             }
-        }
-        if (pinning && (toolDetail.data != null || note.privateNote || note.machine) &&
-            pins.ids.any { key -> commands.none { it.pinKey() == key } }) {
-            TextButton(onClick = { pins.removeUnavailable(commands) }) { Text(resources.getString(R.string.note_tool_clear_unavailable)) }
         }
         if (waiting.isNotEmpty()) {
             waiting.forEach { plugin ->

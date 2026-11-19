@@ -201,14 +201,14 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   await page
     .locator(`article.entry[data-note-id="${source.id}"] a.time`)
     .click();
-  await page.getByRole("button", { name: "Note tools", exact: true }).click();
+  const shortcut = page
+    .locator(".note-tool-shortcut")
+    .filter({ hasText: "Link to note" });
+  await shortcut.click();
   const picker = page.getByRole("dialog", {
     name: "Note tools",
     exact: true,
   });
-  await picker
-    .getByRole("button", { name: "Link to note", exact: true })
-    .click();
   const search = picker.getByRole("searchbox", {
     name: "Search notes",
     exact: true,

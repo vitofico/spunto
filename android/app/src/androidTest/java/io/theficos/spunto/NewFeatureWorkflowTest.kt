@@ -523,11 +523,16 @@ class NewFeatureWorkflowTest {
         val id = arguments.getString("spunto.acceptance.edited")
         assumeTrue("Needs a disposable agent-edit fixture", id != null)
         requireNotNull(id)
-        for (plugin in listOf(AgentInboxId, DecisionJournalId, "links")) enable(plugin)
+        for (plugin in listOf(AgentInboxId, DecisionJournalId, "links", "link-enrichment")) enable(plugin)
         val saved = note(id)
         val before = saved["agent_review"]!!.jsonObject["before"]!!.jsonObject["body"]!!.jsonPrimitive.content
         val after = saved["body"]!!.jsonPrimitive.content
         require("Tuesday" in before && "Thursday" in after)
+        val linked = runBlocking { api.post("/api/v1/notes", buildJsonObject {
+            put("body", "# Synthetic event $suffix\n\nEvent details at https://example.org/agenda.")
+            put("source", buildJsonObject { put("kind", "web"); put("url", "https://example.org/agenda") })
+        }) }["id"]!!.jsonPrimitive.content
+        assertTrue(note(linked)["note_tool_inputs"]!!.jsonObject["link"]!!.jsonPrimitive.boolean)
 
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
         val configuration = Configuration(app.resources.configuration).apply { setLocale(Locale.ITALIAN) }
@@ -538,6 +543,7 @@ class NewFeatureWorkflowTest {
         val catalog = runBlocking { api.get("/api/v1/plugins") }
         lateinit var model: SpuntoViewModel
         val mounted = mutableStateOf(true)
+        val openedNote = mutableStateOf(id)
         compose.runOnIdle {
             applyWindowNightMode(context,"system")
             model = SpuntoViewModel(app, container)
@@ -556,7 +562,7 @@ class NewFeatureWorkflowTest {
         try {
             compose.setContent {
                 CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration) {
-                    if (mounted.value) SpuntoApp(model, initialNoteId = id)
+                    if (mounted.value) key(openedNote.value) { SpuntoApp(model, initialNoteId = openedNote.value) }
                 }
             }
             compose.waitUntil(20_000) { compose.onAllNodesWithText("Prima").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
@@ -567,33 +573,26 @@ class NewFeatureWorkflowTest {
             compose.onNodeWithText("Accetta modifiche").assertIsDisplayed().assertIsEnabled()
             screenshot("android-agent-edit-it.png")
 
+            val linkLabel = "Collega a una nota"
+            val shortcut = compose.onNode(hasText(linkLabel) and hasClickAction())
+            if (!shortcut.isDisplayed()) compose.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText(linkLabel))
+            shortcut.assertIsDisplayed().assertIsEnabled()
             compose.onNodeWithContentDescription("Altre azioni per la nota").performClick()
             compose.onNodeWithText("Azioni della nota").assertIsDisplayed()
             screenshot("android-note-tools-it.png")
-            compose.waitUntil(5_000) { compose.onAllNodesWithText("Collega a una nota").fetchSemanticsNodes().isNotEmpty() }
-            val link = compose.onNodeWithText("Collega a una nota")
+            val link = compose.onNodeWithText(linkLabel)
             if (!link.isDisplayed()) link.performScrollTo()
             link.assertIsDisplayed().assertIsEnabled()
-            for (label in listOf("Altro", "Registra decisione", "Leggi testo immagine", "Trascrivi registrazione", "Recupera dettagli del collegamento")) {
+            val fetchLabel = "Recupera dettagli del collegamento"
+            for (label in listOf("Altro", "Fissa strumenti", "Registra decisione", "Leggi testo immagine", "Trascrivi registrazione", fetchLabel)) {
                 compose.onNodeWithText(label).assertDoesNotExist()
             }
-            val manage = compose.onNodeWithText("Fissa strumenti")
-            if (!manage.isDisplayed()) manage.performScrollTo()
-            manage.performClick()
-            val pin = compose.onNodeWithContentDescription("Fissa Collega a una nota per accedervi rapidamente")
-            if (!pin.isDisplayed()) pin.performScrollTo()
-            pin.performClick()
-            compose.onNodeWithContentDescription("Rimuovi Collega a una nota dagli strumenti fissati").assertExists()
             androidx.test.espresso.Espresso.pressBack()
-            val shortcut = compose.onNode(hasText("Collega a una nota") and hasClickAction())
             compose.onNodeWithText("Azioni della nota").assertDoesNotExist()
-            if (!shortcut.isDisplayed()) compose.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText("Collega a una nota"))
-            shortcut.assertIsDisplayed().assertIsEnabled()
-            assertEquals(listOf("links/link"), NoteToolPins(container.preferences).ids)
 
             compose.runOnIdle { container.connected.value = false }
             compose.waitUntil(5_000) { !model.online.value }
-            compose.onNodeWithText("Collega a una nota").assertDoesNotExist()
+            shortcut.assertDoesNotExist()
             val accept = compose.onNodeWithText("Accetta modifiche")
             compose.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText("Accetta modifiche"))
             accept.assertIsNotEnabled()
@@ -604,6 +603,16 @@ class NewFeatureWorkflowTest {
             compose.onNodeWithText("Accetta modifiche").assertDoesNotExist()
             val accepted = note(id)
             for (field in listOf("body", "source", "origin", "version", "machine")) assertEquals(saved[field], accepted[field])
+
+            compose.runOnIdle { openedNote.value = linked }
+            val fetch = hasText(fetchLabel) and hasClickAction()
+            compose.waitUntil(10_000) { compose.onAllNodes(fetch).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(fetch).assertIsDisplayed().assertIsEnabled()
+            shortcut.assertDoesNotExist()
+            screenshot("android-note-shortcuts-it.png")
+            compose.runOnIdle { container.connected.value = false }
+            compose.waitUntil(5_000) { !model.online.value }
+            compose.onNode(fetch).assertDoesNotExist()
         } finally {
             compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
             runBlocking { container.auth.clear() }

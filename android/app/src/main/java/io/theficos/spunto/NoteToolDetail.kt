@@ -102,9 +102,9 @@ internal fun rememberNoteToolDetail(model: SpuntoViewModel, note: Note): NoteToo
     val epoch by remember(dao, server) {
         dao.observeState().map { state -> state?.epoch?.takeIf { state.serverUrl == server } }
     }.collectAsState(null)
-    val shouldFetch = config != null && online && !epoch.isNullOrEmpty() &&
-        !note.trashed && !note.pending && note.syncError == null && note.serverRev > 0
-    var state by remember(model, note, config, epoch, shouldFetch) { mutableStateOf(NoteToolDetail(shouldFetch)) }
+    val canFetch = config != null && online && !note.trashed && !note.pending && note.syncError == null && note.serverRev > 0
+    val shouldFetch = config != null && canFetch && !epoch.isNullOrEmpty()
+    var state by remember(model, note, config, epoch, canFetch) { mutableStateOf(NoteToolDetail(canFetch)) }
     val expectedEpoch = epoch
     LaunchedEffect(model, note, config, expectedEpoch, shouldFetch) {
         if (!shouldFetch) return@LaunchedEffect

@@ -731,23 +731,6 @@
   background: var(--sunken);
   border-color: var(--rule-strong);
 }
-.noteCommand[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.notePinsControl {
-  display: flex;
-  justify-content: flex-end;
-  margin: calc(-1 * var(--s-8)) 0 var(--s-12);
-}
-.notePinsControl button {
-  gap: var(--s-4);
-  min-height: 44px;
-}
-.notePinsControl button[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
 .noteCommand small {
   grid-column: 2;
   margin-top: calc(-1 * var(--s-8));

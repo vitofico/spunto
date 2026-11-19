@@ -592,6 +592,7 @@ export type NoteToolChoice = CommandChoice & {
   name: string;
   icon?: IconName;
   bundled: boolean;
+  trustedBundled: boolean;
 };
 export type NoteToolView = {
   commands: NoteToolChoice[];
@@ -741,7 +742,7 @@ export function noteCommandAvailable(
   );
 }
 
-export function useWaitingCommandPlugins(enabled: boolean) {
+function useCommandCatalog(enabled: boolean) {
   useLanguage();
   const online = useBrowserOnline();
   const role = useWorkspaceRole();
@@ -749,8 +750,11 @@ export function useWaitingCommandPlugins(enabled: boolean) {
     queryKey: ["catalog"],
     queryFn: api.catalog,
     enabled: enabled && online && role === "owner",
-    select: (catalog) =>
-      localizeCatalog(catalog).plugins.filter(
+    select: (catalog) => ({
+      bundled: catalog.plugins
+        .filter((plugin) => isBundledPlugin(plugin))
+        .map((plugin) => plugin.id),
+      waiting: localizeCatalog(catalog).plugins.filter(
         (plugin) =>
           plugin.state === "waiting" &&
           plugin.permissions.some(
@@ -759,6 +763,7 @@ export function useWaitingCommandPlugins(enabled: boolean) {
               !Object.hasOwn(plugin.ai_destinations ?? {}, permission.slice(3)),
           ),
       ),
+    }),
   });
 }
 
@@ -801,6 +806,7 @@ export function PluginCommands({
   const versionedReview = manifest.data?.features?.includes(
     "agent_review_versioned",
   );
+  const enabledPlugins = activePlugins(manifest.data?.plugins);
   const matchesSurface = (plugin: Plugin, command: Command, at: string[]) => {
     if (!places.some((place) => at.includes(place))) return false;
     if (!at.includes("note-actions")) return true;
@@ -813,9 +819,22 @@ export function PluginCommands({
       (surface) => surface !== "note-actions" && places.includes(surface),
     );
   };
-  const waitingPlugins = useWaitingCommandPlugins(
+  const legacyNoteTools =
+    noteTools &&
+    note &&
+    enabledPlugins.some(
+      (plugin) =>
+        plugin.origin == null &&
+        plugin.source_kind == null &&
+        plugin.contributes?.commands?.some((command) =>
+          noteCommandAvailable(plugin, command, note, versionedReview),
+        ),
+    );
+  const catalog = useCommandCatalog(
     !slash &&
-      (!noteTools || (noteToolsEnabled && !note?.private && !note?.machine)),
+      (!noteTools ||
+        (noteToolsEnabled &&
+          ((!note?.private && !note?.machine) || !!legacyNoteTools))),
   );
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
@@ -982,9 +1001,7 @@ export function PluginCommands({
     [...question].length <= 500;
   const commands = (
     online && workspaceRole === "owner" && (!noteTools || noteToolsEnabled)
-      ? activePlugins(manifest.data?.plugins).filter(
-          (p) => !pluginId || p.id === pluginId,
-        )
+      ? enabledPlugins.filter((p) => !pluginId || p.id === pluginId)
       : []
   )
     .flatMap((p) =>
@@ -1013,6 +1030,12 @@ export function PluginCommands({
           title: command.title,
           name: p.name,
           bundled: !operatorPlugin(p),
+          trustedBundled:
+            noteTools &&
+            (isBundledPlugin(p) ||
+              (p.origin == null &&
+                p.source_kind == null &&
+                catalog.data?.bundled.includes(p.id) === true)),
           icon: noteTools
             ? (!operatorPlugin(p) && noteToolIcons[`${p.id}/${command.id}`]) ||
               "tools"
@@ -1039,7 +1062,7 @@ export function PluginCommands({
     workspaceRole !== "owner" ||
     (noteTools && !noteToolsEnabled)
       ? []
-      : (waitingPlugins.data ?? []).flatMap((plugin) =>
+      : (catalog.data?.waiting ?? []).flatMap((plugin) =>
           !pluginId || pluginId === plugin.id
             ? (plugin.contributes?.commands ?? [])
                 .slice(0, 3)

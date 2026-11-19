@@ -2,11 +2,8 @@
   "nativeName": "English",
   "direction": "ltr",
   "messages": {
-    "plugins.pin_tools": "Pin tools",
-    "plugins.pin_up_to_two": "Choose up to two tools to show directly on eligible notes.",
-    "plugins.clear_unavailable_pins": "Clear unavailable pins",
     "whatsnew.note_tools_title": "Review agent edits and find the right note tools",
-    "whatsnew.note_tools_body": "Compare what an agent added or removed before accepting an edit. Open Note tools to see the tools that fit the current note.",
+    "whatsnew.note_tools_body": "Compare what an agent added or removed before accepting an edit. The most relevant tools appear on the note. Open Note tools to see every available action.",
     "settings.browse_sections": "Browse settings",
     "search.filters": "Filters",
     "search.filters_active": "Filters ({count})",

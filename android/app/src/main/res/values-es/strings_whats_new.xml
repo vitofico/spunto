@@ -10,5 +10,5 @@
     <string name="whats_new_plain_title">Usa un fondo liso</string>
     <string name="whats_new_plain_body">Elige el fondo liso en Apariencia para ocultar la ilustración detrás de tus notas.</string>
     <string name="whats_new_note_tools_title">Revisa cambios de agentes y encuentra las herramientas adecuadas</string>
-    <string name="whats_new_note_tools_body">Compara lo que añadió o eliminó un agente antes de aceptar un cambio. Abre las acciones de la nota para ver qué herramientas puedes usar en ella.</string>
+    <string name="whats_new_note_tools_body">Compara lo que añadió o eliminó un agente antes de aceptar un cambio. Las herramientas más adecuadas aparecen en la nota. Abre las acciones de la nota para ver la lista completa.</string>
 </resources>

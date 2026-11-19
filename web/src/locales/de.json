@@ -2,11 +2,8 @@
   "nativeName": "Deutsch",
   "direction": "ltr",
   "messages": {
-    "plugins.pin_tools": "Werkzeuge anheften",
-    "plugins.pin_up_to_two": "Wähle bis zu zwei Werkzeuge, die direkt auf passenden Notizen angezeigt werden.",
-    "plugins.clear_unavailable_pins": "Nicht verfügbare Werkzeuge lösen",
     "whatsnew.note_tools_title": "Agentenänderungen prüfen und passende Notizwerkzeuge finden",
-    "whatsnew.note_tools_body": "Vergleiche vor der Übernahme, was ein Agent hinzugefügt oder entfernt hat. Öffne die Notizwerkzeuge, um die passenden Werkzeuge für die aktuelle Notiz zu sehen.",
+    "whatsnew.note_tools_body": "Vergleiche vor der Übernahme, was ein Agent hinzugefügt oder entfernt hat. Die passendsten Werkzeuge erscheinen direkt in der Notiz. Öffne die Notizwerkzeuge, um alle verfügbaren Aktionen zu sehen.",
     "settings.browse_sections": "Einstellungen durchsuchen",
     "search.filters": "Filter",
     "search.filters_active": "Filter ({count})",

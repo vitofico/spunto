@@ -21,9 +21,4 @@
     <string name="note_recent_changes">Modifiche recenti</string>
     <string name="accept_changes_loading">Caricamento del confronto…</string>
     <string name="accept_changes_unavailable">La versione precedente non è disponibile. Puoi aprire la cronologia o leggere il testo attuale.</string>
-    <string name="note_tool_manage_pins">Fissa strumenti</string>
-    <string name="note_tool_pin_hint">Fissa fino a due strumenti per accedervi rapidamente.</string>
-    <string name="note_tool_pin">Fissa %1$s per accedervi rapidamente</string>
-    <string name="note_tool_unpin">Rimuovi %1$s dagli strumenti fissati</string>
-    <string name="note_tool_clear_unavailable">Rimuovi le scorciatoie non disponibili per questa nota</string>
 </resources>

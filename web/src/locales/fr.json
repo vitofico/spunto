@@ -2,11 +2,8 @@
   "nativeName": "Français",
   "direction": "ltr",
   "messages": {
-    "plugins.pin_tools": "Épingler des outils",
-    "plugins.pin_up_to_two": "Choisissez jusqu’à deux outils à afficher directement sur les notes compatibles.",
-    "plugins.clear_unavailable_pins": "Retirer les outils indisponibles",
     "whatsnew.note_tools_title": "Vérifiez les modifications des agents et trouvez les bons outils",
-    "whatsnew.note_tools_body": "Comparez les ajouts et suppressions d’un agent avant d’accepter sa modification. Ouvrez les outils de la note pour voir ceux qui conviennent à la note actuelle.",
+    "whatsnew.note_tools_body": "Comparez les ajouts et suppressions d’un agent avant d’accepter sa modification. Les outils les plus pertinents apparaissent sur la note. Ouvrez les outils de la note pour voir toutes les actions disponibles.",
     "settings.browse_sections": "Parcourir les réglages",
     "search.filters": "Filtres",
     "search.filters_active": "Filtres ({count})",

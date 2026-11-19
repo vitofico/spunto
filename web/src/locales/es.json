@@ -2,11 +2,8 @@
   "nativeName": "Español",
   "direction": "ltr",
   "messages": {
-    "plugins.pin_tools": "Fijar herramientas",
-    "plugins.pin_up_to_two": "Elige hasta dos herramientas para mostrarlas directamente en las notas compatibles.",
-    "plugins.clear_unavailable_pins": "Quitar herramientas no disponibles",
     "whatsnew.note_tools_title": "Revisa los cambios de agentes y encuentra las herramientas adecuadas",
-    "whatsnew.note_tools_body": "Compara lo que añadió o eliminó un agente antes de aceptar su edición. Abre Herramientas de la nota para ver las que sirven para la nota actual.",
+    "whatsnew.note_tools_body": "Compara lo que añadió o eliminó un agente antes de aceptar su edición. Las herramientas más relevantes aparecen en la nota. Abre Herramientas de la nota para ver todas las acciones disponibles.",
     "settings.browse_sections": "Ver secciones de ajustes",
     "search.filters": "Filtros",
     "search.filters_active": "Filtros ({count})",

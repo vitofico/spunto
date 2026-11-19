@@ -79,20 +79,33 @@ class PluginPresentationTest {
   assertNull(commandSuccess(result("""{"type":"text","text":"Something changed"}""")))
   assertNull(commandSuccess(result("""{"ui":1,"items":[{"type":"text","text":"Done","feedback":"success"},{"type":"notes","ids":["id"]}]}""")))
  }
- @Test fun pinnedToolsKeepTwoOrderedChoicesAndPersistPerReplica() {
-  val application=org.robolectric.RuntimeEnvironment.getApplication()
-  val preferences=application.getSharedPreferences("synthetic-pins",0)
-  val other=application.getSharedPreferences("synthetic-other-pins",0)
-  val tools=listOf(NoteTool("links","link","Link"),NoteTool("tidy","tidy","Tidy"),NoteTool("image-text","read","OCR"))
-  val pins=NoteToolPins(preferences)
-  tools.forEach(pins::toggle)
-  assertEquals(listOf("links/link","tidy/tidy"),NoteToolPins(preferences).ids)
-  assertTrue(NoteToolPins(other).ids.isEmpty())
-  pins.toggle(tools.first())
-  pins.toggle(tools.last())
-  assertEquals(listOf("tidy/tidy","image-text/read"),NoteToolPins(preferences).ids)
-  pins.removeUnavailable(listOf(tools.last()))
-  assertEquals(listOf("image-text/read"),NoteToolPins(preferences).ids)
+ @Test fun automaticToolsPrioritizeTwoApplicableBundledActionsBeforeGenericLinks() {
+  fun plugin(id:String,command:String,origin:String?="bundled",state:String="enabled")=buildJsonObject {
+   put("id",id); if(origin!=null) put("origin",origin); put("state",state)
+   put("contributes",buildJsonObject {put("commands",buildJsonArray {add(buildJsonObject {
+    put("id",command);put("title",command);put("where",buildJsonArray {add("note-actions")})
+   })})})
+  }
+  val tools=listOf(plugin("links","link"),plugin("tidy","tidy"),plugin("label-suggestions","suggest-now"),
+   plugin("title-summary","summarize"),plugin("link-enrichment","fetch"),plugin("voice-memos","transcribe"),plugin("image-text","read"))
+  val resources=settingsTestResources()
+  fun shortcuts(inputs:NoteToolInputs,plugins:List<JsonObject> = tools,linksSupported:Boolean=true)=
+   automaticNoteTools(noteTools(resources,plugins,inputs=inputs),inputs,linksSupported).map {it.id}
+  assertEquals(listOf("read","transcribe"),shortcuts(NoteToolInputs(true,true,true,true,true,true)))
+  assertEquals(listOf("fetch","summarize"),shortcuts(NoteToolInputs(link=true,titleSummary=true,labels=true,shortText=true)))
+  assertEquals(listOf("suggest-now","tidy"),shortcuts(NoteToolInputs(labels=true,shortText=true)))
+  assertEquals(listOf("fetch"),shortcuts(NoteToolInputs(link=true,shortText=true)))
+  assertEquals(listOf("link"),shortcuts(NoteToolInputs()))
+  assertTrue(shortcuts(NoteToolInputs(),linksSupported=false).isEmpty())
+  val impostors=listOf(plugin("image-text","read","operator"),plugin("voice-memos","transcribe",null),
+   plugin("title-summary","summarize",state="waiting"),tools.first())
+  val inputs=NoteToolInputs(image=true,audio=true,titleSummary=true)
+  assertEquals(setOf("read","transcribe","link"),noteTools(resources,impostors,inputs=inputs).map {it.id}.toSet())
+  assertEquals(listOf("link"),shortcuts(inputs,impostors))
+  val manifest=buildJsonObject {put("plugins",JsonArray(impostors))}
+  assertFalse(needsNoteShortcutInputs(manifest,JsonObject(emptyMap())))
+  val catalog=buildJsonObject {put("plugins",JsonArray(listOf(plugin("voice-memos","transcribe"))))}
+  assertTrue(needsNoteShortcutInputs(manifest,catalog))
  }
  @Test fun toolsExposePrimaryGlobalCommandsAndLeaveJournalInItsOwnViews() {
   fun tool(id:String,command:String,state:String="enabled")=Json.parseToJsonElement("""{

@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
@@ -59,11 +60,14 @@ import kotlinx.serialization.json.*
  var commandResult by remember(id) { mutableStateOf<JsonObject?>(null) }
  var shortcutLink by remember(id) {mutableStateOf<Pair<NotePickerSession,Int>?>(null)}
  val noteActionsFocus=remember(id) {FocusRequester()}
+ val tidyShortcutFocus=remember(id) {FocusRequester()}
+ var resultFromShortcut by remember(id) {mutableStateOf(false)}
  var restoreActionFocus by remember(id) {mutableStateOf(false)}
  LaunchedEffect(restoreActionFocus) {
   if(restoreActionFocus) {
    androidx.compose.runtime.withFrameNanos {}
-   noteActionsFocus.requestFocus()
+   val restored=resultFromShortcut && runCatching {tidyShortcutFocus.requestFocus(FocusDirection.Enter)}.getOrDefault(false)
+   if(!restored) noteActionsFocus.requestFocus()
    restoreActionFocus=false
   }
  }
@@ -85,13 +89,13 @@ import kotlinx.serialization.json.*
  val refused by model.repository.refused.collectAsState(emptyMap())
  val outputs by model.outputs.collectAsState()
  val owner by model.workspaceIsOwner.collectAsState()
- val toolPins=remember(model) {NoteToolPins(model.container.preferences)}
  val toolRunner=rememberNoteToolRunner(model,id)
  val acceptance=remember(value,outputs,manifest,writable,owner) {noteAcceptanceActions(value,outputs,manifest,writable,owner)}
  val needsAgentDetail=!editing && !restoring && acceptance.any {it!=NoteAcceptance.Machine}
  val showShortcuts=!editing && !restoring && writable && owner && online && !value.trashed &&
-  !value.pending && value.serverRev>0 && value.syncError==null && toolPins.ids.isNotEmpty()
- val needsToolDetail=(actions || showShortcuts) && owner && writable && !value.privateNote && !value.machine
+  !value.pending && value.serverRev>0 && value.syncError==null
+ val needsToolDetail=(actions || showShortcuts && needsNoteShortcutInputs(manifest,catalog)) &&
+  owner && writable && !value.privateNote && !value.machine
  val detail=if(online && !value.trashed && (needsAgentDetail || needsToolDetail)) rememberNoteToolDetail(model,value) else NoteToolDetail()
  val deliverToolResult:(JsonObject)->Unit={actions=false;if(journalResult(it)) model.remote.value=it else commandResult=it}
  val linksTo=remember(value.body,id) {noteLinkIds(value.body)-id}
@@ -136,9 +140,10 @@ import kotlinx.serialization.json.*
    if(!editing && isJournalNote(value)) DecisionNoteActions(model,value)
   }
   if(!editing && !restoring && acceptance.isNotEmpty()) item(key="acceptance") {NoteAcceptancePanel(model,value,acceptance,detail,editorScope,onHistory={history=true},onEdit={caret=null;editing=true})}
-  if(showShortcuts && !actions) item(key="pinned-tools") {
-   NoteCommands(model,value,detail,toolPins,toolRunner,shortcuts=true,
-    onLink={shortcutLink=NotePickerSession.open(model,"links")?.let {it to value.serverRev};shortcutLink!=null},onResult=deliverToolResult)
+  if(showShortcuts && !actions) item(key="note-shortcuts") {
+   NoteCommands(model,value,detail,toolRunner,shortcuts=true,tidyShortcutFocus=tidyShortcutFocus,
+    onLink={shortcutLink=NotePickerSession.open(model,"links")?.let {it to value.serverRev};shortcutLink!=null},
+    onResult={resultFromShortcut=true;deliverToolResult(it)})
   }
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
   refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code,onEdit=if(!editing && !restoring && !value.trashed) ({caret=null;editing=true}) else null)}}
@@ -156,7 +161,7 @@ import kotlinx.serialization.json.*
   if(!editing && linked.isNotEmpty()) item {LinkedNotes(linksTo.mapNotNull(linkedById::get),linkedFrom.mapNotNull(linkedById::get),locale,onNote)}
   if(!editing) item {TextButton(onClick={about=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_about_note),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}}
  }
- if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult=deliverToolResult,onTrashed=onClose,detail=detail,pins=toolPins,runner=toolRunner)
+ if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={resultFromShortcut=false;deliverToolResult(it)},onTrashed=onClose,detail=detail,runner=toolRunner)
  LaunchedEffect(writable) {if(!writable) shortcutLink=null}
  shortcutLink?.takeIf {writable}?.let {(session,version) ->
   val feedback=LocalFeedback.current
@@ -194,12 +199,11 @@ import kotlinx.serialization.json.*
 
 /** Shared by the note's menu and a timeline long-press. */
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun NoteActionsSheet(model:SpuntoViewModel,note:Note,onDismiss:()->Unit,onHistory:()->Unit,onCommandResult:(JsonObject)->Unit,onTrashed:()->Unit={},detail:NoteToolDetail?=null,pins:NoteToolPins?=null,runner:NoteToolRunner?=null) {
+@Composable internal fun NoteActionsSheet(model:SpuntoViewModel,note:Note,onDismiss:()->Unit,onHistory:()->Unit,onCommandResult:(JsonObject)->Unit,onTrashed:()->Unit={},detail:NoteToolDetail?=null,runner:NoteToolRunner?=null) {
  val online by model.online.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
  val feedback=LocalFeedback.current
  val context=LocalContext.current
- val toolPins=pins ?: remember(model) {NoteToolPins(model.container.preferences)}
  val toolRunner=runner ?: rememberNoteToolRunner(model,note.id)
  var linkSession by remember(note.id) {mutableStateOf<Pair<NotePickerSession,Int>?>(null)}
  LaunchedEffect(writable) {if(!writable) linkSession=null}
@@ -229,7 +233,7 @@ import kotlinx.serialization.json.*
       }
      }
     }
-    if(writable && online && !note.trashed) NoteCommands(model,note,detail,toolPins,toolRunner,
+    if(writable && online && !note.trashed) NoteCommands(model,note,detail,toolRunner,
      onLink={linkSession=NotePickerSession.open(model,"links")?.let {it to note.serverRev};linkSession!=null}) {onDismiss();onCommandResult(it)}
     HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s20),color=MaterialTheme.colorScheme.outlineVariant)
     Column {

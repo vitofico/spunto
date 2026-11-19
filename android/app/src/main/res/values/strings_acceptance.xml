@@ -21,9 +21,4 @@
     <string name="note_recent_changes">Recent changes</string>
     <string name="accept_changes_loading">Loading the comparison…</string>
     <string name="accept_changes_unavailable">The earlier version is unavailable. You can open history or review the current text.</string>
-    <string name="note_tool_manage_pins">Pin tools</string>
-    <string name="note_tool_pin_hint">Pin up to two tools for quick access.</string>
-    <string name="note_tool_pin">Pin %1$s for quick access</string>
-    <string name="note_tool_unpin">Unpin %1$s</string>
-    <string name="note_tool_clear_unavailable">Remove shortcuts unavailable on this note</string>
 </resources>

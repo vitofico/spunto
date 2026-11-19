@@ -829,14 +829,14 @@ kbd {
 .note-tools .note-command-trigger:hover {
   border-color: var(--accent);
 }
-.note-tools .pinned-note-tool {
+.note-tools .note-tool-shortcut {
   min-height: 44px;
   border: 1px solid var(--rule);
   color: var(--accent);
   background: var(--raised);
   overflow-wrap: anywhere;
 }
-.note-tools .pinned-note-tool .icon {
+.note-tools .note-tool-shortcut .icon {
   flex: none;
 }
 .note-header > .row,

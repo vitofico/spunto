@@ -10,5 +10,5 @@
     <string name="whats_new_plain_title">Scegli uno sfondo semplice</string>
     <string name="whats_new_plain_body">Scegli lo sfondo semplice in Aspetto per nascondere l’illustrazione dietro le note.</string>
     <string name="whats_new_note_tools_title">Controlla le modifiche degli agenti e trova gli strumenti adatti</string>
-    <string name="whats_new_note_tools_body">Confronta ciò che un agente ha aggiunto o rimosso prima di accettare una modifica. Apri le azioni della nota per vedere gli strumenti adatti alla nota corrente.</string>
+    <string name="whats_new_note_tools_body">Confronta ciò che un agente ha aggiunto o rimosso prima di accettare una modifica. Gli strumenti più adatti compaiono sulla nota. Apri le azioni della nota per vedere l’elenco completo.</string>
 </resources>

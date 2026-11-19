@@ -21,9 +21,4 @@
     <string name="note_recent_changes">Letzte Änderungen</string>
     <string name="accept_changes_loading">Vergleich wird geladen …</string>
     <string name="accept_changes_unavailable">Die frühere Version ist nicht verfügbar. Du kannst den Verlauf öffnen oder den aktuellen Text prüfen.</string>
-    <string name="note_tool_manage_pins">Werkzeuge anheften</string>
-    <string name="note_tool_pin_hint">Hefte bis zu zwei Werkzeuge für den Schnellzugriff an.</string>
-    <string name="note_tool_pin">%1$s für den Schnellzugriff anheften</string>
-    <string name="note_tool_unpin">%1$s vom Schnellzugriff entfernen</string>
-    <string name="note_tool_clear_unavailable">In dieser Notiz nicht verfügbare Verknüpfungen entfernen</string>
 </resources>

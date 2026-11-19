@@ -9,7 +9,7 @@ import io.theficos.spunto.data.sync.AuthConfig
 import java.util.Locale
 import kotlinx.serialization.json.*
 
-internal data class NoteTool(val pluginId:String,val id:String,val title:String) {
+internal data class NoteTool(val pluginId:String,val id:String,val title:String,val bundled:Boolean) {
  val icon get()=when(pluginId) {
   "links", "link-enrichment" -> R.drawable.ic_link
   "image-text" -> R.drawable.ic_image
@@ -23,19 +23,47 @@ internal data class NoteTool(val pluginId:String,val id:String,val title:String)
  }
 }
 
+private val contextualShortcutOrder = listOf(
+ "image-text" to "read", "voice-memos" to "transcribe", "link-enrichment" to "fetch",
+ "title-summary" to "summarize", "label-suggestions" to "suggest-now", "tidy" to "tidy",
+)
+
+private fun noteToolOrigin(plugin:JsonObject,catalog:JsonObject):String? = plugin.pluginText("origin") ?:
+ catalog.objects("plugins").firstOrNull {it.string("id")==plugin.string("id")}?.pluginText("origin")
+
+private fun activeNoteToolPlugin(plugin:JsonObject):Boolean = plugin.bool("enabled",true) &&
+ plugin.string("state") !in setOf("disabled","off","failed","waiting","removed")
+
+/** Connect note detail lazily only when active contextual shortcuts can use it. */
+internal fun needsNoteShortcutInputs(manifest:JsonObject,catalog:JsonObject):Boolean = manifest.objects("plugins").any {plugin ->
+ activeNoteToolPlugin(plugin) && noteToolOrigin(plugin,catalog)=="bundled" &&
+  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().any { command ->
+   "note-actions" in command.pluginStrings("where").orEmpty() &&
+    (plugin.string("id") to command.string("id")) in contextualShortcutOrder
+  }
+}
+
+internal fun automaticNoteTools(commands:List<NoteTool>,inputs:NoteToolInputs,linksSupported:Boolean):List<NoteTool> {
+ val byCommand=commands.filter {it.bundled}.associateBy {it.pluginId to it.id}
+ val primary=contextualShortcutOrder.mapNotNull { key ->
+  byCommand[key]?.takeUnless {it.pluginId=="tidy" && (inputs.image || inputs.audio || inputs.link)}
+ }.take(2)
+ return primary.ifEmpty {listOfNotNull(byCommand["links" to "link"].takeIf {linksSupported})}
+}
+
 /** A command is listed once, with the internal note-link action kept in reach. */
 internal fun noteTools(
  resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap()),
  versionedAgentReview:Boolean=false,legacyAgentReview:Boolean=true,inputs:NoteToolInputs=NoteToolInputs(),waitingOnly:Boolean=false,
 ):List<NoteTool> = plugins.filter {
- (if(waitingOnly) it.string("state")=="waiting" else it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed","waiting","removed"))
+ (if(waitingOnly) it.string("state")=="waiting" else activeNoteToolPlugin(it))
  && (!privateNote || (it["permissions"] as? JsonArray)?.all {permission ->
   val name=(permission as? JsonPrimitive)?.takeIf {value ->value.isString}?.content
   name!=null && !name.startsWith("ai.") && !name.startsWith("net.")
  }==true)
 }.sortedBy {(it["position"] as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE}.flatMap {plugin ->
  val id=plugin.string("id")
- val origin=plugin.pluginText("origin") ?: catalog.objects("plugins").firstOrNull {it.string("id")==id}?.pluginText("origin")
+ val origin=noteToolOrigin(plugin,catalog)
  val stock=origin==null || origin=="bundled"
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().filter {command ->
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
@@ -50,7 +78,7 @@ internal fun noteTools(
    "tidy" to "tidy", "translate" to "translate", "develop" to "develop" -> inputs.shortText
    else -> true
   })
- }.map {NoteTool(id,it.string("id"),localizedPluginCommand(resources,plugin,it,catalog))}
+ }.map {NoteTool(id,it.string("id"),localizedPluginCommand(resources,plugin,it,catalog),origin=="bundled")}
 }.distinctBy {it.pluginId to it.id}.sortedByDescending {it.pluginId=="links" && it.id=="link"}
 
 internal fun pluginApi(config:AuthConfig,resources:Resources)=ApiClient(config,language={resources.configuration.locales[0].toLanguageTag()})

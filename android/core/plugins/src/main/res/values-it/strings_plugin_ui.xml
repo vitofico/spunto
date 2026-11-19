@@ -54,4 +54,7 @@
         <item quantity="one">Rimossa %d tabulazione</item>
         <item quantity="other">Rimosse %d tabulazioni</item>
     </plurals>
+    <string name="plugin_ui_before">Prima</string>
+    <string name="plugin_ui_after">Dopo</string>
+    <string name="plugin_ui_empty_text">Vuoto</string>
 </resources>

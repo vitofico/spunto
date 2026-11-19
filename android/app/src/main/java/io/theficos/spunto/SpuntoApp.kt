@@ -43,6 +43,7 @@ import kotlinx.serialization.json.*
  val nav=rememberNavigator(initialNoteId,pages)
  val route=nav.route
  val guideStore=remember {FirstRunGuideStore(firstRunGuidePreferences(model.container.context))}
+ var focusCapture by rememberSaveable { mutableStateOf(false) }
  var theme by remember { mutableStateOf(model.container.preferences.getString("theme","carta")!!) }
  var themeOverride by remember { mutableStateOf(model.container.preferences.contains("theme")) }
  var accent by remember { mutableStateOf(model.container.preferences.getString("theme-accent",null)) }
@@ -115,7 +116,10 @@ import kotlinx.serialization.json.*
  val snackbar=remember { SnackbarHostState() };val feedbackScope=rememberCoroutineScope();val feedback=remember { Feedback(snackbar,feedbackScope) }
  CompositionLocalProvider(LocalNavigator provides nav,LocalTopBar provides topBar,LocalBottomBar provides bottomBar,LocalFeedback provides feedback) {
  SpuntoTheme(activeSelection.id,mode,black,wallpaper,pack=activeSelection.mode(dark),readingFace=readingFace,readingSize=readingSize,backgroundStyle=backgroundStyle) {
-  FirstRunGuideGate(guideStore,eligible=guideEligible && initialNoteId==null && route=="timeline" && !reauth,replay=route=="guide",canConnect=auth==null,onStartWriting={nav.home()},onSkipReplay={nav.back()},onConnect={nav.open("login")},content=appContent@{
+  FirstRunGuideGate(guideStore,eligible=guideEligible && initialNoteId==null && route=="timeline" && !reauth,replay=route=="guide",canConnect=auth==null,onStartWriting={
+   nav.home()
+   if(writable) focusCapture=true else context.startActivity(localCaptureIntent(context))
+  },onSkipReplay={nav.back()},onConnect={nav.open("login")},content=appContent@{
   if(reauth || route=="login") {
    LoginScreen(model,reauth || sync==SyncStatus.NeedsSignIn,onDone={model.reauthenticate.value=false;nav.home()}); return@appContent
   }
@@ -150,17 +154,22 @@ import kotlinx.serialization.json.*
      IconButton(onClick={nav.open("search")},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
      IconButton(onClick={nav.open("settings")},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_settings_outline),contentDescription=context.getString(R.string.core_settings),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
     }
-    var more by remember {mutableStateOf(false)}
     Row(Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
      Box(Modifier.weight(1f)) {
       TextButton(onClick={navigationOpen=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)}  ⌄",style=MaterialTheme.typography.titleLarge.copy(fontSize=21.sp,lineHeight=28.sp),color=MaterialTheme.colorScheme.onSurface,maxLines=2,overflow=TextOverflow.Ellipsis)}
      }
-     Box {
+     val filtered=createdFrom.isNotBlank() || createdTo.isNotBlank()
+     IconButton(onClick={filtersOpen=true},modifier=Modifier.size(48.dp)) {
+      BadgedBox(badge={if(filtered) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=context.getString(if(filtered) R.string.core_filters_applied else R.string.core_filter_notes),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
+     }
+     val hasTools=owner && online && globalTools(catalog,manifest).isNotEmpty()
+     val hasAsk=writable && model.container.manifest.enabled("ask")
+     if(hasTools || hasAsk) Box {
+      var more by remember {mutableStateOf(false)}
       IconButton(onClick={more=true},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
       DropdownMenu(expanded=more,onDismissRequest={more=false}) {
-       if(owner && online && globalTools(catalog,manifest).isNotEmpty()) DropdownMenuItem(text={Text(context.getString(R.string.plugin_global_tools))},onClick={more=false;nav.open("tools")})
-       DropdownMenuItem(text={Text(context.getString(R.string.core_filter_notes))},onClick={more=false;filtersOpen=true})
-       if(writable && model.container.manifest.enabled("ask")) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
+       if(hasTools) DropdownMenuItem(text={Text(context.getString(R.string.plugin_global_tools))},onClick={more=false;nav.open("tools")})
+       if(hasAsk) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
       }
      }
     }
@@ -175,7 +184,8 @@ import kotlinx.serialization.json.*
     if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}
     when {
-     route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo)
+     route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo,
+      focusCapture=focusCapture,onCaptureFocused={focusCapture=false})
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="tools" -> if(owner) GlobalToolsScreen(model,{nav.open("ask")})

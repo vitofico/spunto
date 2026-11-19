@@ -16,7 +16,7 @@ creates = "owner"
 [[contributes.commands]]
 id = "record-decision"
 title = "Record decision"
-where = ["palette", "slash", "note-actions"]
+where = ["palette", "slash"]
 online = true
 
 [[contributes.commands]]

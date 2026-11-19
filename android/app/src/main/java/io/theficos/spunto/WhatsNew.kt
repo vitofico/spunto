@@ -32,7 +32,7 @@ import io.theficos.spunto.core.design.SpuntoType
 internal const val WhatsNewRoute = "whats-new"
 internal const val WhatsNewSeenKey = "latest-seen"
 // Advance this ID when adding the next group of updates.
-private const val latestUpdate = "2026-11-prugna"
+private const val latestUpdate = "2026-11-note-tools"
 
 internal fun whatsNewPreferences(context: Context) =
     context.applicationContext.getSharedPreferences(WhatsNewRoute, Context.MODE_PRIVATE)
@@ -67,6 +67,14 @@ internal fun WhatsNewScreen(onAppearance: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
                 UpdateHeading(
                     stringResource(R.string.whats_new_latest),
+                    stringResource(R.string.whats_new_note_tools_title),
+                    stringResource(R.string.whats_new_note_tools_body),
+                )
+            }
+            HorizontalDivider()
+            Column(verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
+                UpdateHeading(
+                    stringResource(R.string.whats_new_earlier),
                     stringResource(R.string.whats_new_prugna_title),
                     stringResource(R.string.whats_new_prugna_body),
                 )
@@ -76,8 +84,7 @@ internal fun WhatsNewScreen(onAppearance: () -> Unit) {
             }
             HorizontalDivider()
             Column(verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
-                UpdateHeading(
-                    stringResource(R.string.whats_new_earlier),
+                UpdateItem(
                     stringResource(R.string.whats_new_plain_title),
                     stringResource(R.string.whats_new_plain_body),
                 )
@@ -94,6 +101,11 @@ private fun UpdateHeading(group: String, title: String, summary: String) {
         style = SpuntoType.overline,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    UpdateItem(title, summary)
+}
+
+@Composable
+private fun UpdateItem(title: String, summary: String) {
     Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
     Text(summary, style = MaterialTheme.typography.bodyMedium)
 }

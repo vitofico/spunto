@@ -1,10 +1,11 @@
 import { t, useLanguage } from "../lib/i18n";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useSearch as useLocationSearch } from "wouter";
 import { fold, useSearch } from "../lib";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { searchExcerpt } from "../lib/searchExcerpt";
+import { searchExcerpt, searchMatchRanges } from "../lib/searchExcerpt";
 import { NoteCard } from "../components/core/NoteCard";
+import { Icon } from "../components/core/Icon";
 
 const LIMIT = 500;
 /** Words to mark in results: what the server matches, minus #labels. */
@@ -16,58 +17,22 @@ function terms(query: string) {
       ?.map(fold) ?? []
   );
 }
-/**
- * Wraps word-start matches in <mark>, accent- and case-insensitively. Only inside
- * rendered note bodies: their HTML is set as a whole, so React tracks none of it.
- */
-function markMatches(body: HTMLElement, words: string[]) {
-  for (const mark of body.querySelectorAll("mark[data-match]"))
-    mark.replaceWith(...mark.childNodes);
-  body.normalize();
-  if (!words.length) return;
-  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
-  for (const node of nodes) {
-    if (node.parentElement?.closest("code,pre")) continue;
-    // Fold character by character, remembering where each folded unit came from.
-    let folded = "";
-    const origin: number[] = [];
-    for (let at = 0; at < node.data.length;) {
-      const char = String.fromCodePoint(node.data.codePointAt(at)!);
-      for (const unit of fold(char)) {
-        folded += unit;
-        for (let index = 0; index < unit.length; index++) origin.push(at);
-      }
-      at += char.length;
-    }
-    const spans: [number, number][] = [];
-    for (const word of words) {
-      let from = 0;
-      for (;;) {
-        const hit = folded.indexOf(word, from);
-        if (hit < 0) break;
-        from = hit + word.length;
-        if (hit > 0 && /[\p{L}\p{N}]/u.test(folded[hit - 1])) continue;
-        const last = origin[hit + word.length - 1];
-        const end =
-          last + String.fromCodePoint(node.data.codePointAt(last)!).length;
-        spans.push([origin[hit], end]);
-      }
-    }
-    spans.sort((a, b) => b[0] - a[0]);
-    let previous = Infinity;
-    for (const [start, end] of spans) {
-      if (end > previous) continue;
-      const range = document.createRange();
-      range.setStart(node, start);
-      range.setEnd(node, end);
-      const mark = document.createElement("mark");
-      mark.dataset.match = "";
-      range.surroundContents(mark);
-      previous = start;
-    }
+function highlight(text: string, words: string[]): ReactNode {
+  const ranges = searchMatchRanges(text, words);
+  if (!ranges.length) return text;
+  let before = 0;
+  const pieces: ReactNode[] = [];
+  for (const [start, end] of ranges) {
+    if (start < before) continue;
+    pieces.push(
+      text.slice(before, start),
+      <mark key={start} data-match="">
+        {text.slice(start, end)}
+      </mark>,
+    );
+    before = end;
   }
+  return [...pieces, text.slice(before)];
 }
 export default function SearchPage() {
   useLanguage();
@@ -79,9 +44,13 @@ export default function SearchPage() {
   const to = params.get("to") ?? "";
   const archived = params.get("archived") === "1";
   const recent = params.get("sort") === "recent";
-  const results = useRef<HTMLDivElement>(null);
+  const badDates = !!from && !!to && from > to;
+  const filtersRef = useRef<HTMLDetailsElement>(null);
+  const count = Number(!!(from || to)) + Number(archived) + Number(recent);
   useDocumentTitle(
-    submitted.trim() ? `“${submitted.trim()}” · Search` : t("app.search"),
+    submitted.trim()
+      ? `“${submitted.trim()}” · ${t("app.search")}`
+      : t("app.search"),
   );
   /** Filters live in the address, so Back, reload and shared links keep them. */
   function update(next: Record<string, string>) {
@@ -102,9 +71,12 @@ export default function SearchPage() {
     const timer = setTimeout(() => update({ q }), 300);
     return () => clearTimeout(timer);
   }, [q]);
-  const badDates = !!from && !!to && from > to;
+  useEffect(() => {
+    if (badDates && filtersRef.current) filtersRef.current.open = true;
+  }, [badDates]);
   const tooLong = q.length > LIMIT;
-  const enabled = !badDates && !!submitted.trim();
+  const validSearch = !badDates && submitted.length <= LIMIT;
+  const enabled = validSearch && !!submitted.trim();
   const filters = {
     from: from || undefined,
     to: to || undefined,
@@ -115,19 +87,19 @@ export default function SearchPage() {
   const keyword = useSearch(
     submitted,
     { ...filters, mode: "keyword" },
-    !badDates,
+    validSearch,
   );
   const hybrid = useSearch(submitted, { ...filters, mode: "hybrid" }, enabled);
   const semantic = hybrid.data?.pages[0]?.semantic;
   const shown = semantic === "on" ? hybrid : keyword;
   const all = shown.data?.pages.flatMap((page) => page.hits) ?? [];
-  useLayoutEffect(() => {
-    const words = terms(submitted);
-    for (const body of results.current?.querySelectorAll<HTMLElement>(
-      ".note-body",
-    ) ?? [])
-      markMatches(body, words);
-  });
+  const words = terms(submitted);
+  const resultCount =
+    enabled && !shown.isPending && !shown.error
+      ? t(shown.hasNextPage ? "search.found_more" : "search.found", {
+          count: all.length,
+        })
+      : "";
   return (
     <>
       <h1 className="page-title">{t("search.search_your_notes")}</h1>
@@ -159,59 +131,78 @@ export default function SearchPage() {
             {t("search.too_long", { limit: LIMIT, count: q.length })}
           </p>
         )}
-        <div className="search-filters">
-          <label className="date-filter">
-            {t("search.from")}
-            <input
-              className="field"
-              aria-label={t("search.from_date")}
-              type="date"
-              value={from}
-              max={to || undefined}
-              aria-invalid={badDates || undefined}
-              aria-describedby={badDates ? "search-dates" : undefined}
-              onChange={(e) => update({ from: e.target.value })}
-            />
-          </label>
-          <label className="date-filter">
-            {t("search.to")}
-            <input
-              className="field"
-              aria-label={t("search.to_date")}
-              type="date"
-              value={to}
-              min={from || undefined}
-              aria-invalid={badDates || undefined}
-              aria-describedby={badDates ? "search-dates" : undefined}
-              onChange={(e) => update({ to: e.target.value })}
-            />
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={archived}
-              onChange={(e) =>
-                update({ archived: e.target.checked ? "1" : "" })
-              }
-            />
-            {t("search.include_archive")}
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={recent}
-              onChange={(e) =>
-                update({ sort: e.target.checked ? "recent" : "" })
-              }
-            />
-            {t("search.newest_first")}
-          </label>
-        </div>
-        {badDates && (
-          <p id="search-dates" className="error" role="alert">
-            {t("search.the_start_date_is_after_the_end_date")}
-          </p>
-        )}
+        <details className="search-filter-disclosure" ref={filtersRef}>
+          <summary className="button">
+            <Icon name="tune" />
+            {t(count ? "search.filters_active" : "search.filters", { count })}
+            <Icon name="chevron" />
+          </summary>
+          <div className="search-filters">
+            <label className="date-filter">
+              {t("search.from")}
+              <input
+                className="field"
+                aria-label={t("search.from_date")}
+                type="date"
+                value={from}
+                max={to || undefined}
+                aria-invalid={badDates || undefined}
+                aria-describedby={badDates ? "search-dates" : undefined}
+                onChange={(e) => update({ from: e.target.value })}
+              />
+            </label>
+            <label className="date-filter">
+              {t("search.to")}
+              <input
+                className="field"
+                aria-label={t("search.to_date")}
+                type="date"
+                value={to}
+                min={from || undefined}
+                aria-invalid={badDates || undefined}
+                aria-describedby={badDates ? "search-dates" : undefined}
+                onChange={(e) => update({ to: e.target.value })}
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={archived}
+                onChange={(e) =>
+                  update({ archived: e.target.checked ? "1" : "" })
+                }
+              />
+              {t("search.include_archive")}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={recent}
+                onChange={(e) =>
+                  update({ sort: e.target.checked ? "recent" : "" })
+                }
+              />
+              {t("search.newest_first")}
+            </label>
+            {badDates && (
+              <p id="search-dates" className="error" role="alert">
+                {t("search.the_start_date_is_after_the_end_date")}
+              </p>
+            )}
+            {count > 0 && (
+              <button
+                type="button"
+                className="button search-clear-filters"
+                onClick={() => {
+                  filtersRef.current?.querySelector("summary")?.focus();
+                  update({ from: "", to: "", archived: "", sort: "" });
+                }}
+              >
+                {t("search.clear_filters")}
+              </button>
+            )}
+          </div>
+        </details>
       </form>
       {!submitted.trim() && (
         <p className="page-status">
@@ -242,28 +233,26 @@ export default function SearchPage() {
           <p>{t("search.try_fewer_words_search_ignores_accents_so_perche")}</p>
         </div>
       )}
-      <p className="sr-only" role="status">
-        {enabled && !shown.isPending && !shown.error
-          ? t(shown.hasNextPage ? "search.found_more" : "search.found", {
-              count: all.length,
-            })
-          : ""}
+      <p
+        className={all.length && resultCount ? "search-count" : "sr-only"}
+        role="status"
+      >
+        {resultCount}
       </p>
-      <div ref={results}>
+      <div className="search-results">
         {all.map((note) => (
-          <div key={note.id}>
-            <p className="muted">
-              {t(
-                note.match === "meaning"
-                  ? "search.similar_meaning"
-                  : "search.terms_match",
-              )}
-            </p>
-            <NoteCard
-              note={note}
-              excerpt={searchExcerpt(note.body, terms(submitted))}
-            />
-          </div>
+          <NoteCard
+            key={note.id}
+            note={note}
+            searchPreview={{
+              title: highlight(note.title, words),
+              excerpt: highlight(
+                searchExcerpt(note.body, words, 240, note.title),
+                words,
+              ),
+              meaning: note.match === "meaning",
+            }}
+          />
         ))}
       </div>
       {shown.hasNextPage && (

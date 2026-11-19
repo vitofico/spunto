@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
@@ -57,12 +58,16 @@ import kotlinx.serialization.json.*
  var history by remember(id) { mutableStateOf(model.historyFor.value==id) }
  var about by remember(id) { mutableStateOf(false) }
  var commandResult by remember(id) { mutableStateOf<JsonObject?>(null) }
+ var shortcutLink by remember(id) {mutableStateOf<Pair<NotePickerSession,Int>?>(null)}
  val noteActionsFocus=remember(id) {FocusRequester()}
+ val tidyShortcutFocus=remember(id) {FocusRequester()}
+ var resultFromShortcut by remember(id) {mutableStateOf(false)}
  var restoreActionFocus by remember(id) {mutableStateOf(false)}
  LaunchedEffect(restoreActionFocus) {
   if(restoreActionFocus) {
    androidx.compose.runtime.withFrameNanos {}
-   noteActionsFocus.requestFocus()
+   val restored=resultFromShortcut && runCatching {tidyShortcutFocus.requestFocus(FocusDirection.Enter)}.getOrDefault(false)
+   if(!restored) runCatching {noteActionsFocus.requestFocus()}
    restoreActionFocus=false
   }
  }
@@ -84,7 +89,15 @@ import kotlinx.serialization.json.*
  val refused by model.repository.refused.collectAsState(emptyMap())
  val outputs by model.outputs.collectAsState()
  val owner by model.workspaceIsOwner.collectAsState()
+ val toolRunner=rememberNoteToolRunner(model,id)
  val acceptance=remember(value,outputs,manifest,writable,owner) {noteAcceptanceActions(value,outputs,manifest,writable,owner)}
+ val needsAgentDetail=!editing && !restoring && acceptance.any {it!=NoteAcceptance.Machine}
+ val showShortcuts=!editing && !restoring && writable && owner && online && !value.trashed &&
+  !value.pending && value.serverRev>0 && value.syncError==null
+ val needsToolDetail=(actions || showShortcuts && needsNoteShortcutInputs(manifest,catalog)) &&
+  owner && writable && !value.privateNote && !value.machine
+ val detail=if(online && !value.trashed && (needsAgentDetail || needsToolDetail)) rememberNoteToolDetail(model,value) else NoteToolDetail()
+ val deliverToolResult:(JsonObject)->Unit={actions=false;if(journalResult(it)) model.remote.value=it else commandResult=it}
  val linksTo=remember(value.body,id) {noteLinkIds(value.body)-id}
  val linkedFrom=if(model.container.manifest.enabled("links")) backlinkIds(outputs,id) else emptyList()
  val linked by remember(linksTo,linkedFrom) {model.repository.observeAll((linksTo+linkedFrom).distinct())}.collectAsState(emptyList())
@@ -126,9 +139,14 @@ import kotlinx.serialization.json.*
    Text(meta.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {contentDescription=meta})
    if(!editing && isJournalNote(value)) DecisionNoteActions(model,value)
   }
-  if(!editing && !restoring && acceptance.isNotEmpty()) item(key="acceptance") {NoteAcceptancePanel(model,value,acceptance,editorScope,onHistory={history=true},onEdit={caret=null;editing=true})}
+  if(!editing && !restoring && acceptance.isNotEmpty()) item(key="acceptance") {NoteAcceptancePanel(model,value,acceptance,detail,editorScope,onHistory={history=true},onEdit={caret=null;editing=true})}
+  if(showShortcuts && !actions) item(key="note-shortcuts") {
+   NoteCommands(model,value,detail,toolRunner,shortcuts=true,tidyShortcutFocus=tidyShortcutFocus,
+    onLink={shortcutLink=NotePickerSession.open(model,"links")?.let {it to value.serverRev};shortcutLink!=null},
+    onResult={resultFromShortcut=true;deliverToolResult(it)})
+  }
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
-  refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code)}}
+  refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code,onEdit=if(!editing && !restoring && !value.trashed) ({caret=null;editing=true}) else null)}}
   item {
    if(editing && writable) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,
     trailing=if(doneInTopBar) null else ({NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)}),onSave={editing=false})
@@ -143,7 +161,12 @@ import kotlinx.serialization.json.*
   if(!editing && linked.isNotEmpty()) item {LinkedNotes(linksTo.mapNotNull(linkedById::get),linkedFrom.mapNotNull(linkedById::get),locale,onNote)}
   if(!editing) item {TextButton(onClick={about=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_about_note),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}}
  }
- if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={if(journalResult(it)) model.remote.value=it else commandResult=it},onTrashed=onClose)
+ if(actions) NoteActionsSheet(model,value,onDismiss={actions=false},onHistory={history=true},onCommandResult={resultFromShortcut=false;deliverToolResult(it)},onTrashed=onClose,detail=detail,runner=toolRunner)
+ LaunchedEffect(writable) {if(!writable) shortcutLink=null}
+ shortcutLink?.takeIf {writable}?.let {(session,version) ->
+  val feedback=LocalFeedback.current
+  NoteLinkPickerSheet(model,id,version,session,onClose={shortcutLink=null},onInserted={shortcutLink=null;feedback.show(context.getString(it))})
+ }
  if(history) ModalBottomSheet(onDismissRequest={history=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
   LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding(),contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=SpuntoSpacing.s24),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
    revisionHistoryItems(context,revisions,online,historyResult,editing || finishing || restoring,value.body,canRestore=writable) {revision ->
@@ -174,13 +197,14 @@ import kotlinx.serialization.json.*
  }
 }
 
-/** 03 R9: four core tiles, then plugin verbs between hairlines, then Private, History, export and trash. Shared by the note's ⋮ and a timeline long-press. */
+/** Shared by the note's menu and a timeline long-press. */
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun NoteActionsSheet(model:SpuntoViewModel,note:Note,onDismiss:()->Unit,onHistory:()->Unit,onCommandResult:(JsonObject)->Unit,onTrashed:()->Unit={}) {
+@Composable internal fun NoteActionsSheet(model:SpuntoViewModel,note:Note,onDismiss:()->Unit,onHistory:()->Unit,onCommandResult:(JsonObject)->Unit,onTrashed:()->Unit={},detail:NoteToolDetail?=null,runner:NoteToolRunner?=null) {
  val online by model.online.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
  val feedback=LocalFeedback.current
  val context=LocalContext.current
+ val toolRunner=runner ?: rememberNoteToolRunner(model,note.id)
  var linkSession by remember(note.id) {mutableStateOf<Pair<NotePickerSession,Int>?>(null)}
  LaunchedEffect(writable) {if(!writable) linkSession=null}
  linkSession?.takeIf {writable}?.let {(session,version) ->
@@ -190,48 +214,50 @@ import kotlinx.serialization.json.*
   return
  }
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
-  Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom=SpuntoSpacing.s16)) {
+  Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom=SpuntoSpacing.s16),
+   verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    NoteExportActions(model,note,enabled=true) {share,save,available ->
-    Row(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s4),horizontalArrangement=Arrangement.SpaceEvenly) {
-     if(writable) ActionTile(if(note.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin,if(note.pinned) context.getString(R.string.core_unpin) else context.getString(R.string.core_pin)) {model.flags(note.id,pinned=!note.pinned);onDismiss()}
-     ActionTile(R.drawable.ic_copy,context.getString(R.string.core_copy)) {
-      val clip=ClipData.newPlainText(note.title,note.body)
-      if(note.privateNote) clip.description.extras=android.os.PersistableBundle().apply {putBoolean(ClipDescription.EXTRA_IS_SENSITIVE,true)}
-      context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip);feedback.show(context.getString(R.string.core_copied));onDismiss()
-     }
-     ActionTile(R.drawable.ic_share,context.getString(R.string.core_share),enabled=available,onClick=share)
-     if(writable) ActionTile(R.drawable.ic_archive,if(note.archived) context.getString(R.string.core_unarchive) else context.getString(R.string.core_archive)) {
-      val archived=!note.archived;model.flags(note.id,archived=archived);onDismiss()
-      feedback.show(if(archived) context.getString(R.string.core_archived) else context.getString(R.string.core_unarchived),context.getString(R.string.core_undo)) {model.flags(note.id,archived=!archived)}
+    Column(Modifier.padding(horizontal=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+     Text(context.getString(R.string.note_actions_heading),style=MaterialTheme.typography.titleLarge,modifier=Modifier.semantics {heading()})
+     NoteActionGrid {
+      if(writable) NoteActionTile(if(note.pinned) R.drawable.ic_pin_filled else R.drawable.ic_pin,context.getString(if(note.pinned) R.string.core_unpin else R.string.core_pin),Modifier.weight(1f)) {model.flags(note.id,pinned=!note.pinned);onDismiss()}
+      NoteActionTile(R.drawable.ic_copy,context.getString(R.string.core_copy),Modifier.weight(1f)) {
+       val clip=ClipData.newPlainText(note.title,note.body)
+       if(note.privateNote) clip.description.extras=android.os.PersistableBundle().apply {putBoolean(ClipDescription.EXTRA_IS_SENSITIVE,true)}
+       context.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip);feedback.show(context.getString(R.string.core_copied));onDismiss()
+      }
+      NoteActionTile(R.drawable.ic_share,context.getString(R.string.core_share),Modifier.weight(1f),enabled=available,onClick=share)
+      if(writable) NoteActionTile(R.drawable.ic_archive,context.getString(if(note.archived) R.string.core_unarchive else R.string.core_archive),Modifier.weight(1f)) {
+       val archived=!note.archived;model.flags(note.id,archived=archived);onDismiss()
+       feedback.show(if(archived) context.getString(R.string.core_archived) else context.getString(R.string.core_unarchived),context.getString(R.string.core_undo)) {model.flags(note.id,archived=!archived)}
+      }
      }
     }
-    if(writable && online && !note.trashed) NoteCommands(model,note.id,privateNote=note.privateNote,
-     onLink={linkSession=NotePickerSession.open(model,"links")?.let {it to note.serverRev}}) {onDismiss();onCommandResult(it)}
-    HorizontalDivider(Modifier.padding(vertical=SpuntoSpacing.s4),color=MaterialTheme.colorScheme.outlineVariant)
-    if(writable) Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
-     Column(Modifier.weight(1f)) {Text(context.getString(R.string.core_private),style=MaterialTheme.typography.bodyLarge);Text(context.getString(R.string.core_private_hint),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
-     Switch(checked=note.privateNote,onCheckedChange=null)
-    }
-    NoteSheetRow(context.getString(R.string.core_history)) {onDismiss();onHistory()}
-    NoteSheetRow(context.getString(R.string.core_save_markdown),enabled=available,onClick=save)
-    if(writable) NoteSheetRow(if(note.trashed) context.getString(R.string.core_restore_trash) else context.getString(R.string.core_move_trash),destructive=!note.trashed) {
-     val trashed=!note.trashed;model.flags(note.id,trashed=trashed);onDismiss()
-     if(trashed) {feedback.show(context.getString(R.string.core_moved_trash),context.getString(R.string.core_undo)) {model.flags(note.id,trashed=false)};onTrashed()} else feedback.show(context.getString(R.string.core_restored))
+    if(writable && online && !note.trashed) NoteCommands(model,note,detail,toolRunner,
+     onLink={linkSession=NotePickerSession.open(model,"links")?.let {it to note.serverRev};linkSession!=null}) {onDismiss();onCommandResult(it)}
+    HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s20),color=MaterialTheme.colorScheme.outlineVariant)
+    Column {
+     if(writable) Row(Modifier.fillMaxWidth().heightIn(min=56.dp).toggleable(note.privateNote,role=Role.Switch) {model.flags(note.id,privateNote=it)}.padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
+      Icon(painterResource(R.drawable.ic_lock),contentDescription=null,modifier=Modifier.size(22.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
+      Column(Modifier.weight(1f)) {Text(context.getString(R.string.core_private),style=MaterialTheme.typography.bodyLarge);Text(context.getString(R.string.core_private_hint),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)}
+      Switch(checked=note.privateNote,onCheckedChange=null)
+     }
+     NoteSheetRow(R.drawable.ic_history,context.getString(R.string.core_history)) {onDismiss();onHistory()}
+     NoteSheetRow(R.drawable.ic_download,context.getString(R.string.core_save_markdown),enabled=available,onClick=save)
+     if(writable) NoteSheetRow(if(note.trashed) R.drawable.ic_history else R.drawable.ic_trash,context.getString(if(note.trashed) R.string.core_restore_trash else R.string.core_move_trash),destructive=!note.trashed) {
+      val trashed=!note.trashed;model.flags(note.id,trashed=trashed);onDismiss()
+      if(trashed) {feedback.show(context.getString(R.string.core_moved_trash),context.getString(R.string.core_undo)) {model.flags(note.id,trashed=false)};onTrashed()} else feedback.show(context.getString(R.string.core_restored))
+     }
     }
    }
   }
  }
 }
-@Composable private fun ActionTile(icon:Int,label:String,enabled:Boolean=true,onClick:()->Unit) {
- Column(Modifier.widthIn(min=72.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(vertical=SpuntoSpacing.s8).alpha(if(enabled) 1f else .38f),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-  Icon(painterResource(icon),contentDescription=null,modifier=Modifier.size(24.dp),tint=MaterialTheme.colorScheme.onSurface)
-  Text(label,style=MaterialTheme.typography.labelMedium)
- }
-}
-/** One sheet row in Inter, 56 dp tall, text on the same 20 dp edge as the tiles and switch above it. */
-@Composable internal fun NoteSheetRow(label:String,enabled:Boolean=true,destructive:Boolean=false,onClick:()->Unit) {
- Row(Modifier.fillMaxWidth().heightIn(min=56.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(horizontal=SpuntoSpacing.s20).alpha(if(enabled) 1f else .38f),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
-  Text(label,Modifier.weight(1f),style=MaterialTheme.typography.bodyLarge,color=if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+@Composable private fun NoteSheetRow(icon:Int,label:String,enabled:Boolean=true,destructive:Boolean=false,onClick:()->Unit) {
+ val color=if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+ Row(Modifier.fillMaxWidth().heightIn(min=56.dp).clickable(enabled=enabled,role=Role.Button,onClick=onClick).padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8).alpha(if(enabled) 1f else .38f),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
+  Icon(painterResource(icon),contentDescription=null,tint=color,modifier=Modifier.size(22.dp))
+  Text(label,Modifier.weight(1f),style=MaterialTheme.typography.bodyLarge,color=color)
  }
 }
 

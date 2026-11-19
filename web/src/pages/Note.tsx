@@ -10,14 +10,15 @@ import {
   createIdempotencyKey,
   invalidateContent,
   type Note,
+  type NoteDetail,
   type Revision,
   useBrowserOnline,
   useWorkspaceRole,
 } from "../lib";
-import { compactDiff, diffLines } from "../lib/text";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { ShareNote } from "../features/Collaboration";
 import { Editor, sourceOffset } from "../components/core/Editor";
+import { NoteDiff } from "../components/core/NoteDiff";
 import {
   NoteBody,
   Provenance,
@@ -36,14 +37,11 @@ import { useToast } from "../components/core/Toast";
 import {
   SuggestionLine,
   usePlugins,
-  useWaitingCommandPlugins,
   activePlugins,
-  PluginCommands,
   canRunOnNote,
-  supportsNotePicker,
 } from "../features/Slots";
-import { Dialog } from "../features/Dialog";
-import { LinkPicker } from "../features/LinkPicker";
+import { NoteTools } from "../features/NoteTools";
+import { AppliedLabelChanges } from "../features/AppliedLabelChanges";
 import { LinkedNotes, useNoteLinks } from "../features/LinkedNotes";
 /** App marks whether the history entry before this one is inside Spunto. */
 function cameFromApp() {
@@ -70,32 +68,6 @@ function Back() {
     >
       <Icon name="back" />
     </Link>
-  );
-}
-function Diff({ before, after }: { before: string; after: string }) {
-  useLanguage();
-  return (
-    <div className="diff">
-      {compactDiff(diffLines(before, after)).map((line, index) =>
-        line.kind === "skip" ? (
-          <div key={index} className="diff-skip">
-            {t("note.unchanged_lines", { count: line.count })}
-          </div>
-        ) : line.kind === "del" ? (
-          <del key={index}>
-            <span className="sr-only">{t("note.removed")}</span>
-            {line.text || " "}
-          </del>
-        ) : line.kind === "add" ? (
-          <ins key={index}>
-            <span className="sr-only">{t("note.added")}</span>
-            {line.text || " "}
-          </ins>
-        ) : (
-          <div key={index}>{line.text || " "}</div>
-        ),
-      )}
-    </div>
   );
 }
 type Choice = { label: string; run: () => Promise<void>; primary?: boolean };
@@ -145,7 +117,7 @@ function Conflict({
                 )}
               </ins>
             </p>
-            <Diff before={saved} after={mine} />
+            <NoteDiff before={saved} after={mine} />
             <div className="row">
               {choices.map((choice) => (
                 <button
@@ -222,7 +194,7 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
               </button>
             )}
           </div>
-          <Diff
+          <NoteDiff
             before={revisions[index + 1]?.body ?? ""}
             after={revision.body}
           />
@@ -232,7 +204,7 @@ function History({ note, revisions }: { note: Note; revisions: Revision[] }) {
     </>
   );
 }
-function NoteEditor({ note }: { note: Note }) {
+function NoteEditor({ note }: { note: NoteDetail }) {
   useLanguage();
   const trashed = note.trashed;
   const [editing, setEditing] = useState(
@@ -240,20 +212,9 @@ function NoteEditor({ note }: { note: Note }) {
       !trashed && (history.state as { edit?: boolean } | null)?.edit === true,
   );
   const [caret, setCaret] = useState<number>();
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const manifest = usePlugins();
   const role = useWorkspaceRole();
   const online = useBrowserOnline();
-  const canLink =
-    role === "owner" &&
-    !trashed &&
-    !editing &&
-    online &&
-    activePlugins(manifest.data?.plugins).some(
-      (plugin) => plugin.id === "links" && supportsNotePicker(plugin),
-    );
-  const closeLink = () => setLinkOpen(false);
   const [everSaved, setEverSaved] = useState(false);
   const [, navigate] = useLocation();
   const draft = useDraftEditor({
@@ -269,41 +230,25 @@ function NoteEditor({ note }: { note: Note }) {
   const agentInbox = activePlugins(manifest.data?.plugins).find(
     (plugin) => plugin.id === "agent-inbox" && plugin.origin !== "operator",
   );
-  const skipCommands = [
-    "links/link",
-    "decision-journal/review-decision",
-    ...(versionedAgentReview ? ["agent-inbox/mark-reviewed"] : []),
-  ];
   const toolsAllowed =
     role === "owner" && !trashed && !editing && !linkDraftBlocked && online;
-  const waiting = useWaitingCommandPlugins(
-    toolsAllowed && !note.private && !note.machine,
-  );
-  const canUseTools =
-    toolsAllowed &&
-    [...activePlugins(manifest.data?.plugins), ...(waiting.data ?? [])].some(
-      (plugin) =>
-        plugin.contributes?.commands?.some(
-          (command) =>
-            (command.where ?? command.surfaces ?? []).includes(
-              "note-actions",
-            ) &&
-            !skipCommands.includes(`${plugin.id}/${command.id}`) &&
-            canRunOnNote(plugin, command.id, note),
-        ),
-    );
   const [reviewBase, setReviewBase] = useState<Note | null>(null);
   const flag = useNoteFlag();
   const toast = useToast();
   const [confirm, dialog] = useConfirm();
-  const revisions = useHistory(note.id);
   const links = useNoteLinks(note);
   const historyRef = useRef<HTMLDetailsElement>(null);
   const showHistory = new URLSearchParams(useSearch()).get("history") === "1";
+  const [historyOpen, setHistoryOpen] = useState(showHistory);
+  const revisions = useHistory(note.id, historyOpen);
+  const labelChanges = (note.suggestions ?? []).filter(
+    (item) => item.action === "add_label" && item.receipt?.undoable,
+  );
   const openHistory = () => {
     const details = historyRef.current;
     if (!details) return;
     details.open = true;
+    setHistoryOpen(true);
     details.scrollIntoView?.({ block: "start" });
     details.querySelector("summary")?.focus();
   };
@@ -385,22 +330,6 @@ function NoteEditor({ note }: { note: Note }) {
         },
       ]
     : [
-        ...(canLink && !linkDraftBlocked
-          ? [
-              {
-                label: t("plugin.links.commands.link.title"),
-                onSelect: () => setLinkOpen(true),
-              },
-            ]
-          : []),
-        ...(canUseTools
-          ? [
-              {
-                label: t("plugins.note_tools"),
-                onSelect: () => setToolsOpen(true),
-              },
-            ]
-          : []),
         {
           label: note.pinned ? t("note.unpin") : t("slots.pin"),
           onSelect: () => void flag(note, "pinned", !note.pinned),
@@ -470,32 +399,10 @@ function NoteEditor({ note }: { note: Note }) {
               <Icon name="edit" /> {t("note.edit")}
             </button>
           )}
+          {role === "owner" && <NoteTools note={note} enabled={toolsAllowed} />}
           <MoreMenu label={t("note.more_actions")} items={menu} />
         </div>
       </header>
-      {toolsOpen && role === "owner" && (
-        <Dialog
-          title={t("plugins.note_tools")}
-          onClose={() => setToolsOpen(false)}
-        >
-          <PluginCommands
-            where="note-actions"
-            noteId={note.id}
-            note={note}
-            skipCommands={skipCommands}
-            onOpenNote={() => setToolsOpen(false)}
-          />
-        </Dialog>
-      )}
-      {linkOpen && canLink && (
-        <Dialog
-          title={t("plugin.links.commands.link.title")}
-          onClose={closeLink}
-          footer={<></>}
-        >
-          <LinkPicker sourceId={note.id} onClose={closeLink} />
-        </Dialog>
-      )}
       {trashed && (
         <p className="notice">
           {t("note.in_trash")}{" "}
@@ -652,14 +559,30 @@ function NoteEditor({ note }: { note: Note }) {
         </p>
       )}
       <LinkedNotes note={note} />
-      <details className="history" ref={historyRef}>
-        <summary>{t("note.revision_history")}</summary>
-        {revisions.isPending ? (
-          <p className="muted">{t("note.loading_history")}</p>
-        ) : revisions.error ? (
-          <p className="error">{revisions.error.message}</p>
-        ) : (
-          <History note={note} revisions={revisions.data ?? []} />
+      <details
+        className="history"
+        ref={historyRef}
+        onToggle={(event) => setHistoryOpen(event.currentTarget.open)}
+      >
+        <summary>
+          {t("note.revision_history")}
+          {labelChanges.length > 0 && !trashed && (
+            <span className="history-unread">
+              {t("note.label_undo_available")}
+            </span>
+          )}
+        </summary>
+        {historyOpen && (
+          <>
+            {!trashed && <AppliedLabelChanges items={labelChanges} />}
+            {revisions.isPending ? (
+              <p className="muted">{t("note.loading_history")}</p>
+            ) : revisions.error ? (
+              <p className="error">{revisions.error.message}</p>
+            ) : (
+              <History note={note} revisions={revisions.data ?? []} />
+            )}
+          </>
         )}
       </details>
       <div className="note-panel">

@@ -1038,6 +1038,22 @@ export interface components {
             /** Base Version */
             base_version: number;
         };
+        /** AgentReview */
+        AgentReview: {
+            before: components["schemas"]["AgentReviewBase"] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "created" | "edited";
+        };
+        /** AgentReviewBase */
+        AgentReviewBase: {
+            /** Body */
+            body: string;
+            /** Version */
+            version: number;
+        };
         /** Append */
         Append: {
             /** Expected Version */
@@ -1238,6 +1254,85 @@ export interface components {
             updated_via_agent: boolean;
             /** Version */
             version: number;
+        };
+        /** NoteDetail */
+        NoteDetail: {
+            agent_review?: components["schemas"]["AgentReview"] | null;
+            /** Annotations */
+            annotations?: {
+                [key: string]: unknown;
+            }[];
+            /** Archived */
+            archived: boolean;
+            /** Body */
+            body: string;
+            /** Change Seq */
+            change_seq: number;
+            /** Conflict Of */
+            conflict_of: string | null;
+            /** Created At */
+            created_at: string;
+            /** Duplicate */
+            duplicate?: boolean | null;
+            /** Flag Times */
+            flag_times?: {
+                [key: string]: number;
+            };
+            /** Html */
+            html?: string | null;
+            /** Id */
+            id: string;
+            /** Labels */
+            labels: string[];
+            /** Machine */
+            machine: boolean;
+            /** Merged */
+            merged?: boolean | null;
+            note_tool_inputs?: components["schemas"]["NoteToolInputs"] | null;
+            /** Open Tasks */
+            open_tasks: number;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "owner" | "agent" | "plugin" | "external";
+            /** Pinned */
+            pinned: boolean;
+            /** Private */
+            private: boolean;
+            source: components["schemas"]["Source"];
+            /** Suggestions */
+            suggestions?: {
+                [key: string]: unknown;
+            }[];
+            /** Title */
+            title: string;
+            /** Trashed */
+            trashed: boolean;
+            /** Updated At */
+            updated_at: string;
+            /**
+             * Updated Via Agent
+             * @default false
+             */
+            updated_via_agent: boolean;
+            /** Version */
+            version: number;
+        };
+        /** NoteToolInputs */
+        NoteToolInputs: {
+            /** Audio */
+            audio: boolean;
+            /** Image */
+            image: boolean;
+            /** Labels */
+            labels: boolean;
+            /** Link */
+            link: boolean;
+            /** Short Text */
+            short_text: boolean;
+            /** Title Summary */
+            title_summary: boolean;
         };
         /** Page */
         Page: {
@@ -2283,7 +2378,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Note"];
+                    "application/json": components["schemas"]["NoteDetail"];
                 };
             };
             /** @description Validation Error */

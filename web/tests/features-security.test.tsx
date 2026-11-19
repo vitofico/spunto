@@ -120,6 +120,31 @@ describe("closed plugin vocabulary", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("<img src=x onerror=bad()>")).toBeTruthy();
   });
+  it("separates prefixed combined hunks into literal before and after text", () => {
+    const { container } = wrap(
+      <VocabularyItem
+        value={{
+          type: "diff",
+          base_version: 3,
+          hunks: [
+            {
+              old_start: 4,
+              new_start: 4,
+              lines: [" Shared context", "-Old text", "+<svg onload=bad()>"],
+            },
+          ],
+        }}
+      />,
+    );
+    const before = container.querySelector("del");
+    const after = container.querySelector("ins");
+    expect(before?.textContent).toContain("Old text");
+    expect(before?.textContent).not.toContain("<svg");
+    expect(after?.textContent).toContain("<svg onload=bad()>");
+    expect(after?.textContent).not.toContain("Old text");
+    expect(screen.getByText("Shared context")).toBeTruthy();
+    expect(container.querySelector("svg")).toBeNull();
+  });
 });
 describe("generated settings forms", () => {
   it("secrets stay outside inputs and save payloads", () => {

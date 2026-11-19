@@ -518,6 +518,109 @@ class NewFeatureWorkflowTest {
         }
     }
 
+    @Test fun italianReaderComparesAgentEditBesideAcceptanceAndShowsOnlyContextualTools() {
+        val arguments = InstrumentationRegistry.getArguments()
+        val id = arguments.getString("spunto.acceptance.edited")
+        assumeTrue("Needs a disposable agent-edit fixture", id != null)
+        requireNotNull(id)
+        for (plugin in listOf(AgentInboxId, DecisionJournalId, "links", "link-enrichment")) enable(plugin)
+        val saved = note(id)
+        val before = saved["agent_review"]!!.jsonObject["before"]!!.jsonObject["body"]!!.jsonPrimitive.content
+        val after = saved["body"]!!.jsonPrimitive.content
+        require("Tuesday" in before && "Thursday" in after)
+        val linked = runBlocking { api.post("/api/v1/notes", buildJsonObject {
+            put("body", "# Synthetic event $suffix\n\nEvent details at https://example.org/agenda.")
+            put("source", buildJsonObject { put("kind", "web"); put("url", "https://example.org/agenda") })
+        }) }["id"]!!.jsonPrimitive.content
+        assertTrue(note(linked)["note_tool_inputs"]!!.jsonObject["link"]!!.jsonPrimitive.boolean)
+
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val configuration = Configuration(app.resources.configuration).apply { setLocale(Locale.ITALIAN) }
+        val context = app.createConfigurationContext(configuration)
+        val prefix = "native-agent-edit-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, context)
+        val state = runBlocking { api.manifest() }
+        val catalog = runBlocking { api.get("/api/v1/plugins") }
+        lateinit var model: SpuntoViewModel
+        val mounted = mutableStateOf(true)
+        val openedNote = mutableStateOf(id)
+        compose.runOnIdle {
+            applyWindowNightMode(context,"system")
+            model = SpuntoViewModel(app, container)
+            container.manifest.store(state)
+            model.manifest.value = state
+            model.catalog.value = catalog
+        }
+        fun screenshot(name: String) {
+            if (arguments.getString("spunto.workflow.screenshot") != "yes") return
+            compose.waitForIdle()
+            val image = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            File(requireNotNull(app.getExternalFilesDir(null)), name).outputStream().use {
+                check(image.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        }
+        try {
+            compose.setContent {
+                CompositionLocalProvider(LocalContext provides context, LocalConfiguration provides configuration) {
+                    if (mounted.value) key(openedNote.value) { SpuntoApp(model, initialNoteId = openedNote.value) }
+                }
+            }
+            compose.waitUntil(20_000) { compose.onAllNodesWithText("Prima").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
+            compose.onNodeWithText("Un agente ha modificato questa nota").assertIsDisplayed()
+            compose.onNodeWithText("Dopo").assertIsDisplayed()
+            compose.onNodeWithText("… Meet at the library on Tuesday at 10:00. …").assertIsDisplayed()
+            compose.onNodeWithText("… Meet at the library on Thursday at 14:00. …").assertIsDisplayed()
+            compose.onNodeWithText("Accetta modifiche").assertIsDisplayed().assertIsEnabled()
+            screenshot("android-agent-edit-it.png")
+
+            val linkLabel = "Collega a una nota"
+            val shortcut = compose.onNode(hasText(linkLabel) and hasClickAction())
+            if (!shortcut.isDisplayed()) compose.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText(linkLabel))
+            shortcut.assertIsDisplayed().assertIsEnabled()
+            compose.onNodeWithContentDescription("Altre azioni per la nota").performClick()
+            compose.onNodeWithText("Azioni della nota").assertIsDisplayed()
+            screenshot("android-note-tools-it.png")
+            val link = compose.onNodeWithText(linkLabel)
+            if (!link.isDisplayed()) link.performScrollTo()
+            link.assertIsDisplayed().assertIsEnabled()
+            val fetchLabel = "Recupera dettagli del collegamento"
+            for (label in listOf("Altro", "Fissa strumenti", "Registra decisione", "Leggi testo immagine", "Trascrivi registrazione", fetchLabel)) {
+                compose.onNodeWithText(label).assertDoesNotExist()
+            }
+            androidx.test.espresso.Espresso.pressBack()
+            compose.onNodeWithText("Azioni della nota").assertDoesNotExist()
+
+            compose.runOnIdle { container.connected.value = false }
+            compose.waitUntil(5_000) { !model.online.value }
+            shortcut.assertDoesNotExist()
+            val accept = compose.onNodeWithText("Accetta modifiche")
+            compose.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText("Accetta modifiche"))
+            accept.assertIsNotEnabled()
+            compose.runOnIdle { container.connected.value = true }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Prima").fetchSemanticsNodes().isNotEmpty() }
+            accept.performClick()
+            compose.waitUntil(20_000) { model.outputs.value.any { it.noteId == id && viewMembership(it)?.viewId == "reviewed" } }
+            compose.onNodeWithText("Accetta modifiche").assertDoesNotExist()
+            val accepted = note(id)
+            for (field in listOf("body", "source", "origin", "version", "machine")) assertEquals(saved[field], accepted[field])
+
+            compose.runOnIdle { openedNote.value = linked }
+            val fetch = hasText(fetchLabel) and hasClickAction()
+            compose.waitUntil(10_000) { compose.onAllNodes(fetch).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(fetch).assertIsDisplayed().assertIsEnabled()
+            shortcut.assertDoesNotExist()
+            screenshot("android-note-shortcuts-it.png")
+            compose.runOnIdle { container.connected.value = false }
+            compose.waitUntil(5_000) { !model.online.value }
+            compose.onNode(fetch).assertDoesNotExist()
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
     @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {
         runBlocking { api.post("/api/v1/plugins/decision-journal/disable", empty) }
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication

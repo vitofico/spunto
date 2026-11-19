@@ -212,11 +212,8 @@
     <string name="settings_apply_changes">Appliquer les modifications</string>
     <string name="settings_apply">Appliquer</string>
     <string name="settings_keep_original">Garder l’original</string>
-    <string name="settings_more">Plus</string>
     <string name="settings_note_tools">Outils des notes</string>
     <string name="settings_connect_to_the_server_to_use_tools">Connectez-vous au serveur pour utiliser les outils.</string>
-    <string name="settings_find_a_tool">Rechercher un outil</string>
-    <string name="settings_no_tools_match_your_search">Aucun outil ne correspond à votre recherche.</string>
     <string name="settings_default_with_ai">Par défaut avec l’IA</string>
     <string name="settings_details">Détails</string>
     <string name="settings_on_e0049">Activé</string>

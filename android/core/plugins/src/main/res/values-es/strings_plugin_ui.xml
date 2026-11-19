@@ -54,4 +54,7 @@
         <item quantity="one">Se eliminó %d tabulación</item>
         <item quantity="other">Se eliminaron %d tabulaciones</item>
     </plurals>
+    <string name="plugin_ui_before">Antes</string>
+    <string name="plugin_ui_after">Después</string>
+    <string name="plugin_ui_empty_text">Vacío</string>
 </resources>

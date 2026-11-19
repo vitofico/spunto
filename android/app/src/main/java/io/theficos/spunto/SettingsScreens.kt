@@ -17,8 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.SpuntoSpacing
@@ -58,14 +60,14 @@ import kotlinx.serialization.json.*
   item {
    // Appearance and Plugins open their own pages, so their rows lead the page without a heading that repeats them.
    Spacer(Modifier.height(SpuntoSpacing.s8))
-   SettingsRow(resources.getString(R.string.settings_appearance),appearance,onClick={onRoute("appearance")})
+   SettingsRow(resources.getString(R.string.settings_appearance),appearance,opensPage=true,onClick={onRoute("appearance")})
    val language=locale.getDisplayName(locale).replaceFirstChar {it.titlecase(locale)}
    val modern=android.os.Build.VERSION.SDK_INT>=33
-   SettingsRow(resources.getString(R.string.settings_language),resources.getString(R.string.settings_language_current,language,resources.getString(if(modern) R.string.settings_language_system else R.string.settings_language_older)),onClick={
+   SettingsRow(resources.getString(R.string.settings_language),resources.getString(R.string.settings_language_current,language,resources.getString(if(modern) R.string.settings_language_system else R.string.settings_language_older)),opensPage=true,onClick={
     if(modern) try {context.startActivity(Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS,Uri.parse("package:${context.packageName}")))} catch(_:ActivityNotFoundException) {feedback.show(resources.getString(R.string.settings_language_unavailable))}
     else try {context.startActivity(Intent(android.provider.Settings.ACTION_LOCALE_SETTINGS))} catch(_:ActivityNotFoundException) {feedback.show(resources.getString(R.string.settings_language_unavailable))}
    })
-   SettingsRow(resources.getString(R.string.settings_plugins),when {plugins.valid -> resources.getString(R.string.settings_of_on ,plugins.onCount,plugins.rows.size);auth==null -> resources.getString(R.string.settings_connect_your_server_to_choose_plugins);else -> resources.getString(R.string.settings_sync_to_load_your_plugins)},onClick={onRoute("plugins")})
+   SettingsRow(resources.getString(R.string.settings_plugins),when {plugins.valid -> resources.getString(R.string.settings_of_on ,plugins.onCount,plugins.rows.size);auth==null -> resources.getString(R.string.settings_connect_your_server_to_choose_plugins);else -> resources.getString(R.string.settings_sync_to_load_your_plugins)},opensPage=true,onClick={onRoute("plugins")})
   }
   item {
    SettingsSection(resources.getString(R.string.settings_account))
@@ -100,7 +102,7 @@ import kotlinx.serialization.json.*
   item {
    SettingsSection(resources.getString(R.string.settings_about))
    SettingsRow(resources.getString(R.string.settings_export),resources.getString(R.string.settings_download_all_synced_notes_as_a_zip),onClick={ownerPage("data")})
-   SettingsRow(resources.getString(R.string.settings_show_the_guide),resources.getString(R.string.settings_the_four_first_run_steps_again),onClick={onRoute("guide")})
+   SettingsRow(resources.getString(R.string.settings_show_the_guide),resources.getString(R.string.settings_the_four_first_run_steps_again),opensPage=true,onClick={onRoute("guide")})
    WhatsNewSettingsRow(onClick={onRoute(WhatsNewRoute)})
    SettingsRow("Spunto $version".trim(),resources.getString(R.string.settings_free_software_under_the_agpl_3_0))
   }
@@ -116,8 +118,8 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
  val resources=LocalContext.current.resources
  Text(title.uppercase(),Modifier.fillMaxWidth().padding(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,top=SpuntoSpacing.s24,bottom=SpuntoSpacing.s4).semantics {heading()},style=SpuntoType.overline,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }
-/** A title and a one-line summary in ink-2; tappable when [onClick] is set. [expanded] makes it a disclosure. */
-@Composable internal fun SettingsRow(title:String,summary:String?=null,enabled:Boolean=true,onClick:(()->Unit)?=null,expanded:Boolean?=null,description:String?=null,trailing:(@Composable ()->Unit)?=null) {
+/** A title and summary; tappable when [onClick] is set. [expanded] makes it a disclosure. */
+@Composable internal fun SettingsRow(title:String,summary:String?=null,enabled:Boolean=true,onClick:(()->Unit)?=null,expanded:Boolean?=null,description:String?=null,opensPage:Boolean=false,trailing:(@Composable ()->Unit)?=null) {
  val resources=LocalContext.current.resources
  val clickable=if(onClick==null) Modifier else Modifier.clickable(enabled=enabled,onClickLabel=null,onClick=onClick).semantics {
   if(description!=null) stateDescription=description
@@ -129,7 +131,8 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
    Text(title,style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurface.copy(alpha=alpha))
    summary?.takeIf {it.isNotBlank()}?.let {Text(it,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=alpha))}
   }
-  trailing?.invoke()
+  if(trailing!=null) trailing() else if(opensPage || expanded!=null) Icon(painterResource(R.drawable.ic_expand),contentDescription=null,
+   modifier=Modifier.size(20.dp).rotate(if(opensPage) -90f else if(expanded==true) 180f else 0f),tint=MaterialTheme.colorScheme.onSurfaceVariant)
  }
 }
 @Composable internal fun SettingsSwitchRow(title:String,summary:String?,checked:Boolean,enabled:Boolean=true,onChange:(Boolean)->Unit) {

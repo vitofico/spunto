@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { NoteDiff } from "../components/core/NoteDiff";
 import { lazy, Suspense, type ReactNode } from "react";
 const SchemaForm = lazy(() =>
   import("./SchemaForm").then((module) => ({ default: module.SchemaForm })),
@@ -277,20 +278,25 @@ export function VocabularyItem({
               new_lines?: string[];
               lines?: string[];
             }[]
-          ).map((hunk, index) => (
-            <div className={styles.diff} key={index}>
-              <div>
-                <p className={styles.facts}>
-                  − {t("suggestionpreview.before")}
-                </p>
-                <pre>{(hunk.old_lines ?? hunk.lines ?? []).join("\n")}</pre>
-              </div>
-              <div>
-                <p className={styles.facts}>+ {t("suggestionpreview.after")}</p>
-                <pre>{(hunk.new_lines ?? hunk.lines ?? []).join("\n")}</pre>
-              </div>
-            </div>
-          ))}
+          ).map((hunk, index) => {
+            const before = hunk.lines
+              ?.filter((line) => !line.startsWith("+"))
+              .map((line) => line.replace(/^[- ]/, ""));
+            const after = hunk.lines
+              ?.filter((line) => !line.startsWith("-"))
+              .map((line) => line.replace(/^[+ ]/, ""));
+            return (
+              <NoteDiff
+                key={index}
+                before={(before ?? hunk.old_lines ?? []).join("\n")}
+                after={(after ?? hunk.new_lines ?? []).join("\n")}
+                labels={{
+                  before: t("suggestionpreview.before"),
+                  after: t("suggestionpreview.after"),
+                }}
+              />
+            );
+          })}
         </div>
       );
     default:

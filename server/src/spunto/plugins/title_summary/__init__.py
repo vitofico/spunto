@@ -6,9 +6,11 @@ from spunto.ai.output import Output
 from spunto.core.quiet_changes import finish_summary, title_event
 from spunto.host import Ctx, Plugin
 from spunto.host.language import tr
+from spunto.host.vocabulary import success_feedback
 from spunto.plugins._wave2 import backfill, eligible, excerpts, text, unchanged
 
 plugin = Plugin("title-summary")
+MIN_TITLE_WORDS = 300
 
 
 class Summary(Output):
@@ -28,7 +30,7 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
     note = await eligible(ctx, note_id, maximum=1_000_000)
     if note is None:
         return text(tr("This note is unavailable for Title and summary."))
-    if len(note["body"].split()) < 300:
+    if len(note["body"].split(maxsplit=MIN_TITLE_WORDS - 1)) < MIN_TITLE_WORDS:
         await ctx.notes.annotate(note_id, "panel", None)
         return text(tr("Title and summary need a note of at least 300 words."))
     if note_version is not None and note["version"] != note_version:
@@ -54,9 +56,11 @@ async def saved(ctx: Ctx, note_id: str, note_version: int | None = None):
     await ctx.notes.annotate(
         note_id, "panel", {"type": "markdown", "text": summary}, note_version=note["version"]
     )
-    proposal = await finish_summary(ctx, note, answer.title)
+    completed, proposal = await finish_summary(ctx, note, answer.title)
+    if not completed:
+        return text(tr("The note changed."))
     if proposal is None:
-        return text(tr("The stored summary is current."))
+        return success_feedback(tr("The stored summary is current."))
     return {
         "type": "pill",
         "action": "accept",

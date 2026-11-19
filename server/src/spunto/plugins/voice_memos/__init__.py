@@ -7,6 +7,7 @@ from spunto.host import Ctx, Plugin
 from spunto.host.language import tr
 from spunto.host.manifest import ManifestError
 from spunto.host.storage import encoded
+from spunto.host.vocabulary import success_feedback
 from spunto.plugins._capture import (
     audio_duration,
     bounded,
@@ -36,12 +37,14 @@ async def process(
         return None
     note = await ctx.capture.note(note_id, note_version=note_version)
     if note is None:
-        return None
+        return text(tr("That source is unavailable."))
     attachments = [
         attachment
         for attachment in await ctx.attachments.list(note_id)
         if attachment["mime"] in MIMES
     ]
+    if not attachments:
+        return text(tr("This note has no supported recording."))
     pending, values = [], []
     for attachment in attachments:
         key = identity(note_id, attachment["sha256"])
@@ -108,8 +111,16 @@ async def process(
             values.append(receipt)
         if not receipt.get("complete"):
             pending.append((key, receipt, attachment))
-    if not pending or not await current(ctx, note):
-        return None
+    if not await current(ctx, note):
+        return text(tr("The recording source changed."))
+    if not pending:
+        return text(
+            tr(
+                "Transcript proposals are ready; recordings are kept."
+                if values
+                else "No new transcript was available."
+            )
+        )
     body = note["body"]
     if not ctx.settings.get("keep_link", True):
         for attachment in attachments:
@@ -120,9 +131,12 @@ async def process(
     proposed = "\n\n".join(part for part in (body, *words) if part)
     if len(proposed) > 100000:
         return text(tr("The transcripts are too long to append; recordings are kept."))
-    if await finish_recordings(ctx, note, proposed, values, pending):
-        return text(tr("Transcript added; recordings are kept."))
-    return text(tr("Transcript proposals are ready; recordings are kept."))
+    applied = await finish_recordings(ctx, note, proposed, values, pending)
+    if applied is None:
+        return text(tr("The recording source changed."))
+    if applied:
+        return success_feedback(tr("Transcript added; recordings are kept."))
+    return success_feedback(tr("Transcript proposals are ready; recordings are kept."))
 
 
 @plugin.command("transcribe")

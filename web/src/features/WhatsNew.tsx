@@ -5,7 +5,7 @@ import styles from "./Feature.module.css";
 
 const seenKey = "spunto:whats-new-seen";
 // Advance this ID when adding the next group of updates.
-const latestUpdate = "2026-11-prugna";
+const latestUpdate = "2026-11-note-tools";
 
 export function useUnreadWhatsNew(isOpen: boolean) {
   const [seen, setSeen] = useState(() => {
@@ -43,12 +43,16 @@ export function WhatsNew() {
       <h1>{t("whatsnew.title")}</h1>
       <article>
         <h2 className="overline">{t("whatsnew.latest")}</h2>
+        <h3>{t("whatsnew.note_tools_title")}</h3>
+        <p>{t("whatsnew.note_tools_body")}</p>
+      </article>
+      <article>
+        <h2 className="overline">{t("whatsnew.earlier")}</h2>
         <h3>{t("whatsnew.prugna_title")}</h3>
         <p>{t("whatsnew.prugna_body")}</p>
         <Link href="/settings/appearance">{t("whatsnew.open_appearance")}</Link>
       </article>
       <article>
-        <h2 className="overline">{t("whatsnew.earlier")}</h2>
         <h3>{t("whatsnew.plain_title")}</h3>
         <p>{t("whatsnew.plain_body")}</p>
       </article>

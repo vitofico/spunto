@@ -9,22 +9,76 @@ import io.theficos.spunto.data.sync.AuthConfig
 import java.util.Locale
 import kotlinx.serialization.json.*
 
-internal data class NoteTool(val pluginId:String,val pluginName:String,val id:String,val title:String,val description:String)
+internal data class NoteTool(val pluginId:String,val id:String,val title:String,val bundled:Boolean) {
+ val icon get()=when(pluginId) {
+  "links", "link-enrichment" -> R.drawable.ic_link
+  "image-text" -> R.drawable.ic_image
+  "voice-memos" -> R.drawable.ic_mic
+  "label-suggestions" -> R.drawable.ic_label
+  "translate" -> R.drawable.ic_language
+  "title-summary", "tidy", "develop" -> R.drawable.ic_notes
+  "context-packs", "thinking-desk" -> R.drawable.ic_inbox
+  "agent-inbox" -> R.drawable.ic_checklist
+  else -> R.drawable.ic_settings_outline
+ }
+}
+
+private val contextualShortcutOrder = listOf(
+ "image-text" to "read", "voice-memos" to "transcribe", "link-enrichment" to "fetch",
+ "title-summary" to "summarize", "label-suggestions" to "suggest-now", "tidy" to "tidy",
+)
+
+private fun noteToolOrigin(plugin:JsonObject,catalog:JsonObject):String? = plugin.pluginText("origin") ?:
+ catalog.objects("plugins").firstOrNull {it.string("id")==plugin.string("id")}?.pluginText("origin")
+
+private fun activeNoteToolPlugin(plugin:JsonObject):Boolean = plugin.bool("enabled",true) &&
+ plugin.string("state") !in setOf("disabled","off","failed","waiting","removed")
+
+/** Connect note detail lazily only when active contextual shortcuts can use it. */
+internal fun needsNoteShortcutInputs(manifest:JsonObject,catalog:JsonObject):Boolean = manifest.objects("plugins").any {plugin ->
+ activeNoteToolPlugin(plugin) && noteToolOrigin(plugin,catalog)=="bundled" &&
+  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().any { command ->
+   "note-actions" in command.pluginStrings("where").orEmpty() &&
+    (plugin.string("id") to command.string("id")) in contextualShortcutOrder
+  }
+}
+
+internal fun automaticNoteTools(commands:List<NoteTool>,inputs:NoteToolInputs,linksSupported:Boolean):List<NoteTool> {
+ val byCommand=commands.filter {it.bundled}.associateBy {it.pluginId to it.id}
+ val primary=contextualShortcutOrder.mapNotNull { key ->
+  byCommand[key]?.takeUnless {it.pluginId=="tidy" && (inputs.image || inputs.audio || inputs.link)}
+ }.take(2)
+ return primary.ifEmpty {listOfNotNull(byCommand["links" to "link"].takeIf {linksSupported})}
+}
 
 /** A command is listed once, with the internal note-link action kept in reach. */
-internal fun noteTools(resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap()),allowDecisionJournal:Boolean=true,versionedAgentReview:Boolean=false):List<NoteTool> = plugins.filter {
- it.bool("enabled",true) && it.string("state") !in setOf("disabled","off","failed","waiting","removed")
- && (allowDecisionJournal || it.string("id")!=DecisionJournalId)
+internal fun noteTools(
+ resources:Resources,plugins:List<JsonObject>,privateNote:Boolean=false,catalog:JsonObject=JsonObject(emptyMap()),
+ versionedAgentReview:Boolean=false,legacyAgentReview:Boolean=true,inputs:NoteToolInputs=NoteToolInputs(),waitingOnly:Boolean=false,
+):List<NoteTool> = plugins.filter {
+ (if(waitingOnly) it.string("state")=="waiting" else activeNoteToolPlugin(it))
  && (!privateNote || (it["permissions"] as? JsonArray)?.all {permission ->
   val name=(permission as? JsonPrimitive)?.takeIf {value ->value.isString}?.content
   name!=null && !name.startsWith("ai.") && !name.startsWith("net.")
  }==true)
 }.sortedBy {(it["position"] as? JsonPrimitive)?.intOrNull ?: Int.MAX_VALUE}.flatMap {plugin ->
- (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().take(3).filter {command ->
+ val id=plugin.string("id")
+ val origin=noteToolOrigin(plugin,catalog)
+ val stock=origin==null || origin=="bundled"
+ (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().filter {command ->
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
-  (plugin.string("id")!=DecisionJournalId || command.string("id")!="review-decision") &&
-  !handledByAgentReviewPanel(plugin.string("id"),command.string("id"),versionedAgentReview)
- }.map {NoteTool(plugin.string("id"),localizedPluginName(resources,plugin,catalog),it.string("id"),localizedPluginCommand(resources,plugin,it,catalog),localizedPluginDescription(resources,plugin,catalog))}
+  (!stock || when(id to command.string("id")) {
+   DecisionJournalId to "record-decision", DecisionJournalId to "review-decision" -> false
+   AgentInboxId to AgentReviewCommand -> !versionedAgentReview && legacyAgentReview
+   "image-text" to "read" -> inputs.image
+   "voice-memos" to "transcribe" -> inputs.audio
+   "link-enrichment" to "fetch" -> inputs.link
+   "title-summary" to "summarize" -> inputs.titleSummary
+   "label-suggestions" to "suggest-now" -> inputs.labels
+   "tidy" to "tidy", "translate" to "translate", "develop" to "develop" -> inputs.shortText
+   else -> true
+  })
+ }.map {NoteTool(id,it.string("id"),localizedPluginCommand(resources,plugin,it,catalog),origin=="bundled")}
 }.distinctBy {it.pluginId to it.id}.sortedByDescending {it.pluginId=="links" && it.id=="link"}
 
 internal fun pluginApi(config:AuthConfig,resources:Resources)=ApiClient(config,language={resources.configuration.locales[0].toLanguageTag()})

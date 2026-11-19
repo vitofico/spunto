@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -115,6 +117,7 @@ internal fun NoteAcceptancePanel(
     model: SpuntoViewModel,
     note: Note,
     actions: List<NoteAcceptance>,
+    detail: NoteToolDetail,
     scope: CoroutineScope,
     onHistory: () -> Unit,
     onEdit: () -> Unit,
@@ -128,8 +131,10 @@ internal fun NoteAcceptancePanel(
     val ready = online && !note.pending && note.syncError == null && note.serverRev > 0
     val visible = actions - acknowledged
     if (visible.isEmpty()) return
+    val loading = detail.loading
+    val agentReview = remember(detail.data) { parseAgentReview(detail.data) }
 
-    fun submit(action: NoteAcceptance) {
+    fun submit(action: NoteAcceptance, edited: Boolean) {
         if (!ready || running != null) return
         running = action
         message = ""
@@ -137,7 +142,7 @@ internal fun NoteAcceptancePanel(
             try {
                 if (acceptNoteRevision(model, note, action)) {
                     acknowledged += action
-                    val receipt = if (action == NoteAcceptance.AgentChanges) R.string.accept_changes_done else R.string.accept_note_done
+                    val receipt = if (edited) R.string.accept_changes_done else R.string.accept_note_done
                     feedback.show(resources.getString(receipt))
                 } else {
                     feedback.show(resources.getString(R.string.accept_note_stale))
@@ -166,13 +171,17 @@ internal fun NoteAcceptancePanel(
     Column(verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
         visible.forEach { action ->
             val machine = action == NoteAcceptance.Machine
-            val edited = action == NoteAcceptance.AgentChanges
-            val title = when (action) {
-                NoteAcceptance.Machine -> R.string.accept_machine_heading
-                NoteAcceptance.AgentNote -> R.string.accept_agent_heading
-                NoteAcceptance.AgentChanges -> R.string.accept_agent_changes_heading
+            val edited = when (agentReview.takeUnless { machine }) {
+                AgentReviewDetail.Created -> false
+                is AgentReviewDetail.Edited -> true
+                null -> action == NoteAcceptance.AgentChanges
             }
-            val detail = when {
+            val title = when {
+                machine -> R.string.accept_machine_heading
+                edited -> R.string.accept_agent_changes_heading
+                else -> R.string.accept_agent_heading
+            }
+            val description = when {
                 machine && note.privateNote -> R.string.accept_machine_private
                 machine -> R.string.accept_machine_body
                 else -> R.string.accept_agent_body
@@ -191,12 +200,30 @@ internal fun NoteAcceptancePanel(
             ) {
                 Column(Modifier.padding(SpuntoSpacing.s16), verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
                     Text(resources.getString(title), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
-                    Text(resources.getString(detail), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(resources.getString(description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!machine && edited) {
+                        val base = (agentReview as? AgentReviewDetail.Edited)?.before
+                        if (base != null) Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s12)) {
+                                RevisionChangePreview(base, note.body)
+                            }
+                        }
+                        else if (!note.pending && note.syncError == null) Text(
+                            resources.getString(if (loading) R.string.accept_changes_loading else R.string.accept_changes_unavailable),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        )
+                    }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
                         Button(
-                            enabled = ready && running == null,
+                            enabled = ready && running == null && (machine || !loading),
                             modifier = Modifier.heightIn(min = 48.dp),
-                            onClick = { submit(action) },
+                            onClick = { submit(action, edited) },
                         ) { Text(resources.getString(if (running == action) R.string.accept_note_working else accept)) }
                         if (actions.size == 1 || !machine) TextButton(
                             enabled = running == null,

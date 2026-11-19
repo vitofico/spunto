@@ -5,6 +5,7 @@ from pydantic import Field
 from spunto.ai.output import Output
 from spunto.host import Ctx, Plugin
 from spunto.host.language import tr
+from spunto.host.vocabulary import success_feedback
 from spunto.plugins._capture import bounded, current, identity, markdown, markdown_output, text
 
 plugin = Plugin("image-text")
@@ -36,10 +37,15 @@ async def process(
         return None
     note = await ctx.capture.note(note_id, note_version=note_version)
     if note is None:
-        return None
-    for attachment in await ctx.attachments.list(note_id):
-        if attachment["mime"] not in MIMES or attachment_id and attachment_id != attachment["id"]:
-            continue
+        return text(tr("That source is unavailable."))
+    attachments = [
+        attachment
+        for attachment in await ctx.attachments.list(note_id)
+        if attachment["mime"] in MIMES
+        and (attachment_id is None or attachment_id == attachment["id"])
+    ]
+    processed = False
+    for attachment in attachments:
         key = identity(note_id, attachment["sha256"])
         if await ctx.storage.records.get("images", key):
             continue
@@ -68,14 +74,19 @@ async def process(
         await ctx.capture.store_result(
             "images", key, note_id, note["version"], value, attachment_id=attachment["id"]
         )
-    if await current(ctx, note):
-        values = await cached(ctx, note_id)
-        await ctx.capture.set_search_text(
-            note_id,
-            note["version"],
-            "\n\n".join(value["text"] + "\n" + value["description"] for value in values)[:20000],
-        )
-    return text(tr("Image text is ready."))
+        processed = True
+    if not await current(ctx, note):
+        return text(tr("The image source changed."))
+    values = await cached(ctx, note_id)
+    await ctx.capture.set_search_text(
+        note_id,
+        note["version"],
+        "\n\n".join(value["text"] + "\n" + value["description"] for value in values)[:20000],
+    )
+    if not attachments:
+        return text(tr("This note has no supported image."))
+    message = tr("Image text is ready.")
+    return success_feedback(message) if processed else text(message)
 
 
 @plugin.command("read")

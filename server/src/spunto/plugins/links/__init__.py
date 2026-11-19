@@ -6,6 +6,7 @@ from spunto.api.errors import Problem
 from spunto.core.note_links import insert_link, link_text, targets
 from spunto.host import Ctx, Plugin
 from spunto.host.language import tr
+from spunto.host.vocabulary import success_feedback
 from spunto.plugins._wave2 import text
 
 plugin = Plugin("links")
@@ -97,7 +98,7 @@ async def link(
             ctx, note_id, target_id, base_version=base_version, target_version=target_version
         )
         # Both installed note pickers consume these receipts and show localized feedback.
-        return text("Link inserted." if inserted else _DUPLICATE)
+        return success_feedback("Link inserted.") if inserted else text(_DUPLICATE)
     source = await ctx.notes.get(note_id)
     if source is None:
         return text(tr("The note is unavailable."))

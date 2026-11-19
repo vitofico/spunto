@@ -17,4 +17,8 @@
     <string name="accept_note_connect">Connect to the server to accept this version.</string>
     <string name="accept_note_wait_sync">Sync the note before accepting this version.</string>
     <string name="accept_note_working">Accepting…</string>
+    <string name="note_actions_heading">Note actions</string>
+    <string name="note_recent_changes">Recent changes</string>
+    <string name="accept_changes_loading">Loading the comparison…</string>
+    <string name="accept_changes_unavailable">The earlier version is unavailable. You can open history or review the current text.</string>
 </resources>

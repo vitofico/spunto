@@ -407,6 +407,57 @@ async def test_image_unlink_during_model_has_no_result(capture):
         )
 
 
+async def test_note_tool_inputs_and_capture_feedback_use_the_same_source_checks(capture):
+    host, ai, http, notes = capture
+    commands = {
+        "image-text": ("read", "This note has no supported image."),
+        "voice-memos": ("transcribe", "This note has no supported recording."),
+        "link-enrichment": ("fetch", "This note has no supported web link."),
+    }
+
+    async def command(plugin_id, note):
+        return await host.invoke_command(
+            plugin_id, commands[plugin_id][0], {"note_id": note["id"]}, principal=OWNER
+        )
+
+    plain = await notes.create("Three valid words")
+    assert (await notes.get(plain["id"], note_tools=True))["note_tool_inputs"] == {
+        "image": False,
+        "audio": False,
+        "link": False,
+        "title_summary": False,
+        "labels": True,
+        "short_text": True,
+    }
+    for plugin_id, (_, message) in commands.items():
+        assert await command(plugin_id, plain) == {"type": "text", "text": message}
+    assert not ai.calls and not http.calls
+
+    note, _ = await attached(host, notes, b"\x89PNG\r\n\x1a\nfixture", "image/png")
+    recording = await write_attachment(
+        host.store, host.settings, wav(), filename="synthetic.wav", mime="audio/wav"
+    )
+    note = await notes.edit(
+        note["id"],
+        f"{note['body']}\n\n{recording['snippet']}\n\n{'source ' * 300}https://example.org",
+        note["version"],
+    )
+    assert all((await notes.get(note["id"], note_tools=True))["note_tool_inputs"].values())
+    for plugin_id in ("image-text", "voice-memos"):
+        result = await command(plugin_id, note)
+        assert result["feedback"] == "success"
+        assert result["fallback"] == {"type": "text", "text": result["text"]}
+    assert "feedback" not in await command("image-text", note)
+    assert "feedback" not in await command("voice-memos", note)
+    await notes.flags(note["id"], {"private": True})
+    assert not any((await notes.get(note["id"], note_tools=True))["note_tool_inputs"].values())
+
+    malformed = await notes.create("https://[example.org")
+    assert not (await notes.get(malformed["id"], note_tools=True))["note_tool_inputs"]["link"]
+    assert (await command("link-enrichment", malformed))["text"] == commands["link-enrichment"][1]
+    assert not http.calls
+
+
 async def test_voice_proposal_once_original_recording_and_body_retained(capture):
     host, ai, http, notes = capture
     note, attachment = await attached(host, notes, wav(), "audio/wav")

@@ -9,4 +9,6 @@
     <string name="whats_new_open_appearance">Ouvrir Apparence</string>
     <string name="whats_new_plain_title">Gardez un fond uni</string>
     <string name="whats_new_plain_body">Choisissez le fond uni dans Apparence pour masquer l’illustration derrière vos notes.</string>
+    <string name="whats_new_note_tools_title">Vérifier les modifications des agents et trouver les bons outils</string>
+    <string name="whats_new_note_tools_body">Comparez les ajouts et les suppressions d’un agent avant d’accepter une modification. Les outils les plus adaptés s’affichent sur la note. Ouvrez les actions de la note pour voir la liste complète.</string>
 </resources>

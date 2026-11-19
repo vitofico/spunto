@@ -148,6 +148,15 @@ async def write_attachment(
     return result
 
 
+async def linked_attachments(conn, note_id, *, limit=50, mime_only=False):
+    columns = "a.mime" if mime_only else "a.*"
+    return await conn.execute_fetchall(
+        f"SELECT {columns} FROM attachment a JOIN note_attachment na ON na.attachment_id=a.id "  # noqa: S608
+        "WHERE na.note_id=? ORDER BY a.created_at,a.id LIMIT ?",
+        (note_id, limit),
+    )
+
+
 class Attachments:
     def __init__(self, ctx):
         self.ctx, self.store = ctx, ctx._host.store
@@ -175,11 +184,7 @@ class Attachments:
             note = await self._eligible_note(conn, note_id)
             if note is None:
                 return []
-            rows = await conn.execute_fetchall(
-                "SELECT a.* FROM attachment a JOIN note_attachment na ON na.attachment_id=a.id "
-                "WHERE na.note_id=? ORDER BY a.created_at,a.id LIMIT ?",
-                (note_id, limit),
-            )
+            rows = await linked_attachments(conn, note_id, limit=limit)
         self.ctx.check("attachments.read")
         return [{**dict(row), "note_id": note_id, "note_version": note["version"]} for row in rows]
 

@@ -53,14 +53,9 @@ class NativeNavigationTest {
  }
  private fun openFilters() {
   homeTitle()
-  val picker=compose.onNodeWithContentDescription("Choose labels and views").fetchSemanticsNode().boundsInRoot
-  // Cached list rows can expose clipped More nodes at y=0; use the actual header row.
-  val sameHeaderRow=SemanticsMatcher("More action in the notes-picker row") {
-   val bounds=it.boundsInRoot
-   bounds.height>0 && bounds.center.y in picker.top..picker.bottom
-  }
-  compose.onNode(hasContentDescription(container.context.getString(R.string.core_more_actions)) and sameHeaderRow).assertIsDisplayed().performClick()
-  compose.onNodeWithText("Filter notes").assertHasClickAction().performClick()
+  val filter=hasContentDescription(container.context.getString(R.string.core_filter_notes)) or
+   hasContentDescription(container.context.getString(R.string.core_filters_applied))
+  compose.onNode(filter).assertIsDisplayed().performClick()
   waitForFilterSheet()
  }
  private fun todayFilter()=compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_today)))

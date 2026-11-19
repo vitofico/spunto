@@ -27,6 +27,12 @@ class SearchPresentationTest {
   assertTrue(snippet.startsWith("…") && snippet.endsWith("…"))
   assertTrue(snippet.length<=82)
  }
+ @Test fun repeatedFormattedTitlesDoNotReplaceDistinctMatchingContext() {
+  val body="# Studio launch\n**Studio launch**\n\nThe launch starts in May."
+  assertEquals("The launch starts in May.",searchSnippet(body,listOf("launch")))
+  assertEquals("The launch starts in May.",searchSnippet(body,emptyList()))
+  assertNull(searchSnippet("# Studio launch\n**Studio launch**",listOf("launch")))
+ }
  @Test fun recentSearchesKeepTheLastFiveNewestFirstWithoutRepeats() {
   var recent=listOf<String>()
   listOf("garden","  ","#idea ","bread","Garden","one","two","three").forEach { recent=rememberSearch(recent,it) }

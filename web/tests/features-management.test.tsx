@@ -955,7 +955,7 @@ describe("unavailable plugin prerequisites", () => {
   });
 });
 
-it("shows a persisted applied receipt in the note and keeps other proposals usable", async () => {
+it("keeps pending proposals usable without repeating saved label receipts inline", async () => {
   const manifest = {
     ui: 1,
     plugins_rev: 1,
@@ -963,9 +963,6 @@ it("shows a persisted applied receipt in the note and keeps other proposals usab
   };
   client.setQueryData(["manifest"], manifest);
   vi.spyOn(api, "manifest").mockResolvedValue(manifest);
-  const decide = vi
-    .spyOn(api, "decideSuggestion")
-    .mockResolvedValue({ applied: true } as never);
   const note = {
     id: "receipt-note",
     suggestions: [
@@ -987,15 +984,11 @@ it("shows a persisted applied receipt in the note and keeps other proposals usab
     ],
   } as unknown as Note;
   wrap(<SuggestionLine note={note} />);
-  expect(screen.getByText("Added #garden")).toBeTruthy();
+  expect(screen.queryByText("Added #garden")).toBeNull();
   expect(
     screen.getByRole<HTMLButtonElement>("button", { name: "Add #recipes" })
       .disabled,
   ).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-  await waitFor(() =>
-    expect(decide).toHaveBeenCalledExactlyOnceWith("recent", "undo"),
-  );
 });
 
 it("opens the details of an off bundled plugin and enables it with a separate one-tap switch", async () => {

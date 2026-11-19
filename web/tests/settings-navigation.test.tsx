@@ -1,5 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { SettingsPage } from "../src/features/Settings";
 
 vi.mock("../src/features/AISettings", () => ({
@@ -15,47 +21,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("reveals the active settings tab on section changes and resize without moving page or focus", () => {
-  let width = 300;
-  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(
-    function (this: HTMLElement) {
-      return this.tagName === "NAV" ? width : 0;
-    },
-  );
-  vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(900);
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
-    function (this: HTMLElement) {
-      if (this.tagName === "NAV") return new DOMRect(0, 80, width, 44);
-      const offset = this.parentElement?.scrollLeft ?? 0;
-      const left = this.textContent === "AI" ? 600 : 100;
-      return new DOMRect(left - offset, 80, 50, 44);
-    },
-  );
-  const scrollPage = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
-  const focusTarget = document.createElement("button");
-  document.body.append(focusTarget);
-  focusTarget.focus();
+it("lists real settings destinations, identifies the current one and resets the chooser across sections", () => {
   const { rerender } = render(<SettingsPage section="ai" />);
   const nav = screen.getByRole("navigation", { name: "Settings" });
-  expect(nav.scrollLeft).toBeGreaterThan(0);
+  const chooser = within(nav).getByRole("button", { name: "Browse settings" });
+  expect(chooser.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(chooser);
+  expect(chooser.getAttribute("aria-expanded")).toBe("true");
   expect(
-    screen.getByRole("link", { name: "AI" }).getBoundingClientRect().right,
-  ).toBeLessThanOrEqual(width);
-  const previousOffset = nav.scrollLeft;
-  width = 200;
-  act(() => window.dispatchEvent(new Event("resize")));
-  expect(nav.scrollLeft).toBeGreaterThan(previousOffset);
+    within(nav).getByRole("link", { name: "AI", current: "page" }),
+  ).toBeTruthy();
   expect(
-    screen.getByRole("link", { name: "AI" }).getBoundingClientRect().right,
-  ).toBeLessThanOrEqual(width);
+    within(nav).getByRole("link", { name: "Data" }).getAttribute("href"),
+  ).toBe("/settings/data");
+  expect(within(nav).queryByRole("link", { name: "Spaces" })).toBeNull();
+  fireEvent.keyDown(nav, { key: "Escape" });
+  expect(chooser.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(chooser);
   rerender(<SettingsPage section="profile" />);
-  const profile = screen.getByRole("link", { name: "Profile" });
-  expect(profile.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
-  expect(profile.getBoundingClientRect().right).toBeLessThanOrEqual(width);
-  expect(document.activeElement).toBe(focusTarget);
-  expect(nav.scrollTop).toBe(0);
-  expect(scrollPage).not.toHaveBeenCalled();
-  focusTarget.remove();
+  expect(chooser.getAttribute("aria-expanded")).toBe("false");
+  expect(
+    within(nav).getByRole("link", { name: "Profile", current: "page" }),
+  ).toBeTruthy();
 });
 
 it("keeps a newly released update unread until the page is opened and remembers it after remount", () => {
@@ -80,7 +67,12 @@ it("keeps a newly released update unread until the page is opened and remembers 
         .getByRole("link", { name: "Open Appearance" })
         .getAttribute("href"),
     ).toBe("/settings/appearance");
-    expect(localStorage.getItem(key)).toBe("2026-11-prugna");
+    expect(
+      screen.getByRole("heading", {
+        name: "Review agent edits and find the right note tools",
+      }),
+    ).toBeTruthy();
+    expect(localStorage.getItem(key)).toBe("2026-11-note-tools");
     unmount();
 
     render(<SettingsPage section="profile" />);

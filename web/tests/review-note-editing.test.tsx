@@ -17,7 +17,14 @@ import { ApiError } from "../src/lib/errors";
 import { NoteCard } from "../src/components/core/NoteCard";
 import { ToastProvider } from "../src/components/core/Toast";
 import NotePage from "../src/pages/Note";
-import type { Manifest, Note, Revision, Session } from "../src/lib/types";
+import type {
+  Manifest,
+  Note,
+  NoteDetail,
+  Revision,
+  Session,
+  Suggestion,
+} from "../src/lib/types";
 
 const session: Session = {
   owner_id: "alice",
@@ -28,7 +35,7 @@ const session: Session = {
   auth_method: "oidc",
 };
 let serial = 0;
-function fixture(overrides: Partial<Note> = {}) {
+function fixture(overrides: Partial<NoteDetail> = {}) {
   serial += 1;
   return {
     id: `00000000-0000-4000-8000-${String(serial).padStart(12, "0")}`,
@@ -40,7 +47,7 @@ function fixture(overrides: Partial<Note> = {}) {
     suggestions: [],
     annotations: [],
     ...overrides,
-  } as unknown as Note;
+  } as unknown as NoteDetail;
 }
 function tasks() {
   return fixture({
@@ -48,7 +55,7 @@ function tasks() {
     html:
       '<ul><li><input type="checkbox" data-checkbox-index="0" data-checkbox-offset="3" aria-label="Toggle task"> one</li>' +
       '<li><input type="checkbox" data-checkbox-index="1" data-checkbox-offset="13" aria-label="Toggle task"> two</li></ul>',
-  } as Partial<Note>);
+  } as Partial<NoteDetail>);
 }
 function Signed({ children }: { children: ReactNode }) {
   useAuth();
@@ -94,6 +101,49 @@ beforeEach(() => {
   vi.spyOn(api, "manifest").mockResolvedValue({ plugins: [] } as never);
   vi.spyOn(api, "catalog").mockResolvedValue({ plugins: [] } as never);
   vi.spyOn(api, "history").mockResolvedValue([]);
+});
+
+it("offers a saved label Undo in note history after returning to the note", async () => {
+  const noteId = fixture().id;
+  const appliedAt = "2026-11-19T09:00:00Z";
+  const change: Suggestion = {
+    id: "recent-label",
+    plugin: "label-suggestions",
+    note_id: noteId,
+    note_version: 2,
+    status: "accepted",
+    action: "add_label",
+    receipt: { note_version: 2, undoable: true },
+    payload: { path: "garden" },
+    confidence: 1,
+    reason: "Matches an existing label.",
+    change_seq: 2,
+    created_at: appliedAt,
+    decided_at: appliedAt,
+  };
+  let note = fixture({ id: noteId, version: 2, suggestions: [change] });
+  vi.spyOn(api, "note").mockImplementation(async () => note);
+  const decide = vi
+    .spyOn(api, "decideSuggestion")
+    .mockImplementation(async () => {
+      note = { ...note, version: 3, suggestions: [] };
+      return { applied: true, suggestion: change };
+    });
+  render(<NotePage id={note.id} />, { wrapper: Wrapper });
+  expect(await screen.findByText("Label Undo available")).toBeTruthy();
+  expect(screen.queryByText("Added #garden")).toBeNull();
+  expect(api.history).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Label Undo available"));
+  const receipts = await screen.findByRole("region", {
+    name: "Recent label changes",
+  });
+  expect(within(receipts).getByText("Added #garden")).toBeTruthy();
+  fireEvent.click(within(receipts).getByRole("button", { name: "Undo" }));
+  expect(await screen.findByText("Change undone")).toBeTruthy();
+  await waitFor(() =>
+    expect(screen.queryByText("Label Undo available")).toBeNull(),
+  );
+  expect(decide).toHaveBeenCalledExactlyOnceWith("recent-label", "undo");
 });
 afterEach(() => {
   cleanup();
@@ -296,10 +346,13 @@ describe("the note page", () => {
       { version: 1, body: "old", changed_at: "2026-10-18T12:00:00Z" },
     ] as Revision[]);
     render(<NotePage id={note.id} />, { wrapper: Wrapper });
+    await screen.findByText("new");
+    expect(api.history).not.toHaveBeenCalled();
     fireEvent.click(
       await screen.findByText("Revision history", { selector: "summary" }),
     );
     await screen.findByText(/Current version/);
+    expect(api.history).toHaveBeenCalledExactlyOnceWith(note.id);
     expect(screen.getAllByRole("button", { name: "Restore" })).toHaveLength(1);
     const older = screen
       .getByText(/Version 1/)
@@ -341,8 +394,7 @@ it("reaches the missing-model explanation from Note tools when the only tool is 
   await waitFor(() =>
     expect(queryClient.getQueryData(["catalog"])).toBeDefined(),
   );
-  fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Note tools" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Note tools" }));
   const tools = screen.getByRole("dialog", { name: "Note tools" });
   expect(within(tools).getByText(/Tidy text/)).toBeTruthy();
   expect(
@@ -397,6 +449,10 @@ it("lets acceptance and adoption run independently and removes older receipts on
     source: { kind: "web" },
     updated_via_agent: true,
     version: 4,
+    agent_review: {
+      kind: "edited",
+      before: { version: 3, body: "prior premise" },
+    },
   });
   vi.mocked(api.manifest).mockResolvedValue({
     ...adoptionManifest,
@@ -446,6 +502,14 @@ it("lets acceptance and adoption run independently and removes older receipts on
   expect(
     await screen.findByRole("button", { name: "Accept agent changes" }),
   ).toBeTruthy();
+  const comparison = screen.getByRole("region", { name: "Agent changes" });
+  expect(
+    within(comparison).getByText("prior premise", { selector: "del" }),
+  ).toBeTruthy();
+  expect(
+    within(comparison).getByText("original", { selector: "ins" }),
+  ).toBeTruthy();
+  expect(api.history).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Use as my note" }));
   await screen.findByText("Note accepted");
   expect(adopt).toHaveBeenCalledWith(note.id, 4);
@@ -465,7 +529,13 @@ it("lets acceptance and adoption run independently and removes older receipts on
   });
   expect(screen.getByText("Edited by an agent")).toBeTruthy();
 
-  note = { ...note, annotations: [], version: 6, body: "New agent edit" };
+  note = {
+    ...note,
+    annotations: [],
+    version: 6,
+    body: "New agent edit",
+    agent_review: { kind: "edited", before: null },
+  };
   await act(
     async () =>
       void (await queryClient.invalidateQueries({
@@ -476,6 +546,10 @@ it("lets acceptance and adoption run independently and removes older receipts on
     await screen.findByRole("button", { name: "Accept changes" }),
   ).toBeTruthy();
   expect(screen.queryByText("Changes accepted")).toBeNull();
+  expect(
+    screen.getByText(/version before the agent’s edit is unavailable/),
+  ).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Agent changes" })).toBeNull();
   expect(screen.getByText("New agent edit")).toBeTruthy();
 });
 

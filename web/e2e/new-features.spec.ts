@@ -78,7 +78,7 @@ async function palette(page: Page, title: string) {
   });
   await expect(dialog).toBeVisible();
   await dialog
-    .getByRole("textbox", { name: "Search and commands" })
+    .getByRole("searchbox", { name: "Search and commands" })
     .fill(title);
   return dialog;
 }
@@ -201,12 +201,12 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   await page
     .locator(`article.entry[data-note-id="${source.id}"] a.time`)
     .click();
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page
-    .getByRole("menuitem", { name: "Link to note", exact: true })
-    .click();
+  const shortcut = page
+    .locator(".note-tool-shortcut")
+    .filter({ hasText: "Link to note" });
+  await shortcut.click();
   const picker = page.getByRole("dialog", {
-    name: "Link to note",
+    name: "Note tools",
     exact: true,
   });
   const search = picker.getByRole("searchbox", {
@@ -398,10 +398,11 @@ test("decision journal creates, reviews and reopens through the browser", async 
   expect(errors).toEqual([]);
 });
 
-test("a source note offers decision capture with inherited privacy", async ({
+test("journal capture stays available outside contextual note tools", async ({
   page,
 }) => {
   await login(page, "decision-journal");
+  await enablePlugin(page, "links");
   const response = await page.request.post("/api/v1/notes", {
     headers: { Origin: origin() },
     data: { body: "# Synthetic architecture discussion", private: true },
@@ -417,33 +418,38 @@ test("a source note offers decision capture with inherited privacy", async ({
     commands.getByRole("option", { name: /^Review decision/ }),
   ).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Note tools", exact: true }).click();
+  await page.getByRole("button", { name: "Note tools", exact: true }).click();
   const tools = page.getByRole("dialog", { name: "Note tools", exact: true });
-  await uiCommand(page, "decision-journal", "record-decision", () =>
-    tools.getByRole("button", { name: /^Record decision/ }).click(),
-  );
   await expect(
-    tools.getByRole("switch", { name: "Private", exact: true }),
-  ).toBeChecked();
-  await tools
+    tools.getByRole("button", { name: /^Record decision/ }),
+  ).toHaveCount(0);
+  await tools.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("link", { name: "Decisions", exact: true }).click();
+  await uiCommand(page, "decision-journal", "record-decision", () =>
+    page.getByRole("button", { name: "Record decision", exact: true }).click(),
+  );
+  const capture = page.getByRole("dialog", {
+    name: "Record decision",
+    exact: true,
+  });
+  await capture.getByRole("switch", { name: "Private", exact: true }).check();
+  await capture
     .getByLabel("What did you decide?", { exact: true })
     .fill("Store the backup in a separate directory.");
   await page.context().setOffline(true);
   await expect(
-    tools.getByLabel("What did you decide?", { exact: true }),
+    capture.getByLabel("What did you decide?", { exact: true }),
   ).toHaveValue("Store the backup in a separate directory.");
   await expect(
-    tools.getByRole("button", { name: "Save decision", exact: true }),
+    capture.getByRole("button", { name: "Save decision", exact: true }),
   ).toBeDisabled();
   await expect(
-    tools.getByLabel("What did you decide?", { exact: true }),
+    capture.getByLabel("What did you decide?", { exact: true }),
   ).toBeEditable();
   await page.context().setOffline(false);
-  const saved = await run(page, tools, "decision-journal", "record-decision");
+  const saved = await run(page, capture, "decision-journal", "record-decision");
   const decision = await note(page, noteIds(saved)[0]);
   expect(decision.private).toBe(true);
-  expect(decision.body).toContain(`/n/${source.id}`);
   expect((await note(page, source.id)).body).toBe(source.body);
 });
 
@@ -843,7 +849,7 @@ test("thinking history exposes both desk modes and connects and removes selected
     exact: true,
   });
   await dialog
-    .getByRole("textbox", { name: "Search and commands" })
+    .getByRole("searchbox", { name: "Search and commands" })
     .fill("Thinking desk");
   await uiCommand(page, "thinking-desk", "desk", () =>
     dialog.getByRole("option", { name: /^Thinking desk/ }).click(),
@@ -966,6 +972,11 @@ test("accept an agent note as written and review a later agent change", async ({
     }
     expect(await inInbox()).toBe(true);
     await page.goto(`/n/${note.id}`);
+    const comparison = page.getByRole("region", {
+      name: "Agent changes",
+      exact: true,
+    });
+    await expect(comparison).toHaveCount(0);
     await page
       .getByRole("button", { name: "Accept note", exact: true })
       .click();
@@ -984,8 +995,11 @@ test("accept an agent note as written and review a later agent change", async ({
     expect(append.status()).toBe(200);
     await expect.poll(inInbox).toBe(true);
     await page.reload();
+    await expect(comparison.locator("ins")).toContainText(
+      "One more observation.",
+    );
     await page
-      .getByRole("button", { name: "Accept note", exact: true })
+      .getByRole("button", { name: "Accept changes", exact: true })
       .click();
     await expect.poll(inInbox).toBe(false);
     expect((await (await page.request.get(noteUrl)).json()).body).toBe(

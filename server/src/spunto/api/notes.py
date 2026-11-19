@@ -31,6 +31,25 @@ class Source(Input):
     url: str | None = Field(None, max_length=2000)
 
 
+class AgentReviewBase(BaseModel):
+    version: int
+    body: str
+
+
+class AgentReview(BaseModel):
+    kind: Literal["created", "edited"]
+    before: AgentReviewBase | None
+
+
+class NoteToolInputs(BaseModel):
+    image: bool
+    audio: bool
+    link: bool
+    title_summary: bool
+    labels: bool
+    short_text: bool
+
+
 class Note(BaseModel):
     id: str
     body: str
@@ -56,6 +75,11 @@ class Note(BaseModel):
     html: str | None = None
     merged: bool | None = None
     duplicate: bool | None = None
+
+
+class NoteDetail(Note):
+    agent_review: AgentReview | None = None
+    note_tool_inputs: NoteToolInputs | None = None
 
 
 class Page(BaseModel):
@@ -169,12 +193,20 @@ async def create_note(
     )
 
 
-@router.get("/notes/{id}", response_model=Note, response_model_exclude_unset=True)
+@router.get("/notes/{id}", response_model=NoteDetail, response_model_exclude_unset=True)
 async def get_note(
     id: str, principal: PrincipalDep, services: ServicesDep, render: Literal["html"] | None = None
 ):
+    owner = principal.owner and principal.workspace_role == "owner"
+    host = services.host
+    review = (
+        owner
+        and host is not None
+        and host.catalog_metadata.get("agent-inbox", {}).get("origin") == "bundled"
+        and host.states.get("agent-inbox", {}).get("state") == "enabled"
+    )
     return await Notes(services.store, principal).get(
-        id, include_trashed=True, render=render == "html"
+        id, include_trashed=True, render=render == "html", note_tools=owner, agent_review=review
     )
 
 

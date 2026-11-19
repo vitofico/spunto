@@ -1,6 +1,7 @@
 import { t, useLanguage } from "../lib/i18n";
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import { Link } from "wouter";
+import { Icon } from "../components/core/Icon";
 import { AppearancePanel } from "./AppearancePanel";
 import { ProfilePanel } from "./ProfilePanel";
 import { AccountPanel } from "./AccountPanel";
@@ -40,27 +41,18 @@ export function SettingsPage({
   const selected = parts[0] || "appearance";
   const unreadWhatsNew = useUnreadWhatsNew(selected === "whats-new");
   const unreadDescriptionId = useId();
+  const choicesId = useId();
+  const [openedFrom, setOpenedFrom] = useState<string>();
+  const chooser = useRef<HTMLButtonElement>(null);
+  const expanded = openedFrom === section;
   const visible = sections().filter(
     ([id]) => (id !== "account" && id !== "spaces") || hosted,
   );
   const title = visible.find(([id]) => id === selected)?.[1];
-  const navRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const revealSelected = () => {
-      const nav = navRef.current;
-      const active = nav?.querySelector('a[aria-current="page"]');
-      if (!nav || !active || nav.scrollWidth <= nav.clientWidth) return;
-      const container = nav.getBoundingClientRect();
-      const item = active.getBoundingClientRect();
-      if (item.left < container.left + 4)
-        nav.scrollLeft += item.left - container.left - 4;
-      else if (item.right > container.right - 4)
-        nav.scrollLeft += item.right - container.right + 4;
-    };
-    revealSelected();
-    window.addEventListener("resize", revealSelected);
-    return () => window.removeEventListener("resize", revealSelected);
-  }, [selected, hosted]);
+  const closeChooser = () => {
+    setOpenedFrom(undefined);
+    if (chooser.current?.getClientRects().length) chooser.current.focus();
+  };
   return (
     <div className={styles.settings}>
       {!(selected === "plugins" && parts[1]) && (
@@ -70,29 +62,62 @@ export function SettingsPage({
           })}
         />
       )}
-      <nav ref={navRef} className={styles.nav} aria-label={t("app.settings")}>
-        {visible.map(([id, title]) => (
-          <Link
-            href={`/settings/${id}`}
-            aria-current={id === selected ? "page" : undefined}
-            aria-describedby={
-              id === "whats-new" && unreadWhatsNew
-                ? unreadDescriptionId
-                : undefined
-            }
-            key={id}
-          >
-            {title}
-            {id === "whats-new" && unreadWhatsNew && (
-              <>
+      <nav
+        className={styles.nav}
+        aria-label={t("app.settings")}
+        onKeyDown={(event) => {
+          if (!expanded || event.key !== "Escape") return;
+          event.preventDefault();
+          closeChooser();
+        }}
+      >
+        <button
+          ref={chooser}
+          className={styles.settingsChooser}
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={choicesId}
+          aria-describedby={unreadWhatsNew ? unreadDescriptionId : undefined}
+          onClick={() => setOpenedFrom(expanded ? undefined : section)}
+        >
+          <Icon name="tune" />
+          {t("settings.browse_sections")}
+          {unreadWhatsNew && (
+            <span className={styles.unreadDot} aria-hidden="true" />
+          )}
+          <Icon name="chevron" />
+        </button>
+        <div
+          id={choicesId}
+          className={styles.settingsChoices}
+          data-expanded={expanded || undefined}
+        >
+          {visible.map(([id, title]) => (
+            <Link
+              href={`/settings/${id}`}
+              aria-current={id === selected ? "page" : undefined}
+              aria-describedby={
+                id === "whats-new" && unreadWhatsNew
+                  ? unreadDescriptionId
+                  : undefined
+              }
+              onClick={() => {
+                if (expanded) closeChooser();
+              }}
+              key={id}
+            >
+              {title}
+              {id === "whats-new" && unreadWhatsNew && (
                 <span className={styles.unreadDot} aria-hidden="true" />
-                <span id={unreadDescriptionId} hidden>
-                  {t("whatsnew.unread")}
-                </span>
-              </>
-            )}
-          </Link>
-        ))}
+              )}
+            </Link>
+          ))}
+        </div>
+        {unreadWhatsNew && (
+          <span id={unreadDescriptionId} hidden>
+            {t("whatsnew.unread")}
+          </span>
+        )}
       </nav>
       <section className={styles.section}>
         {selected === "account" && hosted ? (

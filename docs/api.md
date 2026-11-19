@@ -127,6 +127,25 @@ command takes `note_id` and `base_version`. Acceptance clears the note from the
 inbox and preserves its text and history. A later agent edit returns the note
 to the inbox.
 
+On `GET /notes/{id}`, the owner session or device receives `agent_review` for
+a pending note when the bundled Agent Inbox is enabled. `kind: "created"`
+identifies a new note from the agent. `kind: "edited"` compares the current
+body with `before.body` and `before.version`, the revision immediately before
+that pending batch of agent edits. Metadata changes preserve the batch. A
+human body edit or a successful acceptance ends it. An edited note returns
+`before: null` when the exact base predates an upgrade or has expired under
+revision retention.
+Submit the detail response's current `version` as `base_version` even when
+the earlier body is unavailable.
+
+The owner detail response also includes `note_tool_inputs`. The booleans
+`image`, `audio`, and `link` identify supported linked attachment types or a
+syntactically valid web source. `labels` requires three words, `title_summary`
+requires 300 words, and `short_text` indicates nonempty text within the
+20,000-character limit for Tidy, Translate and Develop. The detail read
+uses attachment metadata and validates URL syntax locally. The commands
+verify access and current inputs again when run.
+
 A simple read after obtaining a token:
 
 ```sh
@@ -172,6 +191,12 @@ The four M2 plugins default off. Owner sessions and devices can read `GET /api/v
 `GET /plugins/{id}/settings` returns the schema and public values; secret fields report only whether they are set. An owner session or device can send `PATCH /plugins/{id}/settings` with `{"change_mode":"ask_first"}` or `{"change_mode":"automatic"}` for plugins offering quiet changes. The patch preserves other settings. Full settings replacement with `PUT` and `DELETE /plugins/{id}/data` require an owner session. Deleting plugin data preserves its notes. Secret values come exclusively from `SPUNTO_PLUGIN_<ID>_<KEY>` or `_FILE`; they never enter settings JSON. Commands and live routes use the enabled-only dispatcher. Token access must be explicitly declared by a route, and read tokens cannot write through any host adapter.
 
 Plugin views use `GET /notes?view=<plugin>/<view>`, for example `tasks/tasks` and `agent-inbox/reviewed`. Stored output is vocabulary-validated, bounded, hidden while disabled, and filtered for the caller's note visibility. Markdown components receive sanitized HTML for the web. `GET /suggestions` lists pending proposals; `/suggestions/{id}/accept` and `/dismiss` require write access, recheck visibility and apply atomically under the deciding credential. Label renames require a session. Replacement proposals become superseded when their base changes; pending proposals expire after fourteen days.
+
+The enabled plugin manifest includes each plugin's `origin` and
+`source_kind`. Bundled commands may return standalone text with
+`feedback: "success"` for a completed action. This text also includes a
+plain text `fallback` for older clients. Forms, lists, and review
+components retain their vocabulary.
 
 Pending proposals may provide `one_tap`. A reviewed rewrite still needs its exact comparison. A reversible accepted suggestion on a note carries `receipt.undoable` and `receipt.note_version`. The owner can post to `/suggestions/{id}/undo` or queue a `suggestion.decide` operation with decision `undo`. A later independent edit returns `409 suggestion_undo_stale`. Dismissing an applied receipt hides its acknowledgement and keeps the change.
 

@@ -18,7 +18,7 @@ class PluginPresentationTest {
    {"id":"off","enabled":false,"contributes":{"commands":[{"id":"off","where":["note-actions"]}]}},
    {"id":"waiting","state":"waiting","contributes":{"commands":[{"id":"waiting","where":["note-actions"]}]}}
   ]""").jsonArray.map {it.jsonObject}
-  val tools=noteTools(settingsTestResources(),plugins)
+  val tools=noteTools(settingsTestResources(),plugins,inputs=NoteToolInputs(shortText=true,labels=true))
   assertEquals(listOf("Link to note","Tidy text","Suggest labels"),tools.map {it.title})
  }
  @Test fun legacyAgentReviewRemainsInOrdinaryPluginMenusUntilVersionedCapabilityIsAdvertised() {
@@ -49,14 +49,63 @@ class PluginPresentationTest {
   assertTrue(decisionActionIds(manifest(plugin),owner=true,online=false).isEmpty())
   assertTrue(decisionActionIds(manifest(plugin),owner=false,online=true).isEmpty())
   assertTrue(decisionActionIds(manifest(JsonObject(plugin+("enabled" to JsonPrimitive(false)))),owner=true,online=true).isEmpty())
-  assertEquals(listOf("record-decision"),noteTools(settingsTestResources(),listOf(plugin)).map {it.id})
-  assertTrue(noteTools(settingsTestResources(),listOf(plugin),allowDecisionJournal=false).isEmpty())
+  assertTrue(noteTools(settingsTestResources(),listOf(plugin)).isEmpty())
   val ordinary=Note("note","Owner's decision words")
   val journal=ordinary.copy(sourceKind="plugin",sourceRef="decision-journal")
   assertFalse(isJournalNote(ordinary))
   assertTrue(isJournalNote(journal))
   assertFalse(isJournalNote(journal.copy(trashed=true)))
   assertFalse(isJournalNote(journal.copy(conflictOf="other-note")))
+ }
+ @Test fun contextualToolsUseExactInputsAndDoNotHideOperatorCommands() {
+  fun command(plugin:String,id:String,origin:String="bundled")=Json.parseToJsonElement("""{
+   "id":"$plugin","origin":"$origin","permissions":["ai.chat"],"contributes":{"commands":[
+    {"id":"setup","where":[]},{"id":"batch","where":[]},{"id":"export","where":[]},
+    {"id":"$id","title":"$id","where":["note-actions"]}]}}
+  """).jsonObject
+  val plugins=listOf(command("image-text","read"),command("voice-memos","transcribe"),command("link-enrichment","fetch"),
+   command("title-summary","summarize"),command("label-suggestions","suggest-now"),command("tidy","tidy"),
+   command("operator-tool","operator-action","local"))
+  val resources=settingsTestResources()
+  assertEquals(listOf("operator-action"),noteTools(resources,plugins).map {it.id})
+  assertEquals(listOf("read","fetch","summarize","tidy","operator-action"),noteTools(resources,plugins,
+   inputs=NoteToolInputs(image=true,link=true,titleSummary=true,shortText=true)).map {it.id})
+  assertEquals(listOf("transcribe","suggest-now","operator-action"),noteTools(resources,plugins,
+   inputs=NoteToolInputs(audio=true,labels=true)).map {it.id})
+ }
+ @Test fun onlyMarkedStandaloneTextBecomesTransientFeedback() {
+  fun result(body:String)=commandEnvelope("tidy","tidy",JsonObject(emptyMap()),Json.parseToJsonElement(body))
+  assertEquals("Done",commandSuccess(result("""{"type":"text","text":"Done","feedback":"success"}""")))
+  assertNull(commandSuccess(result("""{"type":"text","text":"Something changed"}""")))
+  assertNull(commandSuccess(result("""{"ui":1,"items":[{"type":"text","text":"Done","feedback":"success"},{"type":"notes","ids":["id"]}]}""")))
+ }
+ @Test fun automaticToolsPrioritizeTwoApplicableBundledActionsBeforeGenericLinks() {
+  fun plugin(id:String,command:String,origin:String?="bundled",state:String="enabled")=buildJsonObject {
+   put("id",id); if(origin!=null) put("origin",origin); put("state",state)
+   put("contributes",buildJsonObject {put("commands",buildJsonArray {add(buildJsonObject {
+    put("id",command);put("title",command);put("where",buildJsonArray {add("note-actions")})
+   })})})
+  }
+  val tools=listOf(plugin("links","link"),plugin("tidy","tidy"),plugin("label-suggestions","suggest-now"),
+   plugin("title-summary","summarize"),plugin("link-enrichment","fetch"),plugin("voice-memos","transcribe"),plugin("image-text","read"))
+  val resources=settingsTestResources()
+  fun shortcuts(inputs:NoteToolInputs,plugins:List<JsonObject> = tools,linksSupported:Boolean=true)=
+   automaticNoteTools(noteTools(resources,plugins,inputs=inputs),inputs,linksSupported).map {it.id}
+  assertEquals(listOf("read","transcribe"),shortcuts(NoteToolInputs(true,true,true,true,true,true)))
+  assertEquals(listOf("fetch","summarize"),shortcuts(NoteToolInputs(link=true,titleSummary=true,labels=true,shortText=true)))
+  assertEquals(listOf("suggest-now","tidy"),shortcuts(NoteToolInputs(labels=true,shortText=true)))
+  assertEquals(listOf("fetch"),shortcuts(NoteToolInputs(link=true,shortText=true)))
+  assertEquals(listOf("link"),shortcuts(NoteToolInputs()))
+  assertTrue(shortcuts(NoteToolInputs(),linksSupported=false).isEmpty())
+  val impostors=listOf(plugin("image-text","read","operator"),plugin("voice-memos","transcribe",null),
+   plugin("title-summary","summarize",state="waiting"),tools.first())
+  val inputs=NoteToolInputs(image=true,audio=true,titleSummary=true)
+  assertEquals(setOf("read","transcribe","link"),noteTools(resources,impostors,inputs=inputs).map {it.id}.toSet())
+  assertEquals(listOf("link"),shortcuts(inputs,impostors))
+  val manifest=buildJsonObject {put("plugins",JsonArray(impostors))}
+  assertFalse(needsNoteShortcutInputs(manifest,JsonObject(emptyMap())))
+  val catalog=buildJsonObject {put("plugins",JsonArray(listOf(plugin("voice-memos","transcribe"))))}
+  assertTrue(needsNoteShortcutInputs(manifest,catalog))
  }
  @Test fun toolsExposePrimaryGlobalCommandsAndLeaveJournalInItsOwnViews() {
   fun tool(id:String,command:String,state:String="enabled")=Json.parseToJsonElement("""{

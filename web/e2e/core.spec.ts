@@ -27,6 +27,7 @@ async function fixture(page: Page) {
   let conflictNext = false;
   const patchVersions: string[] = [];
   const sentKeys: string[] = [];
+  const searchQueries: string[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request(),
       url = new URL(request.url()),
@@ -93,14 +94,15 @@ async function fixture(page: Page) {
         next_cursor: null,
       });
     }
-    if (path.endsWith("/search"))
+    if (path.endsWith("/search")) {
+      const query = url.searchParams.get("q") ?? "";
+      searchQueries.push(query);
       return fulfill({
-        hits: notes.filter((n) =>
-          n.body.includes(url.searchParams.get("q") ?? ""),
-        ),
+        hits: notes.filter((n) => n.body.includes(query)),
         next_cursor: null,
         semantic: "off",
       });
+    }
     const id = path.split("/")[4];
     const note = notes.find((n) => n.id === id);
     if (path.endsWith("/revisions"))
@@ -157,6 +159,7 @@ async function fixture(page: Page) {
     patchVersions,
     notes: () => notes,
     keys: sentKeys,
+    searchQueries,
   };
 }
 test("empty long labels wrap without overlapping their compact actions", async ({
@@ -218,7 +221,7 @@ test("all plugins off is complete; capture, label completion and keyboard palett
     page.getByRole("dialog", { name: "Search and commands" }),
   ).toBeVisible();
   await page
-    .getByRole("textbox", { name: "Search and commands" })
+    .getByRole("searchbox", { name: "Search and commands" })
     .fill("second");
   await page
     .getByRole("dialog", { name: "Search and commands" })
@@ -239,6 +242,38 @@ test("all plugins off is complete; capture, label completion and keyboard palett
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Edit note")).toBeFocused();
 });
+test("palette waits for typing to pause, identifies hits and drops stale results", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await page.goto("/");
+  await expect(
+    page.getByRole("link", { name: /A first thought/ }),
+  ).toBeVisible();
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog", { name: "Search and commands" });
+  const input = dialog.getByRole("searchbox", { name: "Search and commands" });
+  const hit = dialog.getByRole("option", {
+    name: /A first thought.*Read it again/,
+  });
+  await input.pressSequentially("thought", { delay: 65 });
+  await expect(hit).toBeVisible();
+  await expect(hit.locator("time")).toHaveAttribute(
+    "datetime",
+    initial.created_at,
+  );
+  expect(state.searchQueries).toEqual(["thought"]);
+
+  await input.fill("archive");
+  await expect(hit).toHaveCount(0);
+  await expect(
+    dialog.getByRole("option", { name: "Go to Archive" }),
+  ).toBeVisible();
+  await input.fill(" ");
+  await expect(dialog.getByRole("group", { name: "Notes" })).toHaveCount(0);
+  expect(state.searchQueries).toEqual(["thought"]);
+});
+
 test("an unreachable capture waits on the timeline across reload and retries the same key", async ({
   page,
 }) => {
@@ -301,9 +336,14 @@ test("compact navigation, date search, checklist and private flags remain usable
   ).toBeVisible();
   await page.goto("/search?q=thought");
   await expect(page.getByLabel("Search notes")).toHaveValue("thought");
+  await page
+    .locator("summary")
+    .filter({ hasText: /^Filters$/ })
+    .click();
   await page.getByLabel("From date").fill("2026-10-01");
+  await expect(page).toHaveURL(/[?&]from=2026-10-01/);
   await expect(
-    page.getByText("A first thought", { exact: false }).first(),
+    page.getByRole("link", { name: initial.title, exact: true }),
   ).toBeVisible();
 });
 
@@ -358,7 +398,7 @@ test("All notes restores its own focus after Search has been closed", async ({
   const search = page.getByRole("button", { name: "Search", exact: true });
   await search.click();
   await expect(
-    page.getByRole("textbox", { name: "Search and commands" }),
+    page.getByRole("searchbox", { name: "Search and commands" }),
   ).toBeFocused();
   await page.getByRole("button", { name: "Close search and commands" }).click();
   await expect(search).toBeFocused();
@@ -407,7 +447,7 @@ test("mobile overlays contain focus and restore it without leaving the note", as
   const search = page.getByRole("button", { name: "Search", exact: true });
   await search.click();
   await expect(
-    page.getByRole("textbox", { name: "Search and commands" }),
+    page.getByRole("searchbox", { name: "Search and commands" }),
   ).toBeFocused();
   await page.getByRole("button", { name: "Close search and commands" }).click();
   await expect(search).toBeFocused();

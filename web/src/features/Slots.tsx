@@ -5,17 +5,34 @@ import {
   useWorkspaceRole,
 } from "../lib/query";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
-import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { api } from "../lib/api";
 import { isBundledPlugin, localizeCatalog } from "../lib/localizePlugins";
+import { hasNoteToolInput } from "../lib/noteToolInputs";
 import { safeError } from "../lib/errors";
 import { NoteBody } from "../components/core/NoteCard";
 import { useToast } from "../components/core/Toast";
-import type { Args, Note, Plugin, Suggestion } from "../lib/types";
+import { Icon, type IconName } from "../components/core/Icon";
+import type {
+  Args,
+  Command,
+  Note,
+  NoteDetail,
+  Plugin,
+  Suggestion,
+} from "../lib/types";
 import { SuggestionPreview } from "./LazyPluginViews";
-import { outputText } from "./vocabularyData";
+import { outputText, commandSuccessMessage } from "./vocabularyData";
 import { Dialog } from "./Dialog";
 import {
   appliedSuggestionTitle,
@@ -83,6 +100,7 @@ export function ReviewLine() {
     </p>
   ) : null;
 }
+
 export function SuggestionLine({
   note,
   onReview,
@@ -145,7 +163,7 @@ export function SuggestionLine({
       setPreview(null);
       void invalidateContentFor(client);
       if (action === "accept") {
-        if (result?.suggestion?.receipt?.undoable)
+        if (result?.suggestion?.receipt?.undoable && s.action !== "add_label")
           setOrder(items.map((item) => item.id));
         acknowledge(result, s);
       }
@@ -162,7 +180,8 @@ export function SuggestionLine({
   ).filter((s) => !hidden?.includes(s.id));
   const pending = new Set(suggestions.map((s) => s.id));
   const items = (note.suggestions ?? []).filter(
-    (s) => pending.has(s.id) || s.receipt?.undoable,
+    (s) =>
+      pending.has(s.id) || (s.receipt?.undoable && s.action !== "add_label"),
   );
   if (items.some((s) => s.receipt?.undoable) && order.length) {
     const positions = new Map(order.map((id, index) => [id, index]));
@@ -569,6 +588,23 @@ export type CommandChoice = {
   title: string;
   args?: Args;
 };
+export type NoteToolChoice = CommandChoice & {
+  name: string;
+  icon?: IconName;
+  bundled: boolean;
+  trustedBundled: boolean;
+};
+export type NoteToolView = {
+  commands: NoteToolChoice[];
+  choose: (tool: NoteToolChoice) => void;
+  list: ReactNode;
+  result: ReactNode;
+  busy: boolean;
+  failed: boolean;
+  reset: () => void;
+};
+
+export const noteToolKey = (tool: CommandChoice) => `${tool.plugin}/${tool.id}`;
 export function SlashCommands({
   query = "",
   onChoose,
@@ -587,7 +623,7 @@ export function PaletteCommands({
 }: {
   query?: string;
   noteId?: string;
-  note?: Note;
+  note?: NoteDetail;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
 }) {
   useLanguage();
@@ -603,13 +639,68 @@ export function PaletteCommands({
     />
   );
 }
+const noteToolInputs: Record<
+  string,
+  keyof NonNullable<NoteDetail["note_tool_inputs"]>
+> = {
+  "image-text/read": "image",
+  "voice-memos/transcribe": "audio",
+  "link-enrichment/fetch": "link",
+  "title-summary/summarize": "title_summary",
+  "label-suggestions/suggest-now": "labels",
+  "tidy/tidy": "short_text",
+  "translate/translate": "short_text",
+  "develop/develop": "short_text",
+};
+
+const noteToolIcons: Record<string, IconName> = {
+  "image-text/read": "image",
+  "voice-memos/transcribe": "audio",
+  "link-enrichment/fetch": "link",
+  "links/link": "link",
+  "title-summary/summarize": "notes",
+  "label-suggestions/suggest-now": "hash",
+  "tidy/tidy": "edit",
+  "translate/translate": "translate",
+  "develop/develop": "branch",
+  "thinking-desk/desk": "branch",
+  "context-packs/packs": "archive",
+};
+
+function operatorPlugin(plugin: Plugin) {
+  return (
+    plugin.origin === "operator" ||
+    plugin.source_kind === "folder" ||
+    plugin.source_kind === "entrypoint"
+  );
+}
+
+function commandSurfaces(plugin: Plugin, command: Command) {
+  const surfaces = command.where ?? command.surfaces ?? [];
+  if (
+    plugin.id === "decision-journal" &&
+    command.id === "record-decision" &&
+    !operatorPlugin(plugin)
+  )
+    return surfaces.filter((surface) => surface !== "note-actions");
+  return surfaces;
+}
+
 /** Source actions use the same scope in the palette and the note's tools list. */
-export function canRunOnNote(plugin: Plugin, command: string, note?: Note) {
-  if (plugin.id === "decision-journal" && command === "review-decision")
-    return !!note && !note.trashed && isDecisionNote(note);
-  if (!note) return true;
-  if (note.trashed) return false;
-  if (plugin.id === "agent-inbox" && command === "mark-reviewed")
+export function canRunOnNote(
+  plugin: Plugin,
+  command: string,
+  note?: NoteDetail,
+) {
+  if (!note || note.trashed) return false;
+  const bundled = !operatorPlugin(plugin);
+  if (
+    bundled &&
+    plugin.id === "decision-journal" &&
+    command === "review-decision"
+  )
+    return isDecisionNote(note);
+  if (bundled && plugin.id === "agent-inbox" && command === "mark-reviewed")
     return (
       (note.source?.kind === "agent" || note.updated_via_agent) &&
       !note.annotations?.some(
@@ -624,10 +715,34 @@ export function canRunOnNote(plugin: Plugin, command: string, note?: Note) {
     )
   )
     return false;
-  return true;
+  if (bundled && plugin.id === "links" && command === "link")
+    return supportsNotePicker(plugin);
+  const input = bundled ? noteToolInputs[`${plugin.id}/${command}`] : undefined;
+  return !input || hasNoteToolInput(note, input);
 }
 
-export function useWaitingCommandPlugins(enabled: boolean) {
+export function noteCommandAvailable(
+  plugin: Plugin,
+  command: Command,
+  note: NoteDetail,
+  versionedAgentReview?: boolean,
+) {
+  return (
+    commandSurfaces(plugin, command).includes("note-actions") &&
+    (operatorPlugin(plugin) ||
+      (!(
+        plugin.id === "decision-journal" && command.id === "review-decision"
+      ) &&
+        !(
+          versionedAgentReview &&
+          plugin.id === "agent-inbox" &&
+          command.id === "mark-reviewed"
+        ))) &&
+    canRunOnNote(plugin, command.id, note)
+  );
+}
+
+function useCommandCatalog(enabled: boolean) {
   useLanguage();
   const online = useBrowserOnline();
   const role = useWorkspaceRole();
@@ -635,8 +750,11 @@ export function useWaitingCommandPlugins(enabled: boolean) {
     queryKey: ["catalog"],
     queryFn: api.catalog,
     enabled: enabled && online && role === "owner",
-    select: (catalog) =>
-      localizeCatalog(catalog).plugins.filter(
+    select: (catalog) => ({
+      bundled: catalog.plugins
+        .filter((plugin) => isBundledPlugin(plugin))
+        .map((plugin) => plugin.id),
+      waiting: localizeCatalog(catalog).plugins.filter(
         (plugin) =>
           plugin.state === "waiting" &&
           plugin.permissions.some(
@@ -645,6 +763,7 @@ export function useWaitingCommandPlugins(enabled: boolean) {
               !Object.hasOwn(plugin.ai_destinations ?? {}, permission.slice(3)),
           ),
       ),
+    }),
   });
 }
 
@@ -653,34 +772,70 @@ export function PluginCommands({
   where = "palette",
   noteId,
   note,
-  skipCommands = [],
   pluginId,
   onChoose,
   onResult,
   onOpenNote,
   inPalette,
+  noteToolsEnabled = true,
+  renderNoteTools,
 }: {
   query?: string;
   where?: string | string[];
   noteId?: string;
-  note?: Note;
-  skipCommands?: string[];
+  note?: NoteDetail;
   pluginId?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
   onOpenNote?: () => void;
   /** Rows look and line up like the palette's own rows. */
   inPalette?: boolean;
+  noteToolsEnabled?: boolean;
+  renderNoteTools?: (view: NoteToolView) => ReactNode;
 }) {
   useLanguage();
   const manifest = usePlugins();
   const online = useBrowserOnline();
+  const toast = useToast();
   const workspaceRole = useWorkspaceRole();
   const [, navigate] = useLocation();
   const client = useQueryClient();
   const places = Array.isArray(where) ? where : [where];
   const slash = places.includes("slash");
-  const waitingPlugins = useWaitingCommandPlugins(!slash);
+  const noteTools = where === "note-actions";
+  const versionedReview = manifest.data?.features?.includes(
+    "agent_review_versioned",
+  );
+  const enabledPlugins = activePlugins(manifest.data?.plugins);
+  const matchesSurface = (plugin: Plugin, command: Command, at: string[]) => {
+    if (!places.some((place) => at.includes(place))) return false;
+    if (!at.includes("note-actions")) return true;
+    if (noteTools)
+      return (
+        !!note && noteCommandAvailable(plugin, command, note, versionedReview)
+      );
+    if (noteId) return canRunOnNote(plugin, command.id, note);
+    return at.some(
+      (surface) => surface !== "note-actions" && places.includes(surface),
+    );
+  };
+  const legacyNoteTools =
+    noteTools &&
+    note &&
+    enabledPlugins.some(
+      (plugin) =>
+        plugin.origin == null &&
+        plugin.source_kind == null &&
+        plugin.contributes?.commands?.some((command) =>
+          noteCommandAvailable(plugin, command, note, versionedReview),
+        ),
+    );
+  const catalog = useCommandCatalog(
+    !slash &&
+      (!noteTools ||
+        (noteToolsEnabled &&
+          ((!note?.private && !note?.machine) || !!legacyNoteTools))),
+  );
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [origin, setOrigin] = useState<CommandOrigin>();
@@ -817,6 +972,21 @@ export function PluginCommands({
       };
       if (choice.args?.note_id && choice.plugin !== "decision-journal")
         void invalidateContentFor(client);
+      const plugin = currentPlugins.current?.find(
+        (item) => item.id === choice.plugin,
+      );
+      const success =
+        plugin && !operatorPlugin(plugin) && commandSuccessMessage(value);
+      if (success) {
+        if (
+          !commandLifetime.current.active ||
+          commandLifetime.current.generation !== requestGeneration()
+        )
+          return;
+        if (noteTools) onOpenNote?.();
+        toast.show({ message: success });
+        return;
+      }
       if (onResult) onResult(value, nextOrigin);
       else {
         setResult(value);
@@ -830,10 +1000,8 @@ export function PluginCommands({
     question.split(/\s+/).length >= 3 &&
     [...question].length <= 500;
   const commands = (
-    online && workspaceRole === "owner"
-      ? activePlugins(manifest.data?.plugins).filter(
-          (p) => !pluginId || p.id === pluginId,
-        )
+    online && workspaceRole === "owner" && (!noteTools || noteToolsEnabled)
+      ? enabledPlugins.filter((p) => !pluginId || p.id === pluginId)
       : []
   )
     .flatMap((p) =>
@@ -841,32 +1009,37 @@ export function PluginCommands({
         .slice(0, 3)
         .map((c) => ({
           command: c,
-          at: (c as unknown as { where?: string[] }).where ?? c.surfaces ?? [],
+          at: commandSurfaces(p, c),
         }))
         .filter(
           ({ command, at }) =>
-            places.some((place) => at.includes(place)) &&
-            !skipCommands.includes(`${p.id}/${command.id}`) &&
+            matchesSurface(p, command, at) &&
             !(
               p.id === "agent-inbox" &&
-              p.origin !== "operator" &&
+              !operatorPlugin(p) &&
               command.id === "mark-reviewed" &&
-              manifest.data?.features?.includes("agent_review_versioned")
+              versionedReview
             ) &&
-            (!(noteId && at.includes("note-actions")) ||
-              canRunOnNote(p, command.id, note)) &&
-            (p.id !== "links" ||
-              command.id !== "link" ||
-              supportsNotePicker(p)) &&
             (!("online" in command) ||
               !(command as unknown as { online?: boolean }).online ||
               online),
         )
-        .map(({ command, at }): CommandChoice & { name: string } => ({
+        .map(({ command, at }): NoteToolChoice => ({
           plugin: p.id,
           id: command.id,
           title: command.title,
           name: p.name,
+          bundled: !operatorPlugin(p),
+          trustedBundled:
+            noteTools &&
+            (isBundledPlugin(p) ||
+              (p.origin == null &&
+                p.source_kind == null &&
+                catalog.data?.bundled.includes(p.id) === true)),
+          icon: noteTools
+            ? (!operatorPlugin(p) && noteToolIcons[`${p.id}/${command.id}`]) ||
+              "tools"
+            : undefined,
           args:
             p.id === "ask" &&
             command.id === "ask" &&
@@ -884,45 +1057,38 @@ export function PluginCommands({
         c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
   const waiting =
-    slash || !online || workspaceRole !== "owner"
+    slash ||
+    !online ||
+    workspaceRole !== "owner" ||
+    (noteTools && !noteToolsEnabled)
       ? []
-      : (waitingPlugins.data ?? []).flatMap((plugin) =>
+      : (catalog.data?.waiting ?? []).flatMap((plugin) =>
           !pluginId || pluginId === plugin.id
             ? (plugin.contributes?.commands ?? [])
                 .slice(0, 3)
-                .filter(
-                  (command) =>
-                    places.some((place) =>
-                      (command.where ?? command.surfaces ?? []).includes(place),
-                    ) &&
-                    (noteId ||
-                      !(command.where ?? command.surfaces ?? []).includes(
-                        "note-actions",
-                      )) &&
-                    !skipCommands.includes(`${plugin.id}/${command.id}`) &&
-                    (!(
-                      noteId &&
-                      (command.where ?? command.surfaces ?? []).includes(
-                        "note-actions",
-                      )
-                    ) ||
-                      canRunOnNote(plugin, command.id, note)) &&
-                    command.title.toLowerCase().includes(query.toLowerCase()),
-                )
+                .filter((command) => {
+                  const at = commandSurfaces(plugin, command);
+                  return (
+                    matchesSurface(plugin, command, at) &&
+                    command.title.toLowerCase().includes(query.toLowerCase())
+                  );
+                })
                 .map((command) => ({ plugin, command }))
             : [],
         );
   const highlighted = Math.min(active, commands.length - 1);
-  const choose = (c: CommandChoice) => {
+  const choose = (c: (typeof commands)[number]) => {
     if (
       !slash &&
       inPalette &&
+      c.bundled &&
       c.plugin === "decision-journal" &&
       c.id === "journal"
     )
       navigate(decisionsPath);
     else if (onChoose) onChoose(c);
     else if (
+      c.bundled &&
       c.plugin === "links" &&
       c.id === "link" &&
       typeof c.args?.note_id === "string"
@@ -962,61 +1128,106 @@ export function PluginCommands({
     document.addEventListener("keydown", key, true);
     return () => document.removeEventListener("keydown", key, true);
   });
-  if (result)
-    return (
-      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
-        <CommandResult
-          value={result}
-          origin={origin}
-          onOpenNote={onOpenNote}
-          onDismiss={() => {
-            if (origin) returnTo.current = `${origin.plugin}/${origin.command}`;
-            setResult(null);
-          }}
-        />
-      </Suspense>
-    );
-  if (!commands.length && !waiting.length) return null;
-  return (
-    <div
-      ref={list}
-      className={slash ? styles.slash : inPalette ? "palette-group" : undefined}
-      role={slash ? "listbox" : undefined}
-      aria-label={slash ? t("slots.commands") : undefined}
-    >
-      {commands.map((c, index) => (
-        <button
-          className={inPalette ? "palette-row" : styles.command}
-          key={`${c.plugin}/${c.id}`}
-          data-command-key={`${c.plugin}/${c.id}`}
-          data-ask-question={
-            (c.plugin === "ask" &&
-              c.id === "ask" &&
-              typeof c.args?.question === "string") ||
-            undefined
+  const openNote = () => {
+    setResult(null);
+    onOpenNote?.();
+  };
+  const resultContent = result ? (
+    <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
+      <CommandResult
+        value={result}
+        origin={origin}
+        onOpenNote={onOpenNote ? openNote : undefined}
+        onDismiss={() => {
+          if (result === true && origin?.plugin === "links" && onOpenNote) {
+            openNote();
+            return;
           }
-          role={slash ? "option" : undefined}
-          aria-selected={slash ? index === highlighted : undefined}
-          disabled={command.isPending}
-          onMouseDown={slash ? (e) => e.preventDefault() : undefined}
-          onClick={() => choose(c)}
-        >
-          <span>{c.title}</span>
-          {c.name !== c.title && <small className="muted">{c.name}</small>}
-        </button>
-      ))}
-      {waiting.map(({ plugin, command }) => (
-        <p className={styles.facts} key={`${plugin.id}/${command.id}`}>
-          {t("quiet.command_waiting", { command: command.title })}{" "}
-          <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
-        </p>
-      ))}
-      {command.isPending && <p role="status">{t("timeline.loading_notes")}</p>}
-      {command.isError && (
-        <p role="alert" className="error">
-          {command.error.message}
-        </p>
-      )}
-    </div>
-  );
+          if (origin) returnTo.current = `${origin.plugin}/${origin.command}`;
+          setResult(null);
+        }}
+      />
+    </Suspense>
+  ) : null;
+  const commandList =
+    commands.length ||
+    waiting.length ||
+    command.isPending ||
+    command.isError ? (
+      <div
+        ref={list}
+        className={
+          slash
+            ? styles.slash
+            : inPalette
+              ? "palette-group"
+              : noteTools
+                ? styles.noteCommandGrid
+                : undefined
+        }
+        role={slash ? "listbox" : undefined}
+        aria-label={slash ? t("slots.commands") : undefined}
+      >
+        {commands.map((c, index) => (
+          <button
+            className={
+              inPalette
+                ? "palette-row"
+                : noteTools
+                  ? styles.noteCommand
+                  : styles.command
+            }
+            key={noteToolKey(c)}
+            data-command-key={noteToolKey(c)}
+            data-ask-question={
+              (c.plugin === "ask" &&
+                c.id === "ask" &&
+                typeof c.args?.question === "string") ||
+              undefined
+            }
+            role={slash ? "option" : undefined}
+            aria-selected={slash ? index === highlighted : undefined}
+            disabled={command.isPending}
+            onMouseDown={slash ? (e) => e.preventDefault() : undefined}
+            onClick={() => choose(c)}
+          >
+            {c.icon && (
+              <span className={styles.noteCommandIcon}>
+                <Icon name={c.icon} />
+              </span>
+            )}
+            <span>{c.title}</span>
+            {c.name !== c.title && (!noteTools || !c.bundled) && (
+              <small className="muted">{c.name}</small>
+            )}
+          </button>
+        ))}
+        {waiting.map(({ plugin, command }) => (
+          <p className={styles.facts} key={`${plugin.id}/${command.id}`}>
+            {t("quiet.command_waiting", { command: command.title })}{" "}
+            <Link href="/settings/ai">{t("settingsplugins.ai_settings")}</Link>
+          </p>
+        ))}
+        {command.isPending && <p role="status">{t("plugins.running")}</p>}
+        {command.isError && (
+          <p role="alert" className="error">
+            {command.error.message}
+          </p>
+        )}
+      </div>
+    ) : null;
+  if (renderNoteTools)
+    return renderNoteTools({
+      commands,
+      choose,
+      list: commandList,
+      result: resultContent,
+      busy: command.isPending,
+      failed: command.isError,
+      reset: () => {
+        setResult(null);
+        if (!command.isPending) command.reset();
+      },
+    });
+  return resultContent ?? commandList;
 }

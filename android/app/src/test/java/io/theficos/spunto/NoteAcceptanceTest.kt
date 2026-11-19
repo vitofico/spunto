@@ -1,6 +1,7 @@
 package io.theficos.spunto
 
 import io.theficos.spunto.core.model.Note
+import io.theficos.spunto.data.local.AttachmentEntity
 import io.theficos.spunto.data.local.PluginOutputEntity
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -41,5 +42,39 @@ class NoteAcceptanceTest {
         assertFalse(matchesAcceptanceRevision(note,note.copy(pending=true)))
         assertFalse(matchesAcceptanceRevision(note,note.copy(machine=true)))
         assertFalse(matchesAcceptanceRevision(note,note.copy(updatedViaAgent=true)))
+    }
+
+    @Test fun toolDetailMatchesOnlyTheSavedDisplayedRevisionAndUsesExplicitAgentBases() {
+        val detail = Json.parseToJsonElement("""{
+            "id":"synthetic-note","version":7,"body":"The exact displayed words","private":false,"machine":false,
+            "agent_review":{"kind":"edited","before":{"version":4,"body":""}},
+            "note_tool_inputs":{"image":false,"audio":true,"link":false,"labels":true}
+        }""").jsonObject
+        assertTrue(matchesNoteToolDetail(note, detail))
+        assertFalse(matchesNoteToolDetail(note.copy(privateNote=true), detail))
+        assertFalse(matchesNoteToolDetail(note.copy(pending=true), detail))
+        assertFalse(matchesNoteToolDetail(note.copy(serverRev=8), detail))
+        assertFalse(matchesNoteToolDetail(note.copy(body="different"), detail))
+        assertEquals(AgentReviewDetail.Edited(""), parseAgentReview(detail))
+        assertEquals(AgentReviewDetail.Edited(null), parseAgentReview(JsonObject(detail + ("version" to JsonPrimitive(4)))))
+        assertEquals(AgentReviewDetail.Created, parseAgentReview(Json.parseToJsonElement("""{"agent_review":{"kind":"created","before":null}}""").jsonObject))
+        assertNull(parseAgentReview(JsonObject(detail - "agent_review")))
+        assertEquals(NoteToolInputs(audio=true,labels=true), parseNoteToolInputs(detail))
+    }
+
+    @Test fun olderDetailsUseProvableTypedAttachmentsAndSafeLocalTextOrLinks() {
+        val scope = NoteToolScope("https://example.org", "current")
+        val id = "01234567-1234-1234-1234-123456789012"
+        val large = note.copy(body = "word ".repeat(300) + "![Image](/a/$id)", sourceUrl = "https://example.org/page")
+        val attachment = AttachmentEntity(noteId=large.id, localPath="synthetic.png", mime="image/png", remoteId=id,
+            status="uploaded", serverUrl=scope.server, serverEpoch=scope.epoch)
+        assertEquals(NoteToolInputs(image=true,link=true,titleSummary=true,labels=true,shortText=true),
+            legacyNoteToolInputs(large, scope, listOf(attachment)))
+        val stale = attachment.copy(serverEpoch="retired")
+        assertFalse(legacyNoteToolInputs(large, scope, listOf(stale)).image)
+        assertFalse(legacyNoteToolInputs(large, scope, listOf(attachment.copy(mime="image/svg+xml"))).image)
+        assertFalse(legacyNoteToolInputs(large.copy(sourceUrl="https://username@example.org/page"), scope, emptyList()).link)
+        assertEquals(NoteToolInputs(), legacyNoteToolInputs(large.copy(privateNote=true), scope, listOf(attachment)))
+        assertEquals(NoteToolInputs(), parseNoteToolInputs(null))
     }
 }

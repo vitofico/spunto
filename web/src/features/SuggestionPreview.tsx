@@ -1,6 +1,7 @@
 import { t, useLanguage } from "../lib/i18n";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { NoteDiff } from "../components/core/NoteDiff";
 import type { Note, Suggestion } from "../lib/types";
 import { NoteReference } from "./Vocabulary";
 import styles from "./Feature.module.css";
@@ -88,27 +89,39 @@ export function SuggestionPreview({
         </p>
       </div>
     );
-  if (s.action === "replace_body")
+  if (s.action === "replace_body") {
+    const base = baseNote ?? note.data;
+    const proposed = String(s.payload.body ?? "");
+    const labels = {
+      before: t("suggestionpreview.before"),
+      after: t("suggestionpreview.after"),
+    };
     return (
       <div>
         <p className={styles.facts}>
           {t("suggestionpreview.version", { version: s.note_version ?? "" })}
         </p>
-        <div className={styles.diff}>
-          <div>
-            <h3>− {t("suggestionpreview.before")}</h3>
-            <pre>
-              {(baseNote ?? note.data)?.body ??
-                t("suggestionpreview.loading_note")}
-            </pre>
+        {base && base.id === s.note_id && base.version === s.note_version ? (
+          <NoteDiff before={base.body} after={proposed} labels={labels} />
+        ) : (
+          <div className={styles.diff}>
+            <div>
+              <h3>{labels.before}</h3>
+              <p>
+                {t(
+                  base ? "note.accept_stale" : "suggestionpreview.loading_note",
+                )}
+              </p>
+            </div>
+            <div>
+              <h3>{labels.after}</h3>
+              <pre>{proposed}</pre>
+            </div>
           </div>
-          <div>
-            <h3>+ {t("suggestionpreview.after")}</h3>
-            <pre>{String(s.payload.body ?? "")}</pre>
-          </div>
-        </div>
+        )}
       </div>
     );
+  }
   if (s.action === "merge_notes")
     return (
       <div>

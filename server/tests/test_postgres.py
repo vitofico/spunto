@@ -312,7 +312,7 @@ async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, pg_adm
 async def test_postgres_ask_transcript_follow_up_and_atomic_evidence_save(
     pg, settings, monkeypatch
 ):
-    from test_plugins_ai import FakeProvider
+    from ai_fake import FakeProvider
 
     from spunto.plugins import ask
 
@@ -362,7 +362,7 @@ async def test_postgres_ask_transcript_follow_up_and_atomic_evidence_save(
         allocated = await ask.ask(ctx, start=True)
         continuation = next(item["args"] for item in allocated["items"] if item.get("id") == "ask")
         first = await ask.ask(ctx, "When is the contralto rehearsal?", **continuation)
-        content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+        content = provider.chat_bodies[0]["messages"][1]["content"]
         assert "18:45" in content and outside["id"] not in content
         assert "PRIVATE-OTHER-SPACE" not in content
         save = next(item["args"] for item in first["items"] if item.get("id") == "save-answer")

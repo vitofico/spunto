@@ -23,7 +23,7 @@ from spunto.ai.queue import ProfileQueue
 from spunto.auth.tokens import Principal
 from spunto.config import Settings, load_settings
 from spunto.core.notes import Notes
-from spunto.store.db import Store
+from spunto.store.db import Store, now_ms
 from spunto.store.migrations import migrate
 
 pytestmark = pytest.mark.anyio
@@ -163,20 +163,69 @@ async def test_validation_retry_can_succeed_and_remembers_ignored_schema(fixture
     assert "Required schema" in fake.requests[-1]["body"]["messages"][0]["content"]
 
 
-async def test_schema_400_fallback_is_once_and_persisted(fixture_gateway, store, profile):
+async def test_schema_400_fallback_requires_valid_output_and_expires(
+    fixture_gateway, store, profile, monkeypatch
+):
+    from spunto.ai import gateway as gateway_module
+
     gateway, fake = fixture_gateway
-    fake.modes.extend(["reject_schema", "valid"])
-    assert (await gateway.chat(Probe, "check")).ok
-    assert [r["body"]["response_format"]["type"] for r in fake.requests] == [
-        "json_schema",
-        "json_object",
-    ]
+    clock = now_ms()
+    monkeypatch.setattr(gateway_module, "now_ms", lambda: clock)
+
+    def formats():
+        result = [r["body"]["response_format"]["type"] for r in fake.requests]
+        fake.requests.clear()
+        return result
+
+    # A transient schema rejection on a strict provider cannot poison a restart.
+    fake.modes.append("400")
+    with pytest.raises(AIError, match="ai_provider_http_error"):
+        await gateway.chat(Probe, "transient failure")
+    assert formats() == ["json_schema", "json_object"]
+
     replacement = Gateway(store, settings_for(profile), transport=httpx.ASGITransport(fake.app))
     try:
-        await replacement.chat(Probe, "again")
-        assert fake.requests[-1]["body"]["response_format"]["type"] == "json_object"
+        assert (await replacement.chat(Probe, "after restart")).ok
+        assert formats() == ["json_schema"]
+
+        # A provider that requires json_object must also supply a valid answer.
+        fake.response_format = "json_object"
+        fake.modes.extend(["valid", "missing", "missing"])
+        with pytest.raises(AIError, match="ai_invalid_output"):
+            await replacement.chat(Probe, "invalid fallback")
+        assert formats() == ["json_schema", "json_object", "json_object"]
+        async with store.read() as conn:
+            assert not await conn.execute_fetchall(
+                "SELECT key FROM meta WHERE key LIKE 'ai:quirk:%'"
+            )
+
+        assert (await replacement.chat(Probe, "valid fallback")).ok
+        assert "Required schema" in fake.requests[-1]["body"]["messages"][0]["content"]
+        assert formats() == ["json_schema", "json_object"]
     finally:
         await replacement.close()
+
+    fresh = Gateway(store, settings_for(profile), transport=httpx.ASGITransport(fake.app))
+    try:
+        assert (await fresh.chat(Probe, "remember validated fallback")).ok
+        assert formats() == ["json_object"]
+
+        clock += 24 * 60 * 60 * 1000
+        fake.response_format = "json_schema"
+        assert not (await fresh.status())["quirks"]
+        assert (await fresh.chat(Probe, "recheck after expiry")).ok
+        assert formats() == ["json_schema"]
+
+        async with store.write() as conn:
+            await conn.execute(
+                "UPDATE meta SET value=? WHERE key LIKE 'ai:quirk:%'",
+                ('{"mode":"json_object","schema_prompt":true}',),
+            )
+        assert not (await fresh.status())["quirks"]
+        assert (await fresh.chat(Probe, "ignore legacy quirk")).ok
+        assert formats() == ["json_schema"]
+    finally:
+        await fresh.close()
 
 
 async def test_provider_error_is_safe_and_pauses_shared_profile(fixture_gateway):
@@ -230,6 +279,11 @@ async def test_native_anthropic_sdk_recorded_responses_and_effort(store):
             fake.modes.append(stop)
             with pytest.raises(AIError, match="ai_answer_refused"):
                 await gateway.chat(Probe, "check")
+        fake.requests.clear()
+        fake.modes.append("400")
+        with pytest.raises(AIError, match="ai_provider_http_error"):
+            await gateway.chat(Probe, "check")
+        assert len(fake.requests) == 1
     finally:
         await gateway.close()
 

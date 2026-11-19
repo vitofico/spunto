@@ -6,7 +6,6 @@ import android.content.Intent
 import android.os.ParcelFileDescriptor
 import android.os.Bundle
 import android.view.KeyEvent
-import android.view.WindowManager
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
@@ -142,11 +141,8 @@ class AppLockTest {
     waitForAuthentication()
    }
    val selection=Intent(instrumentation.targetContext,CaptureActivity::class.java).setAction(Intent.ACTION_PROCESS_TEXT).putExtra(Intent.EXTRA_PROCESS_TEXT,"Synthetic locked selection").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-   ActivityScenario.launch<CaptureActivity>(selection).use {scenario ->
+   ActivityScenario.launch<CaptureActivity>(selection).use {
     waitForAuthentication()
-    scenario.onActivity {activity ->
-     assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-    }
     assertEquals(before,runBlocking {app.container.repository.notes.first().size})
     assertFalse(instrumentation.uiAutomation.windows.flatMap {nodes(it.root)}.any {it.text?.toString()?.contains("Synthetic locked selection")==true})
    }

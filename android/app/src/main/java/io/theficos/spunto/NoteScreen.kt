@@ -67,7 +67,7 @@ import kotlinx.serialization.json.*
   if(restoreActionFocus) {
    androidx.compose.runtime.withFrameNanos {}
    val restored=resultFromShortcut && runCatching {tidyShortcutFocus.requestFocus(FocusDirection.Enter)}.getOrDefault(false)
-   if(!restored) noteActionsFocus.requestFocus()
+   if(!restored) runCatching {noteActionsFocus.requestFocus()}
    restoreActionFocus=false
   }
  }

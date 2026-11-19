@@ -280,7 +280,10 @@ test("compares an agent edit, selects contextual shortcuts and keeps label Undo 
   const history = page.getByRole("region", { name: "Recent label changes" });
   await expect(history.getByText("Added #travel")).toBeVisible();
   expect(histories).toBe(1);
-  await history.getByRole("button", { name: "Undo", exact: true }).click();
+  const undo = history.getByRole("button", { name: "Undo", exact: true });
+  await undo.focus();
+  await expect(undo).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.getByText("Change undone", { exact: true })).toBeVisible();
   await expect(history).toHaveCount(0);
 

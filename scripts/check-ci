@@ -9,7 +9,7 @@ Usage: scripts/check-ci [all|web|server|android|native|browser]
   all       Web, SQLite server, distribution and Android build/lint checks (default)
   web       Locked installs, generated contracts, types, tests, format and build budgets
   server    Locked install, Ruff and the complete SQLite pytest suite
-  android   Distribution tests, all JVM tests, lint, debug and test APKs
+  android   Distribution tests, all JVM tests, lint and debug APK
   native    Instrumentation on an explicitly selected disposable emulator
   browser   Playwright in all three engines (SPUNTO_E2E_URL selects a disposable server)
 
@@ -29,9 +29,10 @@ web() (
   fi
   pnpm install --frozen-lockfile
   uv sync --project ../server --locked
+  python3 ../scripts/check-translations.py
   python3 ../scripts/check-generated.py
   pnpm typecheck
-  pnpm test
+  pnpm test "$@"
   pnpm format:check
   pnpm build
 )
@@ -55,7 +56,7 @@ android() (
   "${runner[@]}" --no-daemon :core:model:test testDebugUnitTest \
     :core:design:lintDebug :core:plugins:lintDebug :data:local:lintDebug :data:sync:lintDebug \
     :plugins:dictation:lintDebug :plugins:quick-capture:lintDebug :app:lintDebug \
-    :app:assembleDebug :app:assembleDebugAndroidTest "$@"
+    :app:assembleDebug "$@"
   # Gradle enforces the 15 MB compressed payload gate. Debug signing/alignment
   # adds container overhead; signed releases retain their separate 15 MB gate.
   python3 ../scripts/check-apk-size.py app/build/outputs/apk/debug/app-debug.apk --max-bytes 25000000
@@ -63,7 +64,7 @@ android() (
 
 case "${1:-all}" in
   --help|-h) usage ;;
-  web) web ;;
+  web) shift; web "$@" ;;
   server) server ;;
   android) shift; android "$@" ;;
   native) "$ROOT/scripts/check-android-native" ;;

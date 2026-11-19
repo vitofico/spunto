@@ -229,6 +229,8 @@ export function Provenance({ note }: { note: Note }) {
       </span>
     );
   }
+  if (note.origin === "owner" && note.updated_via_agent)
+    return <span className="chip">{t("notecard.edited_by_agent")}</span>;
   if (note.origin !== "agent") return null;
   return (
     <span className="chip">

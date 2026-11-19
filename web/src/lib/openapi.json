@@ -52,6 +52,21 @@
         "title": "AIRoute",
         "type": "object"
       },
+      "Adopt": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version": {
+            "minimum": 1.0,
+            "title": "Base Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base_version"
+        ],
+        "title": "Adopt",
+        "type": "object"
+      },
       "Append": {
         "additionalProperties": false,
         "properties": {
@@ -2710,6 +2725,61 @@
           }
         },
         "summary": "Edit Note",
+        "tags": [
+          "Notes"
+        ]
+      }
+    },
+    "/api/v1/notes/{id}/adopt": {
+      "post": {
+        "operationId": "adopt_note_api_v1_notes__id__adopt_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Adopt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "The displayed revision changed or no longer needs adoption"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adopt Note",
         "tags": [
           "Notes"
         ]

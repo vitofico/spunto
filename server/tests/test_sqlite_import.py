@@ -342,6 +342,7 @@ async def run_import(snapshot, target):
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_operator_cli_imports_from_secret_files_and_reconciles_sequences(
     snapshot, target, tmp_path, monkeypatch, capsys
 ):
@@ -380,6 +381,7 @@ async def test_operator_cli_imports_from_secret_files_and_reconciles_sequences(
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_full_snapshot_preserves_rows_epoch_tokens_vectors_and_files(snapshot, target):
     before = snapshot["path"].read_bytes()
     snapshot["path"].chmod(0o400)
@@ -439,6 +441,7 @@ async def test_full_snapshot_preserves_rows_epoch_tokens_vectors_and_files(snaps
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_verification_failure_rolls_back_every_table_and_locator(
     snapshot, target, monkeypatch
 ):
@@ -480,6 +483,7 @@ async def test_verification_failure_rolls_back_every_table_and_locator(
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_nonempty_metadata_only_target_refused(snapshot, target):
     store = await PostgresStore.open(target["database_url"])
     try:
@@ -530,6 +534,7 @@ def test_attachment_manifest_and_copied_files_fail_closed(snapshot, tmp_path):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("change", ["personal", "owner"])
+@pytest.mark.postgres
 async def test_target_mapping_requires_personal_owner(snapshot, target, change):
     async with await psycopg.AsyncConnection.connect(target["admin"]) as connection:
         if change == "personal":
@@ -559,6 +564,7 @@ async def test_active_wal_is_refused_without_opening_target(snapshot):
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_access_metadata_only_target_refused(snapshot, target):
     async with await psycopg.AsyncConnection.connect(target["admin"]) as connection:
         await connection.execute(
@@ -576,6 +582,7 @@ async def test_access_metadata_only_target_refused(snapshot, target):
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_negative_zero_embedding_preserves_float32_digest(snapshot, target):
     key = snapshot["key"]
     with closing(connect(snapshot["path"])) as connection:
@@ -591,6 +598,7 @@ async def test_negative_zero_embedding_preserves_float32_digest(snapshot, target
 
 
 @pytest.mark.anyio
+@pytest.mark.postgres
 async def test_new_wal_during_import_rolls_back_target(snapshot, target, monkeypatch):
     original = sqlite_import._copy
     writer = []
@@ -624,6 +632,7 @@ async def test_new_wal_during_import_rolls_back_target(snapshot, target, monkeyp
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("change", ["mtime", "inode"])
+@pytest.mark.postgres
 async def test_source_metadata_change_rolls_back_import(snapshot, target, monkeypatch, change):
     original = sqlite_import._copy
 

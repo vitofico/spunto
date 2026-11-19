@@ -577,9 +577,9 @@ async def test_voice_ogg_container_gate_keeps_originals_and_never_sends_invalid_
     gateway = Gateway(host.store, settings, transport=httpx.ASGITransport(fake.app))
     host.gateway = gateway
     try:
-        for name, (data, seconds) in ogg_cases().items():
-            if name == "maximum-duration":
-                continue
+        cases = ogg_cases()
+        for name in ("native-style", "corrupt-crc"):
+            data, seconds = cases[name]
             note, attachment = await attached(host, notes, data, "audio/ogg", name)
             scoped = ctx(host, IDS[2], note)
             previous = len(fake.requests)

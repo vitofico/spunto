@@ -3,7 +3,7 @@ import DOMPurify from "dompurify";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 const SchemaForm = lazy(() =>
   import("./SchemaForm").then((module) => ({ default: module.SchemaForm })),
 );
@@ -57,7 +57,49 @@ export function safePluginHtml(html: string) {
     ADD_URI_SAFE_ATTR: [],
   });
 }
-export function NoteReference({ id, reason }: { id: string; reason?: string }) {
+export function ResultNoteLink({
+  id,
+  onOpen,
+  className,
+  children,
+}: {
+  id: string;
+  onOpen?: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      className={className}
+      href={`/n/${encodeURIComponent(id)}`}
+      tabIndex={0}
+      onClick={(event) => {
+        if (
+          !event.defaultPrevented &&
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey
+        )
+          onOpen?.();
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+export function NoteReference({
+  id,
+  reason,
+  onOpen,
+  result,
+}: {
+  id: string;
+  reason?: string;
+  onOpen?: () => void;
+  result?: boolean;
+}) {
   useLanguage();
   const query = useQuery({
     queryKey: ["note", id],
@@ -67,12 +109,16 @@ export function NoteReference({ id, reason }: { id: string; reason?: string }) {
   if (query.isError)
     return <span className="muted">{t("vocabulary.note_unavailable")}</span>;
   return (
-    <Link className={styles.noteRef} href={`/n/${encodeURIComponent(id)}`}>
-      {query.data
-        ? query.data.title || t("vocabulary.untitled_note")
-        : t("slots.open_note")}
-      {reason && <small className="muted"> · {reason}</small>}
-    </Link>
+    <ResultNoteLink id={id} className={styles.noteRef} onOpen={onOpen}>
+      <span>
+        {query.data
+          ? query.data.title || t("vocabulary.untitled_note")
+          : t("slots.open_note")}
+      </span>
+      {reason && (
+        <small className="muted">{result ? reason : ` · ${reason}`}</small>
+      )}
+    </ResultNoteLink>
   );
 }
 export type Callbacks = {
@@ -83,6 +129,9 @@ export type Callbacks = {
   formSubmitDisabled?: boolean;
   commandLabel?: (id: string, title: string, args: Args) => string;
   displayText?: (text: string) => string;
+  result?: boolean;
+  onOpenNote?: () => void;
+  primaryCommand?: string;
   onSuggestion?: (id: string) => void;
   onCommand?: (id: string, args: Args) => void;
   onForm?: (args: Args) => void;
@@ -116,23 +165,36 @@ export function VocabularyItem({
       ) : (
         <p>{String(value.text ?? value.markdown)}</p>
       );
-    case "notes":
+    case "notes": {
+      const notes = (value.ids ?? value.items) as (
+        string | { id: string; reason?: string }
+      )[];
+      if (!notes.length) return null;
+      const List = actions.result ? "ul" : "div";
+      const Item = actions.result ? "li" : "div";
       return (
-        <div>
-          {((value.ids ?? value.items) as unknown[]).map((item, index) => {
-            if (typeof item === "string")
-              return <NoteReference key={`${item}-${index}`} id={item} />;
-            const { id, reason } = item as { id: string; reason?: string };
+        <List
+          className={actions.result ? styles.resultNotes : undefined}
+          role={actions.result ? "list" : undefined}
+          aria-label={actions.result ? t("review.notes") : undefined}
+        >
+          {notes.map((item, index) => {
+            const { id, reason } =
+              typeof item === "string" ? { id: item } : item;
             return (
-              <NoteReference
-                key={index}
-                id={id}
-                reason={reason && (actions.displayText?.(reason) ?? reason)}
-              />
+              <Item key={`${id}-${index}`}>
+                <NoteReference
+                  id={id}
+                  reason={reason && (actions.displayText?.(reason) ?? reason)}
+                  result={actions.result}
+                  onOpen={actions.onOpenNote}
+                />
+              </Item>
             );
           })}
-        </div>
+        </List>
       );
+    }
     case "pill":
       return (
         <button
@@ -146,6 +208,13 @@ export function VocabularyItem({
     case "command":
       return (
         <button
+          className={
+            actions.result
+              ? actions.primaryCommand === value.id
+                ? "primary"
+                : "button"
+              : undefined
+          }
           disabled={!actions.onCommand}
           onClick={() =>
             actions.onCommand?.(String(value.id), (value.args ?? {}) as Args)

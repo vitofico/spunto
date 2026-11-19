@@ -9,7 +9,7 @@ from spunto.core.notes import Notes
 from spunto.host import Ctx
 
 hosted = hosted_fixture
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 BASE = "/api/v1/plugins/library-stats"
 
 

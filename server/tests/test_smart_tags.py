@@ -5,7 +5,7 @@ import re
 
 import httpx
 import pytest
-from test_plugins_ai import FakeProvider
+from ai_fake import FakeProvider
 
 from spunto.ai.errors import AIError
 from spunto.ai.gateway import Gateway
@@ -66,9 +66,7 @@ async def proposals(host):
 
 
 def chat_prompt(provider):
-    return [request for request in provider.requests if "messages" in request][-1]["messages"][1][
-        "content"
-    ]
+    return provider.chat_bodies[-1]["messages"][1]["content"]
 
 
 async def test_chat_only_learns_real_owner_usage_inside_fences(smart):

@@ -19,6 +19,17 @@ from spunto.ai.passages import evidence, source_passages
 from spunto.ai.profiles import CAPABILITIES, Profile
 from spunto.ai.queue import ProfileQueue
 from spunto.ai.quota import QuotaExceeded, Usage, action
+from spunto.store.db import now_ms
+
+JSON_OBJECT_TTL_MS = 24 * 60 * 60 * 1000
+
+
+def _active_quirk(raw):
+    value = json.loads(raw)
+    # Older entries have no expiry and may have been stored after a failed retry.
+    if value.get("mode") == "json_object" and value.get("expires_at", 0) <= now_ms():
+        return {}
+    return value
 
 
 class Probe(Output):
@@ -237,7 +248,7 @@ class Gateway:
             return value
         async with self.store.read() as conn:
             rows = await conn.execute_fetchall("SELECT value FROM meta WHERE key=?", (key,))
-        return json.loads(rows[0][0]) if rows else {}
+        return _active_quirk(rows[0][0]) if rows else {}
 
     async def _structured(
         self,
@@ -448,6 +459,10 @@ class Gateway:
                             mime=mime,
                         )
                         value = parse_output(output, raw, {n["id"] for n in actual})
+                        if fallback:
+                            await self._quirk(
+                                p, model, {**quirk, "expires_at": now_ms() + JSON_OBJECT_TTL_MS}
+                            )
                         return value, attempt > 0 or fallback
                     except AIError as exc:
                         if (
@@ -457,9 +472,7 @@ class Gateway:
                             and quirk.get("mode") != "json_object"
                         ):
                             fallback = True
-                            quirk = await self._quirk(
-                                p, model, {"mode": "json_object", "schema_prompt": True}
-                            )
+                            quirk = {"mode": "json_object", "schema_prompt": True}
                             continue
                         if exc.category != "validation":
                             raise
@@ -483,7 +496,7 @@ class Gateway:
                             )
                         else:
                             invalid.add("meaning")
-                        if isinstance(exc, ValidationError) and "missing" in types:
+                        if isinstance(exc, ValidationError) and "missing" in types and not fallback:
                             quirk = await self._quirk(p, model, {**quirk, "schema_prompt": True})
                     break
             logging.getLogger("spunto.ai").warning(
@@ -641,7 +654,7 @@ class Gateway:
             "health": self.health,
             "stats": [dict(r) for r in rows],
             "quota": await self.quota.status() if self.quota else None,
-            "quirks": [json.loads(r["value"]) for r in quirks],
+            "quirks": [quirk for r in quirks if (quirk := _active_quirk(r["value"]))],
             "model_selection": self.selection.status(),
         }
 

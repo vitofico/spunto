@@ -202,10 +202,10 @@ internal fun DecisionSavedOutput(model: SpuntoViewModel, ids: JsonArray, reviewi
     Text(stringResource(if (reviewing) R.string.decision_outcome_saved else R.string.decision_saved),
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     noteIds.forEachIndexed { index, id ->
-        if (id in available) TextButton(onClick = { onNote(id) }) {
-            Text(stringResource(if (reviewing && index == 0) R.string.decision_open_outcome else R.string.decision_open_original))
-        }
+        val note = notes?.firstOrNull { it.id == id && !it.trashed } ?: return@forEachIndexed
+        ResultNoteLink(stringResource(if (reviewing && index == 0) R.string.decision_open_outcome else R.string.decision_open_original), note.title) { onNote(id) }
     }
+
     if (notes != null && available.size < noteIds.size) {
         Text(stringResource(R.string.decision_saved_sync), style = MaterialTheme.typography.bodySmall)
         DecisionSyncAction(model)

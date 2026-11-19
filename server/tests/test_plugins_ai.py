@@ -1,13 +1,10 @@
 """Real SQLite and fake ASGI provider acceptance for the four M4 plugins."""
 
-import asyncio
 import json
-import re
 
 import httpx
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from ai_fake import FakeProvider
 
 from spunto.ai.errors import AIError
 from spunto.ai.gateway import Gateway
@@ -23,82 +20,6 @@ from spunto.plugins import ask, label_suggestions, related, semantic_search
 pytestmark = pytest.mark.anyio
 OWNER = Principal("owner", "session", "Owner", "write", private_ok=True)
 AI_PLUGINS = ("label-suggestions", "semantic-search", "related", "ask")
-
-
-class FakeProvider:
-    """Only an in-memory ASGI app; these fixtures cannot reach live providers."""
-
-    def __init__(self):
-        self.mode = "valid"
-        self.label_answer = {"labels": [{"path": "project/Spunto", "confidence": 0.95}]}
-        self.requests = []
-        self.ask_answer = None
-        self.action_plan = None
-        self.on_chat = None
-        self.app = FastAPI()
-        self.app.post("/v1/chat/completions")(self.chat)
-        self.app.post("/v1/embeddings")(self.embed)
-
-    async def failure(self):
-        if self.mode == "slow":
-            await asyncio.sleep(0.2)
-        if self.mode == "500":
-            return JSONResponse({}, status_code=500)
-        return None
-
-    async def chat(self, request: Request):
-        body = await request.json()
-        self.requests.append(body)
-        if result := await self.failure():
-            return result
-        if self.mode == "reject-schema" and body["response_format"]["type"] == "json_schema":
-            return JSONResponse({}, status_code=400)
-        if self.on_chat:
-            await self.on_chat()
-        prompt = body["messages"][1]["content"]
-        if "Plan a note action" in prompt:
-            answer = self.action_plan or {
-                "kind": "question",
-                "target_ids": [],
-                "selector": "",
-                "body": "",
-                "before": "",
-                "after": "",
-            }
-        elif "Suggest up to three" in prompt:
-            answer = self.label_answer
-        elif "Question:" in prompt:
-            ids = re.findall(r'<note id="([^"]+)"', prompt)
-            answer = self.ask_answer or {
-                "found": True,
-                "answer": "Spunto uses SQLite.",
-                "citations": ids[:1],
-            }
-        else:
-            answer = {"ok": True}
-        if self.mode in {"prose", "reject-schema"}:
-            content = "This is prose rather than structured output."
-        elif self.mode == "wrong-types":
-            content = json.dumps({"found": "yes", "answer": 42, "citations": "wrong"})
-        elif self.mode == "invented-ids":
-            content = json.dumps({"found": True, "answer": "Invented", "citations": ["invented"]})
-        elif self.mode == "label-spaces":
-            content = json.dumps({"labels": [{"path": "has spaces", "confidence": 0.95}]})
-        else:
-            content = json.dumps(answer)
-        return {"choices": [{"finish_reason": "stop", "message": {"content": content}}]}
-
-    async def embed(self, request: Request):
-        body = await request.json()
-        self.requests.append(body)
-        if result := await self.failure():
-            return result
-        # Modes concerning structured text have equivalent malformed-vector
-        # fixtures for embedding-only plugins, rather than irrelevant chat calls.
-        vector = [1.0, 0.2, 0.1]
-        if self.mode in {"prose", "wrong-types", "invented-ids", "label-spaces", "reject-schema"}:
-            vector = ["invalid", 0.2, 0.1]
-        return {"data": [{"index": i, "embedding": vector} for i, _ in enumerate(body["input"])]}
 
 
 @pytest.fixture
@@ -245,7 +166,7 @@ async def test_ask_grounded_transient_result_sanitized_and_owner_save_idempotent
     note = await Notes(host.store, OWNER).get(saved["ids"][0])
     assert note["machine"] and note["origin"] == "plugin" and note["source"]["ref"] == "ask"
     assert target["body"] in json.dumps(provider.requests)
-    prompt = next(r for r in provider.requests if r.get("messages"))["messages"][1]["content"]
+    prompt = provider.chat_bodies[0]["messages"][1]["content"]
     assert '<note id="' in prompt
     with pytest.raises(ValueError):
         await ask.ask(ctx, "x" * 501)
@@ -276,7 +197,16 @@ async def test_related_and_semantic_bounded_visibility_and_no_annotations(ai_hos
 
 @pytest.mark.parametrize("plugin_id", AI_PLUGINS)
 @pytest.mark.parametrize(
-    "mode", ["prose", "wrong-types", "invented-ids", "label-spaces", "reject-schema", "slow", "500"]
+    "mode",
+    [
+        "prose",
+        "ask_wrong_types",
+        "ask_invented_ids",
+        "label_spaces",
+        "reject_schema",
+        "slow",
+        "500",
+    ],
 )
 async def test_every_plugin_provider_failures_leave_owner_and_derived_data_unchanged(
     ai_host, plugin_id, mode
@@ -291,6 +221,8 @@ async def test_every_plugin_provider_failures_leave_owner_and_derived_data_uncha
             update={"timeout_s": 0.08}
         )
     provider.mode = mode
+    if mode == "reject_schema":
+        provider.response_format = "json_object"
     ctx = Ctx(host, plugin_id, principal=OWNER)
     if plugin_id == "label-suggestions":
         host.settings.ai_embed_profile = None

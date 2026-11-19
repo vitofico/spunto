@@ -1,10 +1,12 @@
+import asyncio
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
+import psycopg
 import pytest
 
 from spunto.api.deps import Services
@@ -13,6 +15,76 @@ from spunto.main import create_app, startup
 
 PUBLIC_URL = "http://spunto.test:8080"
 CLIENT = "203.0.113.7"  # a documentation address, standing in for a browser on the LAN
+
+
+SYNTHETIC_ISSUER = "http://127.0.0.1:18082"
+
+
+@dataclass(eq=False)
+class HostedRows:
+    admin: str | None = field(default=None, repr=False)
+    subjects: list[str] = field(default_factory=list)
+    receipts: list[tuple[str, str]] = field(default_factory=list)
+
+    async def remove(self, conn):
+        if self.receipts:
+            receipt_ids, account_ids = zip(*self.receipts, strict=True)
+            await conn.execute(
+                "DELETE FROM public.spunto_account_closure AS receipt "
+                "USING unnest(%s::text[],%s::text[]) AS owned(id,user_id) "
+                "WHERE receipt.id=owned.id AND receipt.user_id=owned.user_id",
+                (list(receipt_ids), list(account_ids)),
+            )
+        if self.subjects:
+            owners = (SYNTHETIC_ISSUER, self.subjects)
+            await conn.execute(
+                "DELETE FROM public.spunto_workspace WHERE created_by IN ("
+                "SELECT id FROM public.spunto_account WHERE issuer=%s AND subject=ANY(%s))",
+                owners,
+            )
+            await conn.execute(
+                "DELETE FROM public.spunto_account WHERE issuer=%s AND subject=ANY(%s)", owners
+            )
+
+    async def clean(self):
+        if self.admin and (self.subjects or self.receipts):
+            async with await psycopg.AsyncConnection.connect(self.admin) as conn:
+                await self.remove(conn)
+
+
+@pytest.fixture(scope="session")
+def pending_hosted_rows():
+    pending = []
+    yield pending
+    # Fallback for setup/teardown failures. Entries leave this list only after commit.
+    if pending:
+
+        async def clean_pending():
+            for rows in pending:
+                await rows.clean()
+
+        asyncio.run(clean_pending())
+
+
+@pytest.fixture
+def hosted_rows():
+    return HostedRows()
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items):
+    required = {"pg", "pg_admin_url", "hosted", "browsers", "operator_accounts"}
+    missing = [
+        item.nodeid
+        for item in items
+        if (
+            required.intersection(item.fixturenames)
+            or (item.path.name == "test_sqlite_import.py" and "target" in item.fixturenames)
+        )
+        and item.get_closest_marker("postgres") is None
+    ]
+    if missing:
+        raise pytest.UsageError("Missing @pytest.mark.postgres:\n" + "\n".join(missing))
 
 
 @pytest.fixture

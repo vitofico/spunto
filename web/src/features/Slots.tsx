@@ -611,7 +611,7 @@ export function canRunOnNote(plugin: Plugin, command: string, note?: Note) {
   if (note.trashed) return false;
   if (plugin.id === "agent-inbox" && command === "mark-reviewed")
     return (
-      (note.origin === "agent" || note.updated_via_agent) &&
+      (note.source?.kind === "agent" || note.updated_via_agent) &&
       !note.annotations?.some(
         (item) => item.plugin === plugin.id && item.kind === "member:reviewed",
       )
@@ -657,6 +657,7 @@ export function PluginCommands({
   pluginId,
   onChoose,
   onResult,
+  onOpenNote,
   inPalette,
 }: {
   query?: string;
@@ -667,6 +668,7 @@ export function PluginCommands({
   pluginId?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
+  onOpenNote?: () => void;
   /** Rows look and line up like the palette's own rows. */
   inPalette?: boolean;
 }) {
@@ -682,6 +684,19 @@ export function PluginCommands({
   const [active, setActive] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [origin, setOrigin] = useState<CommandOrigin>();
+  const list = useRef<HTMLDivElement>(null);
+  const returnTo = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (result || !returnTo.current) return;
+    const key = returnTo.current;
+    returnTo.current = undefined;
+    const rows =
+      list.current?.querySelectorAll<HTMLButtonElement>("[data-command-key]");
+    if (rows)
+      Array.from(rows)
+        .find((row) => row.dataset.commandKey === key)
+        ?.focus();
+  }, [result]);
   const currentQuery = useRef(query);
   currentQuery.current = query;
   const commandLifetime = useRef({
@@ -832,6 +847,12 @@ export function PluginCommands({
           ({ command, at }) =>
             places.some((place) => at.includes(place)) &&
             !skipCommands.includes(`${p.id}/${command.id}`) &&
+            !(
+              p.id === "agent-inbox" &&
+              p.origin !== "operator" &&
+              command.id === "mark-reviewed" &&
+              manifest.data?.features?.includes("agent_review_versioned")
+            ) &&
             (!(noteId && at.includes("note-actions")) ||
               canRunOnNote(p, command.id, note)) &&
             (p.id !== "links" ||
@@ -947,13 +968,18 @@ export function PluginCommands({
         <CommandResult
           value={result}
           origin={origin}
-          onDismiss={() => setResult(null)}
+          onOpenNote={onOpenNote}
+          onDismiss={() => {
+            if (origin) returnTo.current = `${origin.plugin}/${origin.command}`;
+            setResult(null);
+          }}
         />
       </Suspense>
     );
   if (!commands.length && !waiting.length) return null;
   return (
     <div
+      ref={list}
       className={slash ? styles.slash : inPalette ? "palette-group" : undefined}
       role={slash ? "listbox" : undefined}
       aria-label={slash ? t("slots.commands") : undefined}
@@ -962,6 +988,7 @@ export function PluginCommands({
         <button
           className={inPalette ? "palette-row" : styles.command}
           key={`${c.plugin}/${c.id}`}
+          data-command-key={`${c.plugin}/${c.id}`}
           data-ask-question={
             (c.plugin === "ask" &&
               c.id === "ask" &&

@@ -107,33 +107,43 @@ export function Palette({
   }, [query]);
   useEffect(() => {
     const previous = restoreFocus ?? (document.activeElement as HTMLElement);
-    input.current?.focus();
-    return () => previous?.focus();
+    if (!initialResult) input.current?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
   }, []);
+  const dismissResult = () => {
+    setResult(null);
+    input.current?.focus();
+  };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector("dialog[open]")) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        if (result) setResult(null);
+        if (result) dismissResult();
         else onClose();
       }
       if (e.key === "Tab") {
         const dialog = input.current?.closest("[role=dialog]");
         const controls = [
           ...(dialog?.querySelectorAll<HTMLElement>(
-            'input:not([type="hidden"]):enabled,button:enabled:not([tabindex="-1"]),a[href],select:enabled,textarea:enabled',
+            'input:not([type="hidden"]):enabled,button:enabled,a[href],select:enabled,textarea:enabled,summary',
           ) ?? []),
-        ];
-        const first = controls[0],
-          last = controls.at(-1);
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
+        ].filter(
+          (control) => control.tabIndex >= 0 && control.getClientRects().length,
+        );
+        const ordered = e.shiftKey ? controls.reverse() : controls;
+        const from = document.activeElement;
+        const direction = e.shiftKey
+          ? Node.DOCUMENT_POSITION_PRECEDING
+          : Node.DOCUMENT_POSITION_FOLLOWING;
+        const next = ordered.find(
+          (control) =>
+            from && from.compareDocumentPosition(control) & direction,
+        );
+        e.preventDefault();
+        (next ?? ordered[0])?.focus();
       }
     };
     document.addEventListener("keydown", key);
@@ -200,7 +210,7 @@ export function Palette({
           <input
             ref={input}
             aria-label={t("app.search_and_commands")}
-            aria-controls="palette-options"
+            aria-controls={result ? undefined : "palette-options"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("palette.search_notes_labels_and_actions")}
@@ -250,13 +260,12 @@ export function Palette({
             <CommandResult
               value={result}
               origin={origin}
+              onOpenNote={onClose}
+              surroundingTitle={query}
               onDismiss={
                 result === true && origin?.plugin === "links"
                   ? onClose
-                  : () => {
-                      setResult(null);
-                      input.current?.focus();
-                    }
+                  : dismissResult
               }
             />
           </div>

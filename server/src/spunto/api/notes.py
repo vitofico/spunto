@@ -120,6 +120,10 @@ class Flags(Input):
         return self
 
 
+class Adopt(Input):
+    base_version: int = Field(ge=1, strict=True)
+
+
 @router.get("/notes", response_model=Page, response_model_exclude_unset=True)
 async def list_notes(
     principal: PrincipalDep,
@@ -228,6 +232,16 @@ async def flag_note(id: str, body: Flags, principal: PrincipalDep, services: Ser
         if (value := getattr(body, f"{name}_at")) is not None
     }
     return await Notes(services.store, principal).flags(id, flags, clocks)
+
+
+@router.post(
+    "/notes/{id}/adopt",
+    response_model=Note,
+    response_model_exclude_unset=True,
+    responses={409: {"description": "The displayed revision changed or no longer needs adoption"}},
+)
+async def adopt_note(id: str, body: Adopt, principal: PrincipalDep, services: ServicesDep):
+    return await Notes(services.store, principal).adopt(id, body.base_version)
 
 
 @router.delete("/notes/{id}", status_code=204)

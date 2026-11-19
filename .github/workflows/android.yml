@@ -1,11 +1,8 @@
 name: Android
 
 on:
-  push:
-    branches: [main]
-    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   pull_request:
-    paths: ["android/**", "server/**", "web/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
+    paths: ["android/**", "server/**", ".dockerignore", "spec/**", "scripts/check-ci", "scripts/check-android-native", "scripts/check-generated.py", "scripts/check-apk-size.py", "scripts/android-version.py", "scripts/android-release.py", "scripts/publish-release.py", "scripts/check-apk-reproducibility.py", "scripts/reproducibility-requirements.txt", "scripts/tests/**", "scripts/check-translations.py", "scripts/new-translation", "distribution/**", "fastlane/**", ".github/workflows/android.yml", ".github/workflows/release.yml", ".github/workflows/android-recovery.yml"]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -48,6 +45,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
         with:
           packages: "platform-tools platforms;android-35 build-tools;34.0.0"
@@ -104,6 +104,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
         with:
           packages: "platform-tools platforms;android-35 build-tools;34.0.0"
@@ -127,8 +130,8 @@ jobs:
           mkdir -p "$ANDROID_AVD_HOME"
           printf 'ANDROID_AVD_HOME=%s\n' "$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           sudo chmod a+rw /dev/kvm
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libpulse0
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install --no-install-recommends -y libpulse0
           # The SDK host occasionally serves an incomplete ZIP. Retry package
           # installation only; failing tests are never rerun automatically.
           for attempt in 1 2 3; do

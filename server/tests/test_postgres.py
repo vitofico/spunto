@@ -20,9 +20,9 @@ from spunto.core.notes import Notes
 from spunto.core.plugin_notes import PluginNotes
 from spunto.host import Ctx, Host
 from spunto.store.db import now_ms
-from spunto.store.postgres import PostgresStore, _qmarks, _translate
+from spunto.store.postgres import _COLUMNS, PostgresStore, _qmarks, _translate
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 
 
 async def test_commit_cancellation_preserves_data_and_dispatches_event(pg, monkeypatch):
@@ -173,6 +173,11 @@ async def test_notes_create_edit_list_search_revisions_flags_and_delete(pg):
     await domain.delete(created["id"])
     assert not (await domain.list(view="all"))["notes"]
 
+    strong = await domain.create("Synthetic budget plan plan plan")
+    weak = await domain.create("Synthetic budget plan beside unrelated filler words")
+    ranked = await domain.search("plan")
+    assert [hit["id"] for hit in ranked["hits"]] == [strong["id"], weak["id"]]
+
 
 async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, pg_admin_url, settings):
     root, bounds, users, spaces, _ = pg
@@ -312,7 +317,7 @@ async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, pg_adm
 async def test_postgres_ask_transcript_follow_up_and_atomic_evidence_save(
     pg, settings, monkeypatch
 ):
-    from test_plugins_ai import FakeProvider
+    from ai_fake import FakeProvider
 
     from spunto.plugins import ask
 
@@ -362,7 +367,7 @@ async def test_postgres_ask_transcript_follow_up_and_atomic_evidence_save(
         allocated = await ask.ask(ctx, start=True)
         continuation = next(item["args"] for item in allocated["items"] if item.get("id") == "ask")
         first = await ask.ask(ctx, "When is the contralto rehearsal?", **continuation)
-        content = next(r for r in provider.requests if "messages" in r)["messages"][1]["content"]
+        content = provider.chat_bodies[0]["messages"][1]["content"]
         assert "18:45" in content and outside["id"] not in content
         assert "PRIVATE-OTHER-SPACE" not in content
         save = next(item["args"] for item in first["items"] if item.get("id") == "save-answer")
@@ -491,7 +496,7 @@ def test_parameter_translation_preserves_literals():
     assert args == ["x", "X", 1]
 
 
-def test_ranked_search_translation_scores_without_fts5_rank():
+def test_ranked_search_translation_preserves_query_parameters():
     sql, args, _ = _translate(
         "SELECT id FROM (SELECT n.id,n.updated_at,note_fts.rank AS score FROM note n"
         " JOIN note_fts ON note_fts.rowid=n.rowid WHERE note_fts MATCH ? AND n.trashed_at IS NULL"
@@ -500,7 +505,6 @@ def test_ranked_search_translation_scores_without_fts5_rank():
         ["plan"],
     )
     assert "note_fts.rank" not in sql
-    assert "-ts_rank_cd(note_fts.document,to_tsquery('simple',%s)) AS score" in sql
     assert sql.count("%s") == len(args) == 3
     assert len(set(args)) == 1
 
@@ -679,6 +683,20 @@ async def test_cancelled_writer_rolls_back_and_pool_context_does_not_leak(pg):
 
 
 async def test_runtime_rejects_admin_role_and_direct_cross_workspace_writes(pg):
+    async with await psycopg.AsyncConnection.connect(
+        os.environ["SPUNTO_TEST_POSTGRES_ADMIN_URL"]
+    ) as conn:
+        for table, columns in _COLUMNS.items():
+            rows = await (
+                await conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='spunto' "
+                    "AND table_name=%s AND column_name NOT IN ('workspace_id','rowid') "
+                    "ORDER BY ordinal_position",
+                    (table,),
+                )
+            ).fetchall()
+            assert [row[0] for row in rows] == columns, table
     from spunto.errors import OperatorError
 
     _, bounds, users, spaces, runtime = pg

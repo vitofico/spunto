@@ -176,8 +176,13 @@ def test_unreadable_secret_file_names_the_variable(env, tmp_path):
     assert "cannot be read (No such file or directory)" in message
 
 
-def test_password_hash_must_be_argon2id(env, tmp_path):
-    good = hash_now("correct horse battery")
+@pytest.fixture(scope="module")
+def valid_owner_hash():
+    return hash_now("correct horse battery")
+
+
+def test_password_hash_must_be_argon2id(env, tmp_path, valid_owner_hash):
+    good = valid_owner_hash
     env(SPUNTO_OWNER_PASSWORD_HASH=good)
     assert load_settings().owner_password_hash == good
 
@@ -193,11 +198,11 @@ def test_password_hash_must_be_argon2id(env, tmp_path):
     assert "sesame-plaintext" not in message
 
 
-def test_password_and_hash_together_are_refused(env):
+def test_password_and_hash_together_are_refused(env, valid_owner_hash):
     message = error_for(
         env,
         SPUNTO_OWNER_PASSWORD="correct horse battery",
-        SPUNTO_OWNER_PASSWORD_HASH=hash_now("correct horse battery"),
+        SPUNTO_OWNER_PASSWORD_HASH=valid_owner_hash,
     )
     assert "Set SPUNTO_OWNER_PASSWORD or SPUNTO_OWNER_PASSWORD_HASH, not both" in message
 

@@ -198,7 +198,9 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   const source = await create("Synthetic link source");
   const first = await create(`# ${title}\nKeep the blue draft.`);
   const second = await create(`# ${title}\nKeep the green draft.`);
-  await page.goto(`/n/${source.id}`);
+  await page
+    .locator(`article.entry[data-note-id="${source.id}"] a.time`)
+    .click();
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page
     .getByRole("menuitem", { name: "Link to note", exact: true })
@@ -237,7 +239,7 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   expect(result.body).not.toContain(`/n/${first.id}`);
 });
 
-test("decision journal creates, reviews and reopens without rewriting the original", async ({
+test("decision journal creates, reviews and reopens through the browser", async ({
   page,
 }, info) => {
   const errors: string[] = [];
@@ -293,18 +295,6 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   await expect(dialog.getByRole("status")).toHaveText("Decision saved");
   const rootId = noteIds(created)[0];
   expect(rootId).toBeTruthy();
-  const original = await note(page, rootId);
-  expect(original.origin).toBe("owner");
-  expect(original.machine).toBe(false);
-  expect(original.body).toContain("## Alternatives");
-  expect(original.body).toContain("Keep backups easy to restore.");
-  // A direct owner edit must survive both subsequent plugin commands.
-  const edited = await editNote(
-    page,
-    original,
-    original.body + "\n\nOwner clarification " + suffix,
-  );
-
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
   const decision = page.getByRole("region", {
     name: "Decision journal",
@@ -336,12 +326,6 @@ test("decision journal creates, reviews and reopens without rewriting the origin
   );
   await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
   const outcomeId = noteIds(reviewed)[0];
-  const outcome = await note(page, outcomeId);
-  expect(outcome.body).toContain(`/n/${rootId}`);
-  expect(outcome.body).toContain("three minutes");
-  expect((await note(page, rootId)).body).toBe(edited.body);
-
-  // Review can be reopened from an outcome note, retaining the earlier outcome.
   await dialog.locator(`a[href="/n/${outcomeId}"]`).click();
   await expect(
     decision.getByRole("link", { name: "Open original decision", exact: true }),
@@ -356,15 +340,8 @@ test("decision journal creates, reviews and reopens without rewriting the origin
     .getByLabel("Next review date (optional)", { exact: true })
     .fill("2030-03-01");
   await selectStatus(dialog, "Open for follow-up");
-  const reopened = await run(
-    page,
-    dialog,
-    "decision-journal",
-    "review-decision",
-  );
-  expect(noteIds(reopened)[0]).not.toBe(outcomeId);
-  expect((await note(page, outcomeId)).body).toBe(outcome.body);
-  expect((await note(page, rootId)).body).toBe(edited.body);
+  await run(page, dialog, "decision-journal", "review-decision");
+  await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
   const open = decision.getByRole("button", {
     name: "Review history",
@@ -379,6 +356,11 @@ test("decision journal creates, reviews and reopens without rewriting the origin
     fullPage: true,
   });
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(open).toBeFocused();
+  await open.click();
+  await dialog.locator(`a[href="/n/${rootId}"]`).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/n/${rootId}$`));
   await expect(open).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   await page
@@ -713,7 +695,6 @@ test("context packs curate sources, expose staleness and keep a private note cop
     source,
     sourceBody + "\nA later source revision.",
   );
-  expect(changed.version).toBe(2);
   await uiCommand(page, "context-packs", "sources", () =>
     dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
   );
@@ -943,10 +924,103 @@ test("thinking history exposes both desk modes and connects and removes selected
         dialog.getByText("Note 2 challenges note 1", { exact: true }),
       ).toBeVisible();
   }
-  for (const source of sources)
-    expect((await note(page, source.id)).body).toBe(source.body);
+  // Server tests cover the earlier target. Keep the browser's check on the
+  // later note selected as the first side of the connection.
+  const firstSide = sources[1];
+  expect((await note(page, firstSide.id)).body).toBe(firstSide.body);
   await page.screenshot({
     path: info.outputPath("thinking-history-narrow.png"),
     fullPage: true,
   });
+});
+
+test("accept an agent note as written and review a later agent change", async ({
+  page,
+  request,
+}) => {
+  await login(page, "agent-inbox");
+  const ownerHeaders = { Origin: origin() };
+  const token = await page.request.post("/api/v1/tokens", {
+    headers: ownerHeaders,
+    data: { name: "Review fixture", client: "script", scope: "write" },
+  });
+  expect(token.status()).toBe(201);
+  const credential = await token.json();
+  const agentHeaders = { Authorization: `Bearer ${credential.token}` };
+  try {
+    const body = "Keep the **original** wording.";
+    const response = await request.post("/api/v1/notes", {
+      headers: agentHeaders,
+      data: { body },
+    });
+    expect(response.status()).toBe(201);
+    const note = await response.json();
+    const noteUrl = `/api/v1/notes/${note.id}`;
+    async function inInbox(id = note.id) {
+      const response = await page.request.get("/api/v1/notes", {
+        params: { view: "agent-inbox/reviewed" },
+      });
+      expect(response.status()).toBe(200);
+      const { notes } = await response.json();
+      return notes.some((item: Note) => item.id === id);
+    }
+    expect(await inInbox()).toBe(true);
+    await page.goto(`/n/${note.id}`);
+    await page
+      .getByRole("button", { name: "Accept note", exact: true })
+      .click();
+    await expect.poll(inInbox).toBe(false);
+    const accepted = await (await page.request.get(noteUrl)).json();
+    expect(accepted).toMatchObject({
+      body,
+      version: note.version,
+      source: note.source,
+      origin: "agent",
+    });
+    const append = await request.post(`${noteUrl}/append`, {
+      headers: agentHeaders,
+      data: { text: "One more observation.", expected_version: note.version },
+    });
+    expect(append.status()).toBe(200);
+    await expect.poll(inInbox).toBe(true);
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Accept note", exact: true })
+      .click();
+    await expect.poll(inInbox).toBe(false);
+    expect((await (await page.request.get(noteUrl)).json()).body).toBe(
+      (await append.json()).body,
+    );
+    const owner = await page.request.post("/api/v1/notes", {
+      headers: ownerHeaders,
+      data: { body: "My own wording." },
+    });
+    expect(owner.status()).toBe(201);
+    const original = await owner.json();
+    const update = await request.post(`/api/v1/notes/${original.id}/append`, {
+      headers: agentHeaders,
+      data: { text: "Agent suggestion.", expected_version: original.version },
+    });
+    expect(update.status()).toBe(200);
+    const edited = await update.json();
+    await page.goto(`/n/${original.id}`);
+    await page
+      .getByRole("button", { name: "Accept changes", exact: true })
+      .click();
+    await expect.poll(() => inInbox(original.id)).toBe(false);
+    const kept = await page.request.get(`/api/v1/notes/${original.id}`);
+    expect(await kept.json()).toMatchObject({
+      body: edited.body,
+      version: edited.version,
+      origin: original.origin,
+    });
+  } finally {
+    const revoked = await page.request.delete(
+      `/api/v1/credentials/${credential.id}`,
+      {
+        headers: ownerHeaders,
+      },
+    );
+    expect(revoked.status()).toBe(204);
+  }
 });

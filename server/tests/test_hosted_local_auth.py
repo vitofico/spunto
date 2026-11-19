@@ -21,7 +21,7 @@ from spunto.auth.oidc import OIDCClient, OIDCSettings
 from spunto.config import Settings
 from spunto.hosted import create_hosted_app, hosted_startup
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 ORIGIN = "http://127.0.0.1:18081"
 PASSWORD = "synthetic local account password"
 REPLACEMENT = "synthetic replacement account password"

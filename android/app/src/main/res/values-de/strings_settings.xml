@@ -400,7 +400,7 @@
     <string name="settings_plugin_email_in_name">E-Mail-Eingang</string>
     <string name="settings_plugin_email_in_description">Speichere eingehende E-Mails ausgewählter Absender als Notizen.</string>
     <string name="settings_plugin_agent_inbox_name">Von Agenten</string>
-    <string name="settings_plugin_agent_inbox_description">Prüfe Notizen, die Agenten erstellt oder geändert haben.</string>
+    <string name="settings_plugin_agent_inbox_description">Prüfe Notizen, die Agenten erstellt oder bearbeitet haben, und nimm sie unverändert an.</string>
     <string name="settings_plugin_digest_name">Wochenrückblick</string>
     <string name="settings_plugin_digest_description">Jede Woche eine kurze Notiz zu deinen Einträgen: Themen, offene Fragen und lohnende Gedankengänge, jeweils mit den zugehörigen Notizen verknüpft.</string>
     <string name="settings_plugin_title_summary_name">Titel und Zusammenfassung</string>

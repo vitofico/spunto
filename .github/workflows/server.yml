@@ -4,19 +4,6 @@ name: Server
 # architectures, starts, backs up and restores. The release workflow calls this
 # too, so nothing ships that fails it.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "server/**"
-      - "web/**"
-      - ".dockerignore"
-      - "scripts/smoke-selfhost.sh"
-      - "scripts/check-image-size.py"
-      - "scripts/check-ci"
-      - "scripts/check-generated.py"
-      - ".github/workflows/server.yml"
-      - "android/core/design/generate-tokens.py"
-      - "android/core/design/src/main/java/io/theficos/spunto/core/design/Tokens.kt"
   pull_request:
     paths:
       - "server/**"
@@ -55,6 +42,7 @@ concurrency:
 
 jobs:
   web:
+    if: github.event_name != 'schedule'
     name: Web types, tests and budgets
     runs-on: ubuntu-24.04
     defaults:
@@ -79,9 +67,17 @@ jobs:
           version: "0.13.0"
       - run: npm install --global pnpm@12.11.2
       - name: Local and hosted web preflight
-        run: ../scripts/check-ci web
+        run: ../scripts/check-ci web --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/web.xml"
+      - name: Retain web test results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: web-unit-results
+          path: ${{ runner.temp }}/web.xml
+          if-no-files-found: error
+          retention-days: 3
 
   test:
+    if: github.event_name != 'schedule'
     name: Lint and test
     runs-on: ubuntu-24.04
     defaults:
@@ -103,9 +99,20 @@ jobs:
           version: "0.13.0" # the uv in server/Dockerfile
           enable-cache: true # keyed on server/uv.lock
       - name: Local and hosted server preflight
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/sqlite.xml
         run: ../scripts/check-ci server
+      - name: Retain SQLite JUnit results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sqlite-unit-results
+          path: ${{ runner.temp }}/sqlite.xml
+          if-no-files-found: error
+          retention-days: 3
 
   postgres:
+    if: github.event_name != 'schedule'
     name: PostgreSQL 18 isolation, hosted auth and recovery
     runs-on: ubuntu-24.04
     defaults:
@@ -181,14 +188,9 @@ jobs:
           SPUNTO_DATABASE_ROLE: spunto_runtime
           SPUNTO_IDENTITY_DATABASE_ROLE: spunto_identity
         run: uv run spunto database migrate
-      - name: Exercise real PostgreSQL and signed OIDC fixtures
+      - name: Exercise real PostgreSQL fixtures
         run: |
-          uv run pytest tests/test_postgres.py tests/test_hosted.py tests/test_oidc.py \
-            tests/test_hosted_local_auth.py tests/test_operator_workspace.py \
-            tests/test_sqlite_import.py tests/test_postgres_snapshot.py \
-            tests/test_library_stats_hosted.py \
-            tests/test_ask_writes.py::test_real_postgres_reviewed_edit_create_authoring_and_stale_undo \
-            --junitxml="$RUNNER_TEMP/postgres.xml" -ra
+          uv run pytest -m postgres --junitxml="$RUNNER_TEMP/postgres.xml" -ra
           python3 - <<'PY'
           import os
           import xml.etree.ElementTree as ET
@@ -197,6 +199,15 @@ jobs:
           assert cases, "PostgreSQL acceptance collected no tests"
           assert not report.findall(".//skipped"), "Real PostgreSQL acceptance must not skip"
           PY
+      - name: Retain PostgreSQL JUnit results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: postgres-tests
+          path: ${{ runner.temp }}/postgres.xml
+          if-no-files-found: error
+          retention-days: 3
+
 
   image:
     env:
@@ -224,6 +235,7 @@ jobs:
           platforms: arm64
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Export gzip OCI image
+        if: github.event_name != 'schedule'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -233,6 +245,7 @@ jobs:
           cache-from: type=gha,scope=server-${{ matrix.architecture }}
           cache-to: type=gha,mode=max,scope=server-${{ matrix.architecture }}
       - name: Enforce 150 MB compressed image budget
+        if: github.event_name != 'schedule'
         run: >-
           python3 scripts/check-image-size.py "$RUNNER_TEMP/spunto.oci.tar"
           --platform linux/${{ matrix.architecture }}
@@ -259,19 +272,20 @@ jobs:
           format: table
           timeout: 10m0s
       - run: scripts/smoke-selfhost.sh spunto:ci
+        if: github.event_name != 'schedule'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         with:
           node-version: "26.9.0"
       - name: Install pinned browser tooling
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 5
         working-directory: web
         run: |
           npm install --global pnpm@12.11.2
           pnpm install --frozen-lockfile
       - name: Pull matching browser engines and system libraries
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 10
         working-directory: web
         run: |
@@ -279,7 +293,7 @@ jobs:
           [[ "$PLAYWRIGHT_IMAGE" == *":v${version}-noble@"* ]]
           docker pull "$PLAYWRIGHT_IMAGE"
       - name: Start disposable browser server
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 2
         run: |
           docker run -d --name spunto-browser --read-only --tmpfs /tmp \
@@ -295,7 +309,7 @@ jobs:
           '
       - name: Chromium, Firefox and WebKit acceptance including collaboration
         id: browser_acceptance
-        if: matrix.architecture == 'amd64'
+        if: github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 22
         working-directory: web
         run: |
@@ -310,7 +324,7 @@ jobs:
             --project=chromium --project=firefox --project=webkit \
             --global-timeout=1200000
       - name: Remove disposable browser server
-        if: always() && matrix.architecture == 'amd64'
+        if: always() && github.event_name != 'schedule' && matrix.architecture == 'amd64'
         timeout-minutes: 1
         run: timeout 30s docker rm -f spunto-browser || true
       - name: Make browser failure evidence readable by the runner

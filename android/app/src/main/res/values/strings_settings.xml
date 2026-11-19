@@ -400,7 +400,7 @@
     <string name="settings_plugin_email_in_name">Email in</string>
     <string name="settings_plugin_email_in_description">Save email from the senders you choose as notes.</string>
     <string name="settings_plugin_agent_inbox_name">From agents</string>
-    <string name="settings_plugin_agent_inbox_description">Review notes agents created or changed.</string>
+    <string name="settings_plugin_agent_inbox_description">Review notes agents created or edited and accept them as they are.</string>
     <string name="settings_plugin_digest_name">Weekly digest</string>
     <string name="settings_plugin_digest_description">Each week, a short note on what you captured: themes, open questions and threads worth continuing, each linked to its notes.</string>
     <string name="settings_plugin_title_summary_name">Title and summary</string>

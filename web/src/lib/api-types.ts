@@ -445,6 +445,23 @@ export interface paths {
         patch: operations["edit_note_api_v1_notes__id__patch"];
         trace?: never;
     };
+    "/api/v1/notes/{id}/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adopt Note */
+        post: operations["adopt_note_api_v1_notes__id__adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notes/{id}/append": {
         parameters: {
             query?: never;
@@ -1015,6 +1032,11 @@ export interface components {
             transcribe?: string | null;
             /** Vision */
             vision?: string | null;
+        };
+        /** Adopt */
+        Adopt: {
+            /** Base Version */
+            base_version: number;
         };
         /** Append */
         Append: {
@@ -2331,6 +2353,48 @@ export interface operations {
                 };
             };
             /** @description Overlapping edit; conflict_id identifies the preserved incoming copy */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adopt_note_api_v1_notes__id__adopt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Adopt"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Note"];
+                };
+            };
+            /** @description The displayed revision changed or no longer needs adoption */
             409: {
                 headers: {
                     [name: string]: unknown;

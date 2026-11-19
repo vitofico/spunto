@@ -1,0 +1,23 @@
+{
+  "editor_meta": {
+    "sync_epoch": "e",
+    "workspace_role": "editor"
+  },
+  "viewer_meta": {
+    "sync_epoch": "e",
+    "workspace_role": "viewer"
+  },
+  "viewer_wait": {
+    "cursor": "e.0",
+    "changed": false,
+    "workspace_role": "viewer"
+  },
+  "viewer_reconcile": {
+    "epoch": "e",
+    "restore_ids": [],
+    "workspace_role": "viewer"
+  },
+  "read_only_push": {
+    "code": "read_only_space"
+  }
+}

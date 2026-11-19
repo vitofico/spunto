@@ -1,11 +1,13 @@
 """Bundled non-AI plugins and shared import contracts against real SQLite."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from spunto.api.errors import Problem
 from spunto.auth import tokens
 from spunto.auth.tokens import Principal
 from spunto.core.attachments import Attachments
@@ -91,16 +93,70 @@ async def test_agent_inbox_matches_latest_pat_and_review_is_synced(plugin_host):
         host.store, name="Fixture agent", client="fixture", scope="write"
     )
     agent = Notes(host.store, Principal(credential_id, "pat", "Fixture", "write"))
+    assert not (await agent.flags(note["id"], {"pinned": True}))["updated_via_agent"]
     note = await agent.append(note["id"], "agent addition")
+    note = await domain.flags(note["id"], {"pinned": False})
+    assert note["updated_via_agent"]
     ctx = Ctx(host, "agent-inbox")
     assert [n["id"] async for n in iter_notes(ctx, view="reviewed")] == [note["id"]]
-    validate_output(await agent_inbox.mark_reviewed(ctx, note["id"]))
+    history = await domain.revisions(note["id"])
+
+    async def mark(version=None):
+        args = {"note_id": note["id"]}
+        if version is not None:
+            args["base_version"] = version
+        return await host.invoke_command("agent-inbox", "mark-reviewed", args, principal=OWNER)
+
+    validate_output(await mark(note["version"]))
+    assert (await mark()) == {"type": "text", "text": "Marked reviewed"}
+    accepted = await domain.get(note["id"])
+    for key in ("body", "version", "origin", "source", "updated_via_agent", "updated_at"):
+        assert accepted[key] == note[key]
+    assert await domain.revisions(note["id"]) == history
     assert [n["id"] async for n in iter_notes(ctx, view="reviewed")] == []
     note = await domain.edit(note["id"], "owner revision", note["version"])
     await agent_inbox.changed(ctx, note["id"], note["version"])
     assert len(await rows(host, "SELECT * FROM annotation WHERE plugin_id='agent-inbox'")) == 1
-    note = await agent.append(note["id"], "new agent addition")
-    await agent_inbox.changed(ctx, note["id"], note["version"])
+    # This result is pending immediately, without depending on the note.saved job.
+    latest = await agent.append(note["id"], "new agent addition")
+    assert [n["id"] async for n in iter_notes(ctx, view="reviewed")] == [note["id"]]
+    with pytest.raises(Problem) as err:
+        await mark(note["version"])
+    assert err.value.code == "version_conflict"
+    await mark(latest["version"])
+    annotation = await rows(host, "SELECT * FROM annotation WHERE plugin_id='agent-inbox'")
+    await mark(latest["version"])
+    assert await rows(host, "SELECT * FROM annotation WHERE plugin_id='agent-inbox'") == annotation
+    await host.disable("agent-inbox")
+    await agent.append(note["id"], "agent addition while inbox disabled")
+    await host.enable("agent-inbox", permissions=host.manifests["agent-inbox"]["permissions"])
+    assert [n["id"] async for n in iter_notes(Ctx(host, "agent-inbox"), view="reviewed")] == [
+        note["id"]
+    ]
+
+
+async def test_agent_review_and_agent_edit_cannot_hide_the_new_revision(plugin_host):
+    host = plugin_host
+    credential_id, _ = await tokens.create(
+        host.store, name="Fixture agent", client="fixture", scope="write"
+    )
+    agent = Notes(host.store, Principal(credential_id, "pat", "Fixture", "write"))
+    note = await agent.create("Synthetic draft")
+    accept, appended = await asyncio.gather(
+        host.invoke_command(
+            "agent-inbox",
+            "mark-reviewed",
+            {"note_id": note["id"], "base_version": note["version"]},
+            principal=OWNER,
+        ),
+        agent.append(note["id"], "Unseen revision"),
+        return_exceptions=True,
+    )
+    assert isinstance(appended, dict) and appended["version"] == 2
+    assert accept == {"type": "text", "text": "Note accepted"} or (
+        isinstance(accept, Problem) and accept.code == "version_conflict"
+    )
+    ctx = Ctx(host, "agent-inbox")
     assert [n["id"] async for n in iter_notes(ctx, view="reviewed")] == [note["id"]]
 
 

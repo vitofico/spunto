@@ -400,7 +400,7 @@
     <string name="settings_plugin_email_in_name">Correo entrante</string>
     <string name="settings_plugin_email_in_description">Guarda como notas los correos que recibas de los remitentes que elijas.</string>
     <string name="settings_plugin_agent_inbox_name">De agentes</string>
-    <string name="settings_plugin_agent_inbox_description">Revisa las notas creadas o modificadas por agentes.</string>
+    <string name="settings_plugin_agent_inbox_description">Revisa las notas que han creado o editado los agentes y acéptalas tal como están.</string>
     <string name="settings_plugin_digest_name">Resumen semanal</string>
     <string name="settings_plugin_digest_description">Cada semana, una nota breve sobre lo que has capturado: temas, preguntas abiertas e hilos que continuar, con enlaces a sus notas.</string>
     <string name="settings_plugin_title_summary_name">Título y resumen</string>

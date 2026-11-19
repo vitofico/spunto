@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -42,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.serialization.json.*
@@ -367,15 +369,38 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  selected?.let { id -> outputs.firstOrNull { it.id==id && it.kind=="suggestion" }?.let { SuggestionDecisionDialog(model,proposalData(it),onNote) { selected=null } } }
 }
 
+@Composable internal fun ResultNoteLink(title:String,reason:String="",onOpen:()->Unit) {
+ OutlinedCard(onClick=onOpen,modifier=Modifier.fillMaxWidth().heightIn(min=56.dp)) {
+  Row(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s16,vertical=SpuntoSpacing.s12),
+   verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+   Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s4)) {
+    Text(title,style=MaterialTheme.typography.titleMedium,maxLines=3,overflow=TextOverflow.Ellipsis)
+    if(reason.isNotBlank()) Text(reason,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   }
+   Text("›",style=MaterialTheme.typography.titleLarge,modifier=Modifier.clearAndSetSemantics {})
+  }
+ }
+}
+
 @Composable private fun RoomReference(model:SpuntoViewModel,id:String,reason:String,onNote:(String)->Unit) {
  val resources=LocalContext.current.resources
- val note by remember(id) { model.repository.observe(id) }.collectAsState(null)
- if(note==null || note!!.trashed) Text(resources.getString(R.string.settings_note_unavailable),style=MaterialTheme.typography.bodySmall)
- else Column { TextButton(onClick={onNote(id)}) { Text(note!!.title.ifBlank { note!!.body.lineSequence().firstOrNull().orEmpty().take(100).ifBlank { resources.getString(R.string.settings_open_note) } }) };if(reason.isNotBlank()) Text(reason,style=MaterialTheme.typography.bodySmall) }
+ val loaded by remember(model,id) { model.repository.observe(id).map {it to true} }.collectAsState(null to false)
+ if(!loaded.second) return
+ val note=loaded.first?.takeUnless {it.trashed}
+ if(note==null) Text(resources.getString(R.string.settings_note_unavailable),style=MaterialTheme.typography.bodySmall)
+ else ResultNoteLink(note.title.ifBlank {note.body.lineSequence().firstOrNull().orEmpty().take(100).ifBlank {resources.getString(R.string.settings_open_note)}},reason) {onNote(id)}
+}
+
+internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):JsonObject {
+ if(header.isBlank() || component.string("type")!="markdown") return component
+ val field=if(component["text"]!=null) "text" else "markdown"
+ val body=component.string(field)
+ if(body.lineSequence().firstOrNull()?.trimEnd()!="# $header") return component
+ return JsonObject(component+(field to JsonPrimitive(body.substringAfter('\n',"").trimStart('\r','\n'))))
 }
 
 /** One renderer for bare arrays, stored payloads and live command envelopes. */
-@Composable fun RenderOutput(model:SpuntoViewModel,data:JsonElement,onNote:(String)->Unit,onResult:((JsonObject)->Unit)?=null,commandScope:CoroutineScope?=null,onProposalOpen:()->Unit={},hideSuggestion:String="",onRunning:(Boolean)->Unit={}) {
+@Composable fun RenderOutput(model:SpuntoViewModel,data:JsonElement,onNote:(String)->Unit,onResult:((JsonObject)->Unit)?=null,commandScope:CoroutineScope?=null,onProposalOpen:()->Unit={},hideSuggestion:String="",onRunning:(Boolean)->Unit={},headingShown:String="") {
  val catalog by model.catalog.collectAsState()
  val resources=LocalContext.current.resources
  val online by model.online.collectAsState()
@@ -418,7 +443,8 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value=resources.getString(R.string.settings_sync_to_review_this_suggestion) }
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   if(components.isEmpty() && command.isNotBlank()) Text(resources.getString(R.string.settings_this_result_has_no_preview_in_this),style=MaterialTheme.typography.bodySmall)
-  components.filterNot {it.string("type")=="pill" && hideSuggestion.isNotBlank() && it.string("suggestion_id")==hideSuggestion}.forEach { component ->
+  components.filterNot {it.string("type")=="pill" && hideSuggestion.isNotBlank() && it.string("suggestion_id")==hideSuggestion}.forEachIndexed { index,raw ->
+   val component=if(index==0) withoutRepeatedResultHeading(raw,headingShown) else raw
    if(component.string("type")=="form" && sourcePicker!=null && pickerSession!=null) {
     SourceNotePicker(model,sourcePicker,pickerSession,online,running,pickerRefresh,onQueryChanged={error=""}) {run(command,it)}
     if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
@@ -426,12 +452,12 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
    if(journal) when(component.string("type")) {
     "text" -> if(command=="journal") {
      Text(localizedJournalLabel(resources,component.string("text")))
-     return@forEach
+     return@forEachIndexed
     }
     "form" -> {
      DecisionForm(component["schema"]!!.jsonObject,command,initial,online && canWrite,running) {run(command,JsonObject(initial+it))}
      if(!online && !running) DecisionSyncAction(model)
-     return@forEach
+     return@forEachIndexed
     }
     "command" -> {
      if(online && canWrite) {
@@ -446,11 +472,11 @@ private fun proposalKind(resources:Resources,action:String)=when(action) { "add_
       }
       TextButton(onClick={run(action,args)},enabled=!running) {Text(label?.let(resources::getString) ?: component.string("title"))}
      }
-     return@forEach
+     return@forEachIndexed
     }
     "notes" -> if(command in setOf("record-decision","review-decision")) {
      DecisionSavedOutput(model,component["ids"] as? JsonArray ?: JsonArray(emptyList()),command=="review-decision",onNote)
-     return@forEach
+     return@forEachIndexed
     }
    }
    val output=if(wrapper.string("content_language").isBlank()) pluginFormComponent(resources,plugin,component) else component
@@ -529,24 +555,44 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
  var applyError by remember(result) {mutableStateOf("")}
  val focusManager=androidx.compose.ui.platform.LocalFocusManager.current
  val canWrite by model.workspaceCanWrite.collectAsState()
+ val locked=journalSubmitting || applying
+ val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
+ val title=if(plugin!=null && command!=null) localizedPluginCommand(resources,plugin,command,catalog)
+  else plugin?.let {localizedPluginName(resources,it,catalog)} ?: resources.getString(R.string.settings_tool_result)
+ val ask=result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null
+ val maximumHeight=(LocalConfiguration.current.screenHeightDp * 0.88f).dp
+ val height=if(ask) Modifier.height(maximumHeight) else Modifier.heightIn(max=maximumHeight)
  ModalBottomSheet(
-  onDismissRequest={if(!journalSubmitting) close()},scrimColor=MaterialTheme.colorScheme.scrim,
-  sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=journalResult(result),confirmValueChange={it!=SheetValue.Hidden || !journalSubmitting}),
+  onDismissRequest={if(!locked) close()},scrimColor=MaterialTheme.colorScheme.scrim,
+  containerColor=MaterialTheme.colorScheme.surface.copy(alpha=1f),
+  sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={it!=SheetValue.Hidden || !locked}),
  ) {
-  if(result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null) {
-   Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f)) {TextButton(onClick=close) {Text(resources.getString(R.string.settings_close))};Box(Modifier.weight(1f)) {AskConversation(model,{id -> close();onNote(id)},result,(result["command_args"] as? JsonObject)?.string("question").orEmpty())}}
-  } else Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-   val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
-   Text(if(plugin!=null && command!=null) localizedPluginCommand(resources,plugin,command,catalog) else plugin?.let {localizedPluginName(resources,it,catalog)} ?: resources.getString(R.string.settings_tool_result),style=MaterialTheme.typography.titleLarge)
-   Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-    if(fullReview && matching && proposal!=null) SuggestionPreview(model,proposal)
-    else RenderOutput(model,result,{id -> close();onNote(id)},{if(active) onResult(it)},commandScope=sheetScope,onProposalOpen=close,hideSuggestion=suggestionId,onRunning={if(journalResult(result)) journalSubmitting=it})
-    (plugin?.get("ai_destinations") as? JsonObject)?.forEach { (_,raw) -> (raw as? JsonObject)?.let { destination -> Text(resources.getString(R.string.settings_at ,destination.string("model"),destination.string("host"),if(destination.bool("leaves_network")) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
-    if(suggestionId.isNotBlank() && !matching) Text(resources.getString(R.string.plugin_review_stale),style=MaterialTheme.typography.bodySmall)
-    if(applyError.isNotBlank()) Text(applyError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+  Column(Modifier.fillMaxWidth().then(height).padding(horizontal=SpuntoSpacing.s20),
+   verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+    Text(title,modifier=Modifier.weight(1f).semantics {heading()},style=MaterialTheme.typography.titleLarge)
+    TextButton(onClick=close,enabled=!locked,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_close))}
    }
-   val copied=resultCopyText(resources,result)
-   FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+   HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
+   if(ask) {
+    Box(Modifier.weight(1f)) {AskConversation(model,{id -> close();onNote(id)},result,(result["command_args"] as? JsonObject)?.string("question").orEmpty())}
+   } else {
+    key(result) {
+     Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()).padding(bottom=SpuntoSpacing.s16),
+      verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
+      ProvideTextStyle(MaterialTheme.typography.bodyLarge) {
+       if(fullReview && matching && proposal!=null) SuggestionPreview(model,proposal)
+       else RenderOutput(model,result,{id -> close();onNote(id)},{if(active) onResult(it)},commandScope=sheetScope,onProposalOpen=close,hideSuggestion=suggestionId,onRunning={if(journalResult(result)) journalSubmitting=it},headingShown=title)
+      }
+      (plugin?.get("ai_destinations") as? JsonObject)?.forEach { (_,raw) -> (raw as? JsonObject)?.let { destination -> Text(resources.getString(R.string.settings_at ,destination.string("model"),destination.string("host"),if(destination.bool("leaves_network")) resources.getString(R.string.settings_outside_your_network) else resources.getString(R.string.settings_on_your_network)),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) } }
+      if(suggestionId.isNotBlank() && !matching) Text(resources.getString(R.string.plugin_review_stale),style=MaterialTheme.typography.bodySmall)
+      if(applyError.isNotBlank()) Text(applyError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+     }
+    }
+    val copied=resultCopyText(resources,result)
+    if(matching || copied.isNotBlank()) {
+     HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
+     FlowRow(Modifier.fillMaxWidth().padding(bottom=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     if(matching && proposal!=null) {
      if(diff==null && !fullReview) Button(onClick={fullReview=true}) {Text(resources.getString(R.string.plugin_review_changes))}
      else Button(enabled=!applying && canWrite,onClick={
@@ -580,8 +626,9 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
       }
      }) {Text(resources.getString(if(applying) R.string.settings_saving else R.string.settings_apply_changes))}
     }
-    if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied))}) {Text(resources.getString(if(diff!=null) R.string.settings_copy_changes else R.string.settings_copy))}
-    TextButton(onClick=close,enabled=!journalSubmitting) { Text(resources.getString(R.string.settings_close)) }
+      if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied));feedback.show(resources.getString(R.string.core_copied))},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(if(diff!=null) R.string.settings_copy_changes else R.string.settings_copy))}
+     }
+    }
    }
   }
  }
@@ -711,7 +758,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
  val scope=rememberCoroutineScope()
  val locale=LocalConfiguration.current.locales[0]
  val owner by model.workspaceIsOwner.collectAsState()
- val commands=remember(manifest,catalog,privateNote,locale,owner) {noteTools(resources,model.container.manifest.plugins(),privateNote,catalog,owner)}
+ val commands=remember(manifest,catalog,privateNote,locale,owner) {noteTools(resources,model.container.manifest.plugins(),privateNote,catalog,owner,supportsVersionedAgentReview(manifest))}
  val waiting=remember(catalog,privateNote) {
   if(privateNote) emptyList() else catalog.objects("plugins").map {NativePluginFacts(it)}.filter {plugin ->
    plugin.wantedOn && plugin.state=="waiting" && plugin.contribution.objects("commands").any {"note-actions" in it.pluginStrings("where").orEmpty()}

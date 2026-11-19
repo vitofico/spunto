@@ -5,7 +5,7 @@ import re
 
 import httpx
 import pytest
-from test_plugins_ai import FakeProvider
+from ai_fake import FakeProvider
 
 from spunto.ai.errors import AIError
 from spunto.ai.gateway import Gateway, Probe
@@ -38,7 +38,7 @@ async def bounded(server):
 
 
 def bodies(fake):
-    content = fake.requests[-1]["messages"][1]["content"]
+    content = fake.chat_bodies[-1]["messages"][1]["content"]
     return {
         match[1]: html.unescape(match[2])
         for match in re.finditer(r'<note id="([^"]+)"[^>]*>(.*?)</note>', content, re.DOTALL)
@@ -76,27 +76,23 @@ async def test_omitting_optional_limits_keeps_original_shared_budget_behavior(bo
     assert bodies(fake) == {first["id"]: "01234"}
 
 
-@pytest.mark.parametrize("limit", [0, -1, True, 1.5, "2", 20001])
-async def test_invalid_caps_fail_before_any_provider_request(bounded, limit):
+@pytest.mark.parametrize(
+    ("key", "limit"), [(None, v) for v in (0, -1, True, 1.5, "2", 20001)] + [("unknown", 5)]
+)
+async def test_invalid_caps_fail_before_any_provider_request(bounded, key, limit):
     gateway, fake, notes = bounded
     note = await notes.create("Synthetic budget note")
     with pytest.raises(AIError, match="ai_note_budget_invalid"):
-        await gateway.chat(Probe, "check", notes=[note], note_char_limits={note["id"]: limit})
-    assert not fake.requests
-
-
-async def test_unknown_note_budget_key_fails_before_provider(bounded):
-    gateway, fake, notes = bounded
-    note = await notes.create("Synthetic budget note")
-    with pytest.raises(AIError, match="ai_note_budget_invalid"):
-        await gateway.chat(Probe, "check", notes=[note], note_char_limits={"unknown": 5})
+        await gateway.chat(
+            Probe, "check", notes=[note], note_char_limits={key or note["id"]: limit}
+        )
     assert not fake.requests
 
 
 async def test_per_note_caps_keep_live_privacy_checks_on_validation_retry(bounded):
     gateway, fake, notes = bounded
     note = await notes.create("Synthetic source becomes private during provider validation")
-    fake.mode = "wrong-types"
+    fake.mode = "wrong_types"
 
     async def hide():
         await notes.flags(note["id"], {"private": True})

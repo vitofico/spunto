@@ -102,7 +102,8 @@ jobs:
         env:
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/sqlite.xml
         run: ../scripts/check-ci server
-      - name: Retain sqlite test results
+      - name: Retain SQLite JUnit results
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sqlite-unit-results
@@ -187,14 +188,9 @@ jobs:
           SPUNTO_DATABASE_ROLE: spunto_runtime
           SPUNTO_IDENTITY_DATABASE_ROLE: spunto_identity
         run: uv run spunto database migrate
-      - name: Exercise real PostgreSQL and signed OIDC fixtures
+      - name: Exercise real PostgreSQL fixtures
         run: |
-          uv run pytest tests/test_postgres.py tests/test_hosted.py tests/test_oidc.py \
-            tests/test_hosted_local_auth.py tests/test_operator_workspace.py \
-            tests/test_sqlite_import.py tests/test_postgres_snapshot.py \
-            tests/test_library_stats_hosted.py \
-            tests/test_ask_writes.py::test_real_postgres_reviewed_edit_create_authoring_and_stale_undo \
-            --junitxml="$RUNNER_TEMP/postgres.xml" -ra
+          uv run pytest -m postgres --junitxml="$RUNNER_TEMP/postgres.xml" -ra
           python3 - <<'PY'
           import os
           import xml.etree.ElementTree as ET
@@ -203,6 +199,15 @@ jobs:
           assert cases, "PostgreSQL acceptance collected no tests"
           assert not report.findall(".//skipped"), "Real PostgreSQL acceptance must not skip"
           PY
+      - name: Retain PostgreSQL JUnit results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: postgres-tests
+          path: ${{ runner.temp }}/postgres.xml
+          if-no-files-found: error
+          retention-days: 3
+
 
   image:
     env:

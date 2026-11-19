@@ -1400,11 +1400,13 @@ class Host:
             plugin_id, "panel", key, {"id": note_id}, principal=principal, vocabulary=True
         )
 
+    search_source_timeout_s = 2.0
+
     async def search_sources(self, query, *, principal):
         async def call(plugin_id, plugin):
             key = next(iter(plugin.handlers["search_source"]))
             try:
-                async with asyncio.timeout(2):
+                async with asyncio.timeout(self.search_source_timeout_s):
                     result = await self._invoke(
                         plugin_id, "search_source", key, {"query": query}, principal=principal
                     )

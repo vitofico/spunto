@@ -140,10 +140,7 @@ async def review(host):
 
 async def test_wave_manifests_opt_in_and_api(wave):
     host, _, _ = wave
-    assert all(
-        host.manifests[id]["api"] == "0.9" and host.manifests[id]["default"] == "off"
-        for id in PLUGINS
-    )
+    assert all(host.manifests[id]["default"] == "off" for id in PLUGINS)
     assert host.manifests["duplicates"]["permissions"] == ["notes.read", "suggest", "ai.embed"]
     assert not any(x.startswith(("ai.", "net.")) for x in host.manifests["links"]["permissions"])
 

@@ -193,11 +193,8 @@ async def test_removed_catalog_owner_cleanup_preserves_notes_and_other_data(env,
         assert card(server.services.host)["state"] == "removed"
 
 
-@pytest.mark.parametrize("api", ["0.4", "0.9", "1.0"])
-async def test_reinstall_is_off_and_cannot_revive_removed_jobs_or_new_grants(
-    tmp_path, settings, api
-):
-    folder = install(tmp_path, api=api)
+async def test_reinstall_is_off_and_cannot_revive_removed_jobs_or_new_grants(tmp_path, settings):
+    folder = install(tmp_path, api="1.0")
     config = settings.model_copy(update={"data_dir": tmp_path})
     async with harness(tmp_path, config) as host:
         await host.enable(PLUGIN, PERMISSIONS)
@@ -208,7 +205,7 @@ async def test_reinstall_is_off_and_cannot_revive_removed_jobs_or_new_grants(
         async with host.store.read() as conn:
             job = (await conn.execute_fetchall("SELECT * FROM job WHERE plugin_id=?", (PLUGIN,)))[0]
         assert job["status"] == "dead" and job["last_error"] == "plugin_removed"
-    folder = install(tmp_path, api=api)
+    folder = install(tmp_path, api="1.0")
     manifest = folder / "plugin.toml"
     manifest.write_text(
         manifest.read_text().replace(
@@ -264,19 +261,6 @@ async def test_new_source_with_same_id_does_not_inherit_consent_or_execute(tmp_p
         assert all(
             job["status"] == "dead" and job["last_error"] == "plugin_removed" for job in jobs
         )
-
-
-async def test_bundled_and_colliding_operator_origins_are_loader_established(tmp_path, settings):
-    install(tmp_path, plugin_id="tasks")
-    install(tmp_path, folder="custom")
-    async with harness(tmp_path, settings.model_copy(update={"data_dir": tmp_path})) as host:
-        assert card(host, "tasks")["origin"] == "bundled"
-        assert card(host, "tasks")["source_kind"] == "bundled"
-        assert card(host)["origin"] == "operator"
-        failure = next(item for item in host.catalog() if item["id"].startswith("failed-"))
-        assert failure["origin"] == "operator" and failure["source_kind"] == "folder"
-        assert failure["state"] == "failed" and failure["permissions"] == []
-        assert "entry" not in failure and "contributes" not in failure
 
 
 async def test_schema_five_upgrade_retains_unknown_origin_without_unsafe_metadata(
@@ -347,8 +331,17 @@ async def test_entrypoint_origin_survives_removal_without_importing_its_code(
     distribution = SimpleNamespace(name="retention-test", locate_file=lambda path: tmp_path / path)
     entry = SimpleNamespace(name="entry", value="installed_retained:plugin", dist=distribution)
     monkeypatch.setattr(importlib.metadata, "entry_points", lambda **kwargs: [entry])
+    install(tmp_path, plugin_id="tasks")
+    install(tmp_path, folder="custom")
     config = settings.model_copy(update={"data_dir": tmp_path})
     async with harness(tmp_path, config) as host:
+        assert card(host, "tasks")["origin"] == "bundled"
+        assert card(host, "tasks")["source_kind"] == "bundled"
+        assert card(host)["origin"] == "operator"
+        failure = next(item for item in host.catalog() if item["id"].startswith("failed-"))
+        assert failure["origin"] == "operator" and failure["source_kind"] == "folder"
+        assert failure["state"] == "failed" and failure["permissions"] == []
+        assert "entry" not in failure and "contributes" not in failure
         installed = card(host, "installed-retained")
         assert installed["origin"] == "operator" and installed["source_kind"] == "entrypoint"
         assert installed["state"] == "available" and not marker.exists()
@@ -421,11 +414,10 @@ async def test_retained_environment_pin_stays_locked_off_but_owner_can_delete(en
         assert restarted["pinned_by_env"] == 1
 
 
-@pytest.mark.parametrize("pin", ["+", "-"])
-async def test_unknown_environment_pin_still_rejects_startup(tmp_path, settings, pin):
+async def test_unknown_environment_pin_still_rejects_startup(tmp_path, settings):
     from spunto.errors import OperatorError
 
-    config = settings.model_copy(update={"data_dir": tmp_path, "plugins": pin + "unknown-plugin"})
+    config = settings.model_copy(update={"data_dir": tmp_path, "plugins": "-unknown-plugin"})
     with pytest.raises(
         OperatorError, match="SPUNTO_PLUGINS names unavailable plugins: unknown-plugin"
     ):

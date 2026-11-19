@@ -293,10 +293,7 @@ async def test_domain_relevance_paging_keeps_original_matches_when_bm25_corpus_c
     assert set(seen) == {n["id"] for n in original}
 
 
-@pytest.mark.parametrize("transactional", [False, True])
-async def test_domain_retention_purges_trash_and_keeps_latest_twenty_revisions(
-    domain, server, transactional
-):
+async def test_domain_retention_purges_trash_and_keeps_latest_twenty_revisions(domain, server):
     from spunto.jobs.maintenance import prune
 
     discarded = await domain.create("Discarded searchterm")
@@ -323,16 +320,16 @@ async def test_domain_retention_purges_trash_and_keeps_latest_twenty_revisions(
         )
     assert len(rows) == 1
     assert not (await domain.search("Discarded", include_archived=True))["hits"]
-    if transactional:
-        async with domain.store.write() as conn:
-            conflict = await domain.edit_in_transaction(
-                conn, retained["id"], "Old device's complete text", 1
-            )
-    else:
-        conflict = await domain.edit(retained["id"], "Old device's complete text", 1)
-    assert conflict["conflict"] is True
-    assert (await domain.get(retained["id"]))["body"] == "Retained text 24"
-    assert (await domain.get(conflict["conflict_id"]))["body"] == "Old device's complete text"
+    for transactional in (False, True):
+        body = f"Old device's complete text (transactional={transactional})"
+        if transactional:
+            async with domain.store.write() as conn:
+                conflict = await domain.edit_in_transaction(conn, retained["id"], body, 1)
+        else:
+            conflict = await domain.edit(retained["id"], body, 1)
+        assert conflict["conflict"] is True
+        assert (await domain.get(retained["id"]))["body"] == "Retained text 24"
+        assert (await domain.get(conflict["conflict_id"]))["body"] == body
 
 
 async def test_rest_creation_and_input_validation(signed_in):
@@ -652,38 +649,57 @@ async def test_note_pages_have_bounded_related_reads(domain, monkeypatch):
         return await original(conn, sql, *args, **kwargs)
 
     monkeypatch.setattr(aiosqlite.Connection, "execute_fetchall", counted)
-    page = await domain.list(limit=10)
-    assert len(page["notes"]) == 10 and page["next_cursor"]
-    assert len(queries) == 5
-    queries.clear()
-    for query in ("Synthetic", ""):
-        result = await domain.search(query, limit=10, mode="keyword")
-        assert len(result["hits"]) == 10 and result["next_cursor"]
-        assert len(queries) == 6
+    counts = {}
+    for limit in (5, 10):
         queries.clear()
+        page = await domain.list(limit=limit)
+        assert len(page["notes"]) == limit and page["next_cursor"]
+        counts["list", limit] = len(queries)
+        for query in ("Synthetic", ""):
+            queries.clear()
+            result = await domain.search(query, limit=limit, mode="keyword")
+            assert len(result["hits"]) == limit and result["next_cursor"]
+            counts[query, limit] = len(queries)
+    for kind, bound in (("list", 5), ("Synthetic", 6), ("", 6)):
+        assert counts[kind, 5] == counts[kind, 10] <= bound
+    queries.clear()
     assert (await domain.list(labels=["missing"]))["notes"] == []
     assert len(queries) == 1
 
 
 async def test_body_edits_preserve_existing_label_links_and_refresh_search(domain, monkeypatch):
     note = await domain.create("Before #First #Second")
-    statements = []
-    original = domain.store._writer.execute
+    await domain.store.drain_events()
+    changes = []
+    previous_sink = domain.store.event_sink
 
-    async def counted(sql, *args, **kwargs):
-        statements.append(sql)
-        return await original(sql, *args, **kwargs)
+    def record(event, *args, **kwargs):
+        changes.append(event)
+        if previous_sink:
+            return previous_sink(event, *args, **kwargs)
 
-    monkeypatch.setattr(domain.store._writer, "execute", counted)
+    monkeypatch.setattr(domain.store, "event_sink", record)
+
+    async def label_rows():
+        async with domain.store.read() as conn:
+            return [
+                tuple(row)
+                for row in await conn.execute_fetchall(
+                    "SELECT l.id,l.key,l.path,l.created_at FROM label l JOIN note_label nl "
+                    "ON nl.label_id=l.id WHERE nl.note_id=? ORDER BY l.id",
+                    (note["id"],),
+                )
+            ]
+
+    before = await label_rows()
     edited = await domain.edit(note["id"], "After #second #FIRST", 1)
-    assert edited["labels"] == ["First", "Second"]
-    assert not any(
-        "INTO label" in sql or "INTO note_label" in sql or "DELETE FROM note_label" in sql
-        for sql in statements
-    )
+    await domain.store.drain_events()
+    assert edited["labels"] == ["First", "Second"] and await label_rows() == before
+    assert "labels.changed" not in changes
     assert [hit["id"] for hit in (await domain.search("After"))["hits"]] == [note["id"]]
     assert (await domain.search("Before"))["hits"] == []
-    statements.clear()
+    changes.clear()
     relabelled = await domain.edit(note["id"], "After #Third", edited["version"])
-    assert relabelled["labels"] == ["Third"]
-    assert any("DELETE FROM note_label" in sql for sql in statements)
+    await domain.store.drain_events()
+    assert relabelled["labels"] == ["Third"] and await label_rows() != before
+    assert changes.count("labels.changed") == 1

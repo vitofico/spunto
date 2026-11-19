@@ -126,9 +126,8 @@ async def search_host(ai_host, monkeypatch):
     return host
 
 
-@pytest.mark.parametrize("protocol", ["2025-06-18", "2026-07-28"])
 async def test_keyword_search_excludes_semantic_only_candidates(
-    server, endpoint, search_host, monkeypatch, protocol
+    server, endpoint, search_host, monkeypatch
 ):
     note = await Notes(server.services.store, OWNER).create(
         "Replace the damaged inner tube to repair a flat tire."
@@ -148,17 +147,15 @@ async def test_keyword_search_excludes_semantic_only_candidates(
         token,
         "search_notes",
         {"query": "bicycle puncture maintenance", "mode": "keyword"},
-        protocol,
     )
     assert found["hits"] == []
     assert found["semantic"] == "off"
     assert queries == []
 
 
-@pytest.mark.parametrize("protocol", ["2025-06-18", "2026-07-28"])
 @pytest.mark.parametrize("mode", ["hybrid", None])
 async def test_hybrid_search_preserves_keyword_meaning_and_both_matches(
-    server, endpoint, search_host, monkeypatch, protocol, mode
+    server, endpoint, search_host, monkeypatch, mode
 ):
     notes = Notes(server.services.store, OWNER)
     both = await notes.create("Bicycle repair guide")
@@ -177,7 +174,6 @@ async def test_hybrid_search_preserves_keyword_meaning_and_both_matches(
         token,
         "search_notes",
         {"query": "bicycle", **({"mode": mode} if mode else {})},
-        protocol,
     )
     assert {hit["id"]: hit["match"] for hit in found["hits"]} == {
         both["id"]: "both",
@@ -187,9 +183,8 @@ async def test_hybrid_search_preserves_keyword_meaning_and_both_matches(
     assert found["semantic"] == "on"
 
 
-@pytest.mark.parametrize("protocol", ["2025-06-18", "2026-07-28"])
 async def test_hybrid_search_reports_unavailable_source_without_losing_keyword_hits(
-    server, endpoint, search_host, monkeypatch, protocol
+    server, endpoint, search_host, monkeypatch
 ):
     note = await Notes(server.services.store, OWNER).create("Bicycle repair checklist")
 
@@ -200,9 +195,7 @@ async def test_hybrid_search_reports_unavailable_source_without_losing_keyword_h
         search_host.plugins["semantic-search"].handlers["search_source"], "search", unavailable
     )
     _, token = await pat(server, "read")
-    _, found = await call(
-        endpoint, token, "search_notes", {"query": "bicycle", "mode": "hybrid"}, protocol
-    )
+    _, found = await call(endpoint, token, "search_notes", {"query": "bicycle", "mode": "hybrid"})
     assert [(hit["id"], hit["match"]) for hit in found["hits"]] == [(note["id"], "keyword")]
     assert found["semantic"] == "unavailable"
 

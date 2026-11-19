@@ -158,14 +158,10 @@ export function DecisionNoteActions({
             />
             {original && (
               <DecisionCommand
+                key={`${note.id}:${language}`}
                 id="journal"
-                load={() =>
-                  online
-                    ? detail
-                        .refetch({ cancelRefetch: false, throwOnError: true })
-                        .then((value) => value.data)
-                    : Promise.resolve(detail.data)
-                }
+                // Live updates may cancel the status query while the dialog is opening.
+                load={online ? undefined : () => Promise.resolve(detail.data)}
                 args={{ note_id: note.id }}
                 label={t("decisions.review_history")}
               />

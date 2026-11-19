@@ -935,9 +935,13 @@ async def test_plugin_note_pages_batch_metadata_and_keep_borrowed_sources(
 
         monkeypatch.setattr(aiosqlite.Connection, "execute_fetchall", counted)
         ctx = Ctx(host, "example")
-        page = await ctx.notes.query(limit=10)
-        assert len(page["notes"]) == 10 and page["next_cursor"]
-        assert len(queries) == 5
+        counts = []
+        for limit in (5, 10):
+            queries.clear()
+            page = await ctx.notes.query(limit=limit)
+            assert len(page["notes"]) == limit and page["next_cursor"]
+            counts.append(len(queries))
+        assert counts[0] == counts[1] <= 5
         assert page["notes"][0]["id"] == created[-1]["id"]
         assert page["notes"][0]["import_key"] == "synthetic-import"
         assert all(note["labels"] == ["label"] and not note["private"] for note in page["notes"])

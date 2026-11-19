@@ -1,4 +1,5 @@
 import CommandResult from "../src/features/CommandResult";
+import { DecisionNoteActions } from "../src/features/DecisionJournal";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   act,
@@ -14,7 +15,7 @@ import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { api } from "../src/lib/api";
 import { PaletteCommands, SlashCommands } from "../src/features/Slots";
-import type { Plugin, Schema } from "../src/lib/types";
+import type { Note, Plugin, Schema } from "../src/lib/types";
 
 let client: QueryClient;
 beforeEach(() => {
@@ -154,6 +155,99 @@ function manifest(...plugins: Partial<Plugin>[]) {
     })),
   });
 }
+
+function decisionPanel(id: string, summary: string) {
+  return {
+    ui: 1,
+    items: [
+      { type: "text", text: summary },
+      { type: "notes", ids: [id] },
+    ],
+  };
+}
+
+function decisionFixture(id: string) {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
+  const key = ["plugin-panel", "decision-journal", id, "en"];
+  client.setQueryDefaults(key, { refetchOnMount: false });
+  client.setQueryData(key, decisionPanel(id, "Reviewed"));
+  return {
+    key,
+    note: {
+      id,
+      annotations: [{ plugin: "decision-journal", kind: "member:journal" }],
+    } as Note,
+  };
+}
+
+it("keeps an open decision history request independent of live panel invalidation", async () => {
+  manifest({ id: "decision-journal" });
+  client.setQueryDefaults(["manifest"], { refetchOnMount: false });
+  const { key, note } = decisionFixture("decision-a");
+  let resolveHistory!: (history: unknown) => void;
+  const command = vi
+    .spyOn(api, "command")
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveHistory = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(decisionPanel(note.id, "Reviewed"));
+  render(wrap(<DecisionNoteActions note={note} editing={false} />));
+  fireEvent.click(screen.getByRole("button", { name: "Review history" }));
+  await waitFor(() => expect(command).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: key });
+    resolveHistory(decisionPanel(note.id, "Open · Review on 2030-03-01"));
+  });
+  const history = within(
+    screen.getByRole("dialog", { name: "Review history" }),
+  );
+  expect(
+    await history.findByText(/Open for follow-up.*Review on/),
+  ).toBeTruthy();
+  expect(history.queryByRole("alert")).toBeNull();
+});
+
+it("discards closed decision history and opens the current cached history offline", async () => {
+  manifest({ id: "decision-journal" });
+  client.setQueryDefaults(["manifest"], { refetchOnMount: false });
+  const first = decisionFixture("decision-a");
+  const next = decisionFixture("decision-b");
+  let resolveFirst!: (history: unknown) => void;
+  const command = vi.spyOn(api, "command").mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveFirst = resolve;
+      }),
+  );
+  const view = render(
+    wrap(<DecisionNoteActions note={first.note} editing={false} />),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Review history" }));
+  await waitFor(() => expect(command).toHaveBeenCalledTimes(1));
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }),
+  );
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  view.rerender(wrap(<DecisionNoteActions note={next.note} editing={false} />));
+  fireEvent.click(screen.getByRole("button", { name: "Review history" }));
+  await act(async () => {
+    resolveFirst(decisionPanel(first.note.id, "Open · Review on 2030-03-01"));
+  });
+  const history = within(
+    screen.getByRole("dialog", { name: "Review history" }),
+  );
+  expect(await history.findByText("Reviewed")).toBeTruthy();
+  expect(history.queryByText(/Open for follow-up/)).toBeNull();
+  expect(command).toHaveBeenCalledTimes(1);
+});
 
 it.each([
   ["context-packs", "owner"],

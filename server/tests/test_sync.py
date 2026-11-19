@@ -696,6 +696,11 @@ async def test_restore_reconcile_flag_only_change_and_preserve_newer_server_flag
     assert (
         await server.client.post("/api/v1/sync/reconcile", headers=headers, json=manifest)
     ).json()["restore_ids"] == [note_id]
+    # A device can edit within the same millisecond. Hash disagreement needs a restore.
+    manifest["notes"][0].update(updated_at=iso(now - 1000), body_hash="0" * 64)
+    equal_time = await server.client.post("/api/v1/sync/reconcile", headers=headers, json=manifest)
+    assert equal_time.json()["restore_ids"] == [note_id]
+    manifest["notes"][0].update(updated_at=local["updated_at"], body_hash=local["body_hash"])
     restored = (
         await push(
             server,
@@ -1053,3 +1058,15 @@ async def test_offline_accept_undo_order_replay_and_revision_refusal(server, pro
     refused = (await push(server, headers, [undo]))[0]
     assert refused["status"] == "rejected" and refused["code"] == "suggestion_undo_stale"
     assert (await domain.get(note["id"]))["body"] == "Independent edit\n#example"
+
+
+async def test_restore_without_base_of_a_changed_note_keeps_both_bodies(server):
+    first, second = await signed(server), await signed(server, "Second phone")
+    note_id = str(uuid.uuid7())
+    await push(server, first, [op("note.create", note_id, body="Base")])
+    await push(server, first, [op("note.update", note_id, base_version=1, body="Server text")])
+    result = (await push(server, second, [op("note.restore", note_id, body="Device text")]))[0]
+    assert result["status"] == "conflict"
+    async with server.services.store.read() as conn:
+        rows = await conn.execute_fetchall("SELECT body FROM note ORDER BY body")
+    assert [row[0] for row in rows] == ["Device text", "Server text"]

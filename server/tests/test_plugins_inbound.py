@@ -535,3 +535,41 @@ async def test_off_inbound_catalog_unlocks_only_after_all_configuration_exists(
         assert email()["availability_reason"] is None
         assert email()["switch"] == "off"
         assert "synthetic mailbox password" not in json.dumps(email())
+
+
+async def test_new_uidvalidity_restarts_receipts_without_losing_or_duplicating_mail(
+    inbound, monkeypatch
+):
+    import spunto.net.imap
+
+    host, _ = inbound
+    mailbox = {"validity": 77, "messages": [{"uid": 5, "raw": mail(body="Before the rebuild")}]}
+
+    async def read(url, **kwargs):
+        # Like the real reader: a changed UIDVALIDITY ignores the old after_uid.
+        after = kwargs["after_uid"] if kwargs["uidvalidity"] == mailbox["validity"] else 0
+        return {
+            "uidvalidity": mailbox["validity"],
+            "messages": [m for m in mailbox["messages"] if m["uid"] > after],
+        }
+
+    monkeypatch.setattr(spunto.net.imap, "guarded_read", read)
+    ctx = Ctx(host, "email-in", unattended=True)
+    await email_in.poll(ctx)
+    mailbox.update(
+        validity=78,
+        messages=[
+            {"uid": 1, "raw": mail(body="After one")},
+            {"uid": 2, "raw": mail(body="After two")},
+        ],
+    )
+    await email_in.poll(ctx)
+    await email_in.poll(ctx)
+    bodies = [note["body"] for note in await rows(host)]
+    assert [b.rsplit("\n", 1)[-1] for b in bodies] == [
+        "Before the rebuild",
+        "After one",
+        "After two",
+    ]
+    assert host.states["email-in"]["last_error"] is None
+    assert (await ctx.storage.kv.get("checkpoint"))["uidvalidity"] == 78

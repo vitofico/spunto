@@ -10,6 +10,8 @@ import io.theficos.spunto.data.local.RecordingDraftEntity
 import io.theficos.spunto.data.local.inspectRecording
 import io.theficos.spunto.plugins.dictation.voice.AndroidOggEncoder
 import io.theficos.spunto.plugins.dictation.voice.RECORDING_RATE
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -19,8 +21,9 @@ import kotlin.math.sin
 
 /** Generated audio and a task-owned private note only; never records the microphone. */
 @androidx.test.filters.SdkSuppress(minSdkVersion=33)
+@OptIn(ExperimentalTestApi::class,ExperimentalCoroutinesApi::class)
 class ComposerDoneRecordingTest {
- @get:Rule val compose=createComposeRule()
+ @get:Rule val compose=createComposeRule(effectContext=StandardTestDispatcher())
  @get:Rule val timeout=org.junit.rules.Timeout(5,java.util.concurrent.TimeUnit.MINUTES)
  @Test fun doneAttachesARecoveredClipWithoutASecondSaveButton() {
   val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication

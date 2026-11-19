@@ -23,7 +23,7 @@ from spunto.host.testing import FakeClock
 from spunto.store import postgres_snapshot as snapshots
 from spunto.store.postgres import PostgresStore
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.postgres]
 NOW = datetime(2026, 10, 18, tzinfo=UTC)
 
 

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.ParcelFileDescriptor
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,7 +32,7 @@ class AppLockTest {
  private fun shell(command:String):String=ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use {it.readText()}
  @Before fun disposableAuthority() {
   assumeTrue(InstrumentationRegistry.getArguments().getString("spuntoAppLockDisposable")=="yes")
-  check(shell("getprop ro.boot.qemu.avd_name").trim()=="SpuntoBiometric") {"App lock tests require the dedicated disposable AVD."}
+  check(shell("getprop ro.boot.qemu.avd_name").trim() in setOf("SpuntoBiometric","spunto-ci")) {"App lock tests require the dedicated disposable AVD."}
   authority=runBlocking {LocalFixtureAuthority.require(app.container)}
   instrumentation.uiAutomation.serviceInfo=instrumentation.uiAutomation.serviceInfo.apply {flags=flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS}
  }
@@ -63,10 +64,10 @@ class AppLockTest {
   val current=authenticationNodes()
   return customKeypad(current) || current.any {it.isPassword || it.className?.toString()?.contains("EditText")==true}
  }
+ private fun authenticationVisible():Boolean =
+  credentialVisible() || authenticationNodes().any {it.viewIdResourceName=="com.android.systemui:id/biometric_icon" && it.isVisibleToUser}
  private fun waitForAuthentication() {
-  waitFor("automatic system authentication") {
-   credentialVisible() || authenticationNodes().any {it.viewIdResourceName=="com.android.systemui:id/biometric_icon" && it.isVisibleToUser}
-  }
+  waitFor("automatic system authentication",::authenticationVisible)
   assertFalse(app.container.appLock.state.value.unlocked)
  }
  private fun waitForCredential() {
@@ -103,6 +104,20 @@ class AppLockTest {
   if(!credentialVisible()) clickAuthentication {it.text?.toString()=="Use screen lock"}
   waitForCredential()
  }
+ private fun cancelAuthentication() {
+  val automation=instrumentation.uiAutomation
+  // Android 15 can focus Gboard above the device credential prompt.
+  // The first Back dismisses the keyboard in that case.
+  fun keyboardVisible()=automation.windows.any {it.type==AccessibilityWindowInfo.TYPE_INPUT_METHOD}
+  automation.waitForIdle(250,5_000)
+  val hadKeyboard=credentialVisible() && keyboardVisible()
+  shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+  if(hadKeyboard) {
+   waitFor("the credential keyboard to dismiss") {!keyboardVisible()}
+   automation.waitForIdle(250,5_000)
+   if(credentialVisible()) shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+  }
+ }
  private fun enterPin(pin:String) {
   useCredential()
   if(customKeypad(authenticationNodes())) {
@@ -115,6 +130,7 @@ class AppLockTest {
   waitFor {app.container.appLock.state.value.unlocked}
  }
  @Test fun launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden() {
+  assumeTrue(app.getSystemService(KeyguardManager::class.java).isDeviceSecure)
   runBlocking {authority.requireCurrent()};val before=runBlocking {app.container.repository.notes.first().size}
   val auth=runBlocking {app.container.auth.config.first()}
   configure(true)
@@ -123,6 +139,9 @@ class AppLockTest {
     waitForAuthentication()
     recreateDuringAuthentication(scenario)
     waitForAuthentication()
+    // Let SystemUI finish cancelling the recreated launcher before capture asks again.
+    cancelAuthentication()
+    waitFor("the launcher authentication prompt to close") {!authenticationVisible()}
    }
    val selection=Intent(instrumentation.targetContext,CaptureActivity::class.java).setAction(Intent.ACTION_PROCESS_TEXT).putExtra(Intent.EXTRA_PROCESS_TEXT,"Synthetic locked selection").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
    ActivityScenario.launch<CaptureActivity>(selection).use {
@@ -143,7 +162,7 @@ class AppLockTest {
   try {
    ActivityScenario.launch(MainActivity::class.java).use {scenario ->
     useCredential()
-    shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+    cancelAuthentication()
     waitFor("Back to close the locked activity") {scenario.state==Lifecycle.State.DESTROYED}
     assertFalse(app.container.appLock.state.value.unlocked)
    }
@@ -220,7 +239,7 @@ class AppLockTest {
      scenario.onActivity {it.setPhoneLock(!enabled)}
      if(androidx.biometric.BiometricManager.from(app).canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)==androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) waitForFingerprint()
      else waitForCredential()
-     shell("input keyevent ${KeyEvent.KEYCODE_BACK}")
+     cancelAuthentication()
      waitFor("settings authentication cancellation") {
       var cancelled=false
       scenario.onActivity {cancelled=it.lockMessage=="Authentication cancelled. App lock setting unchanged."}

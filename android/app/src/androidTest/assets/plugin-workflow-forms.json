@@ -1,0 +1,203 @@
+{
+  "context-packs": {
+    "ui": 1,
+    "items": [
+      {
+        "type": "text",
+        "text": "Curate your own brief. Source bodies are never copied automatically. Commands need a connection; private note copies work offline. Review content classifications explicitly before clearing them."
+      },
+      {
+        "type": "form",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "title": "Brief title",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "project": {
+              "type": "string",
+              "title": "Project",
+              "maxLength": 80,
+              "default": ""
+            },
+            "goals": {
+              "type": "string",
+              "title": "Goals",
+              "maxLength": 500,
+              "default": ""
+            },
+            "constraints": {
+              "type": "string",
+              "title": "Constraints",
+              "maxLength": 500,
+              "default": ""
+            },
+            "decisions": {
+              "type": "string",
+              "title": "Decisions",
+              "maxLength": 500,
+              "default": ""
+            },
+            "questions": {
+              "type": "string",
+              "title": "Open questions",
+              "maxLength": 500,
+              "default": ""
+            },
+            "private": {
+              "type": "boolean",
+              "title": "Private pack (only private-enabled agents can read)",
+              "default": false
+            },
+            "external": {
+              "type": "boolean",
+              "title": "Contains external material (hide from agents excluding external notes)",
+              "default": false
+            },
+            "action": {
+              "type": "string",
+              "title": "Action",
+              "enum": [
+                "save"
+              ],
+              "default": "save"
+            },
+            "request_id": {
+              "type": "string",
+              "title": "Creation request ID",
+              "maxLength": 36,
+              "default": "00000000-0000-4000-8000-000000000001"
+            }
+          },
+          "required": [
+            "title",
+            "request_id"
+          ]
+        }
+      }
+    ]
+  },
+  "thinking-desk": {
+    "ui": 1,
+    "items": [
+      {
+        "type": "text",
+        "text": "History follows selected notes in creation order. Collision: choose two to five notes from different subjects and develop your own idea. No AI is used and original notes never change."
+      },
+      {
+        "type": "form",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "title": "Topic or desk title",
+              "maxLength": 80,
+              "default": "New thinking desk",
+              "minLength": 1
+            },
+            "mode": {
+              "type": "string",
+              "title": "Desk type",
+              "enum": [
+                "history",
+                "collision"
+              ],
+              "default": "history"
+            },
+            "prompt": {
+              "type": "string",
+              "title": "Problem or question (optional)",
+              "maxLength": 300,
+              "default": ""
+            },
+            "thinking": {
+              "type": "string",
+              "title": "Your reflection or new idea",
+              "maxLength": 1500,
+              "default": ""
+            },
+            "action": {
+              "type": "string",
+              "title": "Action",
+              "enum": [
+                "save"
+              ],
+              "default": "save"
+            },
+            "request_id": {
+              "type": "string",
+              "title": "Creation request ID",
+              "maxLength": 36,
+              "default": "00000000-0000-4000-8000-000000000001"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      }
+    ]
+  },
+  "decision-journal": {
+    "type": "form",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "title": "Request ID",
+          "maxLength": 36,
+          "default": "00000000-0000-4000-8000-000000000001"
+        },
+        "decision": {
+          "type": "string",
+          "title": "What did you decide?",
+          "maxLength": 500,
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "title": "Decision title",
+          "maxLength": 80
+        },
+        "alternatives": {
+          "type": "string",
+          "title": "Alternatives considered",
+          "maxLength": 500
+        },
+        "rationale": {
+          "type": "string",
+          "title": "Why this choice?",
+          "maxLength": 700
+        },
+        "expected": {
+          "type": "string",
+          "title": "Expected outcome",
+          "maxLength": 500
+        },
+        "review_on": {
+          "type": "string",
+          "title": "Review date (YYYY-MM-DD, optional)",
+          "maxLength": 10,
+          "default": ""
+        },
+        "private": {
+          "type": "boolean",
+          "title": "Private",
+          "default": false
+        }
+      },
+      "required": [
+        "request_id",
+        "decision"
+      ]
+    }
+  }
+}

@@ -19,6 +19,54 @@ for setting in window_animation_scale transition_animation_scale animator_durati
   "${adb_command[@]}" shell settings put global "$setting" 0
 done
 cd "$ROOT/android"
+if [[ "${1:-}" == "--ci-app-lock" ]]; then
+  # The workflow owns this fresh AVD. Gradle runs against all connected devices.
+  [[ "${GITHUB_ACTIONS:-}" == true && -n "${RUNNER_TEMP:-}" ]]
+  [[ "$("${adb_command[@]}" shell getprop ro.boot.qemu.avd_name | tr -d '\r')" == spunto-ci ]]
+  [[ "$(adb devices | awk 'NR>1 && NF {print $1}')" == "$ANDROID_SERIAL" ]]
+  results="$RUNNER_TEMP/spunto-native-junit"
+  mkdir -p "$results"
+  gradle=(./gradlew --no-daemon --max-workers=2 --no-parallel --no-watch-fs)
+  args=(-Pandroid.testInstrumentationRunnerArguments.spuntoAppLockDisposable=yes
+        -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.theficos.spunto.ManualFixture)
+  "${gradle[@]}" "${args[@]}" :app:connectedDebugAndroidTest
+  cp -R app/build/outputs/androidTest-results/connected "$results/no-pin"
+  # This synthetic credential belongs only to the workflow's new emulator.
+  pin=258036
+  enrolled=$("${adb_command[@]}" shell locksettings set-pin "$pin")
+  [[ "$enrolled" == *"set to"* ]]
+  trap '"${adb_command[@]}" shell locksettings clear --old "$pin" >/dev/null' EXIT
+  lock=io.theficos.spunto.AppLockTest
+  cases="$lock#launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden,$lock#actualSystemCredentialCancellationAndSuccessfulPinUnlock,$lock#unsavedShareDraftSurvivesRelockAndIsAbsentFromLockedAccessibilityWindows,$lock#cancellingSettingsAuthenticationDoesNotExitOrChangeSetting"
+  pin_result=0
+  "${gradle[@]}" "${args[@]}" "-Pandroid.testInstrumentationRunnerArguments.spuntoAppLockPin=$pin" \
+    "-Pandroid.testInstrumentationRunnerArguments.class=$cases" :app:connectedDebugAndroidTest || pin_result=$?
+  cp -R app/build/outputs/androidTest-results/connected "$results/with-pin"
+  if [[ "$pin_result" != 0 ]]; then exit "$pin_result"; fi
+  python3 - "$results" <<'PYTHON'
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+expected = {
+    "no-pin": {"backExitsLockScreenWhenPhoneAuthenticationIsUnavailable"},
+    "with-pin": {"launcherAndSelectionStayLockedWithoutCreatingNotesAndWidgetTextStaysHidden",
+                 "actualSystemCredentialCancellationAndSuccessfulPinUnlock",
+                 "unsavedShareDraftSurvivesRelockAndIsAbsentFromLockedAccessibilityWindows",
+                 "cancellingSettingsAuthenticationDoesNotExitOrChangeSetting"},
+}
+for mode, required in expected.items():
+    passed = set()
+    for report in (Path(sys.argv[1]) / mode).rglob("TEST-*.xml"):
+        for case in ET.parse(report).iter("testcase"):
+            if case.get("classname", "").endswith(".AppLockTest") and not any(
+                case.find(tag) is not None for tag in ("error", "failure", "skipped")
+            ):
+                passed.add(case.get("name"))
+    assert required <= passed, f"{mode}: missing successful lock tests {required - passed}"
+PYTHON
+  exit 0
+fi
 scripts/dgradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 # A disposable AVD can contain a debug build signed by another checkout. Reset
 # only these debug identities before installation; the release identity stays.

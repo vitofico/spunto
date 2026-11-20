@@ -296,7 +296,9 @@ test("decision journal creates, reviews and reopens through the browser", async 
     "decision-journal",
     "record-decision",
   );
-  await expect(dialog.getByRole("status")).toHaveText("Decision saved");
+  await expect(
+    dialog.getByRole("status").filter({ hasText: /^Decision saved$/ }),
+  ).toHaveCount(1);
   const rootId = noteIds(created)[0];
   expect(rootId).toBeTruthy();
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
@@ -328,7 +330,9 @@ test("decision journal creates, reviews and reopens through the browser", async 
     "decision-journal",
     "review-decision",
   );
-  await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
+  await expect(
+    dialog.getByRole("status").filter({ hasText: /^Outcome saved$/ }),
+  ).toHaveCount(1);
   const outcomeId = noteIds(reviewed)[0];
   await dialog.locator(`a[href="/n/${outcomeId}"]`).click();
   await expect(
@@ -345,7 +349,9 @@ test("decision journal creates, reviews and reopens through the browser", async 
     .fill("2030-03-01");
   await selectStatus(dialog, "Open for follow-up");
   await run(page, dialog, "decision-journal", "review-decision");
-  await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
+  await expect(
+    dialog.getByRole("status").filter({ hasText: /^Outcome saved$/ }),
+  ).toHaveCount(1);
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
   const open = decision.getByRole("button", {
     name: "Review history",

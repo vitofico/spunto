@@ -32,6 +32,7 @@
     <string name="settings_about">About</string>
     <string name="settings_export">Export</string>
     <string name="settings_download_all_synced_notes_as_a_zip">Download all synced notes as a ZIP, in the web app</string>
+    <string name="settings_import_notes_in_browser">Import Evernote, Notion, Obsidian or Markdown exports in the browser</string>
     <string name="settings_show_the_guide">Show the guide</string>
     <string name="settings_the_four_first_run_steps_again">The four first-run steps again</string>
     <string name="settings_free_software_under_the_agpl_3_0">Free software under the AGPL-3.0 licence</string>
@@ -393,7 +394,7 @@
     <string name="settings_plugin_ask_name">Ask your notes</string>
     <string name="settings_plugin_ask_description">Ask a question and follow the answer back to the notes it came from.</string>
     <string name="settings_plugin_translate_name">Translate</string>
-    <string name="settings_plugin_translate_description">Translates a note between Italian and English, and saves the translation as a linked note if you ask.</string>
+    <string name="settings_plugin_translate_description">Previews a translation in the language you choose and saves it as a linked note if you ask.</string>
     <string name="settings_plugin_email_in_name">Email in</string>
     <string name="settings_plugin_email_in_description">Save email from the senders you choose as notes.</string>
     <string name="settings_plugin_agent_inbox_name">From agents</string>
@@ -424,8 +425,8 @@
     <string name="settings_plugin_voice_memos_description">Keep a recording with its note and add a transcript when you need one.</string>
     <string name="settings_plugin_image_text_name">Text in images</string>
     <string name="settings_plugin_image_text_description">Find notes by words in their images.</string>
-    <string name="settings_plugin_markdown_import_name">Import Markdown</string>
-    <string name="settings_plugin_markdown_import_description">Preview and import a Markdown ZIP or an operator-selected folder.</string>
+    <string name="settings_plugin_markdown_import_name">Import notes</string>
+    <string name="settings_plugin_markdown_import_description">Preview and import exports from Evernote, Notion, Obsidian and Markdown apps.</string>
     <string name="settings_plugin_semantic_search_name">Semantic search</string>
     <string name="settings_plugin_semantic_search_description">Find a note by meaning, even when you use different words.</string>
     <string name="settings_plugin_webhooks_name">Webhooks out</string>

@@ -60,14 +60,14 @@ Write a line, make a checklist or add a `#nested/label`. A short first-run guide
 | **Catch the thought** | Write Markdown and checklists, share into Android, use quick capture or dictate with an available on-device speech service. |
 | **Find the thread again** | Search by words and nested labels, with excerpts around matches and a clear distinction from similar meaning. Web checklist results keep their saved state and controls. Add semantic search, related notes and cited answers when AI is configured. |
 | **Carry context into your work** | Curate selected notes into a reusable **context pack**, with a brief and source snapshots that reveal when the originals have changed. |
-| **See how your thinking changed** | Use **Thinking desk → History** to arrange selected notes by creation date and record directed **builds-on**, **challenges** or **replaces** connections, keeping the originals intact. |
-| **Try an unexpected combination** | Use **Thinking desk → Collision** to choose two to five notes from different subjects, add an optional question and develop your own idea with creative prompts. |
+| **See how your thinking changed** | Use **Thinking desk → Trace an idea** to arrange selected notes by creation date and record directed **builds-on**, **challenges** or **replaces** connections, keeping the originals intact. |
+| **Try an unexpected combination** | Use **Thinking desk → Combine notes** to choose two to five notes from different subjects, add an optional question and develop your own idea with creative prompts. |
 | **Remember why you decided** | Capture a **decision** beside a regular note. Add your reasoning or a review date if useful. Return to the **Decisions** view to record what happened in a linked outcome note. No AI required. |
 | **Keep your tags useful** | Suggest labels using past tagging examples. Opt in to applying confident existing tags automatically; review new labels and all curation changes yourself. |
 | **Work together** | In the web app on a multi-account installation, share one note or a space with an existing account, with explicit view or edit access. |
 | **Keep a recoverable record** | Use revision history, private notes, export, scheduled snapshots and explicit restore tools. |
 
-**Thinking desk** is optional and off by default. The space owner enables it in Plugins and opens it from the command palette or a note’s actions. Its History and Collision workflows are manual: no AI, external processing or MCP tools. Review the desk, then explicitly choose **Keep private note copy** to save a snapshot. It never updates your original notes or refreshes that copy automatically. Changed or unavailable sources block a new snapshot until reviewed or removed; concurrent desk changes reject stale saves.
+**Thinking desk** is optional and off by default. The space owner enables it in Plugins and opens it from navigation. The home page puts recently edited desks first and offers **New desk**. Both workflows are manual. Choose **Save as private note** to create a separate copy with your work and links to the original notes. Changed or unavailable sources require review or removal before saving another copy. Desk revisions protect concurrent edits.
 
 Thinking desk, context-pack and decision-journal commands require a connection. Android can read synced snapshot and decision notes offline; the web app has no offline note replica. [Plugin guides](docs/plugins.md#thinking-desk) explain these workflows, source review and tag curation.
 

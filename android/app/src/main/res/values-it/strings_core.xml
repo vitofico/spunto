@@ -8,6 +8,7 @@
     <string name="core_ask">Chiedi</string>
     <string name="core_search">Cerca</string>
     <string name="core_choose_labels">Scegli etichette e viste</string>
+    <string name="core_open_navigation">Apri il menu di navigazione</string>
     <string name="core_filters_applied">Filtri applicati</string>
     <string name="core_filter_notes">Filtra note</string>
     <string name="core_all_notes">Tutte le note</string>

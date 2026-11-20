@@ -90,7 +90,7 @@ export function Data() {
           {exportError}
         </p>
       )}
-      <h2>{t("markdownimport.import_markdown")}</h2>
+      <h2 id="import-notes">{t("markdownimport.import_markdown")}</h2>
       {importer?.state === "enabled" ? (
         <MarkdownImport />
       ) : importer && importer.state !== "removed" ? (

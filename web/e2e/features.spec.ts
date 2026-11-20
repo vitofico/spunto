@@ -269,9 +269,11 @@ test("Data retains Markdown import and export while old importer links are unava
     }),
   );
   await page.goto("/settings/data");
-  await expect(page.getByLabel("Markdown ZIP")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Import Markdown", exact: true }),
+    page.getByLabel("Choose a Markdown ZIP", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Import notes", exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/Blinko/)).toHaveCount(0);
   await expect(page.locator('a[href*="blinko-import"]')).toHaveCount(0);

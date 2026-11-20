@@ -1,11 +1,11 @@
 id = "markdown-import"
-name = "Import Markdown"
+name = "Import notes"
 version = "1.0.0"
 api = "0.9"
 kind = "server"
 runtime = "in-process"
 category = "data"
-description = "Preview and import a Markdown ZIP or an operator-selected folder."
+description = "Preview and import exports from Evernote, Notion, Obsidian and Markdown apps."
 entry = "spunto.plugins.markdown_import:plugin"
 requires = []
 default = "off"

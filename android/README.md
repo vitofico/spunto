@@ -22,9 +22,9 @@ Choosing a theme, a custom accent, or the instance theme applies that palette's 
 
 ## Think, find and share
 
-**Thinking desk** is an optional server plugin, off by default. A connected space owner can enable it in Plugins, then open it from the command menu or a note’s actions. **History** follows selected notes in creation order with explicit directed **builds-on**, **challenges** and **replaces** connections. **Collision** combines two to five deliberately selected subjects with an optional question and creative prompts for your own idea. Neither workflow uses AI, external processing or MCP tools, and originals remain intact.
+**Thinking desk** is optional. A connected space owner can enable it in Plugins and open the page from navigation. **Trace an idea** puts notes in creation order and records connections. **Combine notes** helps you write an idea from two to five sources. To resume your work, choose a saved desk by its full title. The list puts recently edited desks first and offers **New desk**.
 
-Commands need a connection. **Keep private note copy** explicitly saves the reviewed desk as an ordinary private snapshot; future desk edits do not change that copy. Changed or unavailable sources require review or removal before another snapshot, and stale desk revisions cannot overwrite concurrent changes. Once synced, snapshot notes can be read offline. See the [Thinking desk guide](../docs/plugins.md#thinking-desk) for the full workflow.
+Desk actions require a connection. **Save as private note** creates a separate note with your work and links to its sources. Changed or unavailable sources need review or removal before saving another copy. Saved notes can sync for offline reading. See the [Thinking desk guide](../docs/plugins.md#thinking-desk).
 
 Search shows marked excerpts around matching words, including deep matches in a long first line, and distinguishes those results from similar meaning when connected semantic search is available. Existing drafts and conflict copies remain available for recovery; failed plugin submissions keep the form open for review.
 

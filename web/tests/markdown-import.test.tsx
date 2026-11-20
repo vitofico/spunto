@@ -129,3 +129,43 @@ it("surfaces upload errors without enabling an import", async () => {
     screen.queryByRole("button", { name: "Import these notes" }),
   ).toBeNull();
 });
+
+it("offers source-specific import instructions and previews Evernote omissions", async () => {
+  const fetch = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        archive_id: "synthetic-enex",
+        report: {
+          notes: 1,
+          attachments: 0,
+          attachment_bytes: 0,
+          missing_links: 0,
+          unsupported_items: 1,
+          planned: {
+            created: 1,
+            updated: 0,
+            unchanged: 0,
+            skipped_owner_edits: 0,
+          },
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ),
+  );
+  vi.stubGlobal("fetch", fetch);
+  mount();
+  fireEvent.change(screen.getByLabelText("Source format"), {
+    target: { value: "evernote" },
+  });
+  expect(
+    screen.getByText(/Changed Evernote notes import as new notes/),
+  ).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Choose an Evernote ENEX file"), {
+    target: { files: [new File(["synthetic enex"], "sample.enex")] },
+  });
+  await screen.findByText("Skipped unsupported items: 1.");
+  expect(screen.getByText(/^New: 1/)).toBeTruthy();
+  expect(fetch.mock.calls[0][0]).toBe(
+    "/api/v1/plugins/markdown-import/upload?source_format=evernote",
+  );
+});

@@ -8,6 +8,7 @@
     <string name="core_ask">Demander</string>
     <string name="core_search">Rechercher</string>
     <string name="core_choose_labels">Choisir des étiquettes et des vues</string>
+    <string name="core_open_navigation">Ouvrir la navigation</string>
     <string name="core_filters_applied">Filtres appliqués</string>
     <string name="core_filter_notes">Filtrer les notes</string>
     <string name="core_all_notes">Toutes les notes</string>

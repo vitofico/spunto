@@ -8,6 +8,7 @@
     <string name="core_ask">Ask</string>
     <string name="core_search">Search</string>
     <string name="core_choose_labels">Choose labels and views</string>
+    <string name="core_open_navigation">Open navigation</string>
     <string name="core_filters_applied">Filters applied</string>
     <string name="core_filter_notes">Filter notes</string>
     <string name="core_all_notes">All notes</string>

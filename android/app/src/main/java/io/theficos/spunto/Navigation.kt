@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 @Stable class Navigator internal constructor(private val entries:SnapshotStateList<String>,private val forget:(String)->Unit) {
  val route:String get()=entries.last()
  val canGoBack:Boolean get()=entries.size>1
+ internal fun contains(route:String):Boolean=route in entries
  /** Unique per stack position, so a page opened twice keeps two separate saved states. */
  internal val stateKey:String get()=stateKey(entries.lastIndex)
  private fun stateKey(index:Int)="$index:${entries[index]}"
@@ -41,6 +42,7 @@ val LocalNavigator=staticCompositionLocalOf<Navigator> { error("Navigator is pro
 fun routeTitle(context:Context,route:String):String?=when(route) {
  "settings" -> context.getString(R.string.core_settings); "appearance" -> context.getString(R.string.core_appearance); "plugins" -> context.getString(R.string.core_plugins); "ask" -> context.getString(R.string.core_ask_notes)
  "tools" -> context.getString(R.string.plugin_global_tools)
+ ThinkingDeskRoute -> context.getString(R.string.settings_plugin_thinking_desk_name)
  WhatsNewRoute -> context.getString(R.string.whats_new_title)
  else -> null
 }

@@ -107,7 +107,7 @@ class PluginPresentationTest {
   val catalog=buildJsonObject {put("plugins",JsonArray(listOf(plugin("voice-memos","transcribe"))))}
   assertTrue(needsNoteShortcutInputs(manifest,catalog))
  }
- @Test fun toolsExposePrimaryGlobalCommandsAndLeaveJournalInItsOwnViews() {
+ @Test fun toolsExposePrimaryGlobalCommandsAndLeaveDedicatedPagesInNavigation() {
   fun tool(id:String,command:String,state:String="enabled")=Json.parseToJsonElement("""{
     "id":"$id","switch":"on","state":"$state","contributes":{"commands":[
      {"id":"internal","where":[]},{"id":"$command","where":["palette"]},{"id":"$command","where":["palette"]}
@@ -117,7 +117,7 @@ class PluginPresentationTest {
    tool("digest","digest","waiting"),tool("library-stats","summary"),tool("decision-journal","record-decision"))
   val catalog=buildJsonObject {put("plugins",JsonArray(plugins))}
   val manifest=buildJsonObject {put("plugins",JsonArray(plugins.filterNot {it["id"]==JsonPrimitive("library-stats")}))}
-  assertEquals(listOf("ask","packs","desk","review-now"),globalTools(catalog,manifest).map {it.second["id"]!!.jsonPrimitive.content})
+  assertEquals(listOf("ask","packs","review-now"),globalTools(catalog,manifest).map {it.second["id"]!!.jsonPrimitive.content})
  }
  @Test fun thinkingDeskConnectionLabelsTranslateTheKindFieldAndKeepWireValues() {
   val italian=settingsTestResources("it")

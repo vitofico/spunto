@@ -68,6 +68,7 @@ internal fun noteTools(
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().filter {command ->
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
   (!stock || when(id to command.string("id")) {
+   ThinkingDeskRoute to "desk" -> false
    DecisionJournalId to "record-decision", DecisionJournalId to "review-decision" -> false
    AgentInboxId to AgentReviewCommand -> !versionedAgentReview && legacyAgentReview
    "image-text" to "read" -> inputs.image
@@ -113,6 +114,10 @@ internal fun pluginPillCaption(resources:Resources,plugin:String,caption:String)
 /** These presentation labels leave the submitted enum value and note captions intact. */
 internal fun pluginFormChoice(resources:Resources,plugin:String,field:String,value:JsonElement):String? {
  val option=(value as? JsonPrimitive)?.takeIf {it.isString}?.content ?: return null
+ if(plugin=="translate" && field in setOf("source_language","language")) {
+  if(field=="source_language" && option=="auto") return resources.getString(R.string.plugin_auto_language)
+  if(option in translationLanguages) return translationLanguageName(resources,option)
+ }
  val label=when {
   plugin in setOf("context-packs","thinking-desk") && field=="action" -> when(option) {
    "save" -> R.string.core_save;"delete" -> R.string.plugin_delete;else -> null
@@ -125,6 +130,28 @@ internal fun pluginFormChoice(resources:Resources,plugin:String,field:String,val
  }
  return label?.let(resources::getString)
 }
+
+internal val translationLanguages=setOf("en","it","es","fr","de")
+
+internal fun translationLanguageName(resources:Resources,code:String):String {
+ val locale=resources.configuration.locales[0]
+ return Locale.forLanguageTag(code).getDisplayLanguage(locale).replaceFirstChar {it.titlecase(locale)}
+}
+
+internal fun thinkingDeskStartAction(component:JsonObject):Boolean =
+ component.string("type")=="command" && component.string("id")=="edit" &&
+  (component["args"] as? JsonObject)?.string("action")=="start"
+
+internal fun thinkingDeskWorkAction(component:JsonObject):Boolean {
+ val args=component["args"] as? JsonObject ?: return false
+ return component.string("type")=="command" && args["expected_revision"]!=null &&
+  (component.string("id")=="sources" || component.string("id")=="edit" && args.string("action") in setOf("write","snapshot"))
+}
+
+internal fun thinkingDeskFormLabel(plugin:String,component:JsonObject):String? =
+ if(plugin=="thinking-desk" && component.string("type")=="form")
+  (component["schema"] as? JsonObject)?.string("title")?.takeIf(String::isNotBlank)
+ else null
 
 /** Older servers send these fixed field labels as English. Field values remain server-owned. */
 internal fun pluginFormComponent(resources:Resources,plugin:String,component:JsonObject):JsonObject {

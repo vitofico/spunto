@@ -86,7 +86,7 @@ fun validSchema(value:JsonElement?):Boolean {
    (!field.bool("x-secret") || type=="string" && field["default"]==null)
  }
 }
-@Composable fun Vocabulary(value:JsonObject,onNote:(String)->Unit={},onSuggestion:(String)->Unit={},onCommand:(String,JsonObject)->Unit={_,_->},online:Boolean=true,onForm:((JsonObject)->Unit)?=null,formInitial:JsonObject=JsonObject(emptyMap()),formHidden:Set<String> = emptySet(),noteReference:(@Composable (String,String)->Unit)?=null,proposalPill:(@Composable (JsonObject)->Unit)?=null,choiceLabel:((String,JsonElement)->String?)?=null) {
+@Composable fun Vocabulary(value:JsonObject,onNote:(String)->Unit={},onSuggestion:(String)->Unit={},onCommand:(String,JsonObject)->Unit={_,_->},online:Boolean=true,onForm:((JsonObject)->Unit)?=null,formInitial:JsonObject=JsonObject(emptyMap()),formHidden:Set<String> = emptySet(),noteReference:(@Composable (String,String)->Unit)?=null,proposalPill:(@Composable (JsonObject)->Unit)?=null,choiceLabel:((String,JsonElement)->String?)?=null,formLabel:String?=null,primaryCommand:String?=null,formSubmitOnChange:Boolean=false) {
  val component=safeComponent(value) ?: return
  val webLabel=stringResource(R.string.plugin_ui_web)
  when(component.string("type")) {
@@ -98,8 +98,13 @@ fun validSchema(value:JsonElement?):Boolean {
    entries.forEach { item -> val id=if(item is JsonObject) item.string("id") else item.jsonPrimitive.content; val reason=(item as? JsonObject)?.string("reason").orEmpty();if(noteReference!=null) noteReference(id,reason) else TextButton(onClick={onNote(id)}) { Text(reason.ifEmpty { stringResource(R.string.plugin_ui_open_note) }) } }
   }
   "pill" -> if(proposalPill!=null) proposalPill(component) else SuggestionChip(onClick={onSuggestion(component.string("suggestion_id"))},label={Text(component.string("label"))})
-  "command" -> if(online) TextButton(onClick={onCommand(component.string("id"),component["args"] as? JsonObject ?: JsonObject(emptyMap()))}) { Text(component.string("title")) }
-  "form" -> SchemaForm(component["schema"]!!.jsonObject,initial=formInitial,preferDefaults=true,readOnly=!online || onForm==null,readOnlyMessage=if(!online) stringResource(R.string.plugin_ui_connection) else webLabel,saveLabel=stringResource(R.string.plugin_ui_run),choiceLabel=choiceLabel,hiddenFields=formHidden+commandFormHiddenFields(component["schema"]!!.jsonObject),onSave={onForm?.invoke(it)})
+  "command" -> if(online) {
+   val id=component.string("id")
+   val args=component["args"] as? JsonObject ?: JsonObject(emptyMap())
+   if(id==primaryCommand) Button(onClick={onCommand(id,args)}) {Text(component.string("title"))}
+   else TextButton(onClick={onCommand(id,args)}) {Text(component.string("title"))}
+  }
+  "form" -> SchemaForm(component["schema"]!!.jsonObject,initial=formInitial,preferDefaults=true,readOnly=!online || onForm==null,readOnlyMessage=if(!online) stringResource(R.string.plugin_ui_connection) else webLabel,saveLabel=formLabel ?: stringResource(R.string.plugin_ui_run),choiceLabel=choiceLabel,submitOnChange=formSubmitOnChange,hiddenFields=formHidden+commandFormHiddenFields(component["schema"]!!.jsonObject),onSave={onForm?.invoke(it)})
   "diff" -> Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
    Text(stringResource(R.string.plugin_ui_version,component.string("base_version")),style=MaterialTheme.typography.bodySmall)
    component.objects("hunks").forEachIndexed { index,hunk ->
@@ -112,7 +117,7 @@ fun validSchema(value:JsonElement?):Boolean {
 }
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable fun SchemaForm(schema:JsonObject,initial:JsonObject=JsonObject(emptyMap()),readOnly:Boolean=false,pluginId:String="",readOnlyMessage:String?=null,saveLabel:String?=null,hiddenFields:Set<String> = emptySet(),preferDefaults:Boolean=false,
- submitEnabled:Boolean=true,retainEdits:Boolean=false,choiceLabel:((String,JsonElement)->String?)?=null,invalidInputMessage:String?=null,validateInput:((JsonObject)->String?)?=null,detailsFields:Set<String> = emptySet(),detailsLabels:Pair<String,String>?=null,onSave:(JsonObject)->Unit={}) {
+ submitEnabled:Boolean=true,submitOnChange:Boolean=false,retainEdits:Boolean=false,choiceLabel:((String,JsonElement)->String?)?=null,invalidInputMessage:String?=null,validateInput:((JsonObject)->String?)?=null,detailsFields:Set<String> = emptySet(),detailsLabels:Pair<String,String>?=null,onSave:(JsonObject)->Unit={}) {
  val resources=LocalContext.current.resources
  val unavailable=readOnlyMessage ?: stringResource(R.string.plugin_ui_connection)
  val fields=(schema["properties"] as? JsonObject).orEmpty().filterKeys {it !in hiddenFields}
@@ -151,7 +156,8 @@ fun validSchema(value:JsonElement?):Boolean {
    }
   }
   if(error.isNotEmpty()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
-  if((!readOnly || retainEdits) && (schema["properties"] as? JsonObject).orEmpty().isNotEmpty()) Button(enabled=submitEnabled && !readOnly,onClick={
+  val changed=!submitOnChange || fields.any { (key,field) -> values[key]!=(field as? JsonObject)?.get("default") }
+ if((!readOnly || retainEdits) && (schema["properties"] as? JsonObject).orEmpty().isNotEmpty()) Button(enabled=submitEnabled && !readOnly && changed,onClick={
    runCatching { formArguments(schema,values) }.onSuccess {args ->
     error=validateInput?.invoke(args).orEmpty()
     if(error.isEmpty()) onSave(args)

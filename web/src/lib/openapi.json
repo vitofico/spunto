@@ -3294,6 +3294,24 @@
     "/api/v1/plugins/markdown-import/upload": {
       "post": {
         "operationId": "upload_api_v1_plugins_markdown_import_upload_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source_format",
+            "required": false,
+            "schema": {
+              "default": "markdown",
+              "enum": [
+                "markdown",
+                "obsidian",
+                "notion",
+                "evernote"
+              ],
+              "title": "Source Format",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3302,6 +3320,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Upload",

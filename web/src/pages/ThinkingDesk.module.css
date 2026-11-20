@@ -1,0 +1,40 @@
+.frame h1 {
+  margin-block: var(--s-12) var(--s-20);
+  overflow-wrap: anywhere;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.desks {
+  display: grid;
+  margin: 0 0 var(--s-20);
+  padding: 0;
+  list-style: none;
+}
+
+.desks li {
+  border-top: 1px solid var(--rule);
+}
+
+.desks a {
+  display: block;
+  padding-block: var(--s-12);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-8);
+  margin-block: var(--s-20) var(--s-12);
+}
+
+.actions h2 {
+  margin: 0;
+}

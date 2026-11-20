@@ -11,6 +11,8 @@
   <string name="settings_thinking_desk_command">Thinking desk</string>
   <string name="settings_thinking_desk_edit">Edit thinking desk</string>
   <string name="settings_thinking_desk_sources">Choose thinking sources</string>
+  <string name="settings_thinking_desk_resume">Resume a desk</string>
+  <string name="settings_thinking_desk_from_navigation">Open Thinking desk from the main navigation.</string>
   <string name="core_share_text_preview">Share note text?</string>
   <string name="core_share_text_scope">Choose a recipient in the next step. This sends a copy of the saved note text shown below, including any written links. It does not send attachment files or grant access to Spunto or linked notes. Copies cannot be revoked.</string>
 

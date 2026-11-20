@@ -22,9 +22,10 @@ import {
   useSyncState,
   useHosted,
   useWorkspaceIssue,
+  useWorkspaceRole,
 } from "./lib";
 import { useInstanceAppearance } from "./features/Appearance";
-import { PluginRailViews, type CommandOrigin } from "./features/Slots";
+import { usePlugins, type CommandOrigin } from "./features/Slots";
 import Timeline from "./pages/Timeline";
 import { Icon } from "./components/core/Icon";
 import { useToast } from "./components/core/Toast";
@@ -34,6 +35,7 @@ import { useModalFocus } from "./components/core/useModalFocus";
 import { AccountIdentityLink } from "./features/AccountIdentity";
 import { SpaceSwitcher } from "./features/Collaboration";
 import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
+import { isBundledPlugin } from "./lib/localizePlugins";
 import { commandSuccessMessage } from "./features/vocabularyData";
 const loadNote = () => import("./pages/Note");
 // React.lazy keeps a failed import for good, so "Try again" builds fresh ones.
@@ -51,6 +53,12 @@ function lazyPages() {
     ),
     SharedNotesPage: lazy(() => import("./pages/SharedNotes")),
     NotePage: lazy(loadNote),
+    ThinkingDeskPage: lazy(() => import("./pages/ThinkingDesk")),
+    PluginRailViews: lazy(() =>
+      import("./features/PluginRailViews").catch(() => ({
+        default: () => null,
+      })),
+    ),
     SearchPage: lazy(() => import("./pages/Search")),
     AuthPage: lazy(() => import("./pages/Auth")),
     SettingsPage: lazy(() =>
@@ -198,6 +206,16 @@ function Rail({
   const [location] = useLocation();
   const hosted = useHosted();
   const labels = useLabels();
+  const plugins = usePlugins();
+  const role = useWorkspaceRole();
+  const thinkingDesk =
+    role === "owner" &&
+    plugins.data?.plugins.some(
+      (p) =>
+        p.id === "thinking-desk" &&
+        isBundledPlugin(p) &&
+        (p.state === undefined || p.state === "enabled"),
+    );
   const sync = useSync();
   const rail = useRef<HTMLElement>(null);
   useModalFocus(rail, open, close, returnFocus);
@@ -255,6 +273,21 @@ function Rail({
             <Icon name="notes" />
             <span className="rail-label">{t("app.all_notes")}</span>
           </Link>
+          {thinkingDesk && (
+            <Link
+              href="/thinking-desk"
+              aria-label={t("plugin.thinking-desk.name")}
+              onClick={close}
+              aria-current={
+                location.startsWith("/thinking-desk") ? "page" : undefined
+              }
+            >
+              <Icon name="branch" />
+              <span className="rail-label">
+                {t("plugin.thinking-desk.name")}
+              </span>
+            </Link>
+          )}
           <Link
             href="/archive"
             aria-label={t("app.archive")}
@@ -285,7 +318,11 @@ function Rail({
             </Link>
           </nav>
         )}
-        {(!collapsed || open) && <PluginRailViews close={close} />}
+        {(!collapsed || open) && (
+          <Suspense fallback={null}>
+            <pages.PluginRailViews close={close} />
+          </Suspense>
+        )}
         <div className="label-tree">
           <div className="overline">{t("app.labels")}</div>
           <nav>
@@ -524,6 +561,7 @@ export default function App() {
     SettingsPage,
     SharedNotesPage,
     StatusPage,
+    ThinkingDeskPage,
   } = pages;
   const signedIn = auth.status === "authenticated";
   useEffect(() => {
@@ -917,6 +955,9 @@ export default function App() {
               </Route>
               <Route path="/shared">
                 <SharedNotesPage />
+              </Route>
+              <Route path="/thinking-desk/:desk?">
+                {(params) => <ThinkingDeskPage desk={params.desk} />}
               </Route>
               <Route path="/search">
                 <SearchPage />

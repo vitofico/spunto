@@ -1490,7 +1490,11 @@ class Host:
                 command_feedback=kind == "command"
                 and self.catalog_metadata[plugin_id]["origin"] == "bundled",
             )
-            result = render_output(result)
+            result = render_output(
+                result,
+                joined_markdown=(plugin_id, kind, key) == ("translate", "command", "translate")
+                and self.catalog_metadata[plugin_id]["origin"] == "bundled",
+            )
         return result
 
     async def _recover_expired(self, conn, now):

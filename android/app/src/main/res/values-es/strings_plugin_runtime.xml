@@ -16,6 +16,8 @@
     <string name="plugin_replaces">Reemplaza</string>
     <string name="plugin_action">Acción</string>
     <string name="plugin_translate_to">Traducir a</string>
+    <string name="plugin_translation_preview">Vista previa en %1$s</string>
+    <string name="plugin_translation_linked_note">Al guardar, se crea una nota enlazada y el original se conserva intacto.</string>
     <string name="plugin_choose_note">Elegir una nota</string>
     <string name="plugin_auto_language">Detección automática</string>
     <string name="plugin_delete">Eliminar</string>

@@ -95,7 +95,15 @@ def main(argv: list[str] | None = None) -> int:
     plugin_run.add_argument("plugin_id", choices=["markdown-import"])
     plugin_run.add_argument("--user-id", help="exact hosted workspace owner UUID")
     plugin_run.add_argument("--workspace-id", help="exact hosted target workspace UUID")
-    plugin_run.add_argument("--path", type=Path, help="Markdown ZIP or folder (operator CLI only)")
+    plugin_run.add_argument(
+        "--path", type=Path, help="Markdown ZIP, folder or Evernote ENEX (operator CLI only)"
+    )
+    plugin_run.add_argument(
+        "--format",
+        choices=["markdown", "obsidian", "notion", "evernote"],
+        default="markdown",
+        help="Markdown source layout (.enex files automatically use Evernote)",
+    )
     plugin_run.add_argument("--dry-run", action="store_true")
     plugin_check = (
         commands.add_parser("plugin", help="operator plugin checks")
@@ -214,7 +222,7 @@ async def _run_plugin(settings, args):
             args.plugin_id,
             principal=Principal("operator", "session", "Owner", "full", private_ok=True),
         )
-        source = await ctx.to_thread(read_path, args.path)
+        source = await ctx.to_thread(read_path, args.path, args.format)
         report = await run_import(ctx, source, dry_run=args.dry_run)
         print(json.dumps(report, ensure_ascii=False, sort_keys=True))
 

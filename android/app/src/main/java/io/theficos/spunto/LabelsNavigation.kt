@@ -112,11 +112,12 @@ fun sharedManagementTarget(context:Context,config:AuthConfig?,replicaRoot:String
 /** Browser sign-in stays separate for library, space profile and user account settings. */
 fun ownerWebSettingsTarget(context:Context,config:AuthConfig?,replicaRoot:String?,online:Boolean,section:String,needsSignIn:Boolean=false):SharedManagementTarget {
  fun unavailable(message:String)=SharedManagementTarget(null,message)
- if(section !in setOf("data","profile","account")) return unavailable(context.getString(R.string.core_owner_setting_missing))
+ if(section !in setOf("data","import","profile","account")) return unavailable(context.getString(R.string.core_owner_setting_missing))
  if(config==null || config.token.isBlank() || needsSignIn) return unavailable(context.getString(R.string.core_owner_connect))
  if(!online) return unavailable(context.getString(R.string.core_owner_offline))
  val root=managementRoot(config.serverUrl) ?: return unavailable(context.getString(R.string.core_server_address_missing))
  if(root.startsWith("http://") && !config.httpConsent) return unavailable(context.getString(R.string.core_plain_http_allow))
  if(root!=replicaRoot?.let(::managementRoot)) return unavailable(context.getString(R.string.core_owner_sync))
- return SharedManagementTarget("$root/settings/$section",context.getString(R.string.core_owner_sign_in_separate))
+ val page=if(section=="import") "data#import-notes" else section
+ return SharedManagementTarget("$root/settings/$page",context.getString(R.string.core_owner_sign_in_separate))
 }

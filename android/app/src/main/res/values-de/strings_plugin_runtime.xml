@@ -16,6 +16,8 @@
     <string name="plugin_replaces">Ersetzt</string>
     <string name="plugin_action">Aktion</string>
     <string name="plugin_translate_to">Übersetzen in</string>
+    <string name="plugin_translation_preview">Vorschau auf %1$s</string>
+    <string name="plugin_translation_linked_note">Beim Speichern entsteht eine verknüpfte Notiz. Das Original bleibt unverändert.</string>
     <string name="plugin_choose_note">Notiz auswählen</string>
     <string name="plugin_auto_language">Automatische Erkennung</string>
     <string name="plugin_delete">Löschen</string>

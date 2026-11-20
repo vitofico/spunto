@@ -156,6 +156,7 @@ export function SchemaForm({
   optionLabel,
   optionalDetails,
   submitDisabled = false,
+  submitOnChange = false,
 }: {
   schema: Schema;
   initial?: Args;
@@ -170,6 +171,7 @@ export function SchemaForm({
   optionLabel?: (key: string, value: Json) => string | undefined;
   optionalDetails?: { label: string; fields: readonly string[] };
   submitDisabled?: boolean;
+  submitOnChange?: boolean;
 }) {
   useLanguage();
   const id = useId();
@@ -200,6 +202,12 @@ export function SchemaForm({
       </p>
     );
   const entries = Object.entries(schema.properties ?? {});
+  const unchanged =
+    submitOnChange &&
+    !entries.some(
+      ([key, prop]) =>
+        !hiddenFields.includes(key) && values[key] !== prop.default,
+    );
   const optional = (key: string) =>
     optionalDetails?.fields.includes(key) &&
     !schema.required?.includes(key) &&
@@ -374,7 +382,7 @@ export function SchemaForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (disabled || busy || submitDisabled) return;
+        if (disabled || busy || submitDisabled || unchanged) return;
         const issue = validateSettings(schema, values);
         setError(issue);
         if (!issue) onSave(values);
@@ -397,7 +405,7 @@ export function SchemaForm({
       ) && (
         <button
           className="primary"
-          disabled={disabled || busy || submitDisabled}
+          disabled={disabled || busy || submitDisabled || unchanged}
         >
           {busy ? t("app.saving") : submitLabel}
         </button>

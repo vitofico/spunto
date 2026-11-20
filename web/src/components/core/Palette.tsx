@@ -310,6 +310,7 @@ export function Palette({
                 query={query}
                 noteId={noteId}
                 note={note.data}
+                onNavigate={onClose}
                 onResult={(value, context) => {
                   setResult(value);
                   setOrigin(context);

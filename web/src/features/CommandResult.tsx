@@ -31,6 +31,7 @@ import {
   decisionStatus,
   decisionCommandLabel,
 } from "./decisionJournalData";
+import { choiceLabel } from "./format";
 import {
   supportsNotePicker,
   usePlugins,
@@ -38,8 +39,9 @@ import {
   type CommandOrigin,
 } from "./Slots";
 import { useCommandProposals } from "./suggestionFeedback";
-import { ResultNoteLink, VocabularyOutput } from "./Vocabulary";
-import { outputText, validComponent } from "./vocabularyData";
+import { ResultNoteLink, safePluginHtml, VocabularyOutput } from "./Vocabulary";
+import { deskWorkspace } from "./thinkingDeskData";
+import { outputText, record, validComponent } from "./vocabularyData";
 import styles from "./Feature.module.css";
 
 const LinkPicker = lazy(() =>
@@ -98,6 +100,12 @@ function pluginFormChoice(
   }
   if (plugin.id === "links" && field === "target")
     return value === "Choose a note" ? t("pluginui.choice.choose_note") : value;
+  if (
+    plugin.id === "translate" &&
+    field === "source_language" &&
+    value === "auto"
+  )
+    return t("plugin.translate.detect_source");
   return undefined;
 }
 
@@ -137,12 +145,18 @@ function saveCommand(
     }
   }
 }
+type DeskPageActions = {
+  route: (args: Args, origin: CommandOrigin | undefined) => boolean;
+  changed: (value: unknown, command: string, args?: Args) => void;
+};
+
 export default function CommandResult(props: {
   value: unknown;
   onDismiss?: () => void;
   onOpenNote?: () => void;
   surroundingTitle?: string;
   origin?: CommandOrigin;
+  deskPage?: DeskPageActions;
 }) {
   const sourceId = props.origin?.args?.note_id;
   if (
@@ -223,12 +237,14 @@ function PluginResult({
   onOpenNote,
   surroundingTitle,
   origin,
+  deskPage,
 }: {
   value: unknown;
   onDismiss?: () => void;
   onOpenNote?: () => void;
   surroundingTitle?: string;
   origin?: CommandOrigin;
+  deskPage?: DeskPageActions;
 }) {
   useLanguage();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -272,11 +288,22 @@ function PluginResult({
     typeof noteId === "string" ? noteId : undefined,
     proposalIds,
   );
-  const resultItems = askItems(display);
+  const workspace = deskPage ? deskWorkspace(display) : undefined;
+  const resultItems = workspace?.items ?? askItems(display);
+  const pageItems = deskPage
+    ? resultItems.filter(
+        (item) =>
+          item.type !== "command" ||
+          item.id !== "desk" ||
+          (record(item.args) && Object.keys(item.args).length > 0) ||
+          (currentOrigin?.command === "edit" &&
+            currentOrigin.args?.action === "start" &&
+            typeof currentOrigin.args.title !== "string"),
+      )
+    : resultItems;
   const interactive = resultItems.some(
     (item) => item.type === "form" || item.type === "pill",
   );
-  const text = interactive ? "" : outputText(display);
   const plugin = manifest.data?.plugins.find(
     (p) => p.id === currentOrigin?.plugin,
   );
@@ -294,6 +321,32 @@ function PluginResult({
     sourceForm && validComponent(sourceForm) && sourceForm.type === "form"
       ? (sourceForm.schema as Schema).properties
       : undefined;
+  const thinkingDesk =
+    plugin?.id === "thinking-desk" && isBundledPlugin(plugin);
+  const deskForm = thinkingDesk
+    ? resultItems.find((item) => item.type === "form")
+    : undefined;
+  const deskFormLabel = (deskForm?.schema as Schema | undefined)?.title;
+  const deskStartActions = thinkingDesk
+    ? resultItems.filter(
+        (item) =>
+          item.type === "command" &&
+          item.id === "edit" &&
+          (item.args as Args | undefined)?.action === "start",
+      )
+    : [];
+  const deskWorkAction = thinkingDesk
+    ? resultItems.find((item) => {
+        const args = item.args as Args | undefined;
+        return (
+          item.type === "command" &&
+          typeof args?.expected_revision === "number" &&
+          (item.id === "sources" ||
+            (item.id === "edit" &&
+              ["write", "snapshot"].includes(String(args.action))))
+        );
+      })
+    : undefined;
   const selectedIds = sourceFields?.selected_ids?.default;
   const sourceRevision = sourceFields?.expected_revision?.default;
   const sourceLimit = sourceFields?.max_sources?.default;
@@ -309,7 +362,45 @@ function PluginResult({
           picker: true,
         }
       : undefined;
+  const deskPicker = thinkingDesk && !!sourcePickerArgs;
+  const deskPickerContinue = deskPicker
+    ? resultItems
+        .slice(0, resultItems.indexOf(sourceForm!))
+        .find((item) => item.type === "command" && item.id === "desk")
+    : undefined;
+  const deskPrimary = deskPickerContinue ?? deskWorkAction;
+  const deskPrimaryActions = deskPrimary ? [deskPrimary] : deskStartActions;
+  const deskPickerChanged =
+    deskPicker &&
+    (typeof currentOrigin?.args?.add_id === "string" ||
+      typeof currentOrigin?.args?.remove === "string" ||
+      currentOrigin?.args?.refresh === true);
+  const deskPickerStatus =
+    deskPickerChanged && resultItems[0]?.type === "text"
+      ? String(resultItems[0].text)
+      : "";
   const providedSave = saveCommand(display, saveCommandIds(plugin));
+  const translationLanguage = currentOrigin?.args?.language;
+  const translationPreview =
+    plugin?.id === "translate" &&
+    isBundledPlugin(plugin) &&
+    providedSave?.id === "save-translation" &&
+    typeof translationLanguage === "string";
+  const translationHtml =
+    translationPreview &&
+    record(display) &&
+    typeof display.preview_html === "string" &&
+    display.preview_html.length <= 1_000_000
+      ? display.preview_html
+      : undefined;
+  const text = translationPreview
+    ? resultItems
+        .filter((item) => item.type === "markdown")
+        .map((item) => String(item.text ?? item.markdown ?? ""))
+        .join("")
+    : interactive
+      ? ""
+      : outputText(display);
   const askPendingHandle = useRef<Args | undefined>(undefined);
   const askLifetime = useRef({ active: true, generation: requestGeneration() });
   useEffect(() => {
@@ -342,7 +433,9 @@ function PluginResult({
     (command) => command.id === currentOrigin?.command,
   )?.title;
   const title = onDismiss
-    ? (commandName ?? plugin?.name ?? t("commandresult.title"))
+    ? ((thinkingDesk ? plugin?.name : commandName) ??
+      plugin?.name ??
+      t("commandresult.title"))
     : undefined;
   const showHeading = title && title !== surroundingTitle;
   const formLabel =
@@ -413,6 +506,7 @@ function PluginResult({
       )
         return;
       if (choice.plugin === "ask") askPendingHandle.current = undefined;
+      deskPage?.changed(next, choice.id, choice.args);
       setDisplay(next);
       setCurrentOrigin({
         plugin: choice.plugin,
@@ -449,8 +543,28 @@ function PluginResult({
     },
   });
   useEffect(() => {
-    if (!conversationView) (heading.current ?? panel.current)?.focus();
-  }, [responseId, conversationView]);
+    if (conversationView) return;
+    if (thinkingDesk) {
+      const dialog = panel.current?.closest<HTMLElement>(
+        ".palette, dialog, [role='dialog']",
+      );
+      if (dialog) dialog.scrollTop = 0;
+    }
+    const pickerAction = deskPickerChanged
+      ? panel.current?.querySelector<HTMLElement>(
+          deskPickerContinue ? "button.primary" : 'input[type="search"]',
+        )
+      : undefined;
+    (pickerAction ?? heading.current ?? panel.current)?.focus({
+      preventScroll: thinkingDesk && !pickerAction,
+    });
+  }, [
+    responseId,
+    conversationView,
+    thinkingDesk,
+    deskPickerChanged,
+    deskPickerContinue,
+  ]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -487,6 +601,37 @@ function PluginResult({
     conversationView,
     online,
   ]);
+  const sourcePicker =
+    sourcePickerArgs &&
+    currentOrigin &&
+    Array.isArray(selectedIds) &&
+    (typeof sourceLimit === "number" && selectedIds.length >= sourceLimit ? (
+      <p role="status">
+        {t("notepicker.source_limit", { count: sourceLimit })}
+      </p>
+    ) : (
+      <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
+        <NotePicker
+          exclude={selectedIds.filter(
+            (id): id is string => typeof id === "string",
+          )}
+          action={t("notepicker.add_source")}
+          busy={followup.isPending || !online}
+          onSelect={(note) =>
+            followup.mutate({
+              plugin: currentOrigin.plugin,
+              id: currentOrigin.command,
+              args: {
+                ...sourcePickerArgs,
+                add_id: note.id,
+                add_version: note.version,
+              },
+              session,
+            })
+          }
+        />
+      </Suspense>
+    ));
   if (conversationView)
     return (
       <Suspense fallback={<p role="status">{t("timeline.loading_notes")}</p>}>
@@ -521,8 +666,11 @@ function PluginResult({
         )}
       <p
         role="status"
-        className={decisionSaved ? styles.resultStatus : "sr-only"}
+        className={
+          decisionSaved || deskPickerStatus ? styles.resultStatus : "sr-only"
+        }
       >
+        {deskPickerStatus}
         {decisionSaved &&
           t(
             decisionCommand === "record-decision"
@@ -535,13 +683,46 @@ function PluginResult({
           {t("decisions.reconnect")}
         </p>
       )}
-      <div className={styles.resultBody} aria-busy={followup.isPending}>
+      {translationPreview && (
+        <div className={styles.resultStatus}>
+          <strong>
+            {t("plugin.translate.preview", {
+              language: choiceLabel(translationLanguage),
+            })}
+          </strong>
+          <p>{t("plugin.translate.linked_note")}</p>
+        </div>
+      )}
+      <div
+        className={
+          deskStartActions.length
+            ? `${styles.resultBody} ${styles.deskChoices}${deskPage ? " " + styles.deskPageChoices : ""}`
+            : styles.resultBody
+        }
+        aria-busy={followup.isPending}
+      >
+        {translationHtml && (
+          <div
+            dangerouslySetInnerHTML={{
+              __html: safePluginHtml(translationHtml),
+            }}
+          />
+        )}
         <VocabularyOutput
           key={responseId}
           result
           onOpenNote={onOpenNote}
           primaryCommand={providedSave?.id}
+          primaryActions={deskPrimaryActions}
           formSubmitDisabled={!online}
+          formSubmitOnChange={deskPicker}
+          beforeForm={thinkingDesk ? sourcePicker : undefined}
+          hideForm={
+            thinkingDesk &&
+            !!sourcePickerArgs &&
+            Array.isArray(selectedIds) &&
+            selectedIds.length === 0
+          }
           formSchema={
             decisionCommand
               ? (schema) => decisionForm(decisionCommand, schema)
@@ -560,13 +741,24 @@ function PluginResult({
           displayText={
             decisionCommand === "journal" ? decisionStatus : undefined
           }
-          value={visibleResult}
+          value={
+            deskPickerStatus
+              ? pageItems.slice(1)
+              : translationHtml
+                ? resultItems.filter((item) => item.type !== "markdown")
+                : deskPage
+                  ? pageItems
+                  : visibleResult
+          }
           formLabel={
-            sourcePickerArgs ? t("notepicker.update_sources") : formLabel
+            deskFormLabel ??
+            (sourcePickerArgs ? t("notepicker.update_sources") : formLabel)
           }
           onCommand={
             currentOrigin && online && !followup.isPending
-              ? (id, args) =>
+              ? (id, args) => {
+                  if (id === "desk" && deskPage?.route(args, currentOrigin))
+                    return;
                   followup.mutate({
                     plugin: currentOrigin.plugin,
                     id,
@@ -581,7 +773,8 @@ function PluginResult({
                         ? { ...args, picker: true }
                         : args,
                     session,
-                  })
+                  });
+                }
               : undefined
           }
           onSuggestion={
@@ -613,39 +806,7 @@ function PluginResult({
           }
         />
       </div>
-      {sourcePickerArgs &&
-        currentOrigin &&
-        Array.isArray(selectedIds) &&
-        (typeof sourceLimit === "number" &&
-        selectedIds.length >= sourceLimit ? (
-          <p role="status">
-            {t("notepicker.source_limit", { count: sourceLimit })}
-          </p>
-        ) : (
-          <Suspense
-            fallback={<p role="status">{t("timeline.loading_notes")}</p>}
-          >
-            <NotePicker
-              exclude={selectedIds.filter(
-                (id): id is string => typeof id === "string",
-              )}
-              action={t("notepicker.add_source")}
-              busy={followup.isPending || !online}
-              onSelect={(note) =>
-                followup.mutate({
-                  plugin: currentOrigin.plugin,
-                  id: currentOrigin.command,
-                  args: {
-                    ...sourcePickerArgs,
-                    add_id: note.id,
-                    add_version: note.version,
-                  },
-                  session,
-                })
-              }
-            />
-          </Suspense>
-        ))}
+      {!thinkingDesk && sourcePicker}
       {(followup.isPending || save.isPending) && (
         <p role="status" className={styles.resultStatus}>
           {t("plugins.running")}
@@ -675,43 +836,50 @@ function PluginResult({
           {t("commandproposal.applied")}
         </p>
       )}
-      {((!decisionCommand && !interactive && text) ||
-        saved?.id ||
-        onDismiss) && (
-        <footer>
-          {!decisionCommand && !interactive && text && (
-            <button
-              className="button"
-              onClick={() => void copyText(text).then(setCopied)}
-            >
-              {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
-            </button>
-          )}
-          {genericSave && !interactive && text && (
-            <button
-              className="primary"
-              disabled={!online || save.isPending || !!saved}
-              onClick={() => save.mutate()}
-            >
-              {saved
-                ? t("slots.saved_as_note")
-                : save.isPending
-                  ? t("app.saving")
-                  : t("slots.save_as_note")}
-            </button>
-          )}
-          {saved?.id && (
-            <ResultNoteLink id={saved.id} onOpen={onOpenNote}>
-              {t("slots.open_note")}
-            </ResultNoteLink>
-          )}
-          {onDismiss && (
-            <button className="button" onClick={onDismiss}>
-              {t("slots.back")}
-            </button>
-          )}
-        </footer>
-      )}
+      {!deskPage &&
+        ((!decisionCommand &&
+          !interactive &&
+          text &&
+          !deskStartActions.length) ||
+          saved?.id ||
+          onDismiss) && (
+          <footer>
+            {!decisionCommand &&
+              !interactive &&
+              text &&
+              !deskStartActions.length && (
+                <button
+                  className="button"
+                  onClick={() => void copyText(text).then(setCopied)}
+                >
+                  {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
+                </button>
+              )}
+            {genericSave && !interactive && text && (
+              <button
+                className="primary"
+                disabled={!online || save.isPending || !!saved}
+                onClick={() => save.mutate()}
+              >
+                {saved
+                  ? t("slots.saved_as_note")
+                  : save.isPending
+                    ? t("app.saving")
+                    : t("slots.save_as_note")}
+              </button>
+            )}
+            {saved?.id && (
+              <ResultNoteLink id={saved.id} onOpen={onOpenNote}>
+                {t("slots.open_note")}
+              </ResultNoteLink>
+            )}
+            {onDismiss && (
+              <button className="button" onClick={onDismiss}>
+                {t("slots.back")}
+              </button>
+            )}
+          </footer>
+        )}
       {save.isError && (
         <p role="alert" className="error">
           {save.error.message}

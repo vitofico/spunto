@@ -16,6 +16,8 @@
     <string name="plugin_replaces">Remplace</string>
     <string name="plugin_action">Action</string>
     <string name="plugin_translate_to">Traduire en</string>
+    <string name="plugin_translation_preview">Aperçu en %1$s</string>
+    <string name="plugin_translation_linked_note">L’enregistrement crée une note liée et conserve l’original.</string>
     <string name="plugin_choose_note">Choisir une note</string>
     <string name="plugin_auto_language">Détection automatique</string>
     <string name="plugin_delete">Supprimer</string>

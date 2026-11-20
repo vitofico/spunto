@@ -8,6 +8,7 @@
     <string name="core_ask">Fragen</string>
     <string name="core_search">Suchen</string>
     <string name="core_choose_labels">Labels und Ansichten wählen</string>
+    <string name="core_open_navigation">Navigation öffnen</string>
     <string name="core_filters_applied">Filter angewendet</string>
     <string name="core_filter_notes">Notizen filtern</string>
     <string name="core_all_notes">Alle Notizen</string>

@@ -59,6 +59,12 @@ async def test_thinking_desk_cross_space_and_membership_revocation(hosted):
         )
     ).json()
     desk_id = await create(client, alice, note_id=source["id"])
+    alice_home = await client.post(BASE + "desk", headers=headers(alice), json={})
+    assert alice_home.status_code == 200 and desk_id in alice_home.text
+    assert {"type": "text", "text": "Synthetic hosted thinking"} in alice_home.json()["items"]
+    bob_home = await client.post(BASE + "desk", headers=headers(bob), json={})
+    assert bob_home.status_code == 200
+    assert "Synthetic hosted thinking" not in bob_home.text and desk_id not in bob_home.text
     response = await client.post(BASE + "desk", headers=headers(bob), json={"desk_id": desk_id})
     assert response.status_code == 404 and "Alice-only" not in response.text
     response = await client.post(
@@ -85,6 +91,9 @@ async def test_thinking_desk_cross_space_and_membership_revocation(hosted):
     assert (
         await client.post(BASE + "desk", headers=headers(bob, space), json={"desk_id": team_desk})
     ).status_code == 403
+    assert (
+        await client.post(BASE + "desk", headers=headers(bob, space), json={})
+    ).status_code == 403
     await client.delete(
         f"/api/v1/workspaces/{space}/members/{bob['account']['id']}", headers=headers(alice)
     )
@@ -94,6 +103,36 @@ async def test_thinking_desk_cross_space_and_membership_revocation(hosted):
     ]:
         response = await client.post(BASE + command, headers=headers(bob, space), json=args)
         assert response.status_code == 404
+
+
+async def test_thinking_desk_hosted_recent_cursor_skips_deleted_rows(hosted):
+    client, _, users, _ = hosted
+    alice = users[0]
+    await enable(client, alice)
+    ids = {await create(client, alice) for _ in range(6)}
+    deleted = next(iter(ids))
+    response = await client.post(
+        BASE + "edit",
+        headers=headers(alice),
+        json={"action": "delete", "desk_id": deleted, "expected_revision": 1},
+    )
+    assert response.status_code == 200
+    ids.remove(deleted)
+
+    home = await client.post(BASE + "desk", headers=headers(alice), json={})
+    assert home.status_code == 200
+    items = home.json()["items"]
+    cursor = items[-1]["args"]["cursor"]
+    first = {item["args"]["desk_id"] for item in items if "desk_id" in item.get("args", {})}
+    more = await client.post(BASE + "desk", headers=headers(alice), json={"cursor": cursor})
+    assert more.status_code == 200
+    second = {
+        item["args"]["desk_id"]
+        for item in more.json()["items"]
+        if "desk_id" in item.get("args", {})
+    }
+    assert len(first) == 4 and len(second) == 1
+    assert first.isdisjoint(second) and first | second == ids
 
 
 async def test_thinking_desk_private_and_external_source_fences(hosted):
@@ -128,7 +167,14 @@ async def test_thinking_desk_private_and_external_source_fences(hosted):
         desk_id = await create(client, alice, note_id=source["id"])
         rendered = await desk.desk(restricted, desk_id)
         assert source["body"] not in str(rendered)
-        assert rendered["items"][1]["ids"] == []
+        assert source["id"] not in str(rendered)
+        assert any(
+            item["type"] == "markdown" and "Unavailable note" in item["text"]
+            for item in rendered["items"]
+        )
+        assert not any(
+            item.get("args", {}).get("action") == "snapshot" for item in rendered["items"]
+        )
         with pytest.raises(Problem):
             await desk.edit(restricted, desk_id, 1, action="snapshot")
 

@@ -14,16 +14,20 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from typing import Literal
 from urllib.parse import unquote, urlsplit
 
 from markdown_it import MarkdownIt
 
 from spunto.api.notes import Source
 from spunto.core.export import _rewrite_links
-from spunto.core.text import label_key, labels
+from spunto.core.text import label_key, labels, title_of
 from spunto.host import Ctx, Plugin
 from spunto.host.language import tr
 from spunto.host.plugin import ContextError
+
+from .evernote import convert, markdown_literal
+from .vault import VaultLinks
 
 plugin = Plugin("markdown-import")
 STAGING_LOCKS = weakref.WeakKeyDictionary()
@@ -38,6 +42,8 @@ MAX_EXPANDED_BYTES = 64_000_000
 MAX_MEMBERS = 20_000
 MAX_NOTES = 10_000
 MAX_ATTACHMENT_BYTES = 5_000_000
+ImportFormat = Literal["markdown", "obsidian", "notion", "evernote"]
+NOTION_PAGE = re.compile(r"(?P<title>.+) (?P<id>[0-9a-f]{32})$", re.IGNORECASE)
 EXPORT_FIELDS = {
     "id",
     "created",
@@ -58,6 +64,9 @@ EXPORT_FIELDS = {
 class Bundle:
     files: dict[str, bytes]
     digest: str
+    format: ImportFormat = "markdown"
+    unsupported: int = 0
+    missing: int = 0
 
 
 def member_name(name: str) -> str:
@@ -76,7 +85,7 @@ def member_name(name: str) -> str:
     return name.rstrip("/")
 
 
-def bundle(files: dict[str, bytes]) -> Bundle:
+def bundle(files: dict[str, bytes], source_format: ImportFormat = "markdown") -> Bundle:
     if len(files) > MAX_MEMBERS or sum(map(len, files.values())) > MAX_EXPANDED_BYTES:
         raise ValueError("The import exceeds 20,000 files or 64 MB expanded")
     notes = [name for name in files if name.lower().endswith(".md")]
@@ -87,10 +96,10 @@ def bundle(files: dict[str, bytes]) -> Bundle:
         digest.update(name.encode())
         digest.update(b"\0")
         digest.update(hashlib.sha256(data).digest())
-    return Bundle(files, digest.hexdigest())
+    return Bundle(files, digest.hexdigest(), source_format)
 
 
-def read_zip(data: bytes) -> Bundle:
+def read_zip(data: bytes, source_format: ImportFormat = "markdown") -> Bundle:
     if not isinstance(data, bytes) or not data or len(data) > MAX_ARCHIVE_BYTES:
         raise ValueError("Choose a ZIP of at most 20 MB")
     files = {}
@@ -105,7 +114,10 @@ def read_zip(data: bytes) -> Bundle:
                 mode = info.external_attr >> 16
                 if info.flag_bits & 1 or stat.S_ISLNK(mode):
                     raise ValueError("Encrypted files and symbolic links are not supported")
-                if info.is_dir():
+                if info.is_dir() or (
+                    source_format == "obsidian"
+                    and any(part.startswith(".") or part == "__MACOSX" for part in name.split("/"))
+                ):
                     continue
                 if stat.S_IFMT(mode) not in {0, stat.S_IFREG}:
                     raise ValueError("The archive contains a special file")
@@ -124,19 +136,45 @@ def read_zip(data: bytes) -> Bundle:
                 files[name] = content
     except zipfile.BadZipFile, RuntimeError, NotImplementedError:
         raise ValueError("Choose a valid, unencrypted ZIP archive") from None
-    return bundle(files)
+    if (
+        source_format == "notion"
+        and files
+        and not any(name.lower().endswith(".md") for name in files)
+    ):
+        raise ValueError("Choose a Notion Markdown & CSV export containing Markdown pages")
+    return bundle(files, source_format)
 
 
-def read_path(path: Path) -> Bundle:
+def read_upload(data: bytes, source_format: ImportFormat) -> Bundle:
+    if source_format != "evernote":
+        return read_zip(data, source_format)
+    if not data or len(data) > MAX_ARCHIVE_BYTES:
+        raise ValueError("Choose an import file of at most 20 MB")
+    files, unsupported, missing = convert(
+        data,
+        max_notes=MAX_NOTES,
+        max_attachment_bytes=MAX_ATTACHMENT_BYTES,
+        max_expanded_bytes=MAX_EXPANDED_BYTES,
+    )
+    result = bundle(files, source_format)
+    result.digest = hashlib.sha256(data).hexdigest()
+    result.unsupported = unsupported
+    result.missing = missing
+    return result
+
+
+def read_path(path: Path, source_format: ImportFormat = "markdown") -> Bundle:
     """Only the operator CLI supplies a path. No API accepts a filesystem path."""
     if path.is_symlink():
-        raise ValueError("Choose a regular ZIP or folder, not a symbolic link")
+        raise ValueError("Choose a regular import file or folder")
     if path.is_file():
-        if path.stat().st_size > MAX_ARCHIVE_BYTES:
-            raise ValueError("Choose a ZIP of at most 20 MB")
-        return read_zip(path.read_bytes())
-    if not path.is_dir():
-        raise ValueError("Choose an existing ZIP or Markdown folder")
+        if path.suffix.lower() == ".enex":
+            source_format = "evernote"
+        with path.open("rb") as stream:
+            data = stream.read(MAX_ARCHIVE_BYTES + 1)
+        return read_upload(data, source_format)
+    if not path.is_dir() or source_format == "evernote":
+        raise ValueError("Choose an existing ZIP, ENEX file or Markdown folder")
     files = {}
     expanded = 0
     for entry in path.rglob("*"):
@@ -160,7 +198,7 @@ def read_path(path: Path) -> Bundle:
         if len(content) > maximum:
             raise ValueError("A file changed while reading the import")
         files[name] = content
-    return bundle(files)
+    return bundle(files, source_format)
 
 
 def scalar(value: str):
@@ -248,7 +286,7 @@ def local_target(note_path: str, url: str) -> str | None:
     return target
 
 
-def prepare(name: str, data: bytes, now: int) -> dict:
+def prepare(name: str, data: bytes, now: int, source_format: ImportFormat = "markdown") -> dict:
     try:
         document = data.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -256,7 +294,7 @@ def prepare(name: str, data: bytes, now: int) -> dict:
     if document.startswith("---\r\n"):
         document = document.replace("\r\n", "\n")
     metadata, body = frontmatter(document)
-    own = EXPORT_FIELDS <= metadata.keys()
+    own = source_format == "markdown" and EXPORT_FIELDS <= metadata.keys()
     created = milliseconds(
         metadata.get("created", metadata.get("created_at", metadata.get("date"))), now
     )
@@ -300,6 +338,19 @@ def prepare(name: str, data: bytes, now: int) -> dict:
         identifier = None
         key = "file:" + name
         restored = None
+        if source_format in {"obsidian", "notion"}:
+            filename = PurePosixPath(name).stem
+            page = NOTION_PAGE.fullmatch(filename) if source_format == "notion" else None
+            title = page["title"] if page else filename
+            explicit_title = metadata.get("title")
+            if isinstance(explicit_title, str) and explicit_title.strip():
+                title = explicit_title
+            title = " ".join(title.split())
+            if title and title_of(body, limit=len(title) + 1) != title:
+                body = "# " + markdown_literal(title) + "\n\n" + body
+            key = "notion:" + page["id"].lower() if page else f"{source_format}-file:{name}"
+        if source_format == "evernote":
+            key = "evernote:" + name.partition("/")[0]
         tags = metadata.get("tags", metadata.get("labels", []))
         if isinstance(tags, str):
             tags = re.split(r"[,\s]+", tags)
@@ -323,6 +374,9 @@ def prepare(name: str, data: bytes, now: int) -> dict:
             body += "\n\n" + " ".join(appended)
     if len(body) > 100_000:
         raise ValueError("A note exceeds 100,000 characters")
+    if len(key) > 200:
+        key = key.partition(":")[0] + "-sha256:" + hashlib.sha256(key.encode()).hexdigest()
+    allow_flags = source_format == "markdown"
     return {
         "name": name,
         "body": body,
@@ -330,10 +384,10 @@ def prepare(name: str, data: bytes, now: int) -> dict:
         "updated_at": updated,
         "id": str(identifier) if identifier else None,
         "import_key": key,
-        "pinned": metadata.get("pinned") is True,
-        "archived": metadata.get("archived") is True,
-        "trashed": metadata.get("trashed") is True,
-        "private": metadata.get("private") is True,
+        "pinned": allow_flags and metadata.get("pinned") is True,
+        "archived": allow_flags and metadata.get("archived") is True,
+        "trashed": allow_flags and metadata.get("trashed") is True,
+        "private": allow_flags and metadata.get("private") is True,
         "import_metadata": restored,
     }
 
@@ -342,13 +396,21 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
     if ctx.principal is not None and not ctx.principal.owner or ctx.unattended:
         raise ContextError("owner_import_required")
     now = ctx.clock()
-    prepared = await ctx.to_thread(
-        lambda: [
-            prepare(name, data, now)
-            for name, data in sorted(source.files.items())
-            if name.lower().endswith(".md")
-        ]
-    )
+
+    def prepare_notes():
+        vault = VaultLinks(source.files) if source.format == "obsidian" else None
+        missing = source.missing
+        prepared = []
+        for name, data in sorted(source.files.items()):
+            if name.lower().endswith(".md"):
+                note = prepare(name, data, now, source.format)
+                if vault is not None and note["import_metadata"] is None:
+                    note["body"], unresolved = vault.rewrite(name, note["body"])
+                    missing += unresolved
+                prepared.append(note)
+        return prepared, missing
+
+    prepared, missing = await ctx.to_thread(prepare_notes)
     keys = [note["import_key"] for note in prepared]
     if len(keys) != len(set(keys)):
         raise ValueError("The import contains duplicate note IDs")
@@ -360,16 +422,17 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
         "updated": 0,
         "unchanged": 0,
         "skipped_owner_edits": 0,
-        "missing_links": 0,
+        "missing_links": missing,
+        "unsupported_items": source.unsupported,
         "failed_notes": 0,
         "digest": source.digest,
     }
     plans = []
     note_ids = {}
+    file_hashes = {}
     for note in prepared:
         old = await ctx.notes.lookup_import(note["import_key"])
         state = await ctx.storage.records.get("imports", note["import_key"])
-        digest = hashlib.sha256(source.files[note["name"]]).hexdigest()
         if not note["id"]:
             created = note["created_at"]
             if not 0 <= created < 2**48:
@@ -391,9 +454,13 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
             targets[url] = target
         fingerprint = hashlib.sha256()
         fingerprint.update(source.files[note["name"]])
+        if source.format in {"obsidian", "notion"}:
+            fingerprint.update(note["body"].encode())
         for target in sorted(set(targets.values())):
             fingerprint.update(target.encode())
-            fingerprint.update(hashlib.sha256(source.files[target]).digest())
+            if target not in file_hashes:
+                file_hashes[target] = hashlib.sha256(source.files[target]).digest()
+            fingerprint.update(file_hashes[target])
         digest = fingerprint.hexdigest()
         plans.append((note, old, state, digest, targets))
     attachment_names = {
@@ -406,14 +473,29 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
         raise ValueError("An attachment exceeds the configured upload limit")
     report["attachments"] = len(attachment_names)
     report["attachment_bytes"] = sum(len(source.files[name]) for name in attachment_names)
+    if source.format == "notion":
+        report["unsupported_items"] += sum(
+            name.lower().endswith((".csv", ".zip")) and name not in attachment_names
+            for name in source.files
+        )
+    if dry_run:
+        report["planned"] = dict.fromkeys(
+            ("created", "updated", "unchanged", "skipped_owner_edits"), 0
+        )
+    attached_urls = {}
     for note, old, state, digest, targets in plans:
+        # A failed first receipt leaves no proof that an existing note is safe to update.
+        if (old and not state) or (state and (old is None or old["version"] != state["version"])):
+            outcome = "skipped_owner_edits"
+        elif old and state and state["digest"] == digest:
+            outcome = "unchanged"
+        else:
+            outcome = "updated" if old else "created"
         if dry_run:
+            report["planned"][outcome] += 1
             continue
-        if state and (old is None or old["version"] != state["version"]):
-            report["skipped_owner_edits"] += 1
-            continue
-        if old and state and state["digest"] == digest:
-            report["unchanged"] += 1
+        if outcome in {"skipped_owner_edits", "unchanged"}:
+            report[outcome] += 1
             continue
         # Imported notes updated by the owner are never replaced on a later import.
         replacements = {}
@@ -421,12 +503,14 @@ async def run_import(ctx: Ctx, source: Bundle, *, dry_run: bool = True) -> dict:
             if target in note_ids:
                 replacements[url] = "/n/" + note_ids[target]
             else:
-                attached = await ctx.attachments.write(
-                    source.files[target],
-                    filename=PurePosixPath(target).name,
-                    mime=mimetypes.guess_type(target)[0],
-                )
-                replacements[url] = attached["url"]
+                if target not in attached_urls:
+                    attached = await ctx.attachments.write(
+                        source.files[target],
+                        filename=PurePosixPath(target).name,
+                        mime=mimetypes.guess_type(target)[0],
+                    )
+                    attached_urls[target] = attached["url"]
+                replacements[url] = attached_urls[target]
         body = _rewrite_links(note["body"], replacements)
         if old:
             saved = await ctx.notes.update_own(
@@ -484,9 +568,9 @@ def report_output(report: dict) -> list[dict]:
     )
     if kept := report["skipped_owner_edits"]:
         text += " " + tr(
-            "Kept {count} note you had edited."
+            "Kept {count} existing note as it was."
             if kept == 1
-            else "Kept {count} notes you had edited.",
+            else "Kept {count} existing notes as they were.",
             count=kept,
         )
     if missing := report["missing_links"]:
@@ -496,6 +580,8 @@ def report_output(report: dict) -> list[dict]:
             else "{count} local links could not be found.",
             count=missing,
         )
+    if omitted := report.get("unsupported_items"):
+        text += " " + tr("Skipped unsupported items: {count}.", count=omitted)
     return [{"type": "text", "text": text}]
 
 
@@ -505,7 +591,7 @@ async def report(ctx: Ctx):
     return (
         report_output(stored)
         if stored
-        else [{"type": "text", "text": tr("Upload a ZIP to preview the import first.")}]
+        else [{"type": "text", "text": tr("Upload an export file to preview the import first.")}]
     )
 
 
@@ -519,7 +605,7 @@ async def _staged(ctx: Ctx, archive_id: str) -> tuple[Bundle, dict, Path]:
         if str(uuid.UUID(archive_id)) != archive_id:
             raise ValueError
     except ValueError, TypeError, AttributeError:
-        raise ValueError("Upload a ZIP to preview the import first") from None
+        raise ValueError("Upload an export file to preview the import first") from None
     metadata = await ctx.storage.records.get("uploads", archive_id)
     # The durable job is the consent receipt even if a process failed between
     # enqueue's commit and the optional preview-record update.
@@ -536,14 +622,21 @@ async def _staged(ctx: Ctx, archive_id: str) -> tuple[Bundle, dict, Path]:
     if not metadata or (
         not metadata.get("queued") and ctx.clock() - metadata["created"] > 86_400_000
     ):
-        raise ValueError("The import preview expired; upload the ZIP again")
-    path = ctx._host.settings.data_dir / "imports" / (archive_id + ".zip")
+        raise ValueError("The import preview expired; upload the export file again")
+    source_format = metadata.get("format", "markdown")
+    suffix = ".enex" if source_format == "evernote" else ".zip"
+    path = ctx._host.settings.data_dir / "imports" / (archive_id + suffix)
+
+    def read_staged():
+        with path.open("rb") as stream:
+            return read_upload(stream.read(MAX_ARCHIVE_BYTES + 1), source_format)
+
     try:
-        source = await ctx.to_thread(lambda: read_zip(path.read_bytes()))
+        source = await ctx.to_thread(read_staged)
     except OSError:
-        raise ValueError("Upload the ZIP again; its staged file is unavailable") from None
+        raise ValueError("Upload the export file again; its staged file is unavailable") from None
     if source.digest != metadata["digest"]:
-        raise ValueError("The staged import changed; upload the ZIP again")
+        raise ValueError("The staged import changed; upload the export file again")
     return source, metadata, path
 
 
@@ -551,7 +644,7 @@ async def _staged(ctx: Ctx, archive_id: str) -> tuple[Bundle, dict, Path]:
 async def import_job(ctx: Ctx, archive_id: str) -> None:
     source, metadata, path = await staged(ctx, archive_id)
     if not metadata.get("previewed"):
-        raise ValueError("Preview the ZIP before importing")
+        raise ValueError("Preview the export file before importing")
     await run_import(ctx, source, dry_run=False)
     await ctx.to_thread(path.unlink, missing_ok=True)
     await ctx.storage.records.delete("uploads", archive_id)
@@ -562,7 +655,7 @@ async def import_upload(ctx: Ctx, archive_id: str) -> list[dict]:
     async with staging_lock(ctx._host):
         _, metadata, _ = await _staged(ctx, archive_id)
         if not metadata.get("previewed"):
-            raise ValueError("Preview the ZIP before importing")
+            raise ValueError("Preview the export file before importing")
         if metadata.get("queued"):
             return [{"type": "text", "text": tr("This import is already queued.")}]
         job_id = await ctx.enqueue("import", {"archive_id": archive_id})

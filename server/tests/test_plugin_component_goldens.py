@@ -27,7 +27,8 @@ async def workflow_forms(server):
     outputs = {}
     for plugin_id, command in FORMS.items():
         await host.enable(plugin_id, permissions=host.manifests[plugin_id]["permissions"])
-        result = await host.invoke_command(plugin_id, command, {}, principal=owner)
+        args = {"action": "start", "mode": "collision"} if plugin_id == "thinking-desk" else {}
+        result = await host.invoke_command(plugin_id, command, args, principal=owner)
         validate_output(result)
         items = result["items"] if "items" in result else [result]
         form = next(item for item in items if item["type"] == "form")

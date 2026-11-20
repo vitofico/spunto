@@ -86,7 +86,7 @@
     "items": [
       {
         "type": "text",
-        "text": "History follows selected notes in creation order. Collision: choose two to five notes from different subjects and develop your own idea. No AI is used and original notes never change."
+        "text": "Name your desk. You can choose notes and write an idea next."
       },
       {
         "type": "form",
@@ -96,39 +96,9 @@
           "properties": {
             "title": {
               "type": "string",
-              "title": "Topic or desk title",
+              "title": "A name for this desk",
               "maxLength": 80,
-              "default": "New thinking desk",
               "minLength": 1
-            },
-            "mode": {
-              "type": "string",
-              "title": "Desk type",
-              "enum": [
-                "history",
-                "collision"
-              ],
-              "default": "history"
-            },
-            "prompt": {
-              "type": "string",
-              "title": "Problem or question (optional)",
-              "maxLength": 300,
-              "default": ""
-            },
-            "thinking": {
-              "type": "string",
-              "title": "Your reflection or new idea",
-              "maxLength": 1500,
-              "default": ""
-            },
-            "action": {
-              "type": "string",
-              "title": "Action",
-              "enum": [
-                "save"
-              ],
-              "default": "save"
             },
             "request_id": {
               "type": "string",
@@ -139,7 +109,16 @@
           },
           "required": [
             "title"
-          ]
+          ],
+          "title": "Create desk"
+        }
+      },
+      {
+        "type": "command",
+        "id": "desk",
+        "title": "Back to choices",
+        "args": {
+          "action": "new"
         }
       }
     ]

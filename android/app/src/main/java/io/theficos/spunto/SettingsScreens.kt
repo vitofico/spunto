@@ -102,6 +102,7 @@ import kotlinx.serialization.json.*
   item {
    SettingsSection(resources.getString(R.string.settings_about))
    SettingsRow(resources.getString(R.string.settings_export),resources.getString(R.string.settings_download_all_synced_notes_as_a_zip),onClick={ownerPage("data")})
+   SettingsRow(resources.getString(R.string.settings_plugin_markdown_import_name),resources.getString(R.string.settings_import_notes_in_browser),onClick={ownerPage("import")})
    SettingsRow(resources.getString(R.string.settings_show_the_guide),resources.getString(R.string.settings_the_four_first_run_steps_again),opensPage=true,onClick={onRoute("guide")})
    WhatsNewSettingsRow(onClick={onRoute(WhatsNewRoute)})
    SettingsRow("Spunto $version".trim(),resources.getString(R.string.settings_free_software_under_the_agpl_3_0))

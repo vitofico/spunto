@@ -1,6 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { AIModelSelections } from "../src/lib/types";
 
+test.use({ locale: "en-US" });
+
 const id = "0192f3c4-1111-7000-8000-000000000001";
 const note = {
   id,
@@ -981,11 +983,15 @@ for (const collection of [false, true]) {
     const state = await fixture(page, false, false, true);
     await page.goto(collection ? `/ask?collection=${id}` : "/ask");
     const select = page.getByRole("combobox", { name: "Chat model" });
-    await expect(page.getByText(/chat.example.org/)).toBeVisible();
+    const externalProvider = page.getByText(
+      "Chat uses the configured provider at chat.example.org, outside your network.",
+      { exact: true },
+    );
+    await expect(externalProvider).toBeVisible();
     await select.selectOption("offline-chat");
-    await expect(page.getByText(/chat.example.org/)).toHaveCount(0);
+    await expect(externalProvider).toHaveCount(0);
     await select.selectOption("alternate-chat");
-    await expect(page.getByText(/chat.example.org/)).toBeVisible();
+    await expect(externalProvider).toBeVisible();
     const submit = async (question: string) => {
       await page.getByLabel("Your message").fill(question);
       await page.getByRole("button", { name: "Send", exact: true }).click();

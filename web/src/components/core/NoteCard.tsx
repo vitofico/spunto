@@ -1,7 +1,9 @@
 import { getLanguage, t, useLanguage } from "../../lib/i18n";
 import DOMPurify from "dompurify";
 import {
+  lazy,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -20,10 +22,12 @@ import {
   useWorkspaceRole,
   type Note,
 } from "../../lib";
-import { EntryMeta, SuggestionLine } from "../../features/Slots";
+import { EntryMeta } from "../../features/Slots";
 import { Icon } from "./Icon";
 import { MoreMenu } from "./Menu";
 import { useToast } from "./Toast";
+const SuggestionLine = lazy(() => import("../../features/SuggestionLine"));
+
 export function toggleRenderedCheckbox(body: string, offset: number) {
   if (
     !Number.isInteger(offset) ||
@@ -490,7 +494,17 @@ export const NoteCard = memo(function NoteCard({
           <span className="waiting">{t("notecard.waiting_to_sync")}</span>
         )}
       </div>
-      {canEdit && !queued && <SuggestionLine note={note} />}
+      {canEdit &&
+        !queued &&
+        note.suggestions?.some(
+          (item) =>
+            item.status === "pending" ||
+            (item.receipt?.undoable && item.action !== "add_label"),
+        ) && (
+          <Suspense fallback={null}>
+            <SuggestionLine note={note} />
+          </Suspense>
+        )}
       {canEdit && !queued && (
         <MoreMenu
           label={t("notecard.actions_for_value1", { value1: name })}

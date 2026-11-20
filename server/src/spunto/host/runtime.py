@@ -1347,7 +1347,9 @@ class Host:
             plugin_id, "command", name, args, principal=principal, vocabulary=True
         )
 
-    async def invoke_route(self, plugin_id, path, args=None, *, method="GET", principal=None):
+    async def invoke_route(
+        self, plugin_id, path, args=None, *, method="GET", principal=None, vocabulary=True
+    ):
         plugin = self.plugins.get(plugin_id)
         key = (method, path.lstrip("/"))
         if plugin is None:
@@ -1376,7 +1378,7 @@ class Host:
         if principal is not None and options["write"] and not principal.writable:
             raise ContextError("write_scope_required")
         return await self._invoke(
-            plugin_id, "route", key, args, principal=principal, vocabulary=True
+            plugin_id, "route", key, args, principal=principal, vocabulary=vocabulary
         )
 
     async def invoke_tool(self, plugin_id, name, args=None, *, principal=None):

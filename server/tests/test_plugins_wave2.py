@@ -1032,3 +1032,66 @@ async def test_replace_only_leading_markdown_h1(body, expected):
     from spunto.core.quiet_changes import titled_body
 
     assert titled_body(body, "New") == expected
+
+
+async def test_assisted_decision_outcome_uses_only_later_public_evidence_and_requires_confirmation(
+    wave,
+):
+    host, provider, notes = wave
+    for plugin_id in ("decision-journal", "note-assist"):
+        await host.enable(plugin_id, permissions=host.manifests[plugin_id]["permissions"])
+    await notes.create("Orchid rollout predecision old evidence 30 minutes.")
+    original = await host.invoke_command(
+        "decision-journal", "record-decision", {"decision": "Use Orchid backup."}, principal=OWNER
+    )
+    root = await notes.get(original["ids"][0])
+    await asyncio.sleep(0.01)
+    later = await notes.create("Orchid backup result: restored in three minutes.")
+    private = await notes.create("Orchid backup private sentinel data.", private=True)
+    provider.override = json.dumps(
+        {
+            "supported": True,
+            "outcome": "The Orchid restore completed in three minutes.",
+            "reflection": "",
+            "citations": [later["id"]],
+        }
+    )
+
+    result = await host.invoke_route(
+        "note-assist",
+        "decisions",
+        {"note_id": root["id"]},
+        method="POST",
+        principal=OWNER,
+        vocabulary=False,
+    )
+    assert {source["id"] for source in result["sources"]} == {later["id"]}
+    assert result["sources"][0]["passage"] in later["body"]
+    assert (await notes.get(root["id"]))["body"] == root["body"]
+    assert len((await notes.list())["notes"]) == 4
+    sent = json.dumps([item for item in provider.requests if "messages" in item])
+    assert "predecision old evidence" not in sent and private["id"] not in sent
+
+    form = await host.invoke_command(
+        "decision-journal", "review-decision", {"note_id": root["id"]}, principal=OWNER
+    )
+    request = form["schema"]["properties"]["request_id"]["default"]
+    evidence = {
+        source["id"]: {"version": source["version"], "fingerprint": source["fingerprint"]}
+        for source in [*result["sources"], result["basis"]]
+    }
+    confirmed = await host.invoke_command(
+        "decision-journal",
+        "review-decision",
+        {
+            "note_id": root["id"],
+            "outcome": result["draft"]["outcome"],
+            "base_version": 1,
+            "status": "reviewed",
+            "request_id": request,
+            "evidence": evidence,
+        },
+        principal=OWNER,
+    )
+    assert f"/n/{later['id']}" in (await notes.get(confirmed["ids"][0]))["body"]
+    assert (await notes.get(root["id"]))["body"] == root["body"]

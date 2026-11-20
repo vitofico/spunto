@@ -51,12 +51,12 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
  snapshot:LabelsNavigationSnapshot,onRoute:(String)->Unit,onSettings:()->Unit,
  onManageLabels:(String)->Unit,onManageViews:()->Unit,onDismiss:()->Unit,
  managementAvailable:Boolean=false,managementMessage:String?=null,reviewWaiting:Int=0,allNotes:Int?=null,
- onThinkingDesk:(()->Unit)?=null,onLibraryStats:(()->Unit)?=null,
+ onCollections:(()->Unit)?=null,onThinkingDesk:(()->Unit)?=null,onLibraryStats:(()->Unit)?=null,onDecisions:(()->Unit)?=null,
 ) {
  val context=LocalContext.current
  var query by remember {mutableStateOf("")};var showMore by remember {mutableStateOf(false)}
  val latest by rememberUpdatedState(snapshot)
- val views=remember(snapshot.manifest) {declaredActiveViews(snapshot.manifest)}
+ val views=remember(snapshot.manifest,onDecisions!=null) {declaredActiveViews(snapshot.manifest).filter {onDecisions==null || it.route!=DecisionViewRoute}}
  val rows=remember(snapshot.labels,query,snapshot.route) {labelSheetRows(snapshot.labels,query,snapshot.route.takeIf {it.startsWith("label:")}?.removePrefix("label:"))}
  // Fully open from the start, and one scrolling column, so large font sizes still reach every row.
  ModalBottomSheet(onDismissRequest=onDismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),scrimColor=MaterialTheme.colorScheme.scrim) {
@@ -68,6 +68,12 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
    }
    if(onThinkingDesk!=null) item(key=ThinkingDeskRoute) {
     SheetRow(context.getString(R.string.settings_plugin_thinking_desk_name),false,glyph=R.drawable.ic_inbox,onClick=onThinkingDesk)
+   }
+   if(onDecisions!=null) item(key=DecisionManagerRoute) {
+    SheetRow(context.getString(R.string.settings_bundled_title_23),snapshot.route==DecisionManagerRoute,glyph=R.drawable.ic_inbox,onClick=onDecisions)
+   }
+   if(onCollections!=null) item(key=CollectionsRoute) {
+    SheetRow(context.getString(R.string.collections_title),false,glyph=R.drawable.ic_archive,onClick=onCollections)
    }
    if(onLibraryStats!=null) item(key="library-stats") {
     SheetRow(context.getString(R.string.settings_plugin_library_stats_name),false,glyph=R.drawable.ic_stats,onClick=onLibraryStats)

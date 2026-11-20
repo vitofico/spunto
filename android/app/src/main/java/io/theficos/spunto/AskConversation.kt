@@ -1,16 +1,22 @@
 package io.theficos.spunto
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import io.theficos.spunto.core.design.SpuntoSpacing
+import io.theficos.spunto.core.design.Markdown
 import io.theficos.spunto.core.plugins.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -23,15 +29,18 @@ internal fun askSources(data:JsonElement?):List<String> = outputComponents(data)
 private data class AskTurn(val id:Int,val question:String,val result:JsonObject,val write:AskWriteState?)
 
 /** Ephemeral state stays in the composition: leaving, switching accounts, or clearing discards it. */
-@Composable internal fun AskConversation(model:SpuntoViewModel,onNote:(String)->Unit,initial:JsonObject?=null,initialQuestion:String="") {
+@Composable internal fun AskConversation(model:SpuntoViewModel,onNote:(String)->Unit,initial:JsonObject?=null,initialQuestion:String="",fullPage:Boolean=false,collectionId:String?=null) {
  val resources=LocalContext.current.resources
  val auth by model.auth.collectAsState()
  val epoch by model.pluginReplicaEpochState.collectAsState()
  val manifest=model.manifest.collectAsState().value
+ val catalog by model.catalog.collectAsState()
  val online by model.online.collectAsState()
  val enabled=model.container.manifest.enabled("ask")
+ val modern=fullPage && supportsConversationalAsk(manifest)
+ val noteActions=collectionId==null && supportsAskNoteActions(manifest,auth?.workspaceRole)
  val initialIdentity=remember {auth to epoch}
- key(auth,epoch) {
+ key(auth,epoch,collectionId) {
   val adopted=initial.takeIf {initialIdentity==(auth to epoch)}
   val writeStates=remember {mutableMapOf<String,AskWriteState>()}
   val actionScope=rememberCoroutineScope()
@@ -46,23 +55,33 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
   var conversationGeneration by remember {mutableIntStateOf(0)}
   var continuation by remember {mutableStateOf(askContinuation(adopted))}
   var question by remember {mutableStateOf("")}
+  var notesOnly by remember {mutableStateOf(false)}
+  var preview by remember {mutableStateOf<Pair<String,String>?>(null)}
+  var temporaryInfo by remember {mutableStateOf(false)}
   var pending by remember {mutableStateOf<String?>(null)}
   var failure by remember {mutableStateOf<String?>(null)}
   var retry by remember {mutableStateOf("")}
+  var staleCollection by remember {mutableStateOf(false)}
   var revision by remember {mutableIntStateOf(0)}
   var active by remember {mutableStateOf(true)}
   var request by remember {mutableStateOf<Job?>(null)}
   val config=auth
   fun clearHandle(args:JsonObject?) {if(args!=null && model.auth.value==config && model.pluginReplicaEpoch==epoch) model.request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",args.string("conversation_id"))})}
-  fun discard() {revision++;conversationGeneration++;request?.cancel();clearHandle(continuation);continuation=null;turns=emptyList();writeStates.clear();question="";pending=null;failure=null;retry=""}
+  fun discard(keepDraft:Boolean=false) {
+   revision++;conversationGeneration++;request?.cancel();clearHandle(continuation);continuation=null;turns=emptyList();writeStates.clear()
+   if(!keepDraft) question=""
+   pending=null;failure=null;retry="";preview=null;staleCollection=false
+  }
   DisposableEffect(Unit) {onDispose {active=false;revision++;request?.cancel();clearHandle(continuation)}}
   LaunchedEffect(enabled) {if(!enabled) discard()}
   fun submit(submitted:String) {
-   if(pending!=null || !enabled || !online || config==null) return
+   if(pending!=null || staleCollection || !enabled || !online || config==null) return
    val attempt=++revision
    pending=submitted;failure=null;retry=submitted;question=""
    fun current()=active && revision==attempt && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")
-   request=model.ask(submitted,continuation,current=::current,onHandle={continuation=it},onError={if(current()) {failure=it;question=submitted;pending=null}},onComplete={if(current()) pending=null}) {raw ->
+   request=model.ask(submitted,continuation,current=::current,onHandle={continuation=it},onError={if(current()) {failure=it;question=submitted;pending=null}},onCollectionChanged={
+    if(current()) {staleCollection=true;failure=resources.getString(R.string.core_ask_collection_changed);question=submitted;pending=null}
+   },conversational=modern,notesOnly=notesOnly,collectionId=collectionId,onComplete={if(current()) pending=null}) {raw ->
     val result=raw as? JsonObject
     if(current() && result!=null) {
      turns=(turns+turn(attempt,submitted,result)).takeLast(20)
@@ -72,27 +91,93 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
     else clearHandle(askContinuation(raw))
    }
   }
-  LazyColumn(Modifier.fillMaxSize().imePadding(),state=listState,contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
-   item {Text(resources.getString(R.string.core_ask_temporary),style=MaterialTheme.typography.bodySmall);TextButton(onClick={discard()}) {Text(resources.getString(R.string.core_new_conversation))}}
-   items(turns,key={it.id}) {turn ->
-    Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-     if(turn.question.isNotBlank()) Text(turn.question,style=MaterialTheme.typography.titleMedium)
-     if(turn.write==null) RenderOutput(model,buildJsonObject {put("items",JsonArray(outputComponents(turn.result).filter {it.string("type") in setOf("text","markdown")}))},onNote)
-     val sources=askSources(turn.result)
-     if(turn.write==null && sources.isNotEmpty()) {
-      Text(resources.getString(R.string.core_ask_sources),style=MaterialTheme.typography.titleSmall)
-      sources.forEachIndexed {index,id -> AskSource(model,id,index+1,onNote)}
+  val intro=when {
+   collectionId!=null -> R.string.core_ask_collection_intro
+   modern -> R.string.core_ask_discussion_intro
+   noteActions -> R.string.core_ask_message_hint
+   else -> R.string.core_ask_hint
+  }
+  val route=catalog.objects("plugins").firstOrNull {it.string("id")=="ask"}
+  val destination=((route?.get("ai_destinations") as? JsonObject)?.get("chat") as? JsonObject)?.takeIf {it.bool("leaves_network")}
+  LaunchedEffect(turns.size,pending) {
+   if(turns.isNotEmpty() || pending!=null) listState.scrollToItem(turns.size+if(pending!=null) 1 else 0)
+  }
+  Column(Modifier.fillMaxSize().imePadding()) {
+   LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=listState,contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
+    item(key="conversation") {
+     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+      TextButton(onClick={temporaryInfo=!temporaryInfo},modifier=Modifier.weight(1f)) {
+       Text(resources.getString(R.string.core_ask_temporary_title),style=MaterialTheme.typography.bodySmall)
+      }
+      TextButton(onClick={discard(keepDraft=staleCollection)}) {Text(resources.getString(R.string.core_new_conversation))}
      }
-     val actionGeneration=conversationGeneration
-     AskTurnActions(model,turn.result,turn.write,actionScope,onNote,current={active && conversationGeneration==actionGeneration && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")})
-     HorizontalDivider()
+     if(temporaryInfo) Text(resources.getString(R.string.core_ask_temporary),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+     if(turns.isEmpty() && pending==null) Text(resources.getString(intro),style=MaterialTheme.typography.titleMedium)
+     if(fullPage && destination!=null) Text(resources.getString(R.string.settings_at,destination.string("model"),destination.string("host"),resources.getString(R.string.settings_outside_your_network)),style=MaterialTheme.typography.bodySmall)
     }
+    items(turns,key={it.id}) {turn ->
+     Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+      if(turn.question.isNotBlank()) Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.CenterEnd) {AskMessage(turn.question)}
+      if(turn.write==null) RenderOutput(model,buildJsonObject {put("items",JsonArray(outputComponents(turn.result).filter {it.string("type") in setOf("text","markdown")}))},onNote={id ->
+       if(fullPage) preview=id to "" else onNote(id)
+      })
+      val sources=askSources(turn.result)
+      if(turn.write==null && sources.isNotEmpty()) {
+       var expanded by remember {mutableStateOf(false)}
+       TextButton(onClick={expanded=!expanded}) {Text(resources.getString(R.string.core_ask_sources)+" · "+sources.size)}
+       if(expanded) sources.forEachIndexed {index,id ->
+        AskSource(model,id,index+1) {if(fullPage) preview=id to askPassage(turn.result,id) else onNote(id)}
+       }
+      }
+      val actionGeneration=conversationGeneration
+      AskTurnActions(model,turn.result,turn.write,actionScope,onNote,current={active && conversationGeneration==actionGeneration && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")})
+     }
+    }
+    pending?.let {submitted -> item(key="pending") {
+     Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.CenterEnd) {AskMessage(submitted)}
+     LinearProgressIndicator(Modifier.fillMaxWidth())
+     Text(resources.getString(if(noteActions) R.string.core_ask_action_pending else R.string.core_reading_notes))
+    }}
+    failure?.let {error -> item(key="failure") {Text(error,color=MaterialTheme.colorScheme.error);if(!staleCollection) Text(resources.getString(R.string.core_ask_retry_hint));TextButton(onClick={if(staleCollection) discard(keepDraft=true) else submit(retry)}) {Text(resources.getString(if(staleCollection) R.string.core_new_conversation else R.string.core_ask_retry))}}}
    }
-   pending?.let {submitted -> item {Text(submitted,style=MaterialTheme.typography.titleMedium);LinearProgressIndicator(Modifier.fillMaxWidth());Text(resources.getString(if(supportsAskNoteActions(manifest,auth?.workspaceRole)) R.string.core_ask_action_pending else R.string.core_reading_notes))}}
-   failure?.let {error -> item {Text(error,color=MaterialTheme.colorScheme.error);Text(resources.getString(R.string.core_ask_retry_hint));TextButton(onClick={submit(retry)}) {Text(resources.getString(R.string.core_ask_retry))}}}
-   item {
-    if(turns.isNotEmpty()) TextButton(enabled=pending==null,onClick={actionScope.launch {listState.animateScrollToItem(turns.size)}}) {Text(resources.getString(R.string.core_ask_latest_reply))}
-    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=supportsAskNoteActions(manifest,auth?.workspaceRole))
+   HorizontalDivider()
+   Column(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8)) {
+    if(modern) FilterChip(selected=notesOnly,onClick={notesOnly=!notesOnly},enabled=pending==null,label={Text(resources.getString(R.string.core_ask_only_notes))})
+    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=noteActions,compact=fullPage,limit=if(modern) 2000 else 500,canSend=!staleCollection)
+   }
+  }
+  preview?.let {(id,passage) -> AskSourcePreview(model,id,passage) {preview=null}}
+
+ }
+}
+
+@Composable private fun AskMessage(question:String) {
+ Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
+  Text(question,Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge)
+ }
+}
+
+private fun askPassage(data:JsonObject,id:String):String = outputComponents(data)
+ .filter {it.string("type")=="notes"}
+ .flatMap {it.objects("ids")}
+ .firstOrNull {it.string("id")==id}?.string("reason").orEmpty()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun AskSourcePreview(model:SpuntoViewModel,id:String,passage:String,onClose:()->Unit) {
+ val resources=LocalContext.current.resources
+ val note by remember(id) {model.repository.observe(id)}.collectAsState(null)
+ ModalBottomSheet(onDismissRequest=onClose,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) {
+  Column(Modifier.fillMaxWidth().fillMaxHeight(.82f).verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s20),
+   verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+   TextButton(onClick=onClose) {Text(resources.getString(R.string.core_close))}
+   val current=note?.takeUnless {it.privateNote || it.archived || it.trashed || it.machine}
+   if(current==null) Text(resources.getString(R.string.settings_this_note_is_no_longer_available))
+   else {
+    Text(current.title.ifBlank {resources.getString(R.string.core_untitled)},style=MaterialTheme.typography.titleLarge)
+    if(passage.isNotBlank()) Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(8.dp)) {
+     Text(passage,Modifier.padding(SpuntoSpacing.s12),style=MaterialTheme.typography.bodyMedium)
+    }
+    Markdown(current.body)
    }
   }
  }

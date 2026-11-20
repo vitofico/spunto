@@ -84,13 +84,14 @@ private fun DecisionActions(model: SpuntoViewModel, noteId: String?, actions: Li
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
 }
 
-private val decisionDetailFields = setOf("title", "rationale", "alternatives", "expected")
+private val decisionDetailFields = setOf("title", "rationale", "alternatives", "expected", "questions")
 private val journalFieldTitles = mapOf(
     "title" to R.string.decision_title,
     "decision" to R.string.decision_choice,
     "alternatives" to R.string.decision_alternatives,
     "rationale" to R.string.decision_reason,
     "expected" to R.string.decision_expected,
+    "questions" to R.string.decision_questions,
     "private" to R.string.core_private,
     "outcome" to R.string.decision_actual,
     "reflection" to R.string.decision_reflection,
@@ -181,13 +182,17 @@ internal fun DecisionForm(schema: JsonObject, command: String, initial: JsonObje
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     SchemaForm(
         localized, initial, readOnly = running, readOnlyMessage = "", preferDefaults = true,
-        saveLabel = stringResource(if (reviewing) R.string.decision_record_outcome else R.string.decision_save),
+        saveLabel = stringResource(when (command) {
+            "review-decision" -> R.string.decision_record_outcome
+            "journal" -> R.string.decision_save_schedule
+            else -> R.string.decision_save
+        }),
         hiddenFields = commandFormHiddenFields(schema) + if (inheritedPrivacy) setOf("private") else emptySet(),
         submitEnabled = online, retainEdits = true,
         choiceLabel = { field, value -> if (field == "status") statusLabels[value.jsonPrimitive.content] else null },
         invalidInputMessage = stringResource(R.string.decision_check_fields),
         validateInput = { args -> dateError.takeUnless { validDecisionDate(args.string("review_on").trim()) } },
-        detailsFields = if (reviewing) emptySet() else decisionDetailFields - required,
+        detailsFields = if (reviewing || "evidence" in initial) emptySet() else decisionDetailFields - required,
         detailsLabels = stringResource(R.string.decision_add_details) to stringResource(R.string.decision_hide_details),
         onSave = onSave,
     )

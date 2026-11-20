@@ -385,7 +385,7 @@
     <string name="settings_suggestion_accepted">Cette suggestion a été acceptée.</string>
     <string name="settings_suggestion_dismissed">Cette suggestion a été ignorée.</string>
     <string name="settings_suggestion_unavailable">Cette suggestion est indisponible.</string>
-    <string name="settings_plugin_context_packs_name">Dossiers de contexte</string>
+    <string name="settings_plugin_context_packs_name">Collections</string>
     <string name="settings_plugin_context_packs_description">Rassemblez vos notes de projet dans une synthèse et repérez les sources qui ont changé.</string>
     <string name="settings_plugin_tasks_name">Tâches</string>
     <string name="settings_plugin_tasks_description">Retrouvez au même endroit les notes qui contiennent des cases encore à cocher.</string>

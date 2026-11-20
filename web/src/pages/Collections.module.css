@@ -1,0 +1,70 @@
+.frame {
+  max-width: 52rem;
+}
+
+.frame h2 {
+  margin-block: var(--s-20) var(--s-8);
+}
+
+.frame label:not(.check) {
+  display: block;
+  margin-block: var(--s-12);
+}
+
+.frame :global(.field) {
+  width: 100%;
+}
+
+.frame small {
+  display: block;
+  margin-top: var(--s-4);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: var(--s-20);
+}
+
+.sources {
+  list-style: none;
+  margin: 0 0 var(--s-12);
+  padding: 0;
+}
+
+.sources li {
+  border-top: 1px solid var(--rule);
+  padding-block: var(--s-12);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  align-items: center;
+  margin-block: var(--s-8);
+}
+
+.assist {
+  border-block: 1px solid var(--rule);
+  margin-block: var(--s-20);
+  padding-bottom: var(--s-16);
+}
+
+.check {
+  display: flex;
+  align-items: start;
+  gap: var(--s-8);
+  margin-block: var(--s-8);
+}
+
+.markdown {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.summary {
+  max-width: 64ch;
+  font-size: var(--text-lg, 1.125rem);
+  line-height: 1.55;
+}

@@ -19,18 +19,20 @@ import styles from "./Feature.module.css";
 
 const journal = "decision-journal";
 
-function DecisionCommand({
+export function DecisionCommand({
   id,
   args,
   label,
   disabled,
   load,
+  primary,
 }: {
   id: string;
   args?: Args;
   label: string;
   disabled?: boolean;
   load?: () => Promise<unknown>;
+  primary?: boolean;
 }) {
   const [origin, setOrigin] = useState<CommandOrigin>();
   const opener = useRef<HTMLButtonElement>(null);
@@ -48,7 +50,7 @@ function DecisionCommand({
   return (
     <>
       <button
-        className="button"
+        className={primary ? "primary" : "button"}
         ref={opener}
         type="button"
         disabled={disabled}

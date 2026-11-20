@@ -741,3 +741,48 @@ async def test_postgres_missing_coalesced_ancestor_preserves_reverted_text(pg, t
     assert (await domain.get(note["id"]))["body"] == "C"
     copy = await domain.get(result["conflict_id"])
     assert copy["body"] == "A" and copy["conflict_of"] == note["id"]
+
+
+async def test_decision_manager_paginates_prioritizes_due_and_stays_in_its_workspace(pg, settings):
+    _, bounds, users, _, _ = pg
+    hosts = [Host(store, settings, notes_factory=PluginNotes) for store in bounds]
+    authorities = [
+        Principal(user, "session", "Synthetic owner", "full", private_ok=True) for user in users
+    ]
+    journal = "decision-journal"
+
+    async def record(index, body, due=""):
+        response = await hosts[index].invoke_command(
+            journal,
+            "record-decision",
+            {"decision": body, "review_on": due},
+            principal=authorities[index],
+        )
+        return response["ids"][0]
+
+    try:
+        for host in hosts:
+            await host.discover()
+            await host.enable(journal, host.manifests[journal]["permissions"])
+        due = await record(0, "Check synthetic postage", "2000-01-01")
+        foreign = await record(1, "Check synthetic postage", "1999-01-01")
+        for index in range(11):
+            await record(0, f"Newer choice {index}")
+        first = await hosts[0].invoke_command(
+            journal, "journal", {"manager": True}, principal=authorities[0]
+        )
+        assert first["items"][0]["items"][0]["id"] == due and foreign not in json.dumps(first)
+        next_page = await hosts[0].invoke_command(
+            journal, "journal", first["items"][1]["args"], principal=authorities[0]
+        )
+        assert len(next_page["items"][0]["items"]) == 2
+        search = await hosts[0].invoke_command(
+            journal,
+            "journal",
+            {"manager": True, "query": "postage", "due": True},
+            principal=authorities[0],
+        )
+        assert [ref["id"] for ref in search["items"][0]["items"]] == [due]
+    finally:
+        for host in hosts:
+            await host.close()

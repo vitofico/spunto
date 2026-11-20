@@ -1,3 +1,4 @@
+import DecisionManager from "../src/features/DecisionManager";
 import CommandResult from "../src/features/CommandResult";
 import { DecisionNoteActions } from "../src/features/DecisionJournal";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -156,6 +157,113 @@ function manifest(...plugins: Partial<Plugin>[]) {
     })),
   });
 }
+
+it("keeps grounded decision wording and submits an existing update only after confirmation", async () => {
+  client.setQueryDefaults(["manifest"], { refetchOnMount: false });
+  manifest(
+    {
+      id: "decision-journal",
+      version: "1.1.0",
+      origin: "bundled",
+      creates: "owner",
+    },
+    { id: "note-assist", version: "1.0.0", origin: "bundled" },
+  );
+  const evidence = {
+    id: "synthetic-source",
+    title: "Synthetic test report",
+    version: 3,
+    fingerprint: "x".repeat(64),
+    passage: "The controlled test took three minutes.",
+  };
+  const match = {
+    id: "existing-decision",
+    title: "Baseline backup",
+    version: 1,
+    fingerprint: "y".repeat(64),
+    passage: "Use a backup before changes.",
+  };
+  const call = vi.spyOn(api, "request").mockResolvedValue({
+    draft: { decision: "A model must not replace the owner's choice." },
+    matches: [match],
+    sources: [evidence],
+  });
+  const command = vi
+    .spyOn(api, "command")
+    .mockImplementation(async (_plugin, action, args) => {
+      if (action === "journal")
+        return { type: "text", text: "No decisions yet." };
+      if (action === "review-decision" && args?.outcome == null)
+        return {
+          type: "form",
+          schema: {
+            type: "object",
+            properties: {
+              note_id: { type: "string", default: match.id },
+              base_version: { type: "integer", default: 5 },
+              request_id: {
+                type: "string",
+                default: "synthetic-review-request",
+              },
+              outcome: { type: "string", maxLength: 1600 },
+              status: { type: "string", enum: ["open", "closed"] },
+            },
+            required: [
+              "note_id",
+              "base_version",
+              "request_id",
+              "outcome",
+              "status",
+            ],
+          },
+        };
+      return { type: "text", text: "Outcome saved" };
+    });
+  const phrase = "Use a separate backup for the test.";
+  render(wrap(<DecisionManager />));
+  fireEvent.change(screen.getByLabelText("What did you decide?"), {
+    target: { value: phrase },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await screen.findByText(evidence.passage);
+  expect(call).toHaveBeenCalledWith("/api/v1/note-assist/decisions", {
+    method: "POST",
+    body: { phrase },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Update Baseline backup" }),
+  );
+  const field = await screen.findByLabelText("What happened or changed?");
+  expect((field as HTMLTextAreaElement).value).toBe(phrase);
+  expect(
+    command.mock.calls.filter(
+      ([, action, args]) => action === "review-decision" && args?.outcome,
+    ),
+  ).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Record outcome" }));
+  await waitFor(() =>
+    expect(command).toHaveBeenCalledWith(
+      "decision-journal",
+      "review-decision",
+      expect.objectContaining({
+        outcome: phrase,
+        note_id: match.id,
+        status: "open",
+        base_version: 5,
+        evidence: {
+          [match.id]: {
+            version: match.version,
+            fingerprint: match.fingerprint,
+          },
+          [evidence.id]: {
+            version: evidence.version,
+            fingerprint: evidence.fingerprint,
+          },
+        },
+      }),
+    ),
+  );
+});
 
 it("configures a translation, previews it, changes languages and saves the linked note explicitly", async () => {
   await setLanguage("it");

@@ -517,13 +517,16 @@ function PluginResult({
     : undefined;
   const showHeading = title && title !== surroundingTitle;
   const formLabel =
-    plugin?.id === "translate" && id === "language-settings"
-      ? t("schemaform.save_settings")
-      : decisionCommand === "record-decision"
-        ? t("decisions.save_decision")
-        : decisionCommand === "review-decision"
-          ? t("decisions.record_outcome")
-          : (commandName ?? t("settingsplugins.run"));
+    decisionCommand === "journal" &&
+    currentOrigin?.args?.operation === "schedule"
+      ? t("decisions.save_schedule")
+      : plugin?.id === "translate" && id === "language-settings"
+        ? t("schemaform.save_settings")
+        : decisionCommand === "record-decision"
+          ? t("decisions.save_decision")
+          : decisionCommand === "review-decision"
+            ? t("decisions.record_outcome")
+            : (commandName ?? t("settingsplugins.run"));
   const decisionSaved =
     !interactive &&
     resultItems.some((item) => item.type === "notes") &&
@@ -599,7 +602,8 @@ function PluginResult({
       setApplied([]);
       if (
         choice.plugin === "decision-journal" &&
-        ["record-decision", "review-decision"].includes(choice.id)
+        (["record-decision", "review-decision"].includes(choice.id) ||
+          choice.args?.operation === "schedule")
       )
         void invalidateContentFor(client);
       else void client.invalidateQueries({ queryKey: ["notes"] });
@@ -813,10 +817,17 @@ function PluginResult({
               : undefined
           }
           formDetails={
-            decisionCommand === "record-decision"
+            decisionCommand === "record-decision" &&
+            !currentOrigin?.args?.evidence
               ? {
                   label: t("decisions.add_details"),
-                  fields: ["title", "alternatives", "rationale", "expected"],
+                  fields: [
+                    "title",
+                    "alternatives",
+                    "rationale",
+                    "expected",
+                    "questions",
+                  ],
                 }
               : undefined
           }

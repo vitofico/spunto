@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
+import { ApiError } from "../lib/errors";
 import { requestGeneration } from "../lib/identity";
 import {
   subscribeOwner,
@@ -19,6 +20,7 @@ import {
   askSources,
   askWriteAction,
   askNoteActionOptions,
+  supportsConversationalAsk,
 } from "./askConversationData";
 import { AskWriteActions } from "./AskWriteActions";
 import { copyText } from "./copy";
@@ -30,14 +32,23 @@ export default function AskConversation({
   value,
   question = "",
   onDismiss,
+  page = false,
+  collectionId,
 }: {
   value: unknown;
   question?: string;
   onDismiss?: () => void;
+  page?: boolean;
+  collectionId?: string;
 }) {
   useLanguage();
   const manifest = useManifest();
   const workspaceRole = useWorkspaceRole();
+  const catalog = useQuery({
+    queryKey: ["catalog"],
+    queryFn: api.catalog,
+    enabled: page && workspaceRole === "owner",
+  });
   const client = useQueryClient();
   const [turns, setTurns] = useState<Turn[]>(
     value === undefined ? [] : [{ id: 0, question, value }],
@@ -49,15 +60,22 @@ export default function AskConversation({
   const canContinue = !!plugin?.contributes?.commands?.some(
     (command) => command.id === "clear-conversation",
   );
+  const modern =
+    page && canContinue && !!supportsConversationalAsk(plugin?.version);
   const canWrite =
     canContinue &&
+    !collectionId &&
     askNoteActionOptions(manifest.data?.plugins, workspaceRole).note_actions ===
       true;
+  const limit = modern ? 2000 : 500;
   const [draft, setDraft] = useState("");
+  const [notesOnly, setNotesOnly] = useState(false);
+  const scroll = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
     question: string;
     error: string;
+    stale?: boolean;
   } | null>(null);
   const continuation = useRef(askContinuation(value));
   const generation = useRef(requestGeneration());
@@ -76,13 +94,13 @@ export default function AskConversation({
         })
         .catch(() => {});
   };
-  const discard = () => {
+  const discard = (keepDraft = false) => {
     revision.current++;
     controller.current?.abort();
     clearHandle(continuation.current);
     continuation.current = undefined;
     setTurns([]);
-    setDraft("");
+    if (!keepDraft) setDraft("");
     setPending(null);
     setFailure(null);
   };
@@ -107,10 +125,18 @@ export default function AskConversation({
   useEffect(() => {
     if (!enabled) discard();
   }, [enabled]);
+  useEffect(() => {
+    if (!page || !scroll.current) return;
+    if (pending) scroll.current.scrollTop = scroll.current.scrollHeight;
+    else latest.current?.scrollIntoView({ block: "start" });
+  }, [page, pending, turns]);
+  if (collectionId && !modern)
+    return <p role="status">{t("ask.collection_unavailable")}</p>;
   async function submit(question: string) {
     if (
       !enabled ||
       pending ||
+      failure?.stale ||
       !online ||
       generation.current !== requestGeneration()
     )
@@ -126,7 +152,10 @@ export default function AskConversation({
       if (canContinue && !continuation.current) {
         const started = await api.command("ask", "ask", {
           start: true,
-          ...askNoteActionOptions(manifest.data?.plugins, workspaceRole),
+          ...(!collectionId &&
+            askNoteActionOptions(manifest.data?.plugins, workspaceRole)),
+          ...(modern && { conversational: true }),
+          ...(collectionId && { collection_id: collectionId }),
         });
         const handle = askContinuation(started);
         if (!handle) throw new Error(outputText(started) || t("ask.failed"));
@@ -140,7 +169,11 @@ export default function AskConversation({
         }
         continuation.current = handle;
       }
-      const args = { ...continuation.current, question };
+      const args = {
+        ...continuation.current,
+        question,
+        ...(modern && notesOnly && { notes_only: true }),
+      };
       const result = await api.request("/api/v1/plugins/ask/commands/ask", {
         method: "POST",
         body: args,
@@ -165,107 +198,194 @@ export default function AskConversation({
         attempt === revision.current &&
         !abort.signal.aborted
       ) {
+        const stale =
+          error instanceof ApiError && error.code === "ask_collection_changed";
         setDraft(question);
         setFailure({
           question,
-          error: error instanceof Error ? error.message : t("ask.failed"),
+          error: stale
+            ? t("ask.collection_changed")
+            : error instanceof Error
+              ? error.message
+              : t("ask.failed"),
+          stale,
         });
       }
     } finally {
       if (alive.current && attempt === revision.current) setPending(null);
     }
   }
+  const starters = turns.length === 0 && !pending && (
+    <div className={chatStyles.starters} aria-label={t("ask.try_message")}>
+      <p className="muted">{t("ask.try_message")}</p>
+      {(["ask", ...(canWrite ? ["create", "edit"] : [])] as const).map(
+        (kind) => (
+          <button
+            key={kind}
+            type="button"
+            aria-label={`${t(`ask.starter_${kind}`)}: ${t(`ask.example_${kind}`)}`}
+            disabled={!enabled || !!draft.trim()}
+            onClick={() => {
+              if (draft.trim()) return;
+              setDraft(t(`ask.example_${kind}`));
+              input.current?.focus();
+            }}
+          >
+            <strong>{t(`ask.starter_${kind}`)}</strong>
+            <span>{t(`ask.example_${kind}`)}</span>
+          </button>
+        ),
+      )}
+    </div>
+  );
+  const Heading = page ? "h1" : "h2";
+  const destination = catalog.data?.plugins.find((item) => item.id === "ask")
+    ?.ai_destinations?.chat;
   return (
-    <section className={styles.result} aria-label={t("ask.conversation")}>
+    <section
+      className={page ? chatStyles.page : styles.result}
+      aria-label={t("ask.conversation")}
+    >
       <header className={chatStyles.header}>
         <div>
-          <h2>{t("plugin.ask.name")}</h2>
-          <p className="muted">
-            {t(canWrite ? "ask.intro" : "ask.intro_readonly")}
-          </p>
-        </div>
-        <button onClick={discard}>{t("ask.new_conversation")}</button>
-      </header>
-      <p className={chatStyles.temporary}>{t("ask.temporary")}</p>
-      <div aria-live="polite" aria-busy={pending !== null}>
-        {turns.map((turn) => (
-          <article
-            key={turn.id}
-            tabIndex={-1}
-            ref={turn.id === turns.at(-1)?.id ? latest : undefined}
-          >
-            {turn.question && <h3>{turn.question}</h3>}
-            {!askWriteAction(turn.value) && (
-              <VocabularyOutput
-                value={turn.value}
-                allow={["text", "markdown"]}
-              />
-            )}
-            {!askWriteAction(turn.value) &&
-              askSources(turn.value).length > 0 && (
-                <>
-                  <h4>{t("ask.sources")}</h4>
-                  <ol>
-                    {askSources(turn.value).map((source, i) => (
-                      <li key={`${source.id}-${i}`}>
-                        <NoteReference {...source} />
-                      </li>
-                    ))}
-                  </ol>
-                </>
+          <Heading>{t("plugin.ask.name")}</Heading>
+          {(!page || (turns.length === 0 && !pending)) && (
+            <p className="muted">
+              {t(
+                collectionId
+                  ? "ask.collection_intro"
+                  : modern
+                    ? "ask.discussion_intro"
+                    : canWrite
+                      ? "ask.intro"
+                      : "ask.intro_readonly",
               )}
-            <TurnActions
-              value={turn.value}
-              onRevise={() => {
-                if (!draft.trim()) setDraft(turn.question);
-                input.current?.focus();
-              }}
-              current={() =>
-                alive.current &&
-                enabled &&
-                generation.current === requestGeneration()
+            </p>
+          )}
+        </div>
+        <button onClick={() => discard(failure?.stale === true)}>
+          {t("ask.new_conversation")}
+        </button>
+      </header>
+      <div className={page ? chatStyles.transcript : undefined} ref={scroll}>
+        {page ? (
+          <details className={chatStyles.temporary}>
+            <summary>{t("ask.temporary_title")}</summary>
+            <p>{t("ask.temporary")}</p>
+          </details>
+        ) : (
+          <p className={chatStyles.temporary}>{t("ask.temporary")}</p>
+        )}
+        {page && destination?.leaves_network && (
+          <p className={chatStyles.temporary}>
+            {t("ask.external_provider", {
+              host: destination.host ?? destination.profile,
+            })}
+          </p>
+        )}
+        {page && starters}
+        <div role="log" aria-live="polite" aria-busy={pending !== null}>
+          {turns.map((turn) => (
+            <article
+              key={turn.id}
+              tabIndex={-1}
+              ref={turn.id === turns.at(-1)?.id ? latest : undefined}
+            >
+              {turn.question && (
+                <h3 className={chatStyles.question}>{turn.question}</h3>
+              )}
+              {!askWriteAction(turn.value) && (
+                <VocabularyOutput
+                  value={turn.value}
+                  allow={["text", "markdown"]}
+                />
+              )}
+              {!askWriteAction(turn.value) &&
+                askSources(turn.value).length > 0 &&
+                (page ? (
+                  <details className={chatStyles.sources}>
+                    <summary>
+                      {t("ask.sources")} · {askSources(turn.value).length}
+                    </summary>
+                    <ol>
+                      {askSources(turn.value).map((source, i) => (
+                        <li key={source.id}>
+                          <NoteReference {...source} keepConversation={true} />
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                ) : (
+                  <>
+                    <h4>{t("ask.sources")}</h4>
+                    <ol>
+                      {askSources(turn.value).map((source, i) => (
+                        <li key={`${source.id}-${i}`}>
+                          <NoteReference {...source} />
+                        </li>
+                      ))}
+                    </ol>
+                  </>
+                ))}
+              <TurnActions
+                value={turn.value}
+                onRevise={() => {
+                  if (!draft.trim()) setDraft(turn.question);
+                  input.current?.focus();
+                }}
+                current={() =>
+                  alive.current &&
+                  enabled &&
+                  generation.current === requestGeneration()
+                }
+              />
+            </article>
+          ))}
+          {pending && (
+            <>
+              <h3 className={chatStyles.question}>{pending}</h3>
+              <p role="status">{t("timeline.loading_notes")}</p>
+            </>
+          )}
+        </div>
+        {failure && (
+          <div role="alert">
+            <p className="error">{failure.error}</p>
+            {!failure.stale && <p>{t("ask.retry_hint")}</p>}
+            <button
+              onClick={() =>
+                failure.stale ? discard(true) : void submit(failure.question)
               }
-            />
-          </article>
-        ))}
-        {pending && (
-          <>
-            <h3>{pending}</h3>
-            <p role="status">{t("timeline.loading_notes")}</p>
-          </>
+            >
+              {t(failure.stale ? "ask.new_conversation" : "ask.retry")}
+            </button>
+          </div>
+        )}
+        {turns.length > 0 && !pending && (
+          <button
+            type="button"
+            className={chatStyles.latest}
+            onClick={() => {
+              latest.current?.scrollIntoView({ block: "start" });
+              latest.current?.focus({ preventScroll: true });
+            }}
+          >
+            {t("ask.view_latest")}
+          </button>
         )}
       </div>
-      {failure && (
-        <div role="alert">
-          <p className="error">{failure.error}</p>
-          <p>{t("ask.retry_hint")}</p>
-          <button onClick={() => void submit(failure.question)}>
-            {t("ask.retry")}
-          </button>
-        </div>
-      )}
-      {turns.length > 0 && !pending && (
-        <button
-          type="button"
-          className={chatStyles.latest}
-          onClick={() => {
-            latest.current?.scrollIntoView({ block: "start" });
-            latest.current?.focus({ preventScroll: true });
-          }}
-        >
-          {t("ask.view_latest")}
-        </button>
-      )}
       <form
         className={chatStyles.composer}
         onSubmit={(event) => {
           event.preventDefault();
-          if (draft.trim() && [...draft.trim()].length <= 500)
+          if (draft.trim() && [...draft.trim()].length <= limit)
             void submit(draft.trim());
         }}
       >
         <label>
-          {t("ask.message")}
+          <span className={page ? "sr-only" : undefined}>
+            {t("ask.message")}
+          </span>
           <textarea
             ref={input}
             data-modal-initial
@@ -276,50 +396,42 @@ export default function AskConversation({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             disabled={!enabled || !!pending}
-            rows={3}
+            rows={page ? 2 : 3}
           />
         </label>
-        {turns.length === 0 && !pending && (
-          <div
-            className={chatStyles.starters}
-            aria-label={t("ask.try_message")}
+        {!page && starters}
+        {[...draft.trim()].length > limit && (
+          <p role="alert">
+            {t(modern ? "ask.message_limit" : "ask.question_limit")}
+          </p>
+        )}
+        <div className={chatStyles.composerActions}>
+          {modern && (
+            <label className={chatStyles.onlyNotes}>
+              <input
+                type="checkbox"
+                checked={notesOnly}
+                disabled={!!pending}
+                onChange={(e) => setNotesOnly(e.target.checked)}
+              />
+              {t("ask.only_notes")}
+            </label>
+          )}
+          {!online && <p role="status">{t("ask.offline")}</p>}
+          <button
+            className="primary"
+            disabled={
+              !enabled ||
+              !!pending ||
+              !!failure?.stale ||
+              !draft.trim() ||
+              [...draft.trim()].length > limit ||
+              !online
+            }
           >
-            <p className="muted">{t("ask.try_message")}</p>
-            {(["ask", ...(canWrite ? ["create", "edit"] : [])] as const).map(
-              (kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  aria-label={`${t(`ask.starter_${kind}`)}: ${t(`ask.example_${kind}`)}`}
-                  disabled={!enabled || !!draft.trim()}
-                  onClick={() => {
-                    if (draft.trim()) return;
-                    setDraft(t(`ask.example_${kind}`));
-                    input.current?.focus();
-                  }}
-                >
-                  <strong>{t(`ask.starter_${kind}`)}</strong>
-                  <span>{t(`ask.example_${kind}`)}</span>
-                </button>
-              ),
-            )}
-          </div>
-        )}
-        {[...draft.trim()].length > 500 && (
-          <p role="alert">{t("ask.question_limit")}</p>
-        )}
-        <button
-          className="primary"
-          disabled={
-            !enabled ||
-            !!pending ||
-            !draft.trim() ||
-            [...draft.trim()].length > 500 ||
-            !online
-          }
-        >
-          {t("ask.send")}
-        </button>
+            {t("ask.send")}
+          </button>
+        </div>
       </form>
       {onDismiss && (
         <button

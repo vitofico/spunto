@@ -69,6 +69,7 @@ internal fun noteTools(
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
   (!stock || when(id to command.string("id")) {
    ThinkingDeskRoute to "desk" -> false
+   "context-packs" to "packs" -> !collectionsPluginSupported(plugin)
    DecisionJournalId to "record-decision", DecisionJournalId to "review-decision" -> false
    AgentInboxId to AgentReviewCommand -> !versionedAgentReview && legacyAgentReview
    "image-text" to "read" -> inputs.image
@@ -206,6 +207,7 @@ internal fun localizedPluginName(resources:Resources,plugin:JsonObject,catalog:J
   "library-stats" -> R.string.settings_plugin_library_stats_name
   "thinking-desk" -> R.string.settings_plugin_thinking_desk_name
   "context-packs" -> R.string.settings_plugin_context_packs_name
+  "note-assist" -> R.string.plugin_note_assist_name
   "tasks" -> R.string.settings_plugin_tasks_name
   "develop" -> R.string.settings_plugin_develop_name
   "ask" -> R.string.settings_plugin_ask_name
@@ -240,6 +242,7 @@ internal fun localizedPluginDescription(resources:Resources,plugin:JsonObject,ca
   "library-stats" -> R.string.settings_plugin_library_stats_description
   "thinking-desk" -> R.string.settings_plugin_thinking_desk_description
   "context-packs" -> R.string.settings_plugin_context_packs_description
+  "note-assist" -> R.string.plugin_note_assist_description
   "tasks" -> R.string.settings_plugin_tasks_description
   "develop" -> R.string.settings_plugin_develop_description
   "ask" -> R.string.settings_plugin_ask_description

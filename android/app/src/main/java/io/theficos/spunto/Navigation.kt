@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
  /** Pushes a full-screen page (note, search, settings…); Back returns here. */
  fun open(route:String) { if(route!=this.route) entries.add(route) }
  fun back() { if(canGoBack) replace(entries.dropLast(1)) }
+ internal fun replaceTop(route:String)=replace(entries.dropLast(1)+route)
  /** Switches the timeline filter (All notes, Archive, Trash, Review, a label or view); Back from a filter returns to All notes. */
  fun filter(route:String)=replace(if(route=="timeline") listOf("timeline") else listOf("timeline",route))
  /** Returns to All notes and drops every page above it. */
@@ -39,12 +40,21 @@ import androidx.compose.ui.Alignment
 val LocalNavigator=staticCompositionLocalOf<Navigator> { error("Navigator is provided by SpuntoApp.") }
 
 /** Top bar title of a page; null for pages that show none (a note, search, a plugin page, which heads itself) and for the filter routes, whose title is the labels switcher. */
-fun routeTitle(context:Context,route:String):String?=when(route) {
+fun routeTitle(context:Context,route:String):String?=when {
+ route==DecisionManagerRoute || route.startsWith(DecisionDetailPrefix) -> context.getString(R.string.settings_bundled_title_23)
+ else -> existingRouteTitle(context,route)
+}
+private fun existingRouteTitle(context:Context,route:String):String?=when(route) {
  "settings" -> context.getString(R.string.core_settings); "appearance" -> context.getString(R.string.core_appearance); "plugins" -> context.getString(R.string.core_plugins); "ask" -> context.getString(R.string.core_ask_notes)
  "tools" -> context.getString(R.string.plugin_global_tools)
+ CollectionsRoute -> context.getString(R.string.collections_title)
  ThinkingDeskRoute -> context.getString(R.string.settings_plugin_thinking_desk_name)
  WhatsNewRoute -> context.getString(R.string.whats_new_title)
- else -> null
+ else -> when {
+  route.startsWith("ask:") -> context.getString(R.string.core_ask_notes)
+  route.startsWith("$CollectionsRoute:") -> context.getString(R.string.collections_title)
+  else -> null
+ }
 }
 
 /** Where page content puts its top bar icons (a note's pin and ⋮) without owning the scaffold. */

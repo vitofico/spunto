@@ -17,8 +17,9 @@ from spunto.ai.quota import TITLES, QuotaExceeded
 from spunto.ai.vectors import VectorUnavailable
 from spunto.api.deps import PrincipalDep, ServicesDep, SessionDep
 from spunto.api.errors import Problem, problem_response
-from spunto.host import ContextError, ManifestError
+from spunto.host import ContextError, Ctx, ManifestError
 from spunto.host.language import language, negotiate, tr, use_language
+from spunto.plugins.context_packs.collections import CollectionRequest, collection_request
 
 router = APIRouter(prefix="/api/v1", tags=["Plugins"])
 
@@ -384,6 +385,55 @@ async def panel(
     with _localized(request, response, services.host, plugin_id):
         host = _host(services, plugin_id, enabled=True)
         return await _call(host.invoke_panel(plugin_id, note_id, principal=principal))
+
+
+@router.post("/collections")
+async def collections(
+    body: CollectionRequest,
+    request: Request,
+    response: Response,
+    principal: PrincipalDep,
+    services: ServicesDep,
+):
+    with _localized(request, response, services.host, "context-packs"):
+        _owner(principal)
+        host = _host(services, "context-packs", enabled=True)
+        context = Ctx(host, "context-packs", principal=principal, operation="command:collections")
+        return await _call(collection_request(context, body))
+
+
+@router.post("/note-assist/{workflow}")
+async def note_assistance(
+    workflow: Literal["collections", "decisions"],
+    body: dict,
+    request: Request,
+    response: Response,
+    principal: PrincipalDep,
+    services: ServicesDep,
+):
+    plugin_id = "note-assist"
+    with _localized(request, response, services.host, plugin_id):
+        _owner(principal)
+        host = _host(services, plugin_id, enabled=True)
+        if host.catalog_metadata[plugin_id]["origin"] != "bundled":
+            raise Problem(404, "not_found", tr("That plugin is unavailable."))
+        decision_id = "decision-journal"
+        if workflow == "decisions":
+            _host(services, decision_id, enabled=True)
+            if host.catalog_metadata[decision_id]["origin"] != "bundled":
+                raise Problem(404, "not_found", tr("That plugin is unavailable."))
+            decision_generation = host.generations[decision_id]
+        _arguments(body)
+        result = await _call(
+            host.invoke_route(
+                plugin_id, workflow, body, method="POST", principal=principal, vocabulary=False
+            )
+        )
+        if workflow == "decisions":
+            _host(services, decision_id, enabled=True)
+            if host.generations[decision_id] != decision_generation:
+                raise Problem(404, "not_found", tr("That plugin is unavailable."))
+        return result
 
 
 @router.post("/plugins/{plugin_id}/commands/{command}")

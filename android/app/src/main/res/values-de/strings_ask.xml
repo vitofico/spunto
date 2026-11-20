@@ -49,4 +49,11 @@
     <string name="core_ask_continue">Unterhaltung fortsetzen</string>
     <string name="core_ask_latest_reply">Letzte Antwort ansehen</string>
     <string name="core_ask_message_notes">Nachricht für deine Notizen</string>
+    <string name="core_ask_only_notes">Nur aus Notizen</string>
+    <string name="core_ask_discussion_intro">Frag nach deinen Notizen oder denk gemeinsam über eine Idee nach.</string>
+    <string name="core_ask_collection_intro">Besprich diese Sammlung anhand der verfügbaren Quellnotizen.</string>
+    <string name="core_ask_collection_unavailable">Für diese Sammlung ist eine neuere Version des Ask-Plugins erforderlich.</string>
+    <string name="core_ask_message_characters">%1$d / 2000 Zeichen</string>
+    <string name="core_ask_collection_changed">Die Sammlung wurde geändert. Beginne eine neue Unterhaltung.</string>
+    <string name="core_ask_temporary_title">Vorübergehende Unterhaltung</string>
 </resources>

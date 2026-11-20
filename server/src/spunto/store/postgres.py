@@ -284,6 +284,11 @@ def _translate(statement: str, parameters: Sequence = ()) -> tuple[str, list, bo
     statement = re.sub(r"\bIS NOT \?", "IS DISTINCT FROM ?", statement)
     statement = re.sub(r"\bIS \?", "IS NOT DISTINCT FROM ?", statement)
     statement = re.sub(r"json_extract\((\w+),\'\$\.(\w+)\'\)", r"(\1::jsonb->>'\2')", statement)
+    statement = re.sub(
+        r"json_extract\((\w+),'\$\.(\w+)\.(\w+)'\)",
+        r"(\1::jsonb#>>'{\2,\3}')",
+        statement,
+    )
     statement = statement.replace("min(priority,?)", "least(priority,?)")
     if "note_fts MATCH ?" in statement:
         index = _qmarks(statement.split("note_fts MATCH ?", 1)[0]).count("%s")

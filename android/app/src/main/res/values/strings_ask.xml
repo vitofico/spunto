@@ -49,4 +49,11 @@
     <string name="core_ask_continue">Continue the conversation</string>
     <string name="core_ask_latest_reply">View latest reply</string>
     <string name="core_ask_message_notes">Message for your notes</string>
+    <string name="core_ask_only_notes">Only from notes</string>
+    <string name="core_ask_discussion_intro">Ask about your notes or think through an idea together.</string>
+    <string name="core_ask_collection_intro">Talk through this collection using its eligible source notes.</string>
+    <string name="core_ask_collection_unavailable">Discussion for this collection needs a newer Ask plugin.</string>
+    <string name="core_ask_message_characters">%1$d / 2000 characters</string>
+    <string name="core_ask_collection_changed">The collection changed. Start a new conversation.</string>
+    <string name="core_ask_temporary_title">Temporary conversation</string>
 </resources>

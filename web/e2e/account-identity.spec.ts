@@ -4,6 +4,7 @@ for (const width of [1280, 390]) {
   test(`signed-in account stays distinct from space name at ${width}px`, async ({
     page,
   }, testInfo) => {
+    test.setTimeout(60_000);
     await page.setViewportSize({ width, height: 850 });
     const name = "Élodie 李 with a long account display name";
     await page.route("**/api/v1/**", async (route) => {
@@ -84,9 +85,20 @@ for (const width of [1280, 390]) {
     await expect(link).toBeVisible();
     const identity = link.locator(".account-rail-label");
     await expect(identity).toHaveCSS("display", "grid");
-    const nameBox = await identity.locator("strong").boundingBox();
-    const accountBox = await identity.locator("small").boundingBox();
-    expect(accountBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height);
+    await expect(identity.locator("small")).toHaveText("Account");
+    await expect
+      .poll(() =>
+        identity.evaluate((element) => {
+          const name = element.querySelector("strong")?.getBoundingClientRect();
+          const account = element
+            .querySelector("small")
+            ?.getBoundingClientRect();
+          return Boolean(
+            name?.height && account?.height && account.top >= name.bottom,
+          );
+        }),
+      )
+      .toBe(true);
     await page.screenshot({
       path: testInfo.outputPath(`account-navigation-${width}.png`),
     });

@@ -1,10 +1,17 @@
 import { useRef, useState } from "react";
+import { Link } from "wouter";
 import { Icon } from "../components/core/Icon";
 import { t, useLanguage } from "../lib/i18n";
 import { hasNoteToolInput } from "../lib/noteToolInputs";
 import type { NoteDetail } from "../lib/types";
 import { Dialog } from "./Dialog";
-import { noteToolKey, PluginCommands, type NoteToolChoice } from "./Slots";
+import {
+  noteToolKey,
+  PluginCommands,
+  usePlugins,
+  type NoteToolChoice,
+} from "./Slots";
+import { supportsCollections } from "./collectionsAccess";
 
 const shortcutPriority = [
   "image-text/read",
@@ -41,6 +48,7 @@ export function NoteTools({
   enabled: boolean;
 }) {
   useLanguage();
+  const collections = usePlugins().data?.plugins.some(supportsCollections);
   const [picker, setPicker] = useState(false);
   const [direct, setDirect] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
@@ -82,6 +90,11 @@ export function NoteTools({
               <Icon name={tool.icon ?? "tools"} /> {tool.title}
             </button>
           ))}
+          {enabled && collections && (
+            <Link className="button" href={`/collections?note=${note.id}`}>
+              <Icon name="archive" /> {t("collections.add_to")}
+            </Link>
+          )}
           {enabled && list && (
             <button
               type="button"

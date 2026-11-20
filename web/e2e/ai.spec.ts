@@ -74,24 +74,31 @@ const ask = {
     ],
   },
 };
-async function fixture(page: Page, withModels = false, withWrites = false) {
+async function fixture(
+  page: Page,
+  withModels = false,
+  withWrites = false,
+  modern = false,
+) {
   await page.addInitScript(() => {
     // These are online feature fixtures; the Linux test container has no
     // external network interface, which otherwise marks Chromium offline.
     Object.defineProperty(navigator, "onLine", { get: () => true });
   });
-  const askPlugin = withWrites
-    ? {
-        ...ask,
-        version: "1.1.0",
-        permissions: [...ask.permissions, "notes.review"],
-      }
-    : ask;
+  const askPlugin = modern
+    ? { ...ask, version: "1.2.0" }
+    : withWrites
+      ? {
+          ...ask,
+          version: "1.1.0",
+          permissions: [...ask.permissions, "notes.review"],
+        }
+      : ask;
   const reviewedStages = new Map<string, "preview" | "undo" | "done">();
   let reviewedNumber = 0;
   const routes: unknown[] = [],
     reindex: unknown[] = [],
-    commands: { id: string; args: unknown }[] = [];
+    commands: { id: string; args: Record<string, unknown> }[] = [];
   const modelSaves: unknown[] = [];
   let selections: AIModelSelections = {};
   let revision = 1;
@@ -281,6 +288,45 @@ async function fixture(page: Page, withModels = false, withWrites = false) {
               },
             },
           },
+        });
+      if (
+        modern &&
+        String(args.question).includes("stale collection") &&
+        commands.filter((cmd) => cmd.args.question === args.question).length ===
+          1
+      )
+        return json(
+          {
+            type: "about:blank",
+            code: "ask_collection_changed",
+            detail: "The collection changed. Start a new conversation.",
+          },
+          409,
+        );
+      if (modern && args.notes_only === true)
+        return json({
+          ui: 1,
+          items: [
+            { type: "text", text: "Nothing in your notes covers this" },
+            continuation,
+          ],
+        });
+      if (modern && String(args.question).includes("brainstorm"))
+        return json({
+          ui: 1,
+          items: [
+            {
+              type: "markdown",
+              text: "Try a small reversible experiment together.",
+            },
+            {
+              type: "command",
+              id: "save-answer",
+              title: "Save as note",
+              args: { answer_id: "fixture-receipt" },
+            },
+            continuation,
+          ],
         });
       if (withWrites) {
         reviewedNumber++;
@@ -590,7 +636,13 @@ test("the library Ask button opens chat with citations and explicit save", async
   await expect(
     page.getByRole("button", { name: "Save as note", exact: true }),
   ).toHaveCount(1);
-  await expect(page.locator(`a[href="/n/${id}"]`).last()).toBeVisible();
+  await page.getByText("Sources · 1", { exact: true }).click();
+  const source = page
+    .getByRole("region", { name: "Conversation" })
+    .locator(`a[href="/n/${id}"]`)
+    .last();
+  await expect(source).toBeVisible();
+  await expect(source).toHaveAttribute("target", "_blank");
   if (info.project.name === "chromium") {
     await page.screenshot({
       path: "/tmp/spunto-ask-review-20261030/typed-question-desktop.png",
@@ -637,12 +689,84 @@ test("the library Ask button opens chat with citations and explicit save", async
     )
     .toBe(true);
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("dialog", { name: "Ask your notes" }),
-  ).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
   await expect(askButton).toBeFocused();
 });
 
+test("modern Ask uses the dedicated page, keeps follow-ups and supports notes-only", async ({
+  page,
+}) => {
+  const state = await fixture(page, false, false, true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Ask your notes", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/ask$/);
+  const chat = page.getByRole("region", { name: "Conversation" });
+  const composer = chat.getByRole("textbox", { name: "Your message" });
+  const send = chat.getByRole("button", { name: "Send", exact: true });
+  await composer.fill("Could we brainstorm a small workshop?");
+  await send.click();
+  await expect(
+    chat.getByText("Try a small reversible experiment together."),
+  ).toBeVisible();
+  await expect(chat.getByText(/^Sources/)).toHaveCount(0);
+  await expect(
+    chat.getByRole("button", { name: "Save as note", exact: true }),
+  ).toBeVisible();
+  await chat.getByRole("checkbox", { name: "Only from notes" }).check();
+  await composer.fill(
+    "What did we decide about the room? " + "More detail. ".repeat(45),
+  );
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(
+    chat.getByText("Nothing in your notes covers this"),
+  ).toBeVisible();
+  expect(state.commands[0]).toEqual({
+    id: "ask",
+    args: { start: true, conversational: true, note_actions: true },
+  });
+  expect(state.commands.at(-1)?.args).toMatchObject({
+    notes_only: true,
+    after_turn: 1,
+  });
+  await expect(
+    chat.getByRole("button", { name: "Save as note", exact: true }),
+  ).toHaveCount(1);
+});
+
+test("a stale collection can restart without losing the unsent question", async ({
+  page,
+}) => {
+  const state = await fixture(page, false, false, true);
+  const id = "019ac000-0000-7000-8000-000000000001";
+  await page.goto("/ask?collection=" + id);
+  const input = page.getByRole("textbox", { name: "Your message" });
+  const send = page.getByRole("button", { name: "Send", exact: true });
+  const wording = "Can we discuss the stale collection?";
+  await input.fill(wording);
+  await send.click();
+  const failure = page
+    .getByRole("alert")
+    .filter({ hasText: "The collection changed" });
+  await expect(failure).toBeVisible();
+  await expect(send).toBeDisabled();
+  await failure.getByRole("button", { name: "New conversation" }).click();
+  await expect(input).toHaveValue(wording);
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
+  expect(
+    state.commands
+      .filter((cmd) => cmd.args.start === true)
+      .map((cmd) => cmd.args),
+  ).toEqual([
+    { start: true, conversational: true, collection_id: id },
+    { start: true, conversational: true, collection_id: id },
+  ]);
+});
 test("private and machine notes do not request AI live panels", async ({
   page,
 }) => {

@@ -4,7 +4,6 @@ import { api, safeError, useBrowserOnline } from "../lib";
 import { t } from "../lib/i18n";
 import { Icon } from "../components/core/Icon";
 import { useModalFocus } from "../components/core/useModalFocus";
-import AskConversation from "./AskConversation";
 import CommandResult from "./CommandResult";
 
 const statsOrigin = { plugin: "library-stats", command: "summary" };
@@ -43,20 +42,17 @@ function LibraryStats({ owner }: { owner: string }) {
 }
 
 export default function LibraryDialog({
-  tool,
   owner,
   onClose,
   restoreFocus,
 }: {
-  tool: "ask" | "stats";
   owner: string;
   onClose: () => void;
   restoreFocus: RefObject<HTMLElement | null>;
 }) {
   const dialog = useRef<HTMLElement>(null);
   useModalFocus(dialog, true, onClose, restoreFocus);
-  const ask = tool === "ask";
-  const title = t(ask ? "plugin.ask.name" : "plugin.library-stats.name");
+  const title = t("plugin.library-stats.name");
   return (
     <div
       className="overlay"
@@ -72,21 +68,17 @@ export default function LibraryDialog({
         aria-label={title}
       >
         <header className="palette-head library-tool-head">
-          {!ask && <strong>{title}</strong>}
+          <strong>{title}</strong>
           <button
             className="button"
             aria-label={t("app.close")}
             onClick={onClose}
-            data-modal-initial={!ask ? "" : undefined}
+            data-modal-initial
           >
             <Icon name="close" />
           </button>
         </header>
-        {ask ? (
-          <AskConversation value={undefined} />
-        ) : (
-          <LibraryStats owner={owner} />
-        )}
+        <LibraryStats owner={owner} />
       </section>
     </div>
   );

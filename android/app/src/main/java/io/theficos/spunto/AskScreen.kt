@@ -32,7 +32,7 @@ import io.theficos.spunto.core.design.SpuntoSpacing
  val epoch by model.pluginReplicaEpochState.collectAsState()
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
- val enabled=model.container.manifest.enabled("ask")
+ val enabled=libraryCommandAvailable(manifest,"ask","ask")
  key(auth,epoch) {
   var question by remember {mutableStateOf("")}
   var result by remember {mutableStateOf<JsonObject?>(null)}

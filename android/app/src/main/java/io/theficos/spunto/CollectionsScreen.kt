@@ -80,7 +80,7 @@ private fun JsonObject.toSource(accepted: Boolean = false) = CollectionSource(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable private fun ActiveCollections(
     model: SpuntoViewModel,
     route: String,
@@ -455,23 +455,8 @@ private fun JsonObject.toSource(accepted: Boolean = false) = CollectionSource(
                 }
                 HorizontalDivider()
             }
-            TextButton(onClick = { picking = !picking }, enabled = !loading && sources.size < 10) { Text(stringResource(R.string.collections_add_notes)) }
-            if (picking && sources.size < 10) {
-                NotePickerPanel(Modifier.height(355.dp), sources.map { it.id }.toSet(), true, !loading, requestId,
-                    search = { query, cursor -> searchPickerNotes(api, query, cursor) },
-                    reportError = { res, failure ->
-                        if (!ready()) throw CancellationException()
-                        if (failure is ApiException && failure.status == 401) model.reauthenticate.value = true
-                        if (failure is ApiException) pluginApiError(res, failure) else res.getString(R.string.sys_server_unreachable)
-                    },
-                    maxSelection = 10 - sources.size,
-                    multiActions = { notes, clear ->
-                        Button(onClick = {
-                            notes.forEach { choose(CollectionSource(it.id, it.title, it.serverRev.toLong(), pinned = false, accepted = true)) }
-                            clear()
-                        }, enabled = notes.isNotEmpty() && !loading) { Text(stringResource(R.string.collections_add_note)) }
-                    },
-                )
+            TextButton(onClick = { picking = true }, enabled = !loading && sources.size < 10) {
+                Text(stringResource(R.string.collections_add_notes))
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8)) {
                 Button(onClick = ::save, enabled = title.isNotBlank() && dirty && !loading) { Text(stringResource(R.string.collections_save)) }
@@ -492,6 +477,42 @@ private fun JsonObject.toSource(accepted: Boolean = false) = CollectionSource(
             }
             briefPanel()
 
+        }
+    }
+    if (picking && sources.size < 10) ModalBottomSheet(
+        onDismissRequest = { picking = false },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = SpuntoSpacing.s20)
+                .padding(bottom = SpuntoSpacing.s16),
+            verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s12),
+        ) {
+            Text(stringResource(R.string.collections_add_notes), style = MaterialTheme.typography.titleLarge)
+            NotePickerPanel(
+                Modifier.heightIn(max = 450.dp).fillMaxHeight(),
+                sources.map { it.id }.toSet(),
+                true,
+                !loading,
+                requestId,
+                search = { query, cursor -> searchPickerNotes(api, query, cursor) },
+                reportError = { res, failure ->
+                    if (!ready()) throw CancellationException()
+                    if (failure is ApiException && failure.status == 401) model.reauthenticate.value = true
+                    if (failure is ApiException) pluginApiError(res, failure) else res.getString(R.string.sys_server_unreachable)
+                },
+                maxSelection = 10 - sources.size,
+                multiActions = { notes, _ ->
+                    Button(onClick = {
+                        notes.forEach {
+                            choose(CollectionSource(it.id, it.title, it.serverRev.toLong(), pinned = false, accepted = true))
+                        }
+                        picking = false
+                    }, enabled = notes.isNotEmpty() && !loading) {
+                        Text(stringResource(R.string.collections_add_note))
+                    }
+                },
+            )
         }
     }
     if (confirmDelete) AlertDialog(

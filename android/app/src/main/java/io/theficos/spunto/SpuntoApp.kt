@@ -72,12 +72,13 @@ import kotlinx.serialization.json.*
  val owner by model.workspaceIsOwner.collectAsState()
  val epoch by model.pluginReplicaEpochState.collectAsState()
  val canManageCollections=owner && auth!=null && collectionsAvailable(manifest)
+ val canManageDecisions=owner && auth!=null && libraryCommandAvailable(manifest,DecisionJournalId,"journal")
  val deskAvailable=thinkingDeskAvailable(manifest,owner && auth!=null)
  val canAsk=owner && auth!=null && libraryCommandAvailable(manifest,"ask","ask")
  val canViewStats=owner && auth!=null && libraryCommandAvailable(manifest,"library-stats","summary")
  var statsOpen by remember(auth,epoch) {mutableStateOf(false)}
  LaunchedEffect(canViewStats) {if(!canViewStats) statsOpen=false}
- val navigationLabel=context.getString(if(deskAvailable || canViewStats || canManageCollections) R.string.core_open_navigation else R.string.core_choose_labels)
+ val navigationLabel=context.getString(if(deskAvailable || canViewStats || canManageCollections || canManageDecisions) R.string.core_open_navigation else R.string.core_choose_labels)
  val deskSession=if(deskAvailable && nav.contains(ThinkingDeskRoute)) remember(auth,epoch) { ThinkingDeskSession() } else null
  LaunchedEffect(manifest) {
   model.container.manifest.withCurrentPublication {
@@ -194,7 +195,7 @@ import kotlinx.serialization.json.*
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
-    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onCollections=if(canManageCollections) {{navigationOpen=false;nav.open(CollectionsRoute)}} else null,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null,onLibraryStats=if(canViewStats) {{navigationOpen=false;statsOpen=true}} else null,onDecisions=if(owner && model.container.manifest.enabled(DecisionJournalId)) {{navigationOpen=false;nav.open(DecisionManagerRoute)}} else null)
+    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onCollections=if(canManageCollections) {{navigationOpen=false;nav.open(CollectionsRoute)}} else null,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null,onLibraryStats=if(canViewStats) {{navigationOpen=false;statsOpen=true}} else null,onDecisions=if(canManageDecisions) {{navigationOpen=false;nav.open(DecisionManagerRoute)}} else null)
     StatusLines(model)
     if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}

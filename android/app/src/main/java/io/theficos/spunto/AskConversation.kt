@@ -36,7 +36,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
  val manifest=model.manifest.collectAsState().value
  val catalog by model.catalog.collectAsState()
  val online by model.online.collectAsState()
- val enabled=model.container.manifest.enabled("ask")
+ val enabled=libraryCommandAvailable(manifest,"ask","ask")
  val modern=fullPage && supportsConversationalAsk(manifest)
  val noteActions=collectionId==null && supportsAskNoteActions(manifest,auth?.workspaceRole)
  val initialIdentity=remember {auth to epoch}

@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.Markdown
 import io.theficos.spunto.core.plugins.bool
@@ -89,12 +90,13 @@ internal fun DecisionManager(model: SpuntoViewModel, noteId: String?, onDetail: 
     }
     val details = noteId != null && components.any { it.string("type") == "notes" }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s16),
+        Modifier.fillMaxSize().testTag(if (noteId == null) "decision-manager" else "decision-detail:$noteId")
+            .verticalScroll(rememberScrollState()).padding(SpuntoSpacing.s16),
         verticalArrangement = Arrangement.spacedBy(SpuntoSpacing.s8),
     ) {
         if (noteId == null) {
             if (upgraded) {
-                DecisionDraftFlow(model, null, onNote) { refresh++ }
+                DecisionDraftFlow(model, null, onNote, onCreated = onDetail) { refresh++ }
                 OutlinedTextField(search, { search = it.take(200) }, label = { Text(stringResource(R.string.decision_search)) }, singleLine = true)
                 TextButton(onClick = { query = search.trim(); cursor = "" }) { Text(stringResource(R.string.core_search)) }
                 DecisionStatusFilter(status) { status = it; cursor = "" }
@@ -155,7 +157,9 @@ internal fun DecisionManager(model: SpuntoViewModel, noteId: String?, onDetail: 
             components.firstOrNull { it.string("type") == "text" }?.let { Text(it.string("text")) }
             for (reference in components.firstOrNull { it.string("type") == "notes" }?.objects("items").orEmpty()) {
                 val id = reference.string("id")
-                if (id.isNotEmpty()) DecisionManagerReference(model, id, reference.string("reason"), onDetail)
+                if (id.isNotEmpty()) Box(Modifier.testTag("decision-list-row:$id")) {
+                    DecisionManagerReference(model, id, reference.string("reason"), onDetail)
+                }
             }
             if (cursor.isNotEmpty()) TextButton(onClick = { cursor = "" }) { Text(stringResource(R.string.decision_first_page)) }
             val next = components.firstNotNullOfOrNull {
@@ -225,7 +229,7 @@ private fun decisionOutput(result: JsonObject): List<JsonObject> {
 }
 
 @Composable
-private fun DecisionDraftFlow(model: SpuntoViewModel, noteId: String?, onNote: (String) -> Unit, onSaved: () -> Unit) {
+private fun DecisionDraftFlow(model: SpuntoViewModel, noteId: String?, onNote: (String) -> Unit, onCreated: (String) -> Unit = onNote, onSaved: () -> Unit) {
     val resources = LocalContext.current.resources
     val manifest by model.manifest.collectAsState()
     val available = manifest.objects("plugins").any { it.string("id") == "note-assist" && it.bool("enabled", true) }
@@ -335,7 +339,9 @@ private fun DecisionDraftFlow(model: SpuntoViewModel, noteId: String?, onNote: (
         }
         candidate?.let { output ->
             updateTitle?.let { Text(stringResource(R.string.decision_update_match, it)) }
-            RenderOutput(model, output, onNote, {
+            val openSaved = if (output.string("command_id") == "record-decision" &&
+                (output["payload"] as? JsonObject)?.string("type") == "notes") onCreated else onNote
+            RenderOutput(model, output, openSaved, {
                 candidate = it
                 if ((it["payload"] as? JsonObject)?.string("type") == "notes") onSaved()
             }, commandScope = scope)

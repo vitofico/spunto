@@ -72,6 +72,24 @@ class AskEntryTest {
   compose.onNodeWithText("Ask your notes").assertIsDisplayed()
  }
 
+ @Test fun modernComposerRetainsTheDraftWhileSendIsBlocked() {
+  var question by mutableStateOf("What about tomorrow?")
+  var canSend by mutableStateOf(false)
+  var submitted:String?=null
+  compose.setContent {
+   SpuntoTheme("carta","light") {
+    AskQuestionInput(question,true,true,false,{question=it},{submitted=question},compact=true,limit=2000,canSend=canSend)
+   }
+  }
+  val input=compose.onNodeWithContentDescription("Question for your notes")
+  input.assertTextContains("What about tomorrow?")
+  input.performTextReplacement("What about next Monday?")
+  compose.onNodeWithText("Send").assertIsNotEnabled()
+  compose.runOnIdle {canSend=true}
+  compose.onNodeWithText("Send").assertIsEnabled().performClick()
+  compose.runOnIdle {assertEquals("What about next Monday?",submitted)}
+ }
+
  @Test fun viewerOnModernServerSeesQuestionInputWithoutAuthoringPromptsOrIntro() {
   val manifest=buildJsonObject {put("plugins",JsonArray(listOf(buildJsonObject {
    put("id","ask");put("version","1.1.0");put("state","enabled")

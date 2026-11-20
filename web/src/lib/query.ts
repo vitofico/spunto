@@ -514,17 +514,18 @@ export function useNote(id: string) {
 export function useLabels() {
   return useQuery({ queryKey: ["labels"], queryFn: api.labels });
 }
-export function useManifest() {
+export function useManifest(enabled = true) {
   const language = useLanguage();
   // Older manifests rely on the catalog for bundled plugin provenance.
   const catalog = useQuery({
     queryKey: ["catalog"],
     queryFn: api.catalog,
-    enabled: language !== "en",
+    enabled: enabled && language !== "en",
   });
   return useQuery({
     queryKey: ["manifest"],
     queryFn: api.manifest,
+    enabled,
     select: (data) =>
       localizeCatalog(data, language === "en" ? [] : catalog.data?.plugins),
   });

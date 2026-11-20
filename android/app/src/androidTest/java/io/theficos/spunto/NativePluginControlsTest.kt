@@ -82,6 +82,29 @@ class NativePluginControlsTest {
   compose.onNodeWithText("Automatic").assertIsSelected()
   compose.onNodeWithText("Confidence · 0.91").assertExists()
  }
+ @Test fun settingsWithAnUnsupportedSingleModeOfferWebManagement() {
+  val page=safePluginPage(Json.parseToJsonElement("""{"schema":{"type":"object","properties":{"change_mode":{"type":"string","title":"Change behavior","enum":["ask_first","automatic"]}}},"values":{"change_mode":"ask_first"}}""").jsonObject)
+  var opened=""
+  compose.setContent {SpuntoTheme {Column {
+   NativePluginSettingsValues(NativePluginFacts(row("link-enrichment")),page,true,onChangeMode={fail("Unsupported native mode")}) {opened=it}
+  }}}
+  compose.onNodeWithText("Manage settings in the web app · owner sign-in").performClick()
+  compose.runOnIdle {assertEquals("/settings/plugins/link-enrichment",opened)}
+ }
+ @Test fun labelGardenerKeepsManualRunAndNativeReviewInPluginSettings() {
+  val commands=Json.parseToJsonElement("""{"commands":[{"id":"review-now","title":"Review labels","where":[]}]}""")
+  val plugin=NativePluginFacts(JsonObject(row("label-gardener","enabled")+mapOf(
+   "origin" to JsonPrimitive("bundled"),"contributes" to commands,
+  )),manifestActive=true)
+  val commandsRun=mutableListOf<String>()
+  var reviewOpened=false
+  compose.setContent {SpuntoTheme {Column(Modifier.verticalScroll(rememberScrollState())) {
+   NativePluginDetailFacts(plugin,true,false,false,{commandsRun+=it.pluginText("id").orEmpty()},{},{reviewOpened=true})
+  }}}
+  compose.onNodeWithText("Review labels").performScrollTo().performClick()
+  compose.onNodeWithText("Open Review").performScrollTo().performClick()
+  compose.runOnIdle {assertEquals(listOf("review-now"),commandsRun);assertTrue(reviewOpened)}
+ }
  @Test fun receiptUndoRemainsReachableOnANarrowLayoutWithLargeText() {
   val label="very-long-nested-recipe-label"
   val receipt=buildJsonObject {

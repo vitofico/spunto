@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from spunto.auth.tokens import Principal
 from spunto.core.notes import Notes
 from spunto.core.plugin_notes import PluginNotes
 from spunto.host import Ctx, Host, read_manifest
+from spunto.host.language import use_language
 from spunto.host.plugin import ContextError
 from spunto.host.vocabulary import validate_output
 from spunto.plugins import context_packs as packs
@@ -91,7 +93,99 @@ async def test_manifest_opt_in_manual_and_component_budgets(pack_host):
     result = await packs.packs(ctx(pack_host), note_id=seed["id"])
     validate_output(result)
     assert result["items"][1]["id"] == "edit"
-    assert result["items"][1]["args"] == {"note_id": seed["id"]}
+    assert result["items"][1]["args"] == {"action": "start", "note_id": seed["id"]}
+
+
+@pytest.mark.parametrize("language", ["en", "it", "es", "fr", "de"])
+async def test_guided_draft_reopens_with_live_sources_and_exact_export(pack_host, language):
+    with use_language(language):
+        handler = ctx(pack_host)
+        reader = ctx(pack_host, Principal("draft-reader", "token", "reader", "read"))
+        request_id = str(uuid.uuid4())
+        start = await packs.edit(handler, action="start")
+        validate_output(start)
+        assert set(start["items"][1]["schema"]["properties"]) == {
+            "title",
+            "goals",
+            "request_id",
+        }
+        draft = await packs.edit(
+            handler,
+            action="start",
+            request_id=request_id,
+            title="Watering schedule for the shared garden",
+            goals="Plan watering",
+        )
+        validate_output(draft)
+        assert await packs.get_pack(reader, request_id) == {"found": False}
+        assert await packs.list_packs(reader) == {"packs": [], "next_cursor": None}
+        library = await packs.packs(handler)
+        validate_output(library)
+        assert "Watering schedule for the shared garden" in json.dumps(library)
+        reopened_args = next(
+            item["args"] for item in library["items"] if item.get("args", {}).get("pack_id")
+        )
+        assert await packs.packs(handler, **reopened_args) == draft
+
+        source = await core(pack_host, "Initial source title\nPrivate source prose", private=True)
+        sources = await packs.sources(
+            handler, request_id, 1, picker=True, add_id=source["id"], add_version=source["version"]
+        )
+        validate_output(sources)
+        await Notes(pack_host.store, OWNER).edit(
+            source["id"], "Updated source title", source["version"]
+        )
+        reviewed = await packs.sources(handler, request_id, 2, picker=True)
+        validate_output(reviewed)
+        assert "Updated source title" in json.dumps(reviewed)
+        write_args = next(item["args"] for item in reviewed["items"] if item.get("id") == "edit")
+        blocked = await packs.edit(handler, **write_args)
+        validate_output(blocked)
+        assert blocked["items"][1]["id"] == "sources"
+        with pytest.raises(Problem) as error:
+            await packs.edit(handler, **write_args, title="Garden", goals="New plan")
+        assert error.value.status == 409
+        assert await packs.get_pack(reader, request_id) == {"found": False}
+        reviewed = await packs.sources(handler, request_id, 2, picker=True, refresh=True)
+        write_args = next(item["args"] for item in reviewed["items"] if item.get("id") == "edit")
+        form = await packs.edit(handler, **write_args)
+        validate_output(form)
+        assert form["items"][1]["schema"]["properties"]["goals"]["default"] == "Plan watering"
+        assert form["items"][1]["schema"]["properties"]["private"]["default"] is True
+        finished = await packs.edit(handler, **write_args, title="Garden", goals="New plan")
+        validate_output(finished)
+        assert "[Updated source title]" in finished["items"][0]["text"]
+        assert "Private source prose" not in json.dumps(finished)
+        assert "Updated source title" not in json.dumps(await packs.record(handler, request_id))
+        assert await packs.get_pack(reader, request_id) == {"found": False}
+
+        await Notes(pack_host.store, OWNER).edit(
+            source["id"], "A newer title", source["version"] + 1
+        )
+        stale_export = await packs.packs(handler, pack_id=request_id, export=True)
+        validate_output(stale_export)
+        assert not any(
+            item.get("args", {}).get("action") == "save-note" for item in stale_export["items"]
+        )
+        await packs.sources(handler, request_id, 4, picker=True, refresh=True)
+        exported = await packs.packs(handler, pack_id=request_id, export=True)
+        validate_output(exported)
+        expected = (await packs.get_pack(handler, request_id))["markdown"]
+        assert exported["items"][0]["text"] == expected
+        assert "Updated source title" not in expected and "New plan" in expected
+        copy_args = next(
+            item["args"]
+            for item in exported["items"]
+            if item.get("args", {}).get("action") == "save-note"
+        )
+        copy = await packs.edit(handler, **copy_args)
+        snapshot = await Notes(pack_host.store, OWNER).get(copy["items"][1]["ids"][0])
+        assert snapshot["body"] == expected and snapshot["private"]
+
+        await Notes(pack_host.store, OWNER).flags(source["id"], {"trashed": True})
+        unavailable = await packs.sources(handler, request_id, 5, picker=True)
+        validate_output(unavailable)
+        assert "Updated source title" not in json.dumps(unavailable)
 
 
 async def test_pack_picker_guards_source_at_cas_and_keeps_classification(pack_host, monkeypatch):
@@ -129,6 +223,30 @@ async def test_pack_picker_guards_source_at_cas_and_keeps_classification(pack_ho
     assert saved["sources"] == [] and saved["private"]
 
 
+@pytest.mark.parametrize("action", ["add", "refresh"])
+async def test_legacy_source_form_checks_versions_at_commit(pack_host, monkeypatch, action):
+    from spunto.host.storage import Records
+
+    note = await core(pack_host)
+    handler = ctx(pack_host)
+    pack_id, before = await create(
+        pack_host, **({"note_id": note["id"]} if action == "refresh" else {})
+    )
+    compare = Records.compare_and_set
+
+    async def change_before_compare(self, *args, **kwargs):
+        await Notes(pack_host.store, OWNER).edit(
+            note["id"], "Changed during review", note["version"]
+        )
+        return await compare(self, *args, **kwargs)
+
+    monkeypatch.setattr(Records, "compare_and_set", change_before_compare)
+    args = {"refresh": True} if action == "refresh" else {"add": packs.choice(note)}
+    with pytest.raises(Problem, match="source changed"):
+        await packs.sources(handler, pack_id, before["revision"], **args)
+    assert await packs.record(handler, pack_id, before["revision"]) == before
+
+
 async def test_curated_brief_round_trip_sources_reopen_and_delete(pack_host):
     note = await core(pack_host)
     pack_id, saved = await create(
@@ -149,7 +267,9 @@ async def test_curated_brief_round_trip_sources_reopen_and_delete(pack_host):
     )
     assert result["sources"][0]["status"] == "current"
     opened = await packs.packs(ctx(pack_host), pack_id=pack_id)
-    assert opened["items"][0]["text"] == result["markdown"]
+    assert opened["items"][0]["text"] != result["markdown"]
+    exported = await packs.packs(ctx(pack_host), pack_id=pack_id, export=True)
+    assert exported["items"][0]["text"] == result["markdown"]
     validate_output(opened)
     editor = await packs.edit(ctx(pack_host), pack_id=pack_id, expected_revision=1)
     assert editor["items"][1]["schema"]["properties"]["goals"]["default"] == "Ship locally"
@@ -461,8 +581,25 @@ async def test_cursor_pages_reopen_all_packs_and_reject_wrong_cursor(pack_host):
     assert found == ids
     page = await packs.packs(ctx(pack_host))
     validate_output(page)
-    assert len(page["items"]) == 9
+    assert len(page["items"]) == 10
     assert page["items"][-1]["title"] == "Next packs"
+    opened = set()
+    while True:
+        validate_output(page)
+        opened.update(
+            item["args"]["pack_id"]
+            for item in page["items"]
+            if item["type"] == "command" and "pack_id" in item["args"]
+        )
+        cursor = page["items"][-1].get("args", {}).get("cursor")
+        if cursor is None:
+            break
+        assert re.fullmatch(r"[0-9]{1,19}:[0-9a-f-]{36}", cursor)
+        page = await packs.packs(ctx(pack_host), cursor=cursor)
+    assert opened == ids
+    oldest_cursor = min(ids)
+    legacy_page = await packs.packs(ctx(pack_host), cursor=oldest_cursor)
+    assert legacy_page["items"][-1]["args"]["cursor"] == sorted(ids)[3]
     with pytest.raises(ValueError):
         await packs.list_packs(ctx(pack_host), "_host_bad")
 
@@ -477,12 +614,17 @@ async def test_mcp_pagination_scans_hidden_records_without_exposing_hidden_curso
         deleted_id, _ = await create(pack_host)
         await packs.edit(ctx(pack_host), pack_id=deleted_id, expected_revision=1, action="delete")
         deleted_ids.add(deleted_id)
+    draft_ids = {str(uuid.uuid4()) for _ in range(12)}
+    for draft_id in draft_ids:
+        await packs.edit(ctx(pack_host), action="start", request_id=draft_id, title="Hidden draft")
     seen, cursor = set(), None
     while True:
         page = await packs.list_packs(ctx(pack_host, reader), cursor)
         ids = {row["id"] for row in page["packs"]}
         assert ids <= visible_ids
-        assert not any(hidden in json.dumps(page) for hidden in private_ids | deleted_ids)
+        assert not any(
+            hidden in json.dumps(page) for hidden in private_ids | deleted_ids | draft_ids
+        )
         seen.update(ids)
         cursor = page["next_cursor"]
         if cursor is None:

@@ -86,6 +86,9 @@ async def test_manifest_auth_csrf_permissions_and_etag(plugin_server):
     catalog = (await server.client.get("/api/v1/plugins")).json()
     discovered = [read_manifest(p) for p in Path(bundled.__file__).parent.glob("*/plugin.toml")]
     assert {p["id"] for p in catalog["plugins"]} == {p["id"] for p in discovered}
+    assert {p["id"] for p in catalog["plugins"] if p["has_settings"]} == {
+        p["id"] for p in discovered if p.get("settings", {}).get("properties")
+    }
     assert {
         "tasks",
         "agent-inbox",

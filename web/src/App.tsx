@@ -21,11 +21,16 @@ import {
   useOwner,
   useSyncState,
   useHosted,
+  useManifest,
   useWorkspaceIssue,
   useWorkspaceRole,
 } from "./lib";
 import { useInstanceAppearance } from "./features/Appearance";
-import { usePlugins, type CommandOrigin } from "./features/Slots";
+import {
+  libraryCommandAvailable,
+  usePlugins,
+  type CommandOrigin,
+} from "./features/Slots";
 import Timeline from "./pages/Timeline";
 import { Icon } from "./components/core/Icon";
 import { useToast } from "./components/core/Toast";
@@ -46,6 +51,7 @@ function lazyPages() {
         default: module.Palette,
       })),
     ),
+    LibraryDialog: lazy(() => import("./features/LibraryDialog")),
     FirstRunGuide: lazy(() =>
       import("./components/core/FirstRunGuide").then((module) => ({
         default: module.FirstRunGuide,
@@ -192,6 +198,7 @@ function Rail({
   open,
   close,
   onPalette,
+  onLibraryStats,
   blocked,
   returnFocus,
 }: {
@@ -199,6 +206,7 @@ function Rail({
   open: boolean;
   close: () => void;
   onPalette: (trigger: HTMLElement) => void;
+  onLibraryStats?: (trigger: HTMLElement) => void;
   blocked: boolean;
   returnFocus: RefObject<HTMLElement | null>;
 }) {
@@ -287,6 +295,18 @@ function Rail({
                 {t("plugin.thinking-desk.name")}
               </span>
             </Link>
+          )}
+          {onLibraryStats && (
+            <button
+              className="rail-action"
+              onClick={(event) => onLibraryStats(event.currentTarget)}
+              aria-label={t("plugin.library-stats.name")}
+            >
+              <Icon name="stats" />
+              <span className="rail-label">
+                {t("plugin.library-stats.name")}
+              </span>
+            </button>
           )}
           <Link
             href="/archive"
@@ -553,6 +573,7 @@ export default function App() {
   }
   const {
     Palette,
+    LibraryDialog,
     FirstRunGuide,
     AuthPage,
     NotePage,
@@ -563,6 +584,15 @@ export default function App() {
     StatusPage,
     ThinkingDeskPage,
   } = pages;
+  const workspaceRole = useWorkspaceRole();
+  const plugins = useManifest(auth.status === "authenticated");
+  const canUseLibraryTools = !!owner && workspaceRole === "owner";
+  const canAsk =
+    canUseLibraryTools &&
+    libraryCommandAvailable(plugins.data?.plugins, "ask", "ask");
+  const canViewStats =
+    canUseLibraryTools &&
+    libraryCommandAvailable(plugins.data?.plugins, "library-stats", "summary");
   const signedIn = auth.status === "authenticated";
   useEffect(() => {
     if (!signedIn) return;
@@ -603,8 +633,10 @@ export default function App() {
     setPalette(false);
     setHelp(false);
     setRailOpen(false);
+    setLibraryTool(null);
     setGuideReplay(true);
   }
+  const [libraryTool, setLibraryTool] = useState<"ask" | "stats" | null>(null);
   const [commandResult, setCommandResult] = useState<unknown>(null);
   const [commandOrigin, setCommandOrigin] = useState<CommandOrigin>();
   const [instant, setInstant] = useState(false);
@@ -614,14 +646,25 @@ export default function App() {
     [railOpen, setRailOpen] = useState(false);
   const overlayTrigger = useRef<HTMLElement>(null);
   const helpDialog = useRef<HTMLElement>(null);
-  const modalOpen = palette || help || railOpen;
+  const activeLibraryTool =
+    (libraryTool === "ask" && canAsk) ||
+    (libraryTool === "stats" && canViewStats)
+      ? libraryTool
+      : null;
+  const modalOpen = palette || help || railOpen || !!activeLibraryTool;
   useModalFocus(helpDialog, help, () => setHelp(false), overlayTrigger);
   /** A click names its button: WebKit doesn't focus a clicked button. */
   function rememberFocus(trigger = document.activeElement) {
     if (!modalOpen) overlayTrigger.current = trigger as HTMLElement;
   }
+  function openLibraryTool(tool: "ask" | "stats", trigger: HTMLElement) {
+    rememberFocus(trigger);
+    setRailOpen(false);
+    setLibraryTool(tool);
+  }
   function openSearch(trigger?: HTMLElement) {
     rememberFocus(trigger);
+    setLibraryTool(null);
     setInstant(false);
     setRailOpen(false);
     setHelp(false);
@@ -629,6 +672,7 @@ export default function App() {
   }
   function openHelp() {
     rememberFocus();
+    setLibraryTool(null);
     setRailOpen(false);
     setPalette(false);
     setHelp(true);
@@ -657,10 +701,15 @@ export default function App() {
     setHelp(false);
     setRailOpen(false);
     setGuideReplay(false);
+    setLibraryTool(null);
   }, [owner]);
+  useEffect(() => setLibraryTool(null), [location]);
+  useEffect(() => {
+    if (libraryTool && !activeLibraryTool) setLibraryTool(null);
+  }, [libraryTool, activeLibraryTool]);
   useEffect(() => {
     const handler = (event: Event) => {
-      if (guideOpen) return;
+      if (guideOpen || activeLibraryTool) return;
       const detail = (event as CustomEvent).detail;
       const value = detail?.origin ? detail.value : detail;
       const success = commandSuccessMessage(value);
@@ -678,7 +727,7 @@ export default function App() {
     };
     window.addEventListener("spunto:command-result", handler);
     return () => window.removeEventListener("spunto:command-result", handler);
-  }, [guideOpen, toast]);
+  }, [guideOpen, toast, activeLibraryTool]);
   useEffect(() => {
     if (
       auth.status === "authenticated" &&
@@ -693,7 +742,11 @@ export default function App() {
       if (e.defaultPrevented) return;
       const palettePressed =
         (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
-      if (guideOpen || document.querySelector("dialog[open]")) {
+      if (
+        guideOpen ||
+        activeLibraryTool ||
+        document.querySelector("dialog[open]")
+      ) {
         if (palettePressed) e.preventDefault();
         return;
       }
@@ -811,7 +864,15 @@ export default function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [location, navigate, palette, help, railOpen, guideOpen]);
+  }, [
+    location,
+    navigate,
+    palette,
+    help,
+    railOpen,
+    guideOpen,
+    activeLibraryTool,
+  ]);
   if (auth.status === "unreachable")
     return (
       <main className="auth">
@@ -869,7 +930,12 @@ export default function App() {
         open={railOpen}
         close={() => setRailOpen(false)}
         onPalette={openSearch}
-        blocked={palette || help}
+        onLibraryStats={
+          canViewStats
+            ? (trigger) => openLibraryTool("stats", trigger)
+            : undefined
+        }
+        blocked={palette || help || !!activeLibraryTool}
         returnFocus={overlayTrigger}
       />
       <header className="topbar" inert={modalOpen}>
@@ -894,6 +960,16 @@ export default function App() {
         >
           <Icon name="search" />
         </button>
+        {canAsk && location === "/" && (
+          <button
+            className="button"
+            aria-label={t("plugin.ask.name")}
+            title={t("plugin.ask.name")}
+            onClick={(event) => openLibraryTool("ask", event.currentTarget)}
+          >
+            <Icon name="ask" />
+          </button>
+        )}
         <Link
           href="/settings"
           className="button home-settings"
@@ -1007,6 +1083,18 @@ export default function App() {
           </Suspense>
         </LoadBoundary>
       </main>
+      {owner && activeLibraryTool && (
+        <LoadBoundary location={location} onRetry={retryPages}>
+          <Suspense fallback={null}>
+            <LibraryDialog
+              tool={activeLibraryTool}
+              owner={owner}
+              onClose={() => setLibraryTool(null)}
+              restoreFocus={overlayTrigger}
+            />
+          </Suspense>
+        </LoadBoundary>
+      )}
       {palette && (
         <LoadBoundary location={location} onRetry={retryPages}>
           <Suspense fallback={null}>

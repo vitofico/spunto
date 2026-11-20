@@ -1,14 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
-import { PaletteCommands } from "../src/features/Slots";
+import LibraryDialog from "../src/features/LibraryDialog";
 
 afterEach(() => {
   cleanup();
@@ -61,13 +55,17 @@ it("loads library stats only on request and renders them through the existing re
   });
   const create = vi.spyOn(api, "createNote");
   const note = vi.spyOn(api, "note");
+  expect(command).not.toHaveBeenCalled();
   render(
     <QueryClientProvider client={client}>
-      <PaletteCommands noteId="open-note" />
+      <LibraryDialog
+        tool="stats"
+        owner="test-owner"
+        onClose={() => {}}
+        restoreFocus={{ current: null }}
+      />
     </QueryClientProvider>,
   );
-  expect(command).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: /Library stats/ }));
   expect(
     await screen.findByText("Saved notes: 8 · Active: 7 · Archived: 1"),
   ).toBeTruthy();

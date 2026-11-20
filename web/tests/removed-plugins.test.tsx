@@ -527,3 +527,47 @@ it("refuses a captured cleanup callback after the current count becomes malforme
   expect(await within(dialog).findByRole("alert")).toBeTruthy();
   expect(api.deletePluginData).not.toHaveBeenCalled();
 });
+
+it("opens Review from a manual label check with a legacy enabled manifest", async () => {
+  const plugin: Plugin = {
+    ...installed,
+    id: "label-gardener",
+    name: "Label gardener",
+    origin: "bundled",
+    source_kind: "bundled",
+    permissions: ["suggest", "schedule"],
+    state: "enabled",
+    switch: "on",
+    has_settings: true,
+    contributes: {
+      commands: [
+        {
+          id: "review-now",
+          title: "Review labels",
+          where: ["palette", "slash"],
+        },
+      ],
+    },
+  };
+  vi.mocked(api.catalog).mockResolvedValue(catalog([plugin]));
+  vi.spyOn(api, "manifest").mockResolvedValue({
+    ui: 1,
+    plugins_rev: 7,
+    plugins: [{ ...plugin, origin: undefined, source_kind: undefined }],
+  });
+  vi.mocked(api.command).mockResolvedValue({
+    type: "text",
+    text: "No new label changes to review.",
+  });
+  renderPage("plugins/label-gardener");
+  fireEvent.click(await screen.findByRole("button", { name: "Review labels" }));
+  const message = await screen.findByText("No new label changes to review.");
+  const result = message.closest("section");
+  expect(result).not.toBeNull();
+  expect(
+    within(result!)
+      .getByRole("link", { name: "Open Review" })
+      .getAttribute("href"),
+  ).toBe("/review");
+  expect(api.command).toHaveBeenCalledWith("label-gardener", "review-now", {});
+});

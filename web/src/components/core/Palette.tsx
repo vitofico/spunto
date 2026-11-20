@@ -52,7 +52,6 @@ export function Palette({
   }, [location]);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const defaultSelection = useRef(true);
   const labels = useLabels();
   const keyword = query.trim();
   const searchReady = !!keyword && keyword === settledQuery && !result;
@@ -99,31 +98,16 @@ export function Palette({
   useLayoutEffect(() => {
     paint(active);
     // Plugin rows can arrive after this render; they are options too.
-    const observer = new MutationObserver(() => {
-      const ask = list.current?.querySelector<HTMLElement>(
-        "[data-ask-question]",
-      );
-      if (defaultSelection.current && query.trim().endsWith("?") && ask)
-        setActive(ask);
-      else paint(active);
-    });
+    const observer = new MutationObserver(() => paint(active));
     if (list.current)
       observer.observe(list.current, { childList: true, subtree: true });
     return () => observer.disconnect();
   });
   useEffect(() => {
-    defaultSelection.current = true;
-    const ask = list.current?.querySelector<HTMLElement>("[data-ask-question]");
     const search = list.current?.querySelector<HTMLElement>(
       "[data-search-query]",
     );
-    setActive(
-      query.trim()
-        ? query.trim().endsWith("?") && ask
-          ? ask
-          : (search ?? rows()[0] ?? null)
-        : null,
-    );
+    setActive(query.trim() ? (search ?? rows()[0] ?? null) : null);
   }, [query]);
   useEffect(() => {
     const previous = restoreFocus ?? (document.activeElement as HTMLElement);
@@ -241,19 +225,8 @@ export function Palette({
               const all = rows();
               const count = all.length;
               const index = active ? all.indexOf(active) : -1;
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                const ask = list.current?.querySelector<HTMLButtonElement>(
-                  "[data-ask-question]:not(:disabled)",
-                );
-                if (ask) {
-                  e.preventDefault();
-                  ask.click();
-                  return;
-                }
-              }
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
-                defaultSelection.current = false;
                 if (!count) return;
                 const step = e.key === "ArrowDown" ? 1 : -1;
                 setActive(
@@ -300,7 +273,6 @@ export function Palette({
             onMouseMove={(e) => {
               const row = (e.target as HTMLElement).closest("button");
               if (row && row !== active && rows().includes(row)) {
-                defaultSelection.current = false;
                 setActive(row);
               }
             }}

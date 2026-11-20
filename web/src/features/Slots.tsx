@@ -46,7 +46,6 @@ import { plural } from "./format";
 import styles from "./Feature.module.css";
 import { requestGeneration } from "../lib/identity";
 import { decisionsPath, isDecisionNote } from "./decisionJournalData";
-import { askContinuation, askNoteActionOptions } from "./askConversationData";
 const CommandResult = lazy(() => import("./CommandResult"));
 export function usePlugins() {
   return useManifest();
@@ -598,8 +597,27 @@ function operatorPlugin(plugin: Plugin) {
   );
 }
 
+export function libraryCommandAvailable(
+  plugins: Plugin[] | undefined,
+  pluginId: string,
+  commandId: string,
+) {
+  return activePlugins(plugins).some(
+    (plugin) =>
+      plugin.id === pluginId &&
+      !operatorPlugin(plugin) &&
+      plugin.contributes?.commands?.some((command) => command.id === commandId),
+  );
+}
+
 function commandSurfaces(plugin: Plugin, command: Command) {
   const surfaces = command.where ?? command.surfaces ?? [];
+  if (
+    plugin.id === "label-gardener" &&
+    command.id === "review-now" &&
+    !operatorPlugin(plugin)
+  )
+    return [];
   if (plugin.id === "thinking-desk" && !operatorPlugin(plugin))
     return surfaces.filter((surface) => surface === "palette");
   if (
@@ -698,6 +716,7 @@ export function PluginCommands({
   noteId,
   note,
   pluginId,
+  settingsCommand,
   onChoose,
   onResult,
   onOpenNote,
@@ -711,6 +730,7 @@ export function PluginCommands({
   noteId?: string;
   note?: NoteDetail;
   pluginId?: string;
+  settingsCommand?: string;
   onChoose?: (choice: CommandChoice) => void;
   onResult?: (value: unknown, origin: CommandOrigin) => void;
   onOpenNote?: () => void;
@@ -735,6 +755,12 @@ export function PluginCommands({
   );
   const enabledPlugins = activePlugins(manifest.data?.plugins);
   const matchesSurface = (plugin: Plugin, command: Command, at: string[]) => {
+    if (
+      !operatorPlugin(plugin) &&
+      ((plugin.id === "ask" && command.id === "ask") ||
+        (plugin.id === "library-stats" && command.id === "summary"))
+    )
+      return false;
     if (!places.some((place) => at.includes(place))) return false;
     if (!at.includes("note-actions")) return true;
     if (noteTools)
@@ -779,124 +805,29 @@ export function PluginCommands({
         .find((row) => row.dataset.commandKey === key)
         ?.focus();
   }, [result]);
-  const currentQuery = useRef(query);
-  currentQuery.current = query;
   const commandLifetime = useRef({
     active: true,
     generation: requestGeneration(),
   });
-  const pendingAskHandle = useRef<Args | undefined>(undefined);
   const currentPlugins = useRef(manifest.data?.plugins);
   currentPlugins.current = manifest.data?.plugins;
   useEffect(() => {
     commandLifetime.current.active = true;
     return () => {
       commandLifetime.current.active = false;
-      if (
-        pendingAskHandle.current &&
-        commandLifetime.current.generation === requestGeneration()
-      )
-        void api
-          .command("ask", "clear-conversation", {
-            conversation_id: pendingAskHandle.current.conversation_id,
-          })
-          .catch(() => {});
     };
   }, []);
-  useEffect(
-    () => () => {
-      if (
-        pendingAskHandle.current &&
-        commandLifetime.current.generation === requestGeneration()
-      )
-        void api
-          .command("ask", "clear-conversation", {
-            conversation_id: pendingAskHandle.current.conversation_id,
-          })
-          .catch(() => {});
-      pendingAskHandle.current = undefined;
-    },
-    [query],
-  );
-  useEffect(() => {
-    if (
-      pendingAskHandle.current &&
-      !activePlugins(manifest.data?.plugins).some(
-        (plugin) => plugin.id === "ask",
-      )
-    ) {
-      if (commandLifetime.current.generation === requestGeneration())
-        void api
-          .command("ask", "clear-conversation", {
-            conversation_id: pendingAskHandle.current.conversation_id,
-          })
-          .catch(() => {});
-      pendingAskHandle.current = undefined;
-    }
-  }, [manifest.data]);
   const command = useMutation({
-    mutationFn: async ({ plugin, id, args }: CommandChoice) => {
-      if (
-        plugin === "ask" &&
-        id === "ask" &&
-        typeof args?.question === "string"
-      ) {
-        const started = pendingAskHandle.current
-          ? undefined
-          : await api.command("ask", "ask", {
-              start: true,
-              ...askNoteActionOptions(currentPlugins.current, workspaceRole),
-            });
-        const handle = pendingAskHandle.current ?? askContinuation(started);
-        if (!handle) throw new Error(outputText(started) || t("ask.failed"));
-        pendingAskHandle.current = handle;
-        if (
-          !commandLifetime.current.active ||
-          commandLifetime.current.generation !== requestGeneration() ||
-          args.question !== currentQuery.current.trim() ||
-          !activePlugins(currentPlugins.current).some((p) => p.id === "ask")
-        ) {
-          if (commandLifetime.current.generation === requestGeneration())
-            void api
-              .command("ask", "clear-conversation", {
-                conversation_id: handle.conversation_id,
-              })
-              .catch(() => {});
-          throw new DOMException("Conversation closed", "AbortError");
-        }
-        return api.command(plugin, id, { ...handle, ...args });
-      }
-      return api.command(plugin, id, args ?? {});
-    },
+    mutationFn: ({ plugin, id, args }: CommandChoice) =>
+      api.command(plugin, id, args ?? {}),
     onSuccess: (value, choice) => {
-      if (
-        choice.plugin === "ask" &&
-        (!commandLifetime.current.active ||
-          commandLifetime.current.generation !== requestGeneration() ||
-          !activePlugins(currentPlugins.current).some(
-            (plugin) => plugin.id === "ask",
-          ) ||
-          (typeof choice.args?.question === "string" &&
-            choice.args.question !== currentQuery.current.trim()))
-      ) {
-        const continuation = askContinuation(value);
-        if (
-          continuation &&
-          commandLifetime.current.generation === requestGeneration()
-        )
-          void api
-            .command("ask", "clear-conversation", {
-              conversation_id: continuation.conversation_id,
-            })
-            .catch(() => {});
-        return;
-      }
-      if (choice.plugin === "ask") pendingAskHandle.current = undefined;
       const nextOrigin = {
         plugin: choice.plugin,
         command: choice.id,
         args: choice.args,
       };
+      if (choice.plugin === "label-gardener" && choice.id === "review-now")
+        void client.invalidateQueries({ queryKey: ["suggestions"] });
       if (choice.args?.note_id && choice.plugin !== "decision-journal")
         void invalidateContentFor(client);
       const plugin = currentPlugins.current?.find(
@@ -921,11 +852,6 @@ export function PluginCommands({
       }
     },
   });
-  const question = query.trim();
-  const askQuestion =
-    places.includes("palette") &&
-    question.split(/\s+/).length >= 3 &&
-    [...question].length <= 500;
   const commands = (
     online && workspaceRole === "owner" && (!noteTools || noteToolsEnabled)
       ? enabledPlugins.filter((p) => !pluginId || p.id === pluginId)
@@ -940,7 +866,9 @@ export function PluginCommands({
         }))
         .filter(
           ({ command, at }) =>
-            matchesSurface(p, command, at) &&
+            (settingsCommand
+              ? command.id === settingsCommand && at.length === 0
+              : matchesSurface(p, command, at)) &&
             !(
               p.id === "agent-inbox" &&
               !operatorPlugin(p) &&
@@ -968,20 +896,13 @@ export function PluginCommands({
               "tools"
             : undefined,
           args:
-            p.id === "ask" &&
-            command.id === "ask" &&
-            askQuestion &&
-            question.toLowerCase() !== command.title.toLowerCase()
-              ? { question }
-              : noteId && at.includes("note-actions")
-                ? { note_id: noteId }
-                : undefined,
+            noteId && at.includes("note-actions")
+              ? { note_id: noteId }
+              : undefined,
         })),
     )
-    .filter(
-      (c) =>
-        (c.plugin === "ask" && c.id === "ask" && askQuestion) ||
-        c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
+    .filter((c) =>
+      c.title.toLowerCase().includes(query.toLowerCase().replace(/^\//, "")),
     );
   const waiting =
     slash ||
@@ -1109,12 +1030,6 @@ export function PluginCommands({
             }
             key={noteToolKey(c)}
             data-command-key={noteToolKey(c)}
-            data-ask-question={
-              (c.plugin === "ask" &&
-                c.id === "ask" &&
-                typeof c.args?.question === "string") ||
-              undefined
-            }
             role={slash ? "option" : undefined}
             aria-selected={slash ? index === highlighted : undefined}
             disabled={command.isPending}
@@ -1127,7 +1042,7 @@ export function PluginCommands({
               </span>
             )}
             <span>{c.title}</span>
-            {c.name !== c.title && (!noteTools || !c.bundled) && (
+            {!pluginId && c.name !== c.title && (!noteTools || !c.bundled) && (
               <small className="muted">{c.name}</small>
             )}
           </button>

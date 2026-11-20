@@ -171,7 +171,14 @@ class NewFeatureWorkflowTest {
                         val viewport = if(compactLargeText) Modifier.width(320.dp).height(480.dp) else Modifier.fillMaxSize()
                         Column(viewport.verticalScroll(rememberScrollState()).padding(16.dp)) {
                             key(current.generation) {
-                                outputComponents(current.output).forEach { component ->
+                                val components = outputComponents(current.output)
+                                val packRows = if (plugin == "context-packs") contextPackLibraryRows(components) else emptyMap()
+                                components.forEachIndexed { index, component ->
+                                    if (index + 1 in packRows) return@forEachIndexed
+                                    packRows[index]?.let { title ->
+                                        androidx.compose.material3.TextButton(onClick = { send("packs", component["args"]!!.jsonObject) }) { Text(title) }
+                                        return@forEachIndexed
+                                    }
                                     if (plugin == DecisionJournalId && component["type"]?.jsonPrimitive?.content == "form") {
                                         DecisionForm(component["schema"]!!.jsonObject, current.command, current.args, online = true, running = false) { values ->
                                             send(current.command, JsonObject(current.args + values))
@@ -181,7 +188,7 @@ class NewFeatureWorkflowTest {
                                         onCommand = send,
                                         onForm = { values -> send(current.command, JsonObject(current.args + values)) },
                                         formInitial = current.args,
-                                        formLabel = thinkingDeskFormLabel(plugin, component),
+                                        formLabel = contextPackFormLabel(plugin, component) ?: thinkingDeskFormLabel(plugin, component),
                                     )
                                 }
                             }
@@ -194,6 +201,15 @@ class NewFeatureWorkflowTest {
         fun output(): JsonObject {
             var result = empty
             compose.runOnIdle { result = frame.value.output }
+            return result
+        }
+
+        fun resultEnvelope(): JsonObject {
+            var result = empty
+            compose.runOnIdle {
+                val current = frame.value
+                result = commandEnvelope(plugin, current.command, current.args, current.output)
+            }
             return result
         }
 
@@ -422,33 +438,45 @@ class NewFeatureWorkflowTest {
 
     @Test fun contextPackFormsCreateEditAndKeepPrivateSnapshot() {
         enable("context-packs")
-        val flow = Workflow("context-packs", "edit")
+        val flow = Workflow("context-packs", "packs")
         val title = "Native context $suffix"
         val goals = "Keep a manually curated project brief.\nUse explicit revision tracking."
+        flow.click("New context pack")
         fill("Brief title", title)
-        fill("Project", "Synthetic native workflow")
         fill("Goals", goals)
+        compose.onNodeWithText("Creation request ID", substring = false).assertDoesNotExist()
+        flow.click("Create draft")
+        val sourceArgs = commandArgs(flow.output(), "Choose sources")
+        val packId = sourceArgs["pack_id"]!!.jsonPrimitive.content
+        assertEquals(1, sourceArgs["expected_revision"]!!.jsonPrimitive.int)
+
+        flow.click("All context packs")
+        flow.click("Draft · $title")
+        flow.click("Choose sources")
+        flow.click("Write brief")
+        fill("Project", "Synthetic native workflow")
         fill("Constraints", "All data belongs to a disposable local test server.")
         fill("Decisions", "Keep ordinary private note copies.")
         fill("Open questions", "What should be reviewed next?")
-        compose.onNodeWithText("Creation request ID", substring = false).assertDoesNotExist()
-        flow.submit()
+        flow.click("Save brief")
         val editArgs = commandArgs(flow.output(), "Edit brief")
-        val packId = editArgs["pack_id"]!!.jsonPrimitive.content
-        assertEquals(1, editArgs["expected_revision"]!!.jsonPrimitive.int)
-        val copied = resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output())
-        assertTrue(copied.contains("# $title"))
-        assertTrue(copied.contains(goals))
-        assertTrue(copied.contains("## Open questions"))
+        assertEquals(2, editArgs["expected_revision"]!!.jsonPrimitive.int)
 
-        flow.open("edit", editArgs)
+        flow.click("Edit brief")
         val revised = "A revised native goal.\nRetain the second line exactly."
         fill("Goals", revised)
-        flow.submit()
-        assertEquals(2, commandArgs(flow.output(), "Edit brief")["expected_revision"]!!.jsonPrimitive.int)
+        flow.click("Save brief")
+        assertEquals(3, commandArgs(flow.output(), "Edit brief")["expected_revision"]!!.jsonPrimitive.int)
         assertEquals(packId, commandArgs(flow.output(), "Edit brief")["pack_id"]!!.jsonPrimitive.content)
-        assertTrue(resultCopyText(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources,flow.output()).contains(revised))
+        val resources = InstrumentationRegistry.getInstrumentation().targetContext.resources
+        assertTrue(resultCopyText(resources, flow.resultEnvelope()).isEmpty())
+        flow.click("Use brief")
         // This verifies the production copy formatter, not Android clipboard delivery.
+        val copied = resultCopyText(resources, flow.resultEnvelope())
+        assertTrue(copied.contains("# $title"))
+        assertTrue(copied.contains(revised))
+        assertTrue(copied.contains("## Open questions"))
+        assertFalse(copied.contains("Agents need permission"))
         flow.click("Keep private note copy")
         val saved = note(ids(flow.output()).single())
         assertTrue(saved["private"]!!.jsonPrimitive.boolean)
@@ -721,6 +749,40 @@ class NewFeatureWorkflowTest {
             compose.runOnIdle { container.connected.value = false }
             compose.waitUntil(5_000) { !model.online.value }
             compose.onNode(fetch).assertDoesNotExist()
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
+    @Test fun libraryStatsOpenFromActiveNavigationAndReturnToArchive() {
+        enable("library-stats")
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-library-stats-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, publishesPlugins = true)
+        val mounted = mutableStateOf(true)
+        lateinit var model: SpuntoViewModel
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        val navigation = hasContentDescription("Open navigation") and hasClickAction()
+        val stats = hasText("Library stats") and hasClickAction() and hasAnyAncestor(isDialog())
+        try {
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
+            compose.waitUntil(20_000) {
+                model.online.value && libraryCommandAvailable(model.manifest.value, "library-stats", "summary") &&
+                    compose.onAllNodes(navigation).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNode(navigation).performClick()
+            compose.onNode(hasText("Archive") and hasClickAction() and hasAnyAncestor(isDialog())).performClick()
+            compose.onNode(navigation).assertTextContains("Archive", substring = true).performClick()
+            compose.onNode(stats).performScrollTo().performClick()
+            val summary = hasText("Saved notes: ", substring = true)
+            compose.waitUntil(20_000) { compose.onAllNodes(summary).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(summary).assertIsDisplayed()
+            compose.onNode(hasText("Close") and hasClickAction() and hasAnyAncestor(isDialog())).performClick()
+            compose.onNode(summary).assertDoesNotExist()
+            compose.onNode(navigation).assertTextContains("Archive", substring = true)
         } finally {
             compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
             runBlocking { container.auth.clear() }

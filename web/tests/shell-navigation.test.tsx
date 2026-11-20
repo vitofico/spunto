@@ -79,13 +79,13 @@ it("plugin commands that load after the palette opens are options too", async ()
           plugins_rev: 1,
           plugins: [
             {
-              id: "ask",
-              name: "Ask your notes",
+              id: "digest",
+              name: "Digest",
               state: "enabled",
               switch: "on",
               contributes: {
                 commands: [
-                  { id: "ask", title: "Ask your notes", where: ["palette"] },
+                  { id: "digest", title: "Digest", where: ["palette"] },
                 ],
               },
             },
@@ -97,9 +97,7 @@ it("plugin commands that load after the palette opens are options too", async ()
   // Everything else the palette asks for has settled before the commands arrive.
   await act(() => new Promise((settle) => setTimeout(settle, 50)));
   await act(async () => load());
-  expect(
-    await screen.findByRole("option", { name: /^Ask your notes/ }),
-  ).toBeTruthy();
+  expect(await screen.findByRole("option", { name: /^Digest/ })).toBeTruthy();
 });
 
 it("the highlighted row stays highlighted when plugin rows arrive above it", async () => {
@@ -112,13 +110,13 @@ it("the highlighted row stays highlighted when plugin rows arrive above it", asy
           plugins_rev: 1,
           plugins: [
             {
-              id: "ask",
-              name: "Ask your notes",
+              id: "digest",
+              name: "Digest",
               state: "enabled",
               switch: "on",
               contributes: {
                 commands: [
-                  { id: "ask", title: "Ask your notes", where: ["palette"] },
+                  { id: "digest", title: "Digest", where: ["palette"] },
                 ],
               },
             },
@@ -136,7 +134,7 @@ it("the highlighted row stays highlighted when plugin rows arrive above it", asy
     screen.getByRole("option", { selected: true }).textContent;
   expect(highlighted()).toBe("Go to Archive");
   await act(async () => load());
-  await screen.findByRole("option", { name: /^Ask your notes/ });
+  await screen.findByRole("option", { name: /^Digest/ });
   expect(highlighted()).toBe("Go to Archive");
   fireEvent.keyDown(input, { key: "Enter" });
   expect(close).toHaveBeenCalled();
@@ -218,22 +216,8 @@ it("search explains an over-long query instead of sending it", async () => {
   expect(window.location.search).toBe("");
 });
 
-const allocatedAsk = {
-  ui: 1,
-  items: [
-    {
-      type: "command",
-      id: "ask",
-      title: "Ask a follow-up",
-      args: { conversation_id: "shell-conversation", after_turn: 0 },
-    },
-  ],
-};
-function answeredAsk() {
-  return { type: "text", text: "Synthetic grounded answer" };
-}
-function enableAsk() {
-  vi.spyOn(api, "manifest").mockResolvedValue({
+it("keeps questions as search and omits library actions from the palette", async () => {
+  client.setQueryData(["manifest"], {
     ui: 1,
     plugins_rev: 1,
     plugins: [
@@ -241,152 +225,30 @@ function enableAsk() {
         id: "ask",
         name: "Ask your notes",
         state: "enabled",
-        switch: "on",
-        creates: "machine",
         contributes: {
           commands: [
             { id: "ask", title: "Ask your notes", where: ["palette"] },
           ],
         },
       },
-    ],
-  } as unknown as Awaited<ReturnType<typeof api.manifest>>);
-}
-it("asks a typed question with Enter and retains it beside the answer", async () => {
-  enableAsk();
-  const command = vi
-    .spyOn(api, "command")
-    .mockImplementation(async (_plugin, _id, args) =>
-      args?.start === true ? allocatedAsk : answeredAsk(),
-    );
-  wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("searchbox", { name: "Search and commands" });
-  fireEvent.change(input, { target: { value: "What did I decide?" } });
-  await waitFor(() =>
-    expect(screen.getByRole("option", { selected: true }).textContent).toMatch(
-      /^Ask your notes/,
-    ),
-  );
-  fireEvent.keyDown(input, { key: "Enter" });
-  await screen.findByText("Synthetic grounded answer");
-  expect(command.mock.calls).toEqual([
-    ["ask", "ask", { start: true }],
-    [
-      "ask",
-      "ask",
       {
-        conversation_id: "shell-conversation",
-        after_turn: 0,
-        question: "What did I decide?",
+        id: "library-stats",
+        name: "Library stats",
+        state: "enabled",
+        contributes: {
+          commands: [
+            { id: "summary", title: "Library stats", where: ["palette"] },
+          ],
+        },
       },
     ],
-  ]);
-  expect(screen.getByText("What did I decide?")).toBeTruthy();
-});
-it.each(["ctrlKey", "metaKey"])(
-  "asks with %s + Enter while plain Enter keeps search",
-  async (modifier) => {
-    enableAsk();
-    const command = vi
-      .spyOn(api, "command")
-      .mockImplementation(async (_plugin, _id, args) =>
-        args?.start === true ? allocatedAsk : answeredAsk(),
-      );
-    wrap(<Palette onClose={() => {}} />);
-    const input = screen.getByRole("searchbox", {
-      name: "Search and commands",
-    });
-    fireEvent.change(input, { target: { value: "What did I decide" } });
-    await screen.findByRole("option", { name: /^Ask your notes/ });
-    expect(screen.getByRole("option", { selected: true }).textContent).toMatch(
-      /^Search for/,
-    );
-    fireEvent.keyDown(input, { key: "Enter", [modifier]: true });
-    await screen.findByText("Synthetic grounded answer");
-    expect(command.mock.calls).toEqual([
-      ["ask", "ask", { start: true }],
-      [
-        "ask",
-        "ask",
-        {
-          conversation_id: "shell-conversation",
-          after_turn: 0,
-          question: "What did I decide",
-        },
-      ],
-    ]);
-  },
-);
-it("does not offer a question shortcut under three words or above 500 characters", async () => {
-  enableAsk();
-  wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("searchbox", { name: "Search and commands" });
-  await screen.findByRole("option", { name: /^Ask your notes/ });
-  fireEvent.change(input, { target: { value: "two words?" } });
-  expect(screen.queryByRole("option", { name: /^Ask your notes/ })).toBeNull();
-  fireEvent.change(input, {
-    target: { value: "What about " + "x".repeat(500) + "?" },
-  });
-  expect(screen.queryByRole("option", { name: /^Ask your notes/ })).toBeNull();
-});
-
-it("keeps command-by-title opening the question form", async () => {
-  enableAsk();
-  const command = vi.spyOn(api, "command").mockResolvedValue({
-    type: "form",
-    schema: {
-      type: "object",
-      properties: { question: { type: "string", title: "Question" } },
-    },
   });
   wrap(<Palette onClose={() => {}} />);
   const input = screen.getByRole("searchbox", { name: "Search and commands" });
-  fireEvent.change(input, { target: { value: "Ask your notes" } });
-  fireEvent.click(
-    await screen.findByRole("option", { name: /^Ask your notes/ }),
-  );
-  await screen.findByRole("textbox", { name: "Question" });
-  expect(command).toHaveBeenCalledWith("ask", "ask", {});
-});
-it("forgets an in-flight answer when the search question changes", async () => {
-  enableAsk();
-  let finish!: (value: unknown) => void;
-  const command = vi
-    .spyOn(api, "command")
-    .mockImplementation(async (_plugin, id, args) => {
-      if (args?.start === true) return allocatedAsk;
-      if (id === "clear-conversation")
-        return { type: "text", text: "Conversation cleared" };
-      return new Promise((resolve) => {
-        finish = resolve;
-      });
-    });
-  wrap(<Palette onClose={() => {}} />);
-  const input = screen.getByRole("searchbox", { name: "Search and commands" });
+  expect(screen.queryByRole("option", { name: /Ask your notes/ })).toBeNull();
+  expect(screen.queryByRole("option", { name: /Library stats/ })).toBeNull();
   fireEvent.change(input, { target: { value: "What did I decide?" } });
-  fireEvent.click(
-    await screen.findByRole("option", { name: /^Ask your notes/ }),
-  );
-  expect(await screen.findByRole("status")).toBeTruthy();
-  await waitFor(() => expect(finish).toBeTypeOf("function"));
-  expect(command).toHaveBeenCalledWith("ask", "ask", {
-    conversation_id: "shell-conversation",
-    after_turn: 0,
-    question: "What did I decide?",
-  });
-  fireEvent.change(input, { target: { value: "What about next year?" } });
-  await act(async () =>
-    finish({ type: "text", text: "Obsolete synthetic answer" }),
-  );
-  await waitFor(() =>
-    expect(
-      screen
-        .getByRole("option", { name: /^Ask your notes/ })
-        .hasAttribute("disabled"),
-    ).toBe(false),
-  );
-  expect(screen.queryByText("Obsolete synthetic answer")).toBeNull();
-  expect(command).toHaveBeenCalledWith("ask", "clear-conversation", {
-    conversation_id: "shell-conversation",
-  });
+  const result = await screen.findByRole("option", { selected: true });
+  expect(result.textContent).toMatch(/^Search for/);
+  expect(screen.queryByRole("option", { name: /Ask your notes/ })).toBeNull();
 });

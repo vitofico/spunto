@@ -11,7 +11,6 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AskConversation from "../src/features/AskConversation";
-import { PaletteCommands } from "../src/features/Slots";
 import { api } from "../src/lib/api";
 import { askContinuation } from "../src/features/askConversationData";
 
@@ -61,6 +60,11 @@ beforeEach(() => {
         contributes: {
           commands: [
             { id: "ask", title: "Ask your notes", where: ["palette"] },
+            {
+              id: "clear-conversation",
+              title: "Clear conversation",
+              where: [],
+            },
           ],
         },
       },
@@ -225,7 +229,7 @@ it("discards messages when Ask is disabled", async () => {
     (screen.getByLabelText("Your message") as HTMLTextAreaElement).disabled,
   ).toBe(true);
 });
-it("does not reopen a dismissed palette with a late first answer", async () => {
+it("clears the allocated handle after closing a chat before its first answer", async () => {
   let finish!: (value: unknown) => void;
   vi.mocked(api.command).mockImplementationOnce(
     () =>
@@ -233,17 +237,15 @@ it("does not reopen a dismissed palette with a late first answer", async () => {
         finish = resolve;
       }),
   );
-  const onResult = vi.fn();
-  const view = render(
-    wrap(<PaletteCommands query="What is the plan?" onResult={onResult} />),
-  );
-  fireEvent.click(screen.getByRole("button", { name: /Ask your notes/ }));
+  const request = vi.spyOn(api, "request");
+  const view = render(wrap(<AskConversation value={undefined} />));
+  send("What is the plan?");
   await waitFor(() => expect(finish).toBeTypeOf("function"));
   view.unmount();
   await act(async () => {
     finish(answer());
   });
-  expect(onResult).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
   expect(api.command).toHaveBeenCalledWith("ask", "clear-conversation", {
     conversation_id: "temporary",
   });
@@ -314,20 +316,14 @@ it("clears a handle allocated after clearing and never sends its first question"
     conversation_id: "late-allocated",
   });
 });
-it("reuses the known initial handle after a failed palette request so close can clear it", async () => {
-  let requests = 0;
-  vi.mocked(api.command).mockImplementation(async (_plugin, command, args) => {
-    if (args?.start === true) return answer(0, "", "allocated");
-    if (command === "ask" && ++requests === 1)
-      throw new Error("Synthetic timeout");
-    return command === "ask"
-      ? answer(1, "Recovered first answer", "allocated")
-      : {};
-  });
-  render(wrap(<PaletteCommands query="What is the plan?" />));
-  fireEvent.click(screen.getByRole("button", { name: /Ask your notes/ }));
+it("reuses the known initial handle when retrying a failed first message", async () => {
+  vi.spyOn(api, "request")
+    .mockRejectedValueOnce(new Error("Synthetic timeout"))
+    .mockResolvedValueOnce(answer(1, "Recovered first answer", "allocated"));
+  render(wrap(<AskConversation value={undefined} />));
+  send("What is the plan?");
   await screen.findByRole("alert");
-  fireEvent.click(screen.getByRole("button", { name: /Ask your notes/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   await screen.findByText("Recovered first answer");
   expect(
     vi.mocked(api.command).mock.calls.filter((call) => call[2]?.start === true),

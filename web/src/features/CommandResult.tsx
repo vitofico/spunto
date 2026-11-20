@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   lazy,
@@ -347,6 +348,68 @@ function PluginResult({
         );
       })
     : undefined;
+  const contextPacks =
+    plugin?.id === "context-packs" && isBundledPlugin(plugin);
+  const packLibraryLabels = new Map<string, string>();
+  const packLibraryTitles = new Set<unknown>();
+  if (
+    contextPacks &&
+    currentOrigin?.command === "packs" &&
+    resultItems.some(
+      (item) =>
+        item.type === "command" &&
+        item.id === "edit" &&
+        (item.args as Args | undefined)?.action === "start",
+    )
+  ) {
+    for (const [index, item] of resultItems.entries()) {
+      const args = item.args as Args | undefined;
+      const prior = resultItems[index - 1];
+      if (
+        item.type === "command" &&
+        item.id === "packs" &&
+        typeof args?.pack_id === "string" &&
+        args.export !== true &&
+        prior?.type === "text" &&
+        typeof prior.text === "string"
+      ) {
+        packLibraryLabels.set(args.pack_id, prior.text);
+        packLibraryTitles.add(prior);
+      }
+    }
+  }
+  const packForm = contextPacks
+    ? resultItems.find((item) => item.type === "form")
+    : undefined;
+  const packFormLabel = (packForm?.schema as Schema | undefined)?.title;
+  const packSourceStage = contextPacks && currentOrigin?.command === "sources";
+  const packPrimaryAction = contextPacks
+    ? resultItems.find((item) => {
+        const args = item.args as Args | undefined;
+        return (
+          item.type === "command" &&
+          ((item.id === "edit" && args?.action === "start") ||
+            (item.id === "sources" && !!args?.expected_revision) ||
+            (item.id === "edit" && args?.action === "finish") ||
+            (item.id === "packs" && args?.export === true) ||
+            (item.id === "edit" && args?.action === "save-note"))
+        );
+      })
+    : undefined;
+  const packExport = contextPacks && currentOrigin?.args?.export === true;
+  const packMarkdown = contextPacks
+    ? resultItems.find((item) => item.type === "markdown")?.text
+    : undefined;
+  const stagedPack =
+    contextPacks &&
+    resultItems.some(
+      (item) =>
+        item.type === "command" &&
+        ((item.id === "packs" &&
+          (item.args as Args | undefined)?.export === true) ||
+          (item.id === "edit" &&
+            (item.args as Args | undefined)?.action === "finish")),
+    );
   const selectedIds = sourceFields?.selected_ids?.default;
   const sourceRevision = sourceFields?.expected_revision?.default;
   const sourceLimit = sourceFields?.max_sources?.default;
@@ -393,14 +456,20 @@ function PluginResult({
     display.preview_html.length <= 1_000_000
       ? display.preview_html
       : undefined;
-  const text = translationPreview
-    ? resultItems
-        .filter((item) => item.type === "markdown")
-        .map((item) => String(item.text ?? item.markdown ?? ""))
-        .join("")
-    : interactive
+  const text = packExport
+    ? typeof packMarkdown === "string"
+      ? packMarkdown
+      : ""
+    : contextPacks && (stagedPack || !packMarkdown)
       ? ""
-      : outputText(display);
+      : translationPreview
+        ? resultItems
+            .filter((item) => item.type === "markdown")
+            .map((item) => String(item.text ?? item.markdown ?? ""))
+            .join("")
+        : interactive
+          ? ""
+          : outputText(display);
   const askPendingHandle = useRef<Args | undefined>(undefined);
   const askLifetime = useRef({ active: true, generation: requestGeneration() });
   useEffect(() => {
@@ -419,8 +488,6 @@ function PluginResult({
     };
   }, []);
   const saveKey = useMemo(createIdempotencyKey, [display]);
-  // Plugins that create notes save their own results; an unknown origin gets no save.
-  const genericSave = !!plugin && !plugin.creates;
   const id = currentOrigin?.command;
   const decisionCommand =
     plugin?.id === "decision-journal" &&
@@ -429,21 +496,34 @@ function PluginResult({
       ? id
       : undefined;
   const decisionOffline = !!decisionCommand && !online;
+  const labelReview =
+    plugin?.id === "label-gardener" &&
+    id === "review-now" &&
+    isBundledPlugin(
+      plugin,
+      client
+        .getQueryData<{ plugins: Plugin[] }>(["catalog"])
+        ?.plugins.find((entry) => entry.id === plugin.id),
+    );
+  // Plugins that create notes save their own results.
+  const genericSave = !!plugin && !plugin.creates && !labelReview;
   const commandName = plugin?.contributes?.commands?.find(
     (command) => command.id === currentOrigin?.command,
   )?.title;
   const title = onDismiss
-    ? ((thinkingDesk ? plugin?.name : commandName) ??
+    ? ((thinkingDesk || contextPacks ? plugin?.name : commandName) ??
       plugin?.name ??
       t("commandresult.title"))
     : undefined;
   const showHeading = title && title !== surroundingTitle;
   const formLabel =
-    decisionCommand === "record-decision"
-      ? t("decisions.save_decision")
-      : decisionCommand === "review-decision"
-        ? t("decisions.record_outcome")
-        : (commandName ?? t("settingsplugins.run"));
+    plugin?.id === "translate" && id === "language-settings"
+      ? t("schemaform.save_settings")
+      : decisionCommand === "record-decision"
+        ? t("decisions.save_decision")
+        : decisionCommand === "review-decision"
+          ? t("decisions.record_outcome")
+          : (commandName ?? t("settingsplugins.run"));
   const decisionSaved =
     !interactive &&
     resultItems.some((item) => item.type === "notes") &&
@@ -713,12 +793,16 @@ function PluginResult({
           result
           onOpenNote={onOpenNote}
           primaryCommand={providedSave?.id}
-          primaryActions={deskPrimaryActions}
+          primaryActions={
+            packPrimaryAction ? [packPrimaryAction] : deskPrimaryActions
+          }
           formSubmitDisabled={!online}
           formSubmitOnChange={deskPicker}
-          beforeForm={thinkingDesk ? sourcePicker : undefined}
+          beforeForm={
+            thinkingDesk || packSourceStage ? sourcePicker : undefined
+          }
           hideForm={
-            thinkingDesk &&
+            (thinkingDesk || packSourceStage) &&
             !!sourcePickerArgs &&
             Array.isArray(selectedIds) &&
             selectedIds.length === 0
@@ -737,7 +821,16 @@ function PluginResult({
               : undefined
           }
           formChoices={(field, value) => pluginFormChoice(plugin, field, value)}
-          commandLabel={decisionCommand ? decisionCommandLabel : undefined}
+          commandLabel={
+            decisionCommand
+              ? decisionCommandLabel
+              : packLibraryLabels.size
+                ? (id, title, args) =>
+                    id === "packs" && typeof args.pack_id === "string"
+                      ? (packLibraryLabels.get(args.pack_id) ?? title)
+                      : title
+                : undefined
+          }
           displayText={
             decisionCommand === "journal" ? decisionStatus : undefined
           }
@@ -748,9 +841,12 @@ function PluginResult({
                 ? resultItems.filter((item) => item.type !== "markdown")
                 : deskPage
                   ? pageItems
-                  : visibleResult
+                  : packLibraryTitles.size
+                    ? resultItems.filter((item) => !packLibraryTitles.has(item))
+                    : visibleResult
           }
           formLabel={
+            packFormLabel ??
             deskFormLabel ??
             (sourcePickerArgs ? t("notepicker.update_sources") : formLabel)
           }
@@ -806,7 +902,7 @@ function PluginResult({
           }
         />
       </div>
-      {!thinkingDesk && sourcePicker}
+      {!thinkingDesk && !packSourceStage && sourcePicker}
       {(followup.isPending || save.isPending) && (
         <p role="status" className={styles.resultStatus}>
           {t("plugins.running")}
@@ -844,7 +940,13 @@ function PluginResult({
           saved?.id ||
           onDismiss) && (
           <footer>
+            {labelReview && (
+              <Link href="/review" onClick={onDismiss}>
+                {t("settingsplugins.open_review")}
+              </Link>
+            )}
             {!decisionCommand &&
+              !labelReview &&
               !interactive &&
               text &&
               !deskStartActions.length && (

@@ -194,7 +194,7 @@ class TimelineHeaderTest {
     Text("All notes ▾",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)
    }
   },actions={
-   TextButton(onClick={clicks+="Ask your notes"},modifier=Modifier.semantics {contentDescription="Ask your notes"}) {Text("Ask")}
+   AskNotesButton {clicks+="Ask your notes"}
    for(label in listOf("Search","Filter notes","Settings")+if(extra) listOf("Page action") else emptyList()) {
     IconButton(onClick={clicks+=label},modifier=Modifier.semantics {contentDescription=label}) {
      val icon=when(label) {"Filter notes" -> R.drawable.ic_filter;"Settings" -> R.drawable.ic_settings;else -> R.drawable.ic_search}

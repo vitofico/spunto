@@ -100,12 +100,12 @@ def sample(notes, vocabulary):
     return evidence_notes(notes, vocabulary), usage_context(notes, vocabulary)
 
 
-def capacity(decisions, now):
+def proposal_counts(decisions, now):
     pending_count = sum(s["status"] == "pending" for s in decisions)
     day = datetime.fromtimestamp(now / 1000, UTC)
     start = (day - timedelta(days=day.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     weekly_count = sum(s["created_ms"] >= int(start.timestamp() * 1000) for s in decisions)
-    return max(0, min(3 - pending_count, 3 - weekly_count))
+    return pending_count, weekly_count
 
 
 async def run(ctx: Ctx, *, manual=False):
@@ -113,9 +113,12 @@ async def run(ctx: Ctx, *, manual=False):
     if not manual and await ctx.storage.kv.get("week") == week:
         return tr("This week's tag review has already run.")
     decisions = await history(ctx)
-    available = capacity(decisions, ctx.clock())
-    if not available:
-        return tr("Tag review has reached its three pending or three per-week proposal limit.")
+    pending, this_week = proposal_counts(decisions, ctx.clock())
+    if pending >= 3:
+        return tr("The pending proposal limit is reached. Review the waiting label changes.")
+    if this_week >= 3:
+        return tr("The weekly limit of three label proposals is reached.")
+    available = 3 - max(pending, this_week)
     notes = (await ctx.notes.query(limit=500))["notes"]
     all_labels = (await ctx.notes.labels(limit=500))["labels"]
     vocabulary = all_labels[:50]
@@ -212,6 +215,8 @@ async def run(ctx: Ctx, *, manual=False):
         )
     await ctx.storage.kv.set("week", week)
     count = min(len(payloads), available)
+    if not count:
+        return tr("No new label changes to review.") + " " + report
     return (
         tr(
             "{count} tag proposal added to Review."

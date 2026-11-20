@@ -292,7 +292,7 @@ it("uses receipt stages, rejects client bodies/mixed legacy receipts, and never 
   ).toEqual({ answer_id: "legacy" });
 });
 it.each(["1.0.0", "1.1.0"])(
-  "negotiates reviewed actions on every new palette conversation only for server %s",
+  "negotiates reviewed actions on every new direct conversation only for server %s",
   async (version) => {
     manifest(version);
     vi.mocked(api.command).mockImplementation(async (_plugin, _id, args) =>
@@ -308,8 +308,12 @@ it.each(["1.0.0", "1.1.0"])(
           }
         : proposal(),
     );
-    render(wrap(<PaletteCommands query="Change the deadline?" />));
-    fireEvent.click(screen.getByRole("button", { name: /Ask your notes/ }));
+    const request = vi.spyOn(api, "request").mockResolvedValue(proposal());
+    render(wrap(<AskConversation value={undefined} />));
+    fireEvent.change(screen.getByRole("textbox", { name: "Your message" }), {
+      target: { value: "Change the deadline?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByRole("button", { name: "Apply change" });
     expect(api.command).toHaveBeenNthCalledWith(
       1,
@@ -319,11 +323,16 @@ it.each(["1.0.0", "1.1.0"])(
         ? { start: true, note_actions: true }
         : { start: true },
     );
-    expect(api.command).toHaveBeenNthCalledWith(2, "ask", "ask", {
-      conversation_id: "conversation",
-      after_turn: 0,
-      question: "Change the deadline?",
-    });
+    expect(request).toHaveBeenCalledWith(
+      "/api/v1/plugins/ask/commands/ask",
+      expect.objectContaining({
+        body: {
+          conversation_id: "conversation",
+          after_turn: 0,
+          question: "Change the deadline?",
+        },
+      }),
+    );
   },
 );
 it("negotiates generic Ask forms and fresh chat allocation while continuations carry no opt-in flag", async () => {

@@ -2,6 +2,10 @@
   "nativeName": "Español",
   "direction": "ltr",
   "messages": {
+    "settingsplugins.settings": "Ajustes",
+    "settingsplugins.open_review": "Abrir Revisión",
+    "settingsplugins.label_review_schedule": "El jardinero de etiquetas comprueba automáticamente las notas aptas cada semana. También puedes iniciar una comprobación ahora. Aprueba cada propuesta en Revisión.",
+    "plugin.translate.commands.language-settings.title": "Idiomas predeterminados de traducción",
     "whatsnew.note_tools_title": "Revisa los cambios de agentes y encuentra las herramientas adecuadas",
     "whatsnew.note_tools_body": "Compara lo que añadió o eliminó un agente antes de aceptar su edición. Las herramientas más relevantes aparecen en la nota. Abre Herramientas de la nota para ver todas las acciones disponibles.",
     "settings.browse_sections": "Ver secciones de ajustes",
@@ -1273,6 +1277,7 @@
     "collaboration.preview_editor": "{recipient} puede leer y editar el texto de esta nota y leer sus archivos adjuntos enlazados.",
     "collaboration.preview_scope": "Incluye los cambios futuros de la nota, pero no el historial de revisiones, las notas enlazadas ni el resto del espacio. Otros permisos o la pertenencia al espacio también pueden dar acceso. Revocar el acceso no borra las copias ya realizadas.",
     "slots.stale_form_recovery": "Tus datos siguen en este formulario. Copia el texto que quieras conservar antes de volver a abrir la herramienta; después revisa las fuentes modificadas y reinténtalo.",
+    "library.stats_connect": "Conéctate a tu servidor para ver las estadísticas de notas.",
     "plugin.library-stats.name": "Estadísticas de notas",
     "plugin.library-stats.description": "Consulta el número de notas, capturas recientes y notas que requieren atención. Sin seguimiento ni IA.",
     "plugin.library-stats.commands.summary.title": "Estadísticas de notas",

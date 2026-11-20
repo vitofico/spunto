@@ -185,6 +185,7 @@ export interface Plugin {
     >
   >;
   settings?: Schema | Args;
+  has_settings?: boolean;
   settings_values?: Args;
   position: number;
   switch?: string;

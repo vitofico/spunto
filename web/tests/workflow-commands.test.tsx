@@ -495,6 +495,30 @@ it("focuses the result and presents visible note references as a navigable list"
   expect(screen.getByText("/n/source")).toBeTruthy();
 });
 
+it("keeps a legacy label review command out of the palette and composer", () => {
+  manifest({
+    id: "label-gardener",
+    contributes: {
+      commands: [
+        {
+          id: "review-now",
+          title: "Review labels",
+          where: ["palette", "slash"],
+        },
+      ],
+    },
+  });
+  render(
+    wrap(
+      <>
+        <PaletteCommands query="" onResult={() => {}} />
+        <SlashCommands query="" onChoose={vi.fn()} />
+      </>,
+    ),
+  );
+  expect(screen.queryByText("Review labels")).toBeNull();
+});
+
 it("runs the highlighted slash command on Enter and moves with the arrows", () => {
   manifest(
     {

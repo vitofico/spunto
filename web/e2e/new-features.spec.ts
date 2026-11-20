@@ -488,14 +488,24 @@ test("bundled plugin settings and decision outcomes follow Italian with an Engli
   await page.screenshot({ path: info.outputPath("plugin-settings-it.png") });
 
   await enablePlugin(page, "library-stats");
-  await page.goto("/settings/plugins/library-stats");
+  await page.goto("/archive");
   const stats = page.getByRole("button", {
     name: new RegExp(name("plugin.library-stats.commands.summary.title")),
   });
+  const openNavigation = page.getByRole("button", {
+    name: name("app.open_navigation"),
+  });
+  await expect(stats.or(openNavigation)).toBeVisible();
+  if (await openNavigation.isVisible()) await openNavigation.click();
   await uiCommand(page, "library-stats", "summary", () => stats.click());
   await expect(page.getByText(/Note salvate: /)).toBeVisible();
   await expect(page.getByText(/Saved notes: /)).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("library-stats-it.png") });
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: name("plugin.library-stats.name") }),
+  ).toHaveCount(0);
+  await expect(page).toHaveURL(/\/archive$/);
 
   await enablePlugin(page, "thinking-desk");
   await page.goto("/settings/plugins/thinking-desk");
@@ -668,11 +678,36 @@ test("context packs curate sources, expose staleness and keep a private note cop
     .getByLabel("Brief title", { exact: true })
     .fill(`Pack ${suffix}`);
   await dialog
-    .getByLabel("Project", { exact: true })
-    .fill(`Synthetic ${suffix}`);
-  await dialog
     .getByLabel("Goals", { exact: true })
     .fill("Make one useful brief.\nKeep it manually curated.");
+  await uiCommand(page, "context-packs", "edit", () =>
+    dialog.getByRole("button", { name: "Create draft", exact: true }).click(),
+  );
+  await expect(dialog.getByText(/Draft · Finish your brief/)).toBeVisible();
+
+  await uiCommand(page, "context-packs", "packs", () =>
+    dialog
+      .getByRole("button", { name: "All context packs", exact: true })
+      .click(),
+  );
+  await uiCommand(page, "context-packs", "packs", () =>
+    dialog
+      .getByRole("button", { name: `Draft · Pack ${suffix}`, exact: true })
+      .click(),
+  );
+  await uiCommand(page, "context-packs", "sources", () =>
+    dialog.getByRole("button", { name: "Choose sources", exact: true }).click(),
+  );
+  await pickSource(page, dialog, "context-packs", suffix);
+  await uiCommand(page, "context-packs", "edit", () =>
+    dialog.getByRole("button", { name: "Write brief", exact: true }).click(),
+  );
+  await expect(dialog.getByLabel("Goals", { exact: true })).toHaveValue(
+    "Make one useful brief.\nKeep it manually curated.",
+  );
+  await dialog
+    .getByLabel("Project", { exact: true })
+    .fill(`Synthetic ${suffix}`);
   await dialog
     .getByLabel("Constraints", { exact: true })
     .fill("Keep all work local.");
@@ -682,23 +717,17 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await dialog
     .getByLabel("Open questions", { exact: true })
     .fill("Which constraint changes next?");
-  await dialog
-    .getByLabel("Private pack (only private-enabled agents can read)", {
+  await expect(
+    dialog.getByLabel("Private pack (only private-enabled agents can read)", {
       exact: true,
-    })
-    .check();
-  await run(page, dialog, "context-packs", "edit");
+    }),
+  ).toBeChecked();
+  await uiCommand(page, "context-packs", "edit", () =>
+    dialog.getByRole("button", { name: "Save brief", exact: true }).click(),
+  );
   await expect(
     dialog.getByRole("heading", { name: `Pack ${suffix}`, exact: true }),
   ).toBeVisible();
-
-  await uiCommand(page, "context-packs", "sources", () =>
-    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
-  );
-  await pickSource(page, dialog, "context-packs", suffix);
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("button", { name: "Back to brief", exact: true }).click(),
-  );
   await expect(
     dialog.getByText(/baseline 1 · current 1 · current/),
   ).toBeVisible();
@@ -709,7 +738,9 @@ test("context packs curate sources, expose staleness and keep a private note cop
   const revisedGoals =
     "A revised goal, kept by the owner.\nSources must never rewrite this brief.";
   await dialog.getByLabel("Goals", { exact: true }).fill(revisedGoals);
-  await run(page, dialog, "context-packs", "edit");
+  await uiCommand(page, "context-packs", "edit", () =>
+    dialog.getByRole("button", { name: "Save brief", exact: true }).click(),
+  );
   const changed = await editNote(
     page,
     source,
@@ -718,7 +749,7 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await uiCommand(page, "context-packs", "sources", () =>
     dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
   );
-  await expect(dialog.getByText("1: changed", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("1 · changed", { exact: true })).toBeVisible();
   await uiCommand(page, "context-packs", "packs", () =>
     dialog.getByRole("button", { name: "Back to brief", exact: true }).click(),
   );
@@ -744,6 +775,15 @@ test("context packs curate sources, expose staleness and keep a private note cop
   await expect(dialog.getByText(/Source revisions need review/)).toHaveCount(0);
   await expect(
     dialog.getByText(/A revised goal, kept by the owner/),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Copy text", exact: true }),
+  ).toHaveCount(0);
+  await uiCommand(page, "context-packs", "packs", () =>
+    dialog.getByRole("button", { name: "Use brief", exact: true }).click(),
+  );
+  await expect(
+    dialog.getByText(/Agents need permission to read private content/),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Copy text", exact: true }).click();
   await expect(

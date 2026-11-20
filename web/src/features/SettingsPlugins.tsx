@@ -243,12 +243,20 @@ function pluginNeedsReview(plugin: Plugin) {
   );
 }
 function pluginLocations(plugin: Plugin) {
-  if (plugin.id === "thinking-desk" && isBundledPlugin(plugin))
-    return [{ title: plugin.name, href: "/thinking-desk" }];
+  if (isBundledPlugin(plugin)) {
+    if (plugin.id === "thinking-desk")
+      return [{ title: plugin.name, href: "/thinking-desk" }];
+    if (plugin.id === "ask") return [{ title: t("app.all_notes") }];
+    if (plugin.id === "library-stats") return [{ title: t("app.navigation") }];
+  }
   const contributions = plugin.contributes ?? {};
   const commands =
-    contributions.commands?.flatMap(
-      (command) => command.where ?? command.surfaces ?? [],
+    contributions.commands?.flatMap((command) =>
+      plugin.id === "label-gardener" &&
+      isBundledPlugin(plugin) &&
+      command.id === "review-now"
+        ? []
+        : (command.where ?? command.surfaces ?? []),
     ) ?? [];
   return [
     ...(contributions.views ?? []).map((view) => ({
@@ -570,6 +578,12 @@ export function PluginManager() {
               <ul className={styles.list}>
                 {items.map((p) => {
                   const unavailable = p.switch !== "on" && !pluginCanEnable(p);
+                  const hasSettings =
+                    p.state !== "removed" &&
+                    (p.has_settings ||
+                      Object.keys(p.settings ?? {}).length > 0 ||
+                      Object.keys(p.secrets ?? {}).length > 0 ||
+                      (isBundledPlugin(p) && p.id === "translate"));
                   return (
                     <li
                       className={`${styles.plugin} ${styles.rowLink} ${unavailable ? styles.pluginUnavailable : ""}`}
@@ -582,6 +596,12 @@ export function PluginManager() {
                               href={`/settings/plugins/${encodeURIComponent(p.id)}`}
                             >
                               {p.name}
+                              {hasSettings && (
+                                <small className={styles.facts}>
+                                  {" "}
+                                  · {t("settingsplugins.settings")}
+                                </small>
+                              )}
                             </Link>
                           </strong>
                           {p.kind === "device" && (
@@ -832,9 +852,23 @@ export function PluginPage({ id }: { id: string }) {
   });
   const plugin = catalog.data?.plugins.find((p) => p.id === id);
   const removed = plugin?.state === "removed";
+  const bundled = plugin && isBundledPlugin(plugin);
+  const gardener = bundled && id === "label-gardener";
+  const languageSettings =
+    bundled &&
+    plugin.state === "enabled" &&
+    id === "translate" &&
+    plugin.contributes?.commands?.some(
+      (command) => command.id === "language-settings",
+    );
+  const settingsCommand = gardener
+    ? "review-now"
+    : languageSettings
+      ? "language-settings"
+      : undefined;
   const locations = plugin ? pluginLocations(plugin) : [];
   const canRun =
-    !(id === "thinking-desk" && plugin && isBundledPlugin(plugin)) &&
+    !(bundled && ["thinking-desk", "ask", "library-stats"].includes(id)) &&
     plugin?.contributes?.commands?.some((command) =>
       (command.where ?? command.surfaces ?? []).includes("palette"),
     );
@@ -1044,6 +1078,9 @@ export function PluginPage({ id }: { id: string }) {
             </p>
           )
         ))}
+      {gardener && !removed && (
+        <p>{t("settingsplugins.label_review_schedule")}</p>
+      )}
       {!removed && query.data && (
         <SchemaForm
           key={`${id}-${JSON.stringify(query.data.values)}`}
@@ -1075,11 +1112,23 @@ export function PluginPage({ id }: { id: string }) {
           <AIRouting plugin={plugin} />
         </>
       )}
-      {plugin.state === "enabled" && canRun && (
+      {plugin.state === "enabled" && (canRun || settingsCommand) && (
         <>
-          <h2>{t("settingsplugins.run")}</h2>
+          <h2>
+            {t(
+              languageSettings
+                ? "settingsplugins.settings"
+                : "settingsplugins.run",
+            )}
+          </h2>
+          {gardener && !result && (
+            <p>
+              <Link href="/review">{t("settingsplugins.open_review")}</Link>
+            </p>
+          )}
           <PluginCommands
             pluginId={id}
+            settingsCommand={settingsCommand}
             where="palette"
             onResult={(value, origin) => {
               setResult(value);

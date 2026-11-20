@@ -153,6 +153,25 @@ internal fun thinkingDeskFormLabel(plugin:String,component:JsonObject):String? =
   (component["schema"] as? JsonObject)?.string("title")?.takeIf(String::isNotBlank)
  else null
 
+internal fun contextPackLibraryRows(components:List<JsonObject>):Map<Int,String> {
+ if(components.none {
+  it.string("type")=="command" && it.string("id")=="edit" &&
+   (it["args"] as? JsonObject)?.string("action")=="start"
+ }) return emptyMap()
+ return components.mapIndexedNotNull {index,component ->
+  val prior=components.getOrNull(index-1)
+  val args=component["args"] as? JsonObject
+  if(component.string("type")=="command" && component.string("id")=="packs" &&
+   !args?.string("pack_id").isNullOrBlank() && prior?.string("type")=="text"
+  ) index to prior.string("text") else null
+ }.toMap()
+}
+
+internal fun contextPackFormLabel(plugin:String,component:JsonObject):String? =
+ if(plugin=="context-packs" && component.string("type")=="form")
+  (component["schema"] as? JsonObject)?.string("title")?.takeIf(String::isNotBlank)
+ else null
+
 /** Older servers send these fixed field labels as English. Field values remain server-owned. */
 internal fun pluginFormComponent(resources:Resources,plugin:String,component:JsonObject):JsonObject {
  if(component.string("type")!="form") return component
@@ -273,6 +292,7 @@ internal fun localizedPluginCommand(resources:Resources,plugin:JsonObject,item:J
   "decision-journal" to "review-decision" -> R.string.settings_bundled_title_13
   "decision-journal" to "journal" -> R.string.settings_bundled_title_14
   "label-gardener" to "review-now" -> R.string.settings_bundled_title_15
+  "translate" to "language-settings" -> R.string.plugin_translate_language_settings
   "voice-memos" to "transcribe" -> R.string.settings_bundled_title_16
   "image-text" to "read" -> R.string.settings_bundled_title_17
   "label-suggestions" to "suggest-now" -> R.string.settings_bundled_title_18

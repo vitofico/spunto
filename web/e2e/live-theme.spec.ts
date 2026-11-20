@@ -11,7 +11,7 @@ const rgb = (hex: string) =>
 test("live theme controls recolor the wordmark, labels, Ask, and ambient artwork without reloading", async ({
   page,
 }) => {
-  // Every palette/mode check visits Appearance, the command palette and All notes.
+  // Every palette/mode check visits Appearance and the library header.
   test.setTimeout(120_000);
   let settings = {
     theme: "carta",
@@ -157,12 +157,10 @@ test("live theme controls recolor the wordmark, labels, Ask, and ambient artwork
           .evaluate((element) => getComputedStyle(element, "::before").content),
       )
       .toBe("none");
-    await page.locator(".rail-search").click();
-    await expect(
-      page.locator(".palette-row").filter({ hasText: "Ask your notes" }),
-    ).toHaveCSS("color", rgb(palette["ink-2"]!));
-    await page.keyboard.press("Escape");
     await page.locator(".rail-heading .wordmark").click();
+    await expect(
+      page.getByRole("button", { name: "Ask your notes", exact: true }),
+    ).toHaveCSS("color", rgb(palette["ink-2"]!));
     await expect(page.locator('.note-body a[href="/l/ideas"]')).toHaveCSS(
       "color",
       accent,

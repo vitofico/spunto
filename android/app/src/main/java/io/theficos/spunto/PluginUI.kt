@@ -65,6 +65,16 @@ private fun translationPreviewBody(data:JsonElement,components:List<JsonObject>)
 
 internal fun resultCopyText(resources:Resources,data:JsonElement):String {
  val components=outputComponents(data)
+ val wrapper=data as? JsonObject
+ if(wrapper?.string("plugin_id")=="context-packs" || wrapper?.string("plugin")=="context-packs") {
+  val markdown=components.firstOrNull {it.string("type")=="markdown"}
+  if((wrapper?.get("command_args") as? JsonObject)?.bool("export")==true) return markdown?.string("text").orEmpty()
+  if(markdown==null || components.any {
+   val args=it["args"] as? JsonObject
+   it.string("type")=="command" && (it.string("id")=="packs" && args?.bool("export")==true ||
+    it.string("id")=="edit" && args?.string("action")=="finish")
+  }) return ""
+ }
  translationPreviewBody(data,components)?.let {return it}
  return components.mapNotNull { component ->
   when(component.string("type")) {
@@ -470,6 +480,17 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
  val sourcePicker=sourcePickerState(plugin,command,initial,components)
  val deskPicker=plugin=="thinking-desk" && sourcePicker!=null
  val deskPickerChanged=deskPicker && (initial.string("add_id").isNotBlank() || initial.string("remove").isNotBlank() || initial["refresh"]==JsonPrimitive(true))
+ val contextPacks=plugin=="context-packs"
+ val packLibraryRows=if(contextPacks && command=="packs") contextPackLibraryRows(components) else emptyMap()
+ val packPrimary=if(contextPacks) components.firstOrNull { component ->
+  val args=component["args"] as? JsonObject
+  component.string("type")=="command" && when(component.string("id")) {
+   "edit" -> args?.string("action") in setOf("start","finish","save-note")
+   "sources" -> args?.get("expected_revision")!=null
+   "packs" -> args?.bool("export")==true
+   else -> false
+  }
+ } else null
  val deskPrimary=when {
   deskPicker -> components.takeWhile {it.string("type")!="form"}.firstOrNull {it.string("type")=="command" && it.string("id")=="desk"}
   plugin=="thinking-desk" -> components.firstOrNull(::thinkingDeskWorkAction)
@@ -511,6 +532,12 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
   }
   if(translatedBody!=null) Markdown(translatedBody,machine=true,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/"))})
   components.filterNot {it.string("type")=="pill" && hideSuggestion.isNotBlank() && it.string("suggestion_id")==hideSuggestion}.forEachIndexed { index,raw ->
+   if(index+1 in packLibraryRows) return@forEachIndexed
+   packLibraryRows[index]?.let { title ->
+    val args=raw["args"] as JsonObject
+    TextButton(onClick={run("packs",args)},enabled=online && canWrite && !running) {Text(title)}
+    return@forEachIndexed
+   }
    if(translatedBody!=null && raw.string("type")=="markdown") return@forEachIndexed
    val component=if(index==0) withoutRepeatedResultHeading(raw,headingShown) else raw
    if(index==0 && deskPickerChanged && component.string("type")=="text") {
@@ -520,7 +547,7 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
    if(component.string("type")=="form" && sourcePicker!=null && pickerSession!=null) {
     SourceNotePicker(model,sourcePicker,pickerSession,online,running,pickerRefresh,onQueryChanged={error=""}) {run(command,it)}
     if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
-    if(plugin=="thinking-desk" && sourcePicker.selectedIds.isEmpty()) return@forEachIndexed
+    if((plugin=="thinking-desk" || contextPacks) && sourcePicker.selectedIds.isEmpty()) return@forEachIndexed
    }
    if(journal) when(component.string("type")) {
     "text" -> if(command=="journal") {
@@ -556,9 +583,14 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
    Vocabulary(output,onNote,review,run,online=online && canWrite && !running,
     choiceLabel={field,value -> pluginFormChoice(resources,plugin,field,value)},
     formSubmitOnChange=deskPicker,
-    formLabel=if(translating) resources.getString(R.string.settings_bundled_title_6) else thinkingDeskFormLabel(plugin,output),
+    formLabel=when {
+     translating -> resources.getString(R.string.settings_bundled_title_6)
+     plugin=="translate" && command=="language-settings" -> resources.getString(R.string.core_save)
+     else -> contextPackFormLabel(plugin,output) ?: thinkingDeskFormLabel(plugin,output)
+    },
     primaryCommand=when {
      translationPreview -> "save-translation"
+     component === packPrimary -> component.string("id")
      component === deskPrimary || plugin=="thinking-desk" && thinkingDeskStartAction(component) -> component.string("id")
      else -> null
     },
@@ -620,7 +652,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable fun CommandResultSheet(model:SpuntoViewModel,result:JsonObject,onNote:(String)->Unit,onResult:(JsonObject)->Unit,onClose:()->Unit) {
+@Composable fun CommandResultSheet(model:SpuntoViewModel,result:JsonObject,onNote:(String)->Unit,onResult:(JsonObject)->Unit,onClose:()->Unit,onReview:(()->Unit)?=null) {
  val feedback=LocalFeedback.current
  val success=commandSuccess(result)
  if(success!=null) {
@@ -650,7 +682,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
  val canWrite by model.workspaceCanWrite.collectAsState()
  val locked=journalSubmitting || applying
  val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
- val title=if(plugin!=null && command!=null && plugin.string("id")!="thinking-desk") localizedPluginCommand(resources,plugin,command,catalog)
+ val title=if(plugin!=null && command!=null && plugin.string("id") !in setOf("thinking-desk","context-packs")) localizedPluginCommand(resources,plugin,command,catalog)
   else plugin?.let {localizedPluginName(resources,it,catalog)} ?: resources.getString(R.string.settings_tool_result)
  val ask=result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null
  val maximumHeight=(LocalConfiguration.current.screenHeightDp * 0.88f).dp
@@ -683,7 +715,10 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
      }
     }
     val deskLanding=plugin?.string("id")=="thinking-desk" && outputComponents(result).any(::thinkingDeskStartAction)
-    val copied=if(deskLanding) "" else resultCopyText(resources,result)
+    val copied=if(deskLanding || onReview!=null) "" else resultCopyText(resources,result)
+    if(onReview!=null) TextButton(onClick={close();onReview()}) {
+     Text(resources.getString(R.string.plugin_open_review))
+    }
     if(matching || copied.isNotBlank()) {
      HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
      FlowRow(Modifier.fillMaxWidth().padding(bottom=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
@@ -842,8 +877,8 @@ internal fun suggestionStatus(resources:Resources,status:String)=resources.getSt
 })
 
 private val globalToolCommands=mapOf(
- "ask" to "ask", "digest" to "digest", "library-stats" to "summary",
- "context-packs" to "packs", "label-gardener" to "review-now",
+ "digest" to "digest",
+ "context-packs" to "packs",
 )
 
 internal fun globalTools(catalog:JsonObject,manifest:JsonObject):List<Pair<NativePluginFacts,JsonObject>> =
@@ -857,7 +892,7 @@ internal fun globalTools(catalog:JsonObject,manifest:JsonObject):List<Pair<Nativ
   }?.let {plugin to it}
  }.distinctBy {it.first.id}
 
-@Composable internal fun GlobalToolsScreen(model:SpuntoViewModel,onAsk:()->Unit) {
+@Composable internal fun GlobalToolsScreen(model:SpuntoViewModel) {
  val resources=LocalContext.current.resources
  val catalog by model.catalog.collectAsState()
  val online by model.online.collectAsState()
@@ -869,8 +904,7 @@ internal fun globalTools(catalog:JsonObject,manifest:JsonObject):List<Pair<Nativ
  LazyColumn(contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   if(online) items(tools,key={it.first.id}) {(plugin,command) ->
    TextButton(enabled=!running,onClick={
-    if(plugin.id=="ask") onAsk()
-    else if(!running) {
+    if(!running) {
      running=true
      error=""
      runCommand(model,plugin.id,command.string("id"),JsonObject(emptyMap()),{model.remote.value=it},{running=false},scope,onError={error=it})

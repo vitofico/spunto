@@ -2,4 +2,5 @@
 <resources>
     <string name="settings_plugin_library_stats_name">Statistiques des notes</string>
     <string name="settings_plugin_library_stats_description">Consultez le nombre de notes, les captures récentes et les notes à organiser. Sans suivi ni IA.</string>
+    <string name="library_stats_connect">Connectez-vous à votre serveur pour voir les statistiques des notes.</string>
 </resources>

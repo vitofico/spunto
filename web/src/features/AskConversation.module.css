@@ -8,9 +8,14 @@
   gap: var(--s-12);
 }
 
+.header h1,
 .header h2,
 .writeHeader h3 {
   margin: 0;
+}
+
+.header h1 {
+  font: var(--t-title) var(--f-serif);
 }
 
 .header p {
@@ -156,4 +161,120 @@
 .latest {
   min-height: 44px;
   margin-block-start: var(--s-12);
+}
+
+.frame,
+.page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.frame {
+  flex: 1;
+}
+
+.page {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  justify-self: start;
+  min-height: 44px;
+  color: var(--ink-2);
+}
+
+.page > .header {
+  padding-block: var(--s-8);
+  border-block-end: 1px solid var(--rule);
+}
+
+.page > .header > div {
+  flex: 1 1 auto;
+}
+
+.page details.temporary {
+  margin-block: var(--s-8);
+}
+
+.page details.temporary summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.transcript {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-inline: 2px var(--s-8);
+  scrollbar-gutter: stable;
+}
+
+.transcript article {
+  margin-block: var(--s-16) var(--s-32);
+  overflow-wrap: anywhere;
+}
+
+.question {
+  width: fit-content;
+  max-width: min(34rem, 85%);
+  margin: var(--s-12) 0 var(--s-16) auto;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-12) var(--r-12) var(--r-4) var(--r-12);
+  background: var(--sunken);
+  font: var(--t-ui-size) / 1.5 var(--f-sans);
+  white-space: pre-line;
+}
+
+.sources {
+  width: fit-content;
+  max-width: 100%;
+  margin-block: var(--s-12);
+  padding: var(--s-8) var(--s-12);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-8);
+}
+
+.sources summary {
+  cursor: pointer;
+}
+
+.sources blockquote {
+  margin: var(--s-4) 0 var(--s-12);
+  color: var(--ink-2);
+  white-space: pre-line;
+}
+
+.page > .composer {
+  border-block-start: 1px solid var(--rule);
+  padding-block: var(--s-12) var(--s-8);
+  margin: 0;
+  background: var(--paper);
+}
+
+.page textarea {
+  min-height: 3rem;
+  max-height: 24dvh;
+}
+
+.composerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.composerActions > button {
+  margin-inline-start: auto;
+}
+
+.composerActions .onlyNotes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-height: 44px;
+  cursor: pointer;
 }

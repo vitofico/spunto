@@ -885,6 +885,7 @@ internal fun globalTools(catalog:JsonObject,manifest:JsonObject):List<Pair<Nativ
  catalog.objects("plugins").mapNotNull {raw ->
   val plugin=NativePluginFacts(raw)
   val commandId=globalToolCommands[plugin.id] ?: return@mapNotNull null
+  if(plugin.id=="context-packs" && collectionsAvailable(manifest)) return@mapNotNull null
   val active=manifest.objects("plugins").any { it.string("id")==plugin.id && it.bool("enabled",true) }
   if(!plugin.wantedOn || plugin.state!="enabled" || !active) return@mapNotNull null
   plugin.contribution.objects("commands").firstOrNull {command ->

@@ -1,0 +1,13 @@
+id = "note-assist"
+name = "Note assistance"
+version = "1.0.0"
+api = "1.0"
+kind = "server"
+runtime = "in-process"
+category = "develop"
+description = "Find relevant passages and draft suggestions for Collections and Decisions when you ask."
+entry = "spunto.plugins.note_assist:plugin"
+requires = ["ai.chat"]
+default = "off"
+data_version = 1
+permissions = ["notes.read", "ai.chat", "ai.embed", "routes"]

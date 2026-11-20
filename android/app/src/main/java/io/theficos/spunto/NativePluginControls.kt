@@ -159,6 +159,7 @@ internal fun pluginDetailCommands(plugin:NativePluginFacts,versionedAgentReview:
  (plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.filter {command ->
   command.pluginStrings("where").orEmpty().any {it in setOf("global","palette","note-actions")} &&
    plugin.id!=ThinkingDeskRoute &&
+   !(plugin.id=="context-packs" && collectionsPluginSupported(plugin.raw)) &&
    (plugin.id to command.pluginText("id")) !in setOf("ask" to "ask","library-stats" to "summary") &&
    !(plugin.id=="label-gardener" && plugin.raw.pluginText("origin")=="bundled" && command.pluginText("id")=="review-now") &&
    !handledByAgentReviewPanel(plugin.id,command.pluginText("id"),versionedAgentReview)

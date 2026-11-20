@@ -71,12 +71,14 @@ import kotlinx.serialization.json.*
  val writable by model.workspaceCanWrite.collectAsState()
  val owner by model.workspaceIsOwner.collectAsState()
  val epoch by model.pluginReplicaEpochState.collectAsState()
+ val canManageCollections=owner && auth!=null && collectionsAvailable(manifest)
+ val canManageDecisions=owner && auth!=null && libraryCommandAvailable(manifest,DecisionJournalId,"journal")
  val deskAvailable=thinkingDeskAvailable(manifest,owner && auth!=null)
  val canAsk=owner && auth!=null && libraryCommandAvailable(manifest,"ask","ask")
  val canViewStats=owner && auth!=null && libraryCommandAvailable(manifest,"library-stats","summary")
  var statsOpen by remember(auth,epoch) {mutableStateOf(false)}
  LaunchedEffect(canViewStats) {if(!canViewStats) statsOpen=false}
- val navigationLabel=context.getString(if(deskAvailable || canViewStats) R.string.core_open_navigation else R.string.core_choose_labels)
+ val navigationLabel=context.getString(if(deskAvailable || canViewStats || canManageCollections || canManageDecisions) R.string.core_open_navigation else R.string.core_choose_labels)
  val deskSession=if(deskAvailable && nav.contains(ThinkingDeskRoute)) remember(auth,epoch) { ThinkingDeskSession() } else null
  LaunchedEffect(manifest) {
   model.container.manifest.withCurrentPublication {
@@ -90,7 +92,7 @@ import kotlinx.serialization.json.*
  // While a note is being edited, Back finishes the edit before leaving.
  fun navigateBack() {
   when {
-   route.startsWith("note:") && noteBack!=null -> noteBack?.invoke()
+   route.substringBefore(':') in setOf("note","note-edit") && noteBack!=null -> noteBack?.invoke()
    route==ThinkingDeskRoute && deskSession?.busy==true -> Unit
    route==ThinkingDeskRoute && deskSession?.insideDesk==true -> deskSession.reset()
    else -> nav.back()
@@ -193,22 +195,26 @@ import kotlinx.serialization.json.*
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
-    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null,onLibraryStats=if(canViewStats) {{navigationOpen=false;statsOpen=true}} else null)
+    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onCollections=if(canManageCollections) {{navigationOpen=false;nav.open(CollectionsRoute)}} else null,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null,onLibraryStats=if(canViewStats) {{navigationOpen=false;statsOpen=true}} else null,onDecisions=if(canManageDecisions) {{navigationOpen=false;nav.open(DecisionManagerRoute)}} else null)
     StatusLines(model)
     if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}
     when {
      route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo,
       focusCapture=focusCapture,onCaptureFocused={focusCapture=false})
-     route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
+     route.substringBefore(':') in setOf("note","note-edit") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it},startEditing=route.startsWith("note-edit:"))
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="tools" -> if(owner) GlobalToolsScreen(model)
+     route.substringBefore(':')==CollectionsRoute -> CollectionsScreen(model,route,onNote=openNote)
      route==ThinkingDeskRoute -> if(deskSession!=null) ThinkingDeskScreen(model,deskSession,openNote)
       else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
-     route=="ask" -> if(canAsk) AskScreen(model,onNote=openNote)
+     route=="ask" || route.startsWith("ask:") -> if(canAsk) AskScreen(model,onNote=openNote,collectionId=route.substringAfter(':',"").ifBlank {null})
       else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
+     route==DecisionManagerRoute || route==DecisionViewRoute || route.startsWith(DecisionDetailPrefix) ->
+      DecisionManager(model,route.takeIf {it.startsWith(DecisionDetailPrefix)}?.removePrefix(DecisionDetailPrefix),
+       {nav.open(DecisionDetailPrefix+it)},openNote,{nav.open("note-edit:$it")},{nav.back()})
      route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote=openNote)
      route=="review" -> ReviewScreen(model,openNote)
      route=="appearance" -> AppearanceScreen(requestedTheme,mode,black,wallpaper,{ choice ->

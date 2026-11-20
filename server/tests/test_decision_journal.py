@@ -768,3 +768,61 @@ def test_decision_notes_date_entries_in_words():
     from spunto.plugins.decision_journal import stamp
 
     assert stamp(1_792_600_320_000) == "21 October 2026, 16:32 UTC"
+
+
+async def test_manager_filters_entire_library_and_prioritizes_due_decisions(journal):
+    host, notes = journal
+    old, state, _ = await record(
+        host, decision="RÉSERVE synthetic review slot", review_on="2000-01-01"
+    )
+    for i in range(11):
+        await record(host, decision=f"Newer synthetic choice {i}", review_on="")
+    first = await command(host, "journal", {"manager": True})
+    assert first["items"][0]["items"][0]["id"] == old
+    assert len(first["items"][0]["items"]) == 10
+    more = first["items"][1]
+    second = await command(host, more["id"], more["args"])
+    assert len(second["items"][0]["items"]) == 2
+    for filters in ({"query": "reserve review"}, {"due": True}):
+        page = await command(host, "journal", {"manager": True, **filters})
+        assert [ref["id"] for ref in page["items"][0]["items"]] == [old]
+    opened = await command(host, "journal", {"manager": True, "note_id": old})
+    schedule = opened["items"][-1]
+    assert schedule["args"]["operation"] == "schedule"
+    await command(
+        host, "journal", {**schedule["args"], "base_version": state["version"], "status": "closed"}
+    )
+    assert (await command(host, "journal", {"manager": True, "due": True}))["items"][0][
+        "type"
+    ] == "text"
+    assert (await notes.get(old))["body"].count("RÉSERVE synthetic review slot") == 1
+
+
+async def test_manager_trash_and_restore_preserve_linked_outcome(journal):
+    host, notes = journal
+    original, _, _ = await record(host)
+    saved = (await command(host, "review-decision", outcome(original)))["ids"][0]
+    await notes.flags(original, {"trashed": True})
+    assert (await command(host, "journal", {"manager": True, "note_id": original}))[
+        "type"
+    ] == "text"
+    assert (await notes.get(saved))["id"] == saved
+    await notes.flags(original, {"trashed": False})
+    detail = await command(host, "journal", {"manager": True, "note_id": original})
+    assert detail["items"][2]["items"][0]["id"] == saved
+
+
+async def test_confirmed_assisted_decision_checks_versions_and_keeps_source_link(journal):
+    host, notes = journal
+    source = await notes.create("Synthetic test rollout evidence.")
+    proof = await Ctx(host, PLUGIN, principal=OWNER).notes.evidence(source["id"])
+    evidence = {
+        source["id"]: {"version": proof["version"], "fingerprint": proof["evidence_fingerprint"]}
+    }
+    args = fields(questions="Is latency still acceptable?", evidence=evidence)
+    decision = (await command(host, "record-decision", args))["ids"][0]
+    assert source["id"] in (await notes.get(decision))["body"]
+    await notes.edit(source["id"], "Updated synthetic evidence.", source["version"])
+    with pytest.raises(Problem, match="evidence changed"):
+        await command(host, "record-decision", {**args, "request_id": str(uuid.uuid7())})
+    assert (await command(host, "record-decision", args))["ids"] == [decision]

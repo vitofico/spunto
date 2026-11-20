@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -207,7 +208,9 @@ internal suspend fun searchPickerNotes(api:ApiClient,query:String,cursor:String?
  search:suspend (query:String,cursor:String?)->JsonObject,
  reportError:suspend (Resources,Exception)->String,
  onQueryChanged:()->Unit={},
- actions:@Composable (Note?)->Unit
+ maxSelection:Int=1,
+ multiActions:(@Composable (List<Note>,()->Unit)->Unit)?=null,
+ actions:@Composable (Note?)->Unit={}
 ) {
  val resources=LocalContext.current.resources
  val locale=LocalConfiguration.current.locales[0]
@@ -217,6 +220,7 @@ internal suspend fun searchPickerNotes(api:ApiClient,query:String,cursor:String?
  var retry by remember {mutableIntStateOf(0)}
  var pages by remember(query,retry,online,refreshKey) {mutableStateOf(SearchPages())}
  var selected by remember(query,retry,online,refreshKey,excludedIds) {mutableStateOf<Note?>(null)}
+ var staged by remember(refreshKey) {mutableStateOf(emptyList<Note>())}
  var loadRequests by remember(query,retry,online,refreshKey) {mutableIntStateOf(0)}
  var loading by remember(query,retry,online,refreshKey) {mutableStateOf(online)}
  var searchError by remember(query,retry,online,refreshKey) {mutableStateOf("")}
@@ -242,16 +246,24 @@ internal suspend fun searchPickerNotes(api:ApiClient,query:String,cursor:String?
   if(loading || !enabled) LinearProgressIndicator(Modifier.fillMaxWidth())
   val matches=pages.hits.filter {it.id !in excludedIds && !it.trashed}
   val terms=remember(query) {searchTerms(query)}
-  LazyColumn(Modifier.weight(1f).fillMaxWidth().selectableGroup()) {
+  val listModifier=Modifier.weight(1f).fillMaxWidth()
+  LazyColumn(if(multiActions==null) listModifier.selectableGroup() else listModifier) {
    if(!online) item {Text(stringResource(R.string.settings_connect_to_the_server_to_use_this))}
    else if(!loading && searchError.isBlank() && matches.isEmpty() && pages.cursor==null) item {
     Text(if(query.isBlank()) stringResource(R.string.core_picker_no_notes) else stringResource(R.string.core_search_empty,query.trim()))
    }
    items(matches,key={it.id}) {note ->
-    val chosen=selected?.id==note.id
-    Row(Modifier.fillMaxWidth().heightIn(min=56.dp).selectable(chosen,enabled=enabled,role=Role.RadioButton) {selected=note;focus.clearFocus()}
-     .padding(vertical=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
-     RadioButton(selected=chosen,onClick=null,enabled=enabled)
+    val chosen=if(multiActions==null) selected?.id==note.id else staged.any {it.id==note.id}
+    val modifier=Modifier.fillMaxWidth().heightIn(min=56.dp)
+    val choice=if(multiActions==null)
+     modifier.selectable(chosen,enabled=enabled,role=Role.RadioButton) {selected=note;focus.clearFocus()}
+    else modifier.toggleable(chosen,enabled=enabled && (chosen || staged.size<maxSelection),role=Role.Checkbox) {
+     staged=if(it) staged+note else staged.filterNot {prior -> prior.id==note.id}
+     focus.clearFocus()
+    }
+    Row(choice.padding(vertical=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12),verticalAlignment=Alignment.CenterVertically) {
+     if(multiActions==null) RadioButton(selected=chosen,onClick=null,enabled=enabled)
+     else Checkbox(checked=chosen,onCheckedChange=null,enabled=enabled && (chosen || staged.size<maxSelection))
      Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
       Text(note.title.ifBlank {stringResource(R.string.core_untitled)},style=MaterialTheme.typography.bodyLarge,maxLines=2,overflow=TextOverflow.Ellipsis)
       searchSnippet(note.body,terms)?.let {Text(it,style=MaterialTheme.typography.bodySmall,
@@ -268,7 +280,8 @@ internal suspend fun searchPickerNotes(api:ApiClient,query:String,cursor:String?
     TextButton(enabled=!loading && enabled,onClick={loadRequests++}) {Text(stringResource(R.string.core_show_more))}
    }
   }
-  actions(selected)
+  if(multiActions==null) actions(selected)
+  else multiActions(staged) {staged=emptyList()}
  }
 }
 

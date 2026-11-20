@@ -38,6 +38,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.theficos.spunto.core.design.SpuntoTheme
 import io.theficos.spunto.core.plugins.Vocabulary
 import io.theficos.spunto.core.plugins.outputComponents
+import io.theficos.spunto.core.plugins.string
 import io.theficos.spunto.data.local.ReplicaDatabaseCache
 import io.theficos.spunto.data.local.viewMembership
 import io.theficos.spunto.data.sync.ApiClient
@@ -436,6 +437,81 @@ class NewFeatureWorkflowTest {
         }
     }
 
+    @Test fun collectionsOpenFromNavigationAndSaveManualSelection() {
+        enable("context-packs")
+        val sourceTitle = "Synthetic collection source $suffix"
+        val source = runBlocking {
+            api.post("/api/v1/notes", buildJsonObject { put("body", "$sourceTitle\nPrepared for the native workflow.") })
+        }
+        val secondTitle = "Second synthetic collection source $suffix"
+        val second = runBlocking {
+            api.post("/api/v1/notes", buildJsonObject { put("body", "$secondTitle\nAnother note for the native workflow.") })
+        }
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-collections-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, publishesPlugins = true)
+        val mounted = mutableStateOf(true)
+        lateinit var model: SpuntoViewModel
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        val collectionName = "Manual collection $suffix"
+        val navigation = hasContentDescription("Open navigation") and hasClickAction()
+        val navigationEntry = hasText("Collections") and hasClickAction() and hasAnyAncestor(isDialog())
+        try {
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
+            compose.waitUntil(30_000) {
+                model.online.value && collectionsAvailable(model.manifest.value) &&
+                    compose.onAllNodes(navigation).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNode(navigation).performClick()
+            compose.onNode(navigationEntry).performScrollTo().performClick()
+            compose.onNodeWithText("New collection", substring = false).performScrollTo().performClick()
+            val goal = hasText("What are you working on?") and hasSetTextAction()
+            compose.waitUntil(15_000) { compose.onAllNodes(goal).fetchSemanticsNodes().isNotEmpty() }
+            fill("What are you working on?", "Bring the synthetic evidence together.")
+            fill("Collection name", collectionName)
+            fill("Introduction (optional)", "Short owner-authored beginning.")
+            androidx.test.espresso.Espresso.closeSoftKeyboard()
+            compose.onNodeWithText("Choose source notes", substring = false).performScrollTo().performClick()
+            val picker = hasAnyAncestor(isDialog())
+            val firstChoice = hasText(sourceTitle, substring = false) and hasClickAction() and picker
+            val secondChoice = hasText(secondTitle, substring = false) and hasClickAction() and picker
+            compose.waitUntil(20_000) { compose.onAllNodes(firstChoice).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(firstChoice).performScrollTo().performClick().assertIsOn()
+            compose.onNode(secondChoice).performScrollTo().performClick().assertIsOn()
+            compose.onNode(hasText("Add to selection", substring = false) and hasClickAction() and picker)
+                .assertIsEnabled().performClick()
+            val pin = hasText("Pin source", substring = false) and hasClickAction()
+            compose.waitUntil(10_000) { compose.onAllNodes(pin).fetchSemanticsNodes().size == 2 }
+            compose.onAllNodes(pin)[0].performScrollTo().performClick()
+            compose.onNodeWithText("Save collection", substring = false).performScrollTo().performClick()
+            val saved = hasText(collectionName, substring = false) and !hasSetTextAction()
+            compose.waitUntil(20_000) { compose.onAllNodes(saved).fetchSemanticsNodes().isNotEmpty() }
+            val collection = runBlocking {
+                val result = api.post("/api/v1/collections", buildJsonObject { put("query", collectionName) })
+                check(result["collections"]!!.jsonArray.size == 1)
+                val id = result["collections"]!!.jsonArray.single().jsonObject["id"]!!
+                api.post("/api/v1/collections", buildJsonObject { put("action", "read"); put("id", id) })
+            }
+            val links = collection["sources"]!!.jsonArray.map { it.jsonObject }
+            assertEquals(listOf(source["id"], second["id"]), links.map { it["id"] })
+            assertEquals(listOf(true, false), links.map { it["pinned"]!!.jsonPrimitive.boolean })
+            if (InstrumentationRegistry.getArguments().getString("spunto.workflow.screenshot") == "yes") {
+                compose.waitForIdle()
+                val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+                automation.waitForIdle(600, 5_000)
+                val directory = requireNotNull(app.getExternalFilesDir(null))
+                File(directory, "android-collections-manual.png").outputStream().use {
+                    check(requireNotNull(automation.takeScreenshot()).compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+            }
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
     @Test fun contextPackFormsCreateEditAndKeepPrivateSnapshot() {
         enable("context-packs")
         val flow = Workflow("context-packs", "packs")
@@ -791,6 +867,48 @@ class NewFeatureWorkflowTest {
         }
     }
 
+    @Test fun askOpensFromTheHeaderWithAVisibleComposerAndStrictMode() {
+        assumeTrue(
+            "Requires a disposable real-model Ask provider",
+            InstrumentationRegistry.getArguments().getString("spunto.workflow.ask") == "true",
+        )
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-ask-conversation-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, publishesPlugins = true)
+        val mounted = mutableStateOf(true)
+        lateinit var model: SpuntoViewModel
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        try {
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
+            val launcher = hasContentDescription("Ask your notes") and hasClickAction()
+            compose.waitUntil(30_000) {
+                supportsConversationalAsk(model.manifest.value) &&
+                    compose.onAllNodes(launcher).fetchSemanticsNodes().size == 1
+            }
+            compose.onNode(launcher).performClick()
+            val title = hasText("Ask your notes")
+            val composer = hasContentDescription("Message for your notes") and isEnabled()
+            compose.waitUntil(30_000) {
+                model.online.value &&
+                    compose.onAllNodes(title).fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodes(composer).fetchSemanticsNodes().size == 1
+            }
+            compose.onNode(title).assertIsDisplayed()
+            compose.onNodeWithText("Only from notes").assertIsDisplayed().performClick().assertIsSelected()
+            compose.onNode(composer).performTextInput("What did I promise about a nonexistent synthetic code?")
+            compose.onNodeWithText("Send", substring = false).assertIsDisplayed().assertIsEnabled()
+            androidx.test.espresso.Espresso.closeSoftKeyboard()
+            compose.onNodeWithContentDescription("Back").performClick()
+            compose.onNode(launcher).assertIsDisplayed()
+            compose.onNodeWithText("Only from notes").assertDoesNotExist()
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
     @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {
         runBlocking { api.post("/api/v1/plugins/decision-journal/disable", empty) }
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
@@ -838,6 +956,74 @@ class NewFeatureWorkflowTest {
         } finally {
             compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
             runBlocking { auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
+    @Test fun decisionsManagerKeepsTypedChoiceUntilExplicitSaveAndHidesTrashedDecision() {
+        enable(DecisionJournalId)
+        runBlocking { api.post("/api/v1/plugins/note-assist/disable", empty) }
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-decisions-manager-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, publishesPlugins = true)
+        val mounted = mutableStateOf(true)
+        lateinit var model: SpuntoViewModel
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        val navigation = hasContentDescription("Open navigation") and hasClickAction()
+        val choice = "Keep a reversible launch $suffix."
+        fun waitFor(stage: String, selector: SemanticsMatcher, timeout: Long = 15_000, ready: () -> Boolean = { true }) {
+            try {
+                compose.waitUntil(timeout) { ready() && compose.onAllNodes(selector).fetchSemanticsNodes().isNotEmpty() }
+            } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+                val tree = runCatching { compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12) }
+                    .getOrElse { "Could not capture the semantic tree: ${it.message}" }
+                throw AssertionError("Decision workflow stalled at $stage; online=${model.online.value}.\n$tree", error)
+            }
+        }
+        try {
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
+            waitFor("open navigation", navigation, 20_000) {
+                model.online.value && model.container.manifest.enabled(DecisionJournalId)
+            }
+            compose.onNode(navigation).performClick()
+            compose.onNode(hasText("Decisions") and hasClickAction() and hasAnyAncestor(isDialog())).performScrollTo().performClick()
+            waitFor("decision manager entry", hasText("What did you decide?"), 15_000)
+            fill("What did you decide?", choice)
+            androidx.test.espresso.Espresso.closeSoftKeyboard()
+            compose.onNodeWithText("Continue").performScrollTo().performClick()
+            waitFor("editable decision preview", hasText("Save decision"), 15_000)
+            compose.onNode(hasSetTextAction() and hasText(choice)).assertExists()
+            val prior = runBlocking {
+                api.post("/api/v1/plugins/decision-journal/commands/journal", buildJsonObject {
+                    put("manager", true); put("query", choice)
+                })
+            }
+            assertTrue(outputComponents(prior).first().string("type") == "text")
+            compose.onNodeWithText("Save decision").performScrollTo().performClick()
+            waitFor("explicit save receipt", hasText("Decision saved."), 20_000)
+            val decisionId = runBlocking {
+                val journal = api.post("/api/v1/plugins/decision-journal/commands/journal", buildJsonObject {
+                    put("manager", true); put("query", choice)
+                })
+                outputComponents(journal).first()
+                    .getValue("items").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content
+            }
+            val row = hasAnyAncestor(hasTestTag("decision-list-row:$decisionId")) and hasText(choice) and hasClickAction()
+            waitFor("saved decision list row", row, 20_000)
+            compose.onNode(row).performScrollTo().performClick()
+            waitFor("decision manager detail route", hasTestTag("decision-detail:$decisionId"))
+            val trash = hasText("Move decision to trash") and hasClickAction()
+            waitFor("trash action in decision detail", trash)
+            compose.onNode(trash).performScrollTo().performClick()
+            compose.onNode(trash and hasAnyAncestor(isDialog())).performClick()
+            waitFor("returned to decision list", hasTestTag("decision-manager"))
+            compose.onNode(row).assertDoesNotExist()
+            runBlocking { model.synchronize().join() }
+            assertTrue("The server still showed an active decision", note(decisionId).getValue("trashed").jsonPrimitive.boolean)
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
             container.database.close()
             app.deleteDatabase(prefix + "spunto.db")
         }

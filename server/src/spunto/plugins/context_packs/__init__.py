@@ -95,17 +95,25 @@ async def provenance(ctx, pack, *, owner_labels=False):
             or (baseline["external"] and not principal.external_ok)
         ):
             return None
-        note = await ctx.notes.get(baseline["id"])
+        proof = pack.get("intro_citations", {}).get(baseline["id"])
+        note = (
+            await ctx.notes.evidence(baseline["id"])
+            if proof
+            else await ctx.notes.get(baseline["id"])
+        )
         if note is None:
             if restricted:
                 return None
             result.append({**baseline, "current_version": None, "status": "unavailable"})
         else:
+            changed = source(note) != baseline or (
+                proof is not None and note["evidence_fingerprint"] != proof
+            )
             result.append(
                 {
                     **baseline,
                     "current_version": note["version"],
-                    "status": "changed" if source(note) != baseline else "current",
+                    "status": "changed" if changed else "current",
                     "current_private": bool(note["private"]),
                     "current_external": note["origin"] == "external",
                 }
@@ -115,6 +123,12 @@ async def provenance(ctx, pack, *, owner_labels=False):
                 # never include live source titles or excerpts.
                 title = re.sub(r"[\[\]\\`*_<>&]", "", re.sub(r"\s+", " ", note.get("title") or ""))
                 result[-1]["display_title"] = title.strip()[:60]
+                result[-1]["ai_eligible"] = (
+                    not note["private"]
+                    and note["origin"] != "external"
+                    and not note["machine"]
+                    and not note["archived"]
+                )
     return result
 
 
@@ -135,6 +149,8 @@ def markdown(pack, states, *, show_titles=False):
         lines.append(
             tr("Source revisions need review; this brief has not been refreshed automatically.")
         )
+    if pack.get("intro"):
+        lines.append(pack["intro"])
     for key, title in SECTIONS.items():
         if pack[key]:
             lines.extend([f"\n## {tr(title)}", pack[key]])
@@ -349,6 +365,28 @@ async def packs(
         )
     if pack_id is not None:
         return await render(ctx, pack_id, export=export)
+    page, next_cursor = await page_records(ctx, cursor, limit=PAGE_SIZE)
+    items = [
+        text(
+            tr(
+                "Build a reusable handoff for a project, a task, or an agent. "
+                "Write a brief, link the notes behind it, and revisit it when the work changes."
+            )
+        ),
+        command("edit", tr("New context pack"), action="start"),
+    ]
+    if page:
+        items.append(text(tr("Saved context packs")))
+    for row in page:
+        pack = row["data"]
+        label = tr("Draft · {title}", title=pack["title"]) if pack.get("draft") else pack["title"]
+        items.extend([text(label), command("packs", tr("Open pack"), pack_id=row["id"])])
+    if next_cursor:
+        items.append(command("packs", tr("Next packs"), cursor=next_cursor))
+    return output(*items)
+
+
+async def page_records(ctx, cursor=None, *, limit, query=""):
     # Continue older in-flight UUID pages in their original order.
     after, before = None, None
     if cursor is not None:
@@ -364,37 +402,71 @@ async def packs(
     recent = after is None
     page = []
     async with asyncio.timeout(5):
-        while len(page) <= PAGE_SIZE:
+        while len(page) <= limit:
             rows = await ctx.storage.records.list(
                 COLLECTION, limit=25, after=after, recent=recent, before=before
             )
-            page.extend(row for row in rows if not row["data"].get("deleted"))
+            page.extend(
+                row
+                for row in rows
+                if not row["data"].get("deleted") and query in row["data"]["title"].casefold()
+            )
             if len(rows) < 25:
                 break
             if recent:
                 before = rows[-1]["updated_at"], rows[-1]["id"]
             else:
                 after = rows[-1]["id"]
-    items = [
-        text(
-            tr(
-                "Build a reusable handoff for a project, a task, or an agent. "
-                "Write a brief, link the notes behind it, and revisit it when the work changes."
-            )
-        ),
-        command("edit", tr("New context pack"), action="start"),
-    ]
-    if page:
-        items.append(text(tr("Saved context packs")))
-    for row in page[:PAGE_SIZE]:
-        pack = row["data"]
-        label = tr("Draft · {title}", title=pack["title"]) if pack.get("draft") else pack["title"]
-        items.extend([text(label), command("packs", tr("Open pack"), pack_id=row["id"])])
-    if len(page) > PAGE_SIZE:
-        last = page[PAGE_SIZE - 1]
+    next_cursor = None
+    if len(page) > limit:
+        last = page[limit - 1]
         next_cursor = f"{last['updated_at']}:{last['id']}" if recent else last["id"]
-        items.append(command("packs", tr("Next packs"), cursor=next_cursor))
-    return output(*items)
+    return page[:limit], next_cursor
+
+
+def for_collection(ctx):
+    """Open the current first-party collection store in this caller's workspace."""
+    from spunto.host import ContextError
+
+    host = ctx._host
+    origin = host.catalog_metadata.get("context-packs", {}).get("origin")
+    if origin != "bundled" or host.states.get("context-packs", {}).get("state") != "enabled":
+        raise ContextError("plugin_disabled")
+    context = Ctx(host, "context-packs", principal=ctx.principal, operation="command:collections")
+    owner(context)
+    return context
+
+
+async def ask_context(ctx, collection_id):
+    context = for_collection(ctx)
+    pack = await record(context, collection_id)
+    states = await provenance(context, pack)
+    if pack.get("draft"):
+        raise Problem(409, "version_conflict", tr("Save the collection before using Ask."))
+    versions = {}
+    for item in states:
+        if item["status"] == "unavailable":
+            continue
+        note = await ctx.notes.evidence(item["id"])
+        if (
+            note is not None
+            and not note["private"]
+            and note["origin"] != "external"
+            and not note["machine"]
+            and not note["archived"]
+        ):
+            versions[item["id"]] = note["version"]
+    if not versions:
+        raise Problem(409, "version_conflict", tr("Add a source eligible for AI before using Ask."))
+    return {
+        "id": collection_id,
+        "revision": pack["revision"],
+        "source_ids": list(versions),
+        "source_versions": versions,
+        # The scoped source list is enough for Ask. Collection prose may have
+        # been written from material that the Ask provider is not allowed to see.
+        "brief": "",
+    }
 
 
 @plugin.command("edit")
@@ -477,6 +549,7 @@ async def edit(
             markdown(old, states),
             private=True,
             source_versions={item["id"]: item["version"] for item in states} or None,
+            source_fingerprints=old.get("intro_citations") or None,
             request_id=f"pack:{pack_id}:{old['revision']}",
         )
         if await ctx.notes.get(note["id"]) is None:
@@ -562,6 +635,14 @@ async def edit(
         "updated_at": ctx.clock(),
         "creation_digest": old["creation_digest"] if old else digest,
     }
+    if old:
+        data.update(
+            {
+                key: old[key]
+                for key in ("intro", "pinned_source_ids", "intro_citations")
+                if key in old
+            }
+        )
     if old and old.get("draft") and action != "finish":
         data["draft"] = True
     states = await provenance(ctx, data)
@@ -706,6 +787,12 @@ async def sources(
             )
         else:
             remove, baseline_version = identifier(remove), None
+        if remove in old.get("intro_citations", {}):
+            raise Problem(
+                422,
+                "validation_failed",
+                tr("Clear the sourced introduction before removing one of its sources."),
+            )
         if remove not in {item["id"] for item in selected}:
             raise ValueError("unknown pack source")
         removed = next(item for item in selected if item["id"] == remove)
@@ -740,6 +827,9 @@ async def sources(
             "revision": old["revision"] + 1,
             "updated_at": ctx.clock(),
         }
+        if "pinned_source_ids" in old:
+            ids = {item["id"] for item in selected}
+            new["pinned_source_ids"] = [item for item in old["pinned_source_ids"] if item in ids]
         states = await provenance(ctx, new)
         markdown(new, states)
         if not await ctx.storage.records.compare_and_set(

@@ -162,6 +162,7 @@ class Records:
         note_id=None,
         key=None,
         source_versions=None,
+        source_fingerprints=None,
     ):
         """Replace exact JSON atomically, provided an associated note still exists."""
         self.ctx.check_write()
@@ -181,9 +182,11 @@ class Records:
             ):
                 self.ctx.check()
                 return False
-            if source_versions is not None:
+            if source_versions is not None or source_fingerprints is not None:
                 self.ctx.check("notes.read")
-                await self.ctx.notes._guard_sources(conn, source_versions)
+                await self.ctx.notes._guard_sources(
+                    conn, source_versions, source_fingerprints=source_fingerprints
+                )
             if note_id is not None and not await conn.execute_fetchall(
                 "SELECT 1 FROM note WHERE id=?", (note_id,)
             ):

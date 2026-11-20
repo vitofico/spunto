@@ -1,4 +1,11 @@
 {
+  "A source changed while drafting. Try again or continue manually.": "Une source a changé pendant la rédaction. Réessayez ou continuez manuellement.",
+  "Decision evidence changed. Draft again or continue manually.": "Les éléments à l’appui ont changé. Recréez le brouillon ou continuez manuellement.",
+  "No eligible note evidence was found. You can continue manually.": "Aucune note admissible n’a été trouvée. Vous pouvez continuer manuellement.",
+  "Note assist is unavailable. You can continue manually.": "L’assistance est indisponible. Vous pouvez continuer manuellement.",
+  "Review settings": "Réglages de révision",
+  "Supporting sources": "Sources à l’appui",
+  "The collection changed. Start a new conversation.": "La collection a changé. Démarre une nouvelle conversation.",
   "(empty text)": "(texte vide)",
   "A Tidy proposal was already offered for this version.": "Une proposition de rangement existe déjà pour cette version.",
   "A name for this desk": "Nom de l’atelier",
@@ -288,6 +295,7 @@
   "The transcripts are too long to append; recordings are kept.": "Les transcriptions sont trop longues à ajouter. Les enregistrements sont conservés.",
   "The weekly limit of three label proposals is reached.": "La limite hebdomadaire de trois propositions d’étiquettes est atteinte.",
   "This decision changed. Reopen it before reviewing.": "Cette décision a changé. Rouvrez-la avant de la réviser.",
+  "This decision is unavailable to Note assist. Record the outcome manually.": "L’assistance ne peut pas consulter cette décision. Consignez le résultat manuellement.",
   "This decision is unavailable.": "Cette décision n’est pas disponible.",
   "This decision is unavailable. Its original creation will not be repeated.": "La décision n’est pas disponible et ne sera pas recréée.",
   "This desk or source changed. Reopen the desk, review sources, and retry; your original notes remain intact.": "Le bureau ou une source a changé. Rouvrez le bureau, vérifiez les sources et réessayez. Les notes d’origine sont conservées.",
@@ -400,5 +408,10 @@
   "Link the notes that explain the work. You can add up to ten, or continue without sources.": "Liez les notes qui expliquent le travail. Vous pouvez en ajouter jusqu’à dix ou continuer sans source.",
   "Open changed notes to check what is different. Acknowledge their revisions after updating the brief as needed.": "Ouvrez les notes modifiées pour voir les différences. Actualisez le dossier si nécessaire, puis confirmez les révisions.",
   "Review changed sources and remove unavailable sources before saving this draft.": "Vérifiez les sources modifiées et retirez les sources indisponibles avant d’enregistrer ce brouillon.",
-  "Open pack": "Ouvrir le dossier"
+  "Open pack": "Ouvrir le dossier",
+  "Choose up to ten different source notes.": "Choisissez jusqu’à dix notes sources différentes.",
+  "A source changed. Review it again.": "Une source a changé. Vérifiez-la de nouveau.",
+  "Save the collection before using Ask.": "Enregistrez la collection avant de poser une question.",
+  "Add a source eligible for AI before using Ask.": "Ajoutez une source utilisable par l’IA avant de poser une question.",
+  "Clear the sourced introduction before removing one of its sources.": "Videz l’introduction avant de retirer l’une des notes qu’elle cite."
 }

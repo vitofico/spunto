@@ -44,7 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun NoteScreen(model:SpuntoViewModel,id:String,onClose:()->Unit,onNote:(String)->Unit,onBackReady:((()->Unit)?)->Unit={}) {
+@Composable fun NoteScreen(model:SpuntoViewModel,id:String,onClose:()->Unit,onNote:(String)->Unit,onBackReady:((()->Unit)?)->Unit={},startEditing:Boolean=false) {
  val context=LocalContext.current
  val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
  val manifest=model.manifest.collectAsState().value
@@ -52,7 +52,7 @@ import kotlinx.serialization.json.*
  // Loading and missing differ: a note still being read shows nothing rather than "unavailable".
  val loaded by remember(id) { model.repository.observe(id).map { it to true } }.collectAsState(null to false)
  val note=loaded.first
- var editing by remember(id) { mutableStateOf(false) }
+ var editing by remember(id) { mutableStateOf(startEditing) }
  var caret by remember(id) { mutableStateOf<Int?>(null) }
  var actions by remember(id) { mutableStateOf(false) }
  var history by remember(id) { mutableStateOf(model.historyFor.value==id) }
@@ -200,6 +200,9 @@ import kotlinx.serialization.json.*
 /** Shared by the note's menu and a timeline long-press. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun NoteActionsSheet(model:SpuntoViewModel,note:Note,onDismiss:()->Unit,onHistory:()->Unit,onCommandResult:(JsonObject)->Unit,onTrashed:()->Unit={},detail:NoteToolDetail?=null,runner:NoteToolRunner?=null) {
+ val nav=LocalNavigator.current
+ val collectionsManifest by model.manifest.collectAsState()
+ val owner by model.workspaceIsOwner.collectAsState()
  val online by model.online.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
  val feedback=LocalFeedback.current
@@ -233,6 +236,10 @@ import kotlinx.serialization.json.*
       }
      }
     }
+    if(owner && online && !note.trashed && !note.pending && collectionsAvailable(collectionsManifest))
+     TextButton(modifier=Modifier.padding(horizontal=SpuntoSpacing.s20),onClick={onDismiss();nav.open("$CollectionsRoute:add:${note.id}")}) {
+      Text(context.getString(R.string.collections_add_to))
+     }
     if(writable && online && !note.trashed) NoteCommands(model,note,detail,toolRunner,
      onLink={linkSession=NotePickerSession.open(model,"links")?.let {it to note.serverRev};linkSession!=null}) {onDismiss();onCommandResult(it)}
     HorizontalDivider(Modifier.padding(horizontal=SpuntoSpacing.s20),color=MaterialTheme.colorScheme.outlineVariant)

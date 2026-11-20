@@ -38,8 +38,8 @@ import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
 import { AccountIdentityLink } from "./features/AccountIdentity";
-import { SpaceSwitcher } from "./features/Collaboration";
 import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
+import { supportsCollections } from "./features/collectionsAccess";
 import { isBundledPlugin } from "./lib/localizePlugins";
 import { commandSuccessMessage } from "./features/vocabularyData";
 const loadNote = () => import("./pages/Note");
@@ -51,6 +51,15 @@ function lazyPages() {
         default: module.Palette,
       })),
     ),
+    SpaceSwitcher: lazy(() =>
+      import("./features/Collaboration").then((module) => ({
+        default: module.SpaceSwitcher,
+      })),
+    ),
+    KeyboardShortcuts: lazy(
+      () => import("./components/core/KeyboardShortcuts"),
+    ),
+    AskPage: lazy(() => import("./pages/Ask")),
     LibraryDialog: lazy(() => import("./features/LibraryDialog")),
     FirstRunGuide: lazy(() =>
       import("./components/core/FirstRunGuide").then((module) => ({
@@ -60,6 +69,8 @@ function lazyPages() {
     SharedNotesPage: lazy(() => import("./pages/SharedNotes")),
     NotePage: lazy(loadNote),
     ThinkingDeskPage: lazy(() => import("./pages/ThinkingDesk")),
+    CollectionsPage: lazy(() => import("./pages/Collections")),
+    DecisionManager: lazy(() => import("./features/DecisionManager")),
     PluginRailViews: lazy(() =>
       import("./features/PluginRailViews").catch(() => ({
         default: () => null,
@@ -224,6 +235,15 @@ function Rail({
         isBundledPlugin(p) &&
         (p.state === undefined || p.state === "enabled"),
     );
+  const collections =
+    role === "owner" &&
+    plugins.data?.plugins.some(
+      (plugin) =>
+        plugin.id === "context-packs" &&
+        isBundledPlugin(plugin) &&
+        (plugin.state === undefined || plugin.state === "enabled") &&
+        supportsCollections(plugin),
+    );
   const sync = useSync();
   const rail = useRef<HTMLElement>(null);
   useModalFocus(rail, open, close, returnFocus);
@@ -270,7 +290,11 @@ function Rail({
           </span>
           <kbd>{formatShortcut("mod+k")}</kbd>
         </button>
-        {hosted && <SpaceSwitcher close={close} />}
+        {hosted && (
+          <Suspense fallback={null}>
+            <pages.SpaceSwitcher close={close} />
+          </Suspense>
+        )}
         <nav>
           <Link
             href="/"
@@ -294,6 +318,40 @@ function Rail({
               <span className="rail-label">
                 {t("plugin.thinking-desk.name")}
               </span>
+            </Link>
+          )}
+          {role === "owner" &&
+            plugins.data?.plugins.some(
+              (plugin) =>
+                plugin.id === "decision-journal" &&
+                isBundledPlugin(plugin) &&
+                (plugin.state === undefined || plugin.state === "enabled"),
+            ) && (
+              <Link
+                href="/decisions"
+                onClick={close}
+                aria-current={
+                  location.startsWith("/decisions") ? "page" : undefined
+                }
+                aria-label={t("plugin.decision-journal.views.journal.title")}
+              >
+                <Icon name="cbox" />
+                <span className="rail-label">
+                  {t("plugin.decision-journal.views.journal.title")}
+                </span>
+              </Link>
+            )}
+          {collections && (
+            <Link
+              href="/collections"
+              aria-label={t("collections.title")}
+              aria-current={
+                location.startsWith("/collections") ? "page" : undefined
+              }
+              onClick={close}
+            >
+              <Icon name="archive" />
+              <span className="rail-label">{t("collections.title")}</span>
             </Link>
           )}
           {onLibraryStats && (
@@ -402,26 +460,6 @@ function Rail({
   );
 }
 /** What the keys below actually do; `?` and the palette open this list. */
-const shortcuts: () => [string[], string][] = () => [
-  [["n"], t("app.new_note")],
-  [[formatShortcut("mod+enter")], t("app.save_the_note")],
-  [[formatShortcut("mod+s")], t("app.save_while_editing")],
-  [[formatShortcut("mod+k"), "/"], t("app.search_and_commands")],
-  [["j", "k"], t("app.next_or_previous_note")],
-  [["↵", "o"], t("app.open_the_note")],
-  [["e"], t("app.edit_the_note")],
-  [["p"], t("app.pin_or_unpin")],
-  [["#"], t("app.add_a_label_opens_the_note_to_edit")],
-  [["y"], t("app.archive")],
-  [[formatShortcut("shift+y")], t("app.move_to_trash")],
-  [["Esc"], t("app.close_or_go_back_from_a_note")],
-  [["["], t("app.collapse_the_navigation")],
-  [["g a"], t("app.go_to_all_notes")],
-  [["g l"], t("app.go_to_the_labels")],
-  [["g t"], t("app.go_to_trash")],
-  [["g s"], t("app.go_to_settings")],
-  [["?"], t("app.show_these_keys")],
-];
 function decoded(path: string) {
   try {
     return decodeURIComponent(path);
@@ -573,6 +611,8 @@ export default function App() {
   }
   const {
     Palette,
+    KeyboardShortcuts,
+    AskPage,
     LibraryDialog,
     FirstRunGuide,
     AuthPage,
@@ -583,6 +623,8 @@ export default function App() {
     SharedNotesPage,
     StatusPage,
     ThinkingDeskPage,
+    CollectionsPage,
+    DecisionManager,
   } = pages;
   const workspaceRole = useWorkspaceRole();
   const plugins = useManifest(auth.status === "authenticated");
@@ -636,7 +678,7 @@ export default function App() {
     setLibraryTool(null);
     setGuideReplay(true);
   }
-  const [libraryTool, setLibraryTool] = useState<"ask" | "stats" | null>(null);
+  const [libraryTool, setLibraryTool] = useState<"stats" | null>(null);
   const [commandResult, setCommandResult] = useState<unknown>(null);
   const [commandOrigin, setCommandOrigin] = useState<CommandOrigin>();
   const [instant, setInstant] = useState(false);
@@ -645,19 +687,14 @@ export default function App() {
     [collapsed, setCollapsed] = useState(false),
     [railOpen, setRailOpen] = useState(false);
   const overlayTrigger = useRef<HTMLElement>(null);
-  const helpDialog = useRef<HTMLElement>(null);
   const activeLibraryTool =
-    (libraryTool === "ask" && canAsk) ||
-    (libraryTool === "stats" && canViewStats)
-      ? libraryTool
-      : null;
+    libraryTool === "stats" && canViewStats ? libraryTool : null;
   const modalOpen = palette || help || railOpen || !!activeLibraryTool;
-  useModalFocus(helpDialog, help, () => setHelp(false), overlayTrigger);
   /** A click names its button: WebKit doesn't focus a clicked button. */
   function rememberFocus(trigger = document.activeElement) {
     if (!modalOpen) overlayTrigger.current = trigger as HTMLElement;
   }
-  function openLibraryTool(tool: "ask" | "stats", trigger: HTMLElement) {
+  function openLibraryTool(tool: "stats", trigger: HTMLElement) {
     rememberFocus(trigger);
     setRailOpen(false);
     setLibraryTool(tool);
@@ -916,6 +953,7 @@ export default function App() {
     <div
       key={owner}
       data-home={location === "/"}
+      data-ask-page={location === "/ask"}
       data-artwork-surface={
         !location.startsWith("/n/") && !location.startsWith("/shared/n/")
       }
@@ -963,9 +1001,10 @@ export default function App() {
         {canAsk && location === "/" && (
           <button
             className="button"
+            data-ask-launcher
             aria-label={t("plugin.ask.name")}
             title={t("plugin.ask.name")}
-            onClick={(event) => openLibraryTool("ask", event.currentTarget)}
+            onClick={() => navigate("/ask")}
           >
             <Icon name="ask" />
           </button>
@@ -997,6 +1036,7 @@ export default function App() {
         className={
           "column" +
           (location.startsWith("/n/") ? " note-column" : "") +
+          (location === "/ask" ? " ask-column" : "") +
           (location.startsWith("/settings") ? " wide-column" : "")
         }
       >
@@ -1007,7 +1047,11 @@ export default function App() {
         )}
         {sync.offline && (
           <div className="banner" role="status">
-            {t("app.can_t_reach_the_server_what_you_type")}
+            {t(
+              location === "/ask"
+                ? "ask.offline"
+                : "app.can_t_reach_the_server_what_you_type",
+            )}
           </div>
         )}
         {meta.data?.unencrypted && <UnencryptedBand />}
@@ -1032,8 +1076,29 @@ export default function App() {
               <Route path="/shared">
                 <SharedNotesPage />
               </Route>
+              <Route path="/collections/:collection?">
+                {(params) =>
+                  plugins.isPending ? (
+                    <p role="status">{t("app.opening")}</p>
+                  ) : canUseLibraryTools &&
+                    plugins.data?.plugins.some(supportsCollections) ? (
+                    <CollectionsPage collection={params.collection} />
+                  ) : (
+                    <NotFound />
+                  )
+                }
+              </Route>
               <Route path="/thinking-desk/:desk?">
                 {(params) => <ThinkingDeskPage desk={params.desk} />}
+              </Route>
+              <Route path="/ask">
+                {plugins.isPending ? (
+                  <p role="status">{t("app.opening")}</p>
+                ) : canAsk ? (
+                  <AskPage />
+                ) : (
+                  <NotFound />
+                )}
               </Route>
               <Route path="/search">
                 <SearchPage />
@@ -1053,6 +1118,14 @@ export default function App() {
                     <NotFound />
                   );
                 }}
+              </Route>
+              <Route path="/decisions/:noteId?">
+                {({ noteId }) => (
+                  <DecisionManager key={noteId} noteId={noteId} />
+                )}
+              </Route>
+              <Route path="/v/decision-journal/journal">
+                <DecisionManager />
               </Route>
               <Route path="/v/:plugin/:view">
                 {(params) => (
@@ -1087,7 +1160,6 @@ export default function App() {
         <LoadBoundary location={location} onRetry={retryPages}>
           <Suspense fallback={null}>
             <LibraryDialog
-              tool={activeLibraryTool}
               owner={owner}
               onClose={() => setLibraryTool(null)}
               restoreFocus={overlayTrigger}
@@ -1116,52 +1188,12 @@ export default function App() {
         </LoadBoundary>
       )}{" "}
       {help && (
-        <div
-          className="overlay"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setHelp(false);
-          }}
-        >
-          <section
-            ref={helpDialog}
-            className="palette card"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("app.keyboard_shortcuts")}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                setHelp(false);
-              }
-            }}
-          >
-            <h2 className="page-title">
-              {t("app.a_few_keys_a_little_faster")}
-            </h2>
-            <dl className="keys">
-              {shortcuts().map(([keys, action]) => (
-                <div key={action}>
-                  <dt>
-                    {keys.map((key, index) => (
-                      <span key={key}>
-                        {index > 0 && t("format.or")}
-                        <kbd>{key}</kbd>
-                      </span>
-                    ))}
-                  </dt>
-                  <dd>{action}</dd>
-                </div>
-              ))}
-            </dl>
-            <button
-              className="button primary"
-              autoFocus
-              onClick={() => setHelp(false)}
-            >
-              {t("app.close")}
-            </button>
-          </section>
-        </div>
+        <Suspense fallback={null}>
+          <KeyboardShortcuts
+            onClose={() => setHelp(false)}
+            returnFocus={overlayTrigger}
+          />
+        </Suspense>
       )}
     </div>
   );

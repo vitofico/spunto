@@ -49,4 +49,11 @@
     <string name="core_ask_continue">Continua la conversazione</string>
     <string name="core_ask_latest_reply">Vedi ultima risposta</string>
     <string name="core_ask_message_notes">Messaggio per le tue note</string>
+    <string name="core_ask_only_notes">Solo dalle note</string>
+    <string name="core_ask_discussion_intro">Fai una domanda sulle tue note o ragiona insieme su un’idea.</string>
+    <string name="core_ask_collection_intro">Discuti questa raccolta a partire dalle note di origine disponibili.</string>
+    <string name="core_ask_collection_unavailable">Per discutere questa raccolta serve una versione più recente del plugin.</string>
+    <string name="core_ask_message_characters">%1$d / 2000 caratteri</string>
+    <string name="core_ask_collection_changed">La raccolta è cambiata. Inizia una nuova conversazione.</string>
+    <string name="core_ask_temporary_title">Conversazione temporanea</string>
 </resources>

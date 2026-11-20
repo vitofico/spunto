@@ -20,11 +20,13 @@ export default function PluginRailViews({ close }: { close?: () => void }) {
       }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ["settings"] }),
   });
-  const views = activePlugins(manifest.data?.plugins).flatMap((p) =>
-    (p.contributes?.views ?? [])
-      .slice(0, 1)
-      .map((v) => ({ ...v, plugin: p.id, key: `${p.id}/${v.id}` })),
-  );
+  const views = activePlugins(manifest.data?.plugins)
+    .filter((plugin) => plugin.id !== "decision-journal")
+    .flatMap((p) =>
+      (p.contributes?.views ?? [])
+        .slice(0, 1)
+        .map((v) => ({ ...v, plugin: p.id, key: `${p.id}/${v.id}` })),
+    );
   const review = activePlugins(manifest.data?.plugins).some((plugin) =>
     ["duplicates", "label-gardener"].includes(plugin.id),
   );

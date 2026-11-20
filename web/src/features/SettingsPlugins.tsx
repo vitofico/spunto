@@ -1,3 +1,4 @@
+import { supportsCollections } from "./collectionsAccess";
 import CommandResult from "./CommandResult";
 import { isBundledPlugin, localizeCatalog } from "../lib/localizePlugins";
 import { getLanguage, t, useLanguage } from "../lib/i18n";
@@ -243,6 +244,8 @@ function pluginNeedsReview(plugin: Plugin) {
   );
 }
 function pluginLocations(plugin: Plugin) {
+  if (supportsCollections(plugin))
+    return [{ title: plugin.name, href: "/collections" }];
   if (isBundledPlugin(plugin)) {
     if (plugin.id === "thinking-desk")
       return [{ title: plugin.name, href: "/thinking-desk" }];
@@ -868,6 +871,7 @@ export function PluginPage({ id }: { id: string }) {
       : undefined;
   const locations = plugin ? pluginLocations(plugin) : [];
   const canRun =
+    (!plugin || !supportsCollections(plugin)) &&
     !(bundled && ["thinking-desk", "ask", "library-stats"].includes(id)) &&
     plugin?.contributes?.commands?.some((command) =>
       (command.where ?? command.surfaces ?? []).includes("palette"),

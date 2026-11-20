@@ -13,7 +13,14 @@ from spunto.host import ContextError, Ctx, Plugin
 from spunto.host.language import language, tr, use_language
 
 plugin = Plugin("decision-journal")
-LIMITS = {"title": 80, "decision": 500, "alternatives": 500, "rationale": 700, "expected": 500}
+LIMITS = {
+    "title": 80,
+    "decision": 500,
+    "alternatives": 500,
+    "rationale": 700,
+    "expected": 500,
+    "questions": 500,
+}
 STATUSES = ("open", "reviewed", "closed")
 REVIEW_FIELDS = ("request_id", "base_version", "outcome", "reflection", "status", "review_on")
 DECISION_UNAVAILABLE = "This decision is unavailable. Its original creation will not be repeated."
@@ -203,6 +210,59 @@ def recording_fingerprint(original, due):
     return hashlib.sha256(json.dumps([intent, due], sort_keys=True).encode()).hexdigest()
 
 
+def parse_evidence(evidence):
+    if evidence is None:
+        return {}
+    if not isinstance(evidence, dict) or not 1 <= len(evidence) <= 7:
+        raise ValueError("Invalid decision evidence.")
+    for key, proof in evidence.items():
+        identifier(key)
+        if (
+            not isinstance(proof, dict)
+            or set(proof) != {"version", "fingerprint"}
+            or type(proof["version"]) is not int
+            or proof["version"] < 1
+            or not isinstance(proof["fingerprint"], str)
+            or not re.fullmatch(r"[a-f0-9]{64}", proof["fingerprint"])
+        ):
+            raise ValueError("Invalid decision evidence.")
+    return evidence
+
+
+async def verify_evidence(ctx, evidence):
+    for key, proof in evidence.items():
+        note = await ctx.notes.evidence(key)
+        if (
+            note is None
+            or note["private"]
+            or note["machine"]
+            or note["archived"]
+            or note["version"] != proof["version"]
+            or note["evidence_fingerprint"] != proof["fingerprint"]
+        ):
+            raise Problem(
+                409,
+                "decision_conflict",
+                tr("Decision evidence changed. Draft again or continue manually."),
+            )
+
+
+def evidence_links(evidence):
+    return (
+        f"\n\n## {tr('Supporting sources')}\n"
+        + "\n".join(f"- [{tr('Source note')}](/n/{key})" for key in evidence)
+        if evidence
+        else ""
+    )
+
+
+def evidence_guards(evidence, versions=None):
+    return (
+        {**{key: proof["version"] for key, proof in evidence.items()}, **(versions or {})} or None,
+        {key: proof["fingerprint"] for key, proof in evidence.items()} or None,
+    )
+
+
 def original_body(original, due, *, untitled=False):
     decision = original["decision"]
     choice_is_title = (
@@ -221,8 +281,9 @@ def original_body(original, due, *, untitled=False):
                 ("alternatives", "Alternatives"),
                 ("rationale", "Rationale"),
                 ("expected", "Expected outcome"),
+                ("questions", "Open questions"),
             )
-            if original[key]
+            if original.get(key)
         )
         + (tr("Initial review date: {date}.", date=display_date(due)) + "\n\n" if due else "")
         + (
@@ -230,7 +291,7 @@ def original_body(original, due, *, untitled=False):
             if original.get("source_id")
             else ""
         )
-    ).rstrip()
+    ).rstrip() + evidence_links(original.get("evidence"))
     if len(body) > 4000:
         raise ValueError("Decision exceeds the display budget.")
     return body
@@ -244,6 +305,8 @@ async def record(
     alternatives=None,
     rationale=None,
     expected=None,
+    questions=None,
+    evidence=None,
     review_on="",
     private=False,
     note_id=None,
@@ -256,7 +319,16 @@ async def record(
     if (
         all(
             value is None
-            for value in (title, decision, alternatives, rationale, expected, request_id)
+            for value in (
+                title,
+                decision,
+                alternatives,
+                rationale,
+                expected,
+                questions,
+                evidence,
+                request_id,
+            )
         )
         and review_on == ""
         and private is False
@@ -268,6 +340,7 @@ async def record(
             "alternatives": field(tr("Alternatives considered"), LIMITS["alternatives"]),
             "rationale": field(tr("Why this choice?"), LIMITS["rationale"]),
             "expected": field(tr("Expected outcome"), LIMITS["expected"]),
+            "questions": field(tr("Open questions"), LIMITS["questions"]),
             "review_on": field(tr("Review date (YYYY-MM-DD, optional)"), 10, ""),
             "private": {
                 "type": "boolean",
@@ -284,11 +357,14 @@ async def record(
         alternatives=alternatives,
         rationale=rationale,
         expected=expected,
+        questions=questions,
     )
     values = {
         key: clean("" if value is None else value, LIMITS[key], optional=key != "decision")
         for key, value in values.items()
     }
+    if not values["questions"]:
+        values.pop("questions")  # Keep creation retries for pre-assist forms compatible.
     untitled = False
     if not values["title"]:
         derived = title_of(values["decision"], LIMITS["title"])
@@ -301,12 +377,17 @@ async def record(
     due = review_date(review_on)
     request_id = identifier(str(uuid.uuid7()) if request_id is None else request_id)
     creation_id = "decision:" + request_id
-    source_versions = {source["id"]: source["version"]} if source else None
+    evidence = parse_evidence(evidence)
+    source_versions, source_fingerprints = evidence_guards(
+        evidence,
+        {source["id"]: source["version"]} if source else None,
+    )
     original = {
         **values,
         "source_id": source["id"] if source else None,
         "requested_private": requested_private,
         "private": private,
+        **({"evidence": evidence} if evidence else {}),
     }
     fingerprint = recording_fingerprint(original, due)
     records = ctx.storage.records
@@ -318,6 +399,7 @@ async def record(
             if state is None:
                 return text(tr(DECISION_UNAVAILABLE))
     if state is None:
+        await verify_evidence(ctx, evidence)
         state = {
             "id": request_id,
             # An interrupted reservation can outlive a purged note. Keep no prose here.
@@ -357,6 +439,8 @@ async def record(
             raise conflict()
         state = classified
     if state["note_id"] is None:
+        if not await ctx.notes.creation_acknowledged(creation_id):
+            await verify_evidence(ctx, evidence)
         original.update(
             created_ms=state["original"]["created_ms"],
             private=state["original"]["private"],
@@ -367,6 +451,7 @@ async def record(
             body,
             private=original["private"],
             source_versions=source_versions,
+            source_fingerprints=source_fingerprints,
             request_id=creation_id,
         )
         completed = {**state, "note_id": created["id"], "original": original}
@@ -398,6 +483,7 @@ async def review(
     review_on="",
     base_version=None,
     request_id=None,
+    evidence=None,
 ):
     owner(ctx)
     entry = await entry_for_note(ctx, note_id)
@@ -421,6 +507,7 @@ async def review(
                         tr("Resume review"),
                         note_id=root["id"],
                         **{key: pending[key] for key in REVIEW_FIELDS},
+                        **({"evidence": pending["evidence"]} if pending.get("evidence") else {}),
                     ),
                 ],
             }
@@ -453,9 +540,11 @@ async def review(
     request_id = identifier(str(uuid.uuid7()) if request_id is None else request_id)
     event_id = state["id"] + ":" + request_id
     creation_id = "outcome:" + event_id
+    evidence = parse_evidence(evidence)
     intent = {
         "request_id": request_id,
         "base_version": base_version,
+        **({"evidence": evidence} if evidence else {}),
         "outcome": outcome,
         "reflection": reflection,
         "status": status,
@@ -470,11 +559,24 @@ async def review(
             return await review_result(ctx, root, prior["note_id"])
 
     pending = state["pending"]
+    if prior is None and not await ctx.notes.creation_acknowledged(creation_id):
+        try:
+            await verify_evidence(ctx, evidence)
+        except Problem:
+            if pending and all(pending.get(key) == value for key, value in intent.items()):
+                await records.compare_and_set(
+                    "decisions", state["id"], state, {**state, "pending": None}, note_id=root["id"]
+                )
+            raise
     source_versions = {root["id"]: root["version"]}
     if source:
         source_versions[source["id"]] = source["version"]
+    source_versions, source_fingerprints = evidence_guards(evidence, source_versions)
     private = root["private"] or bool(source and source["private"])
-    if pending is None or {key: pending[key] for key in REVIEW_FIELDS} != intent:
+    if pending is None or (
+        {key: pending[key] for key in REVIEW_FIELDS} != {key: intent[key] for key in REVIEW_FIELDS}
+        or pending.get("evidence", {}) != evidence
+    ):
         if prior is None and await ctx.notes.creation_acknowledged(creation_id):
             return text(tr(OUTCOME_UNAVAILABLE))
         if pending is not None or state["version"] != base_version:
@@ -518,13 +620,27 @@ async def review(
                 f"## {section}\n{outcome}\n\n"
                 + (f"## {tr('Reflection')}\n{reflection}\n\n" if reflection else "")
                 + (tr("Next review date: {date}.", date=display_date(followup)) if followup else "")
-            ).rstrip()
-        created = await ctx.notes.create(
-            body,
-            private=pending["private"],
-            source_versions=source_versions,
-            request_id=creation_id,
-        )
+            ).rstrip() + evidence_links(
+                {key: proof for key, proof in evidence.items() if key != root["id"]}
+            )
+        try:
+            created = await ctx.notes.create(
+                body,
+                private=pending["private"],
+                source_versions=source_versions,
+                source_fingerprints=source_fingerprints,
+                request_id=creation_id,
+            )
+        except Problem as exc:
+            if (
+                evidence
+                and exc.status in {404, 409}
+                and not await ctx.notes.creation_acknowledged(creation_id)
+            ):
+                await records.compare_and_set(
+                    "decisions", state["id"], state, {**state, "pending": None}, note_id=root["id"]
+                )
+            raise
         outcome_id = created["id"]
     event = {
         "decision_id": state["id"],
@@ -571,16 +687,90 @@ async def review_result(ctx, root, outcome_id):
 
 
 @plugin.command("journal")
-async def journal(ctx: Ctx, note_id=None, cursor=None, outcome_cursor=None):
+async def journal(
+    ctx: Ctx,
+    note_id=None,
+    cursor=None,
+    outcome_cursor=None,
+    query="",
+    status=None,
+    due=False,
+    manager=False,
+    operation=None,
+    base_version=None,
+    review_on="",
+):
     owner(ctx)
     if note_id is not None:
         entry = await entry_for_note(ctx, note_id)
         if entry is None:
             return text(tr("This decision is unavailable."))
         state, root, _ = entry
+        if manager and root["id"] != note_id:
+            return text(tr("This decision is unavailable."))
+        if operation == "schedule":
+            if base_version is None:
+                return form(
+                    {
+                        "base_version": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": state["version"],
+                        },
+                        "status": {
+                            "type": "string",
+                            "title": tr("After this review"),
+                            "enum": list(STATUSES),
+                            "default": state["status"],
+                        },
+                        "review_on": field(
+                            tr("Review date (YYYY-MM-DD, optional)"), 10, state["review_date"]
+                        ),
+                    },
+                    ["base_version", "status"],
+                )
+            review_on = review_date(review_on)
+            if (
+                type(base_version) is not int
+                or state["version"] != base_version
+                or state["pending"]
+            ):
+                raise conflict()
+            if status not in STATUSES:
+                raise ValueError("Choose a decision status.")
+            updated = {
+                **state,
+                "version": base_version + 1,
+                "status": status,
+                "review_date": "" if status == "closed" else review_on,
+            }
+            if not await ctx.storage.records.compare_and_set(
+                "decisions",
+                state["id"],
+                state,
+                updated,
+                note_id=root["id"],
+                source_versions={root["id"]: root["version"]},
+            ):
+                raise conflict()
+            state = updated
+        elif operation is not None:
+            raise ValueError("Unknown journal action.")
         items = [text(summary(state, ctx.clock())), {"type": "notes", "ids": [state["note_id"]]}]
+        if outcome_cursor is not None and not isinstance(outcome_cursor, str):
+            raise ValueError("Invalid outcome cursor.")
+        recent = manager and (outcome_cursor is None or outcome_cursor.startswith("r:"))
+        before = None
+        if recent and outcome_cursor:
+            _, timestamp, event_id = outcome_cursor.split(":", 2)
+            before = (int(timestamp), event_id)
         events = await ctx.storage.records.list(
-            "outcomes", key=state["id"], after=outcome_cursor, limit=9
+            "outcomes",
+            key=state["id"],
+            recent=recent,
+            before=before,
+            after=outcome_cursor if not recent else None,
+            limit=9,
         )
         refs = []
         for event in events[:8]:
@@ -614,30 +804,73 @@ async def journal(ctx: Ctx, note_id=None, cursor=None, outcome_cursor=None):
                     "journal",
                     tr("More outcomes"),
                     note_id=root["id"],
-                    outcome_cursor=events[7]["id"],
+                    outcome_cursor=(
+                        f"r:{events[7]['updated_at']}:{events[7]['id']}"
+                        if recent
+                        else events[7]["id"]
+                    ),
+                    **({"manager": True} if manager else {}),
+                )
+            )
+        if manager:
+            items.append(
+                action(
+                    "journal",
+                    tr("Review settings"),
+                    note_id=root["id"],
+                    manager=True,
+                    operation="schedule",
                 )
             )
         return {"ui": 1, "items": items}
-    page = await ctx.notes.query(
-        view="journal", source="plugin:decision-journal", limit=10, cursor=cursor
-    )
-    refs = []
-    for note in page["notes"]:
-        entry = await entry_for_note(ctx, note["id"], note)
-        if entry:
-            refs.append({"id": note["id"], "reason": summary(entry[0], ctx.clock())})
+    if operation is not None or type(due) is not bool or type(manager) is not bool:
+        raise ValueError("Unknown journal action.")
+    query = clean(query, 200, optional=True).casefold()
+    if status is not None and status not in STATUSES:
+        raise ValueError("Choose a decision status.")
+    if manager:
+        page = await ctx.notes.decision_page(
+            query=query,
+            status=status,
+            due=due,
+            today=datetime.fromtimestamp(ctx.clock() / 1000, UTC).date().isoformat(),
+            cursor=cursor,
+        )
+        refs = [{"id": row["id"], "reason": summary(row, ctx.clock())} for row in page["decisions"]]
+        no_matches = bool(query or status or due)
+    else:
+        page = await ctx.notes.query(
+            view="journal", source="plugin:decision-journal", limit=10, cursor=cursor
+        )
+        refs = []
+        for note in page["notes"]:
+            entry = await entry_for_note(ctx, note["id"], note)
+            if entry:
+                refs.append({"id": note["id"], "reason": summary(entry[0], ctx.clock())})
+        no_matches = bool(page["notes"])
     items = (
         [{"type": "notes", "items": refs}]
         if refs
         else [
             text(
                 tr("No decisions on this page.")
-                if cursor or page["notes"]
+                if cursor or no_matches
                 else tr("No decisions yet.")
             )
         ]
     )
     if page["next_cursor"]:
-        items.append(action("journal", tr("More decisions"), cursor=page["next_cursor"]))
+        items.append(
+            action(
+                "journal",
+                tr("More decisions"),
+                cursor=page["next_cursor"],
+                **(
+                    {"manager": True, "query": query, "status": status, "due": due}
+                    if manager
+                    else {}
+                ),
+            )
+        )
     items.append(action("record-decision", tr("Record decision")))
     return {"ui": 1, "items": items}

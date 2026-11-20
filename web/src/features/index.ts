@@ -1,9 +1,9 @@
 export { SettingsPage, StatusPage } from "./Settings";
+export { default as SuggestionLine } from "./SuggestionLine";
 export { ReviewPage } from "./Review";
 export {
   ReviewLine,
   DailySlip,
-  SuggestionLine,
   EntryMeta,
   SlashCommands,
   PaletteCommands,

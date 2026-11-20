@@ -161,6 +161,11 @@
           "title": "Expected outcome",
           "maxLength": 500
         },
+        "questions": {
+          "type": "string",
+          "title": "Open questions",
+          "maxLength": 500
+        },
         "review_on": {
           "type": "string",
           "title": "Review date (YYYY-MM-DD, optional)",

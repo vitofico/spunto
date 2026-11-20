@@ -59,7 +59,6 @@ it("loads library stats only on request and renders them through the existing re
   render(
     <QueryClientProvider client={client}>
       <LibraryDialog
-        tool="stats"
         owner="test-owner"
         onClose={() => {}}
         restoreFocus={{ current: null }}

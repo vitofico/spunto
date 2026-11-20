@@ -1,4 +1,11 @@
 {
+  "A source changed while drafting. Try again or continue manually.": "Eine Quelle hat sich beim Entwerfen geändert. Versuche es erneut oder fahre manuell fort.",
+  "Decision evidence changed. Draft again or continue manually.": "Entscheidungsbelege haben sich geändert. Erstelle einen neuen Entwurf oder fahre manuell fort.",
+  "No eligible note evidence was found. You can continue manually.": "Keine passenden Belegnotizen gefunden. Du kannst manuell fortfahren.",
+  "Note assist is unavailable. You can continue manually.": "Die Notizassistenz ist nicht verfügbar. Du kannst manuell fortfahren.",
+  "Review settings": "Prüfungseinstellungen",
+  "Supporting sources": "Belegquellen",
+  "The collection changed. Start a new conversation.": "Die Sammlung wurde geändert. Beginne eine neue Unterhaltung.",
   "(empty text)": "(leerer Text)",
   "A Tidy proposal was already offered for this version.": "Für diese Version gibt es bereits einen Aufräumvorschlag.",
   "A name for this desk": "Name der Ideenwerkstatt",
@@ -288,6 +295,7 @@
   "The transcripts are too long to append; recordings are kept.": "Die Transkripte sind zu lang zum Anhängen. Die Aufnahmen bleiben erhalten.",
   "The weekly limit of three label proposals is reached.": "Das Wochenlimit von drei Schlagwortvorschlägen ist erreicht.",
   "This decision changed. Reopen it before reviewing.": "Diese Entscheidung wurde geändert. Öffne sie vor der Überprüfung erneut.",
+  "This decision is unavailable to Note assist. Record the outcome manually.": "Die Notizassistenz kann diese Entscheidung nicht lesen. Erfasse das Ergebnis manuell.",
   "This decision is unavailable.": "Diese Entscheidung ist nicht verfügbar.",
   "This decision is unavailable. Its original creation will not be repeated.": "Die Entscheidung ist nicht verfügbar und wird nicht erneut erstellt.",
   "This desk or source changed. Reopen the desk, review sources, and retry; your original notes remain intact.": "Der Denkraum oder eine Quelle wurde geändert. Öffne den Denkraum erneut, prüfe die Quellen und versuche es noch einmal. Die ursprünglichen Notizen bleiben erhalten.",
@@ -400,5 +408,10 @@
   "Link the notes that explain the work. You can add up to ten, or continue without sources.": "Verknüpfe Notizen, die das Vorhaben erklären. Du kannst bis zu zehn hinzufügen oder ohne Quellen fortfahren.",
   "Open changed notes to check what is different. Acknowledge their revisions after updating the brief as needed.": "Öffne geänderte Notizen, um die Unterschiede zu prüfen. Aktualisiere bei Bedarf das Briefing und bestätige dann die Revisionen.",
   "Review changed sources and remove unavailable sources before saving this draft.": "Prüfe geänderte Quellen und entferne nicht verfügbare Quellen, bevor du den Entwurf speicherst.",
-  "Open pack": "Paket öffnen"
+  "Open pack": "Paket öffnen",
+  "Choose up to ten different source notes.": "Wähle bis zu zehn verschiedene Quellnotizen.",
+  "A source changed. Review it again.": "Eine Quelle hat sich geändert. Prüfe sie erneut.",
+  "Save the collection before using Ask.": "Speichere die Sammlung, bevor du Fragen stellst.",
+  "Add a source eligible for AI before using Ask.": "Füge vor dem Fragen eine für KI geeignete Quelle hinzu.",
+  "Clear the sourced introduction before removing one of its sources.": "Leere die Einführung, bevor du eine ihrer Quellnotizen entfernst."
 }

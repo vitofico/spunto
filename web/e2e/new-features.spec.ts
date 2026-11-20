@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { signInOwner } from "./owner-session";
 
@@ -24,6 +25,7 @@ type Note = {
   body: string;
   version: number;
   private: boolean;
+  trashed: boolean;
   machine: boolean;
   origin: string;
 };
@@ -262,9 +264,13 @@ test("decision journal creates, reviews and reopens through the browser", async 
   await expect(
     page.getByRole("heading", { name: "Decisions", exact: true }),
   ).toBeVisible();
+  await page
+    .getByLabel("What did you decide?", { exact: true })
+    .fill("Use a single SQLite file.");
   await uiCommand(page, "decision-journal", "record-decision", () =>
-    capture.click(),
+    page.getByRole("button", { name: "Continue", exact: true }).click(),
   );
+  dialog = page.getByRole("region", { name: "Decision draft" });
   await dialog.locator("summary").filter({ hasText: "Add details" }).click();
   await dialog
     .getByLabel("Title (optional)", { exact: true })
@@ -290,7 +296,9 @@ test("decision journal creates, reviews and reopens through the browser", async 
     "decision-journal",
     "record-decision",
   );
-  await expect(dialog.getByRole("status")).toHaveText("Decision saved");
+  await expect(
+    dialog.getByRole("status").filter({ hasText: /^Decision saved$/ }),
+  ).toHaveCount(1);
   const rootId = noteIds(created)[0];
   expect(rootId).toBeTruthy();
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
@@ -322,7 +330,9 @@ test("decision journal creates, reviews and reopens through the browser", async 
     "decision-journal",
     "review-decision",
   );
-  await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
+  await expect(
+    dialog.getByRole("status").filter({ hasText: /^Outcome saved$/ }),
+  ).toHaveCount(1);
   const outcomeId = noteIds(reviewed)[0];
   await dialog.locator(`a[href="/n/${outcomeId}"]`).click();
   await expect(
@@ -339,7 +349,9 @@ test("decision journal creates, reviews and reopens through the browser", async 
     .fill("2030-03-01");
   await selectStatus(dialog, "Open for follow-up");
   await run(page, dialog, "decision-journal", "review-decision");
-  await expect(dialog.getByRole("status")).toHaveText("Outcome saved");
+  await expect(
+    dialog.getByRole("status").filter({ hasText: /^Outcome saved$/ }),
+  ).toHaveCount(1);
   await dialog.locator(`a[href="/n/${rootId}"]`).click();
   const open = decision.getByRole("button", {
     name: "Review history",
@@ -360,6 +372,33 @@ test("decision journal creates, reviews and reopens through the browser", async 
   await expect(dialog).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`/n/${rootId}$`));
   await expect(open).toBeFocused();
+  await page.goto("/decisions");
+  await page.getByLabel("Search decisions").fill(`Decision ${suffix}`);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.locator(`a[href="/decisions/${rootId}"]`).click();
+  await expect(
+    page.getByRole("heading", { name: `Decision ${suffix}`, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Use a single SQLite file.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(`a[href="/n/${outcomeId}"]`)).toBeVisible();
+  const trashTitle = "Move decision to trash";
+  await page.getByRole("button", { name: trashTitle, exact: true }).click();
+  await page
+    .getByRole("dialog", { name: trashTitle, exact: true })
+    .getByRole("button", { name: trashTitle, exact: true })
+    .click();
+  await expect(page.locator(`a[href="/decisions/${rootId}"]`)).toHaveCount(0);
+  expect((await note(page, outcomeId)).trashed).toBe(false);
+  await page.goto(`/n/${rootId}`);
+  await page.getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Restore", exact: true }),
+  ).toHaveCount(0);
+  await page.goto(`/decisions/${rootId}`);
+  await expect(page.locator(`a[href="/n/${outcomeId}"]`)).toBeVisible();
+  await page.goto(`/n/${rootId}`);
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .getByRole("button", { name: "Open navigation", exact: true })
@@ -375,12 +414,19 @@ test("decision journal creates, reviews and reopens through the browser", async 
   await expect(
     page.getByRole("heading", { name: "Decisions", exact: true }),
   ).toBeVisible();
-  await capture.focus();
-  await page.keyboard.press("Enter");
-  dialog = page.getByRole("dialog", { name: "Record decision", exact: true });
-  await dialog
+  await page
     .getByLabel("What did you decide?", { exact: true })
     .fill("Keep the weekly planning slot.");
+  const continueDecision = page.getByRole("button", {
+    name: "Continue",
+    exact: true,
+  });
+  await continueDecision.focus();
+  await page.keyboard.press("Enter");
+  dialog = page.getByRole("region", { name: "Decision draft" });
+  await expect(
+    dialog.getByLabel("What did you decide?", { exact: true }),
+  ).toHaveValue("Keep the weekly planning slot.");
   await expect(
     dialog.getByLabel("Title (optional)", { exact: true }),
   ).not.toBeVisible();
@@ -423,17 +469,14 @@ test("journal capture stays available outside contextual note tools", async ({
   ).toHaveCount(0);
   await tools.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("link", { name: "Decisions", exact: true }).click();
-  await uiCommand(page, "decision-journal", "record-decision", () =>
-    page.getByRole("button", { name: "Record decision", exact: true }).click(),
-  );
-  const capture = page.getByRole("dialog", {
-    name: "Record decision",
-    exact: true,
-  });
-  await capture.getByRole("switch", { name: "Private", exact: true }).check();
-  await capture
+  await page
     .getByLabel("What did you decide?", { exact: true })
     .fill("Store the backup in a separate directory.");
+  await uiCommand(page, "decision-journal", "record-decision", () =>
+    page.getByRole("button", { name: "Continue", exact: true }).click(),
+  );
+  const capture = page.getByRole("region", { name: "Decision draft" });
+  await capture.getByRole("switch", { name: "Private", exact: true }).check();
   await page.context().setOffline(true);
   await expect(
     capture.getByLabel("What did you decide?", { exact: true }),
@@ -559,19 +602,58 @@ test("bundled plugin settings and decision outcomes follow Italian with an Engli
     commandHeaders.push(request.headers()["accept-language"]);
     if (request.postDataJSON()?.request_id) mutations.push(request.url());
   });
-  const captureTitle = name(
-    "plugin.decision-journal.commands.record-decision.title",
-  );
-  await page.getByRole("button", { name: captureTitle, exact: true }).click();
-  let dialog = page.getByRole("dialog", { name: captureTitle, exact: true });
-  const decision = `Keep Tuesday’s draft as written ${info.project.name}`;
-  await dialog
-    .getByLabel(name("decisions.form.decision"), { exact: true })
+  const decision = "Conservare una copia separata del diario ogni martedì.";
+  const title = `Piano di ripristino · ${info.project.name}`;
+  await page
+    .getByLabel(name("decisions.phrase"), { exact: true })
     .fill(decision);
-  await dialog
-    .getByRole("button", { name: name("decisions.save_decision"), exact: true })
+  await page
+    .getByRole("button", { name: name("decisions.continue"), exact: true })
     .click();
-  await dialog.getByRole("link", { name: decision, exact: true }).click();
+  await expect(
+    page.getByLabel(name("decisions.form.decision"), { exact: true }),
+  ).toHaveValue(decision);
+  const draft = page.getByRole("region", {
+    name: name("decisions.assisted_draft"),
+  });
+  await draft
+    .locator("summary")
+    .filter({ hasText: name("decisions.add_details") })
+    .click();
+  await draft
+    .getByLabel(name("decisions.form.title"), { exact: true })
+    .fill(title);
+  await draft
+    .getByLabel(name("decisions.form.rationale"), { exact: true })
+    .fill("Una copia indipendente riduce il rischio di perdere la cronologia.");
+  await draft
+    .getByLabel(name("decisions.form.expected"), { exact: true })
+    .fill("Ripristino in meno di cinque minuti.");
+  expect(mutations).toHaveLength(0);
+  const saved = await uiCommand(
+    page,
+    "decision-journal",
+    "record-decision",
+    () =>
+      page
+        .getByRole("button", {
+          name: name("decisions.save_decision"),
+          exact: true,
+        })
+        .click(),
+  );
+  const original = noteIds(saved)[0];
+  await page.goto(`/decisions/${original}`);
+  await expect(
+    page.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(name("decisions.review_settings"), { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: name("decisions.open_original"), exact: true })
+    .click();
+  let dialog: Locator;
   const reviewTitle = name(
     "plugin.decision-journal.commands.review-decision.title",
   );
@@ -621,7 +703,7 @@ test("bundled plugin settings and decision outcomes follow Italian with an Engli
       exact: true,
     })
     .click();
-  await dialog.getByRole("link", { name: decision, exact: true }).click();
+  await dialog.getByRole("link", { name: title, exact: true }).click();
   const history = name("decisions.review_history");
   await journal.getByRole("button", { name: history, exact: true }).click();
   dialog = page.getByRole("dialog", { name: history, exact: true });
@@ -632,6 +714,14 @@ test("bundled plugin settings and decision outcomes follow Italian with an Engli
   await dialog
     .getByRole("button", { name: name("app.close"), exact: true })
     .click();
+  await page.goto(`/decisions/${original}`);
+  await expect(
+    page.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(decision, { exact: true })).toBeVisible();
+  await expect(page.locator(`a[href="/n/${outcome}"]`)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("decisions-manager-it.png") });
+  await page.goto(`/n/${original}`);
   expect(commandHeaders.length).toBeGreaterThan(3);
   expect(new Set(commandHeaders)).toEqual(new Set(["it"]));
   const mutationCount = mutations.length;
@@ -651,163 +741,225 @@ test("bundled plugin settings and decision outcomes follow Italian with an Engli
   expect(mutations).toHaveLength(mutationCount);
 });
 
-test("context packs curate sources, expose staleness and keep a private note copy", async ({
+test("Collections link existing notes, save an introduction and export a private copy", async ({
   page,
 }, info) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
   await login(page, "context-packs");
   const suffix = `${Date.now().toString(36)}-${info.project.name}`;
-  const sourceBody = `SOURCE-ONLY ${suffix}\nA synthetic implementation constraint.`;
-  const seeded = await page.request.post("/api/v1/notes", {
+  const collection = `Exhibition plan ${suffix}`;
+  const initial = await page.request.post("/api/v1/notes", {
     headers: { Origin: origin(), "Idempotency-Key": crypto.randomUUID() },
-    data: { body: sourceBody, private: true, source: { kind: "web" } },
+    data: {
+      body: `Gallery floor ${suffix}\nThe first room has prints.`,
+      source: { kind: "web" },
+    },
   });
-  expect(seeded.status(), await seeded.text()).toBe(201);
-  const source: Note = await seeded.json();
-  let dialog = await palette(page, "Context packs");
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("option", { name: /^Context packs/ }).click(),
-  );
-  await uiCommand(page, "context-packs", "edit", () =>
-    dialog
-      .getByRole("button", { name: "New context pack", exact: true })
-      .click(),
-  );
-  await dialog
-    .getByLabel("Brief title", { exact: true })
-    .fill(`Pack ${suffix}`);
-  await dialog
-    .getByLabel("Goals", { exact: true })
-    .fill("Make one useful brief.\nKeep it manually curated.");
-  await uiCommand(page, "context-packs", "edit", () =>
-    dialog.getByRole("button", { name: "Create draft", exact: true }).click(),
-  );
-  await expect(dialog.getByText(/Draft · Finish your brief/)).toBeVisible();
-
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog
-      .getByRole("button", { name: "All context packs", exact: true })
-      .click(),
-  );
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog
-      .getByRole("button", { name: `Draft · Pack ${suffix}`, exact: true })
-      .click(),
-  );
-  await uiCommand(page, "context-packs", "sources", () =>
-    dialog.getByRole("button", { name: "Choose sources", exact: true }).click(),
-  );
-  await pickSource(page, dialog, "context-packs", suffix);
-  await uiCommand(page, "context-packs", "edit", () =>
-    dialog.getByRole("button", { name: "Write brief", exact: true }).click(),
-  );
-  await expect(dialog.getByLabel("Goals", { exact: true })).toHaveValue(
-    "Make one useful brief.\nKeep it manually curated.",
-  );
-  await dialog
-    .getByLabel("Project", { exact: true })
-    .fill(`Synthetic ${suffix}`);
-  await dialog
-    .getByLabel("Constraints", { exact: true })
-    .fill("Keep all work local.");
-  await dialog
-    .getByLabel("Decisions", { exact: true })
-    .fill("Use explicit source revisions.");
-  await dialog
-    .getByLabel("Open questions", { exact: true })
-    .fill("Which constraint changes next?");
+  expect(initial.status()).toBe(201);
+  const note = await initial.json();
+  await page.goto(`/n/${note.id}`);
+  await page
+    .getByRole("link", { name: "Add to collection", exact: true })
+    .click();
+  await page.getByRole("link", { name: "New collection", exact: true }).click();
+  await page
+    .getByLabel("What are you working on?")
+    .fill("Prepare an exhibition with the curator.");
+  await page.getByLabel("Collection name").fill(collection);
+  await page
+    .getByLabel("Introduction (optional)")
+    .fill("Use the first room as the entrance.");
   await expect(
-    dialog.getByLabel("Private pack (only private-enabled agents can read)", {
-      exact: true,
-    }),
-  ).toBeChecked();
-  await uiCommand(page, "context-packs", "edit", () =>
-    dialog.getByRole("button", { name: "Save brief", exact: true }).click(),
-  );
-  await expect(
-    dialog.getByRole("heading", { name: `Pack ${suffix}`, exact: true }),
+    page.getByText(`Gallery floor ${suffix}`, { exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Pin source", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Save collection", exact: true })
+    .click();
   await expect(
-    dialog.getByText(/baseline 1 · current 1 · current/),
+    page.getByRole("heading", { name: collection, exact: true }),
   ).toBeVisible();
-
-  await uiCommand(page, "context-packs", "edit", () =>
-    dialog.getByRole("button", { name: "Edit brief", exact: true }).click(),
+  await page.getByRole("button", { name: "Use brief", exact: true }).click();
+  await expect(page.locator("pre")).toContainText(
+    "Use the first room as the entrance.",
   );
-  const revisedGoals =
-    "A revised goal, kept by the owner.\nSources must never rewrite this brief.";
-  await dialog.getByLabel("Goals", { exact: true }).fill(revisedGoals);
-  await uiCommand(page, "context-packs", "edit", () =>
-    dialog.getByRole("button", { name: "Save brief", exact: true }).click(),
+  await expect(page.locator("pre")).not.toContainText(
+    "The first room has prints.",
   );
-  const changed = await editNote(
-    page,
-    source,
-    sourceBody + "\nA later source revision.",
-  );
-  await uiCommand(page, "context-packs", "sources", () =>
-    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
-  );
-  await expect(dialog.getByText("1 · changed", { exact: true })).toBeVisible();
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("button", { name: "Back to brief", exact: true }).click(),
-  );
-  await expect(dialog.getByText(/Source revisions need review/)).toBeVisible();
-  await expect(
-    dialog.getByText(/A revised goal, kept by the owner/),
-  ).toBeVisible();
-  await uiCommand(page, "context-packs", "sources", () =>
-    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
-  );
-  await dialog
-    .getByLabel("Acknowledge all current source revisions", { exact: true })
-    .check();
-  await uiCommand(page, "context-packs", "sources", () =>
-    dialog.getByRole("button", { name: "Update sources", exact: true }).click(),
-  );
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("button", { name: "Back to brief", exact: true }).click(),
-  );
-  await expect(
-    dialog.getByText(/baseline 2 · current 2 · current/),
-  ).toBeVisible();
-  await expect(dialog.getByText(/Source revisions need review/)).toHaveCount(0);
-  await expect(
-    dialog.getByText(/A revised goal, kept by the owner/),
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Copy text", exact: true }),
-  ).toHaveCount(0);
-  await uiCommand(page, "context-packs", "packs", () =>
-    dialog.getByRole("button", { name: "Use brief", exact: true }).click(),
-  );
-  await expect(
-    dialog.getByText(/Agents need permission to read private content/),
-  ).toBeVisible();
-  await dialog.getByRole("button", { name: "Copy text", exact: true }).click();
-  await expect(
-    dialog.getByRole("button", { name: "Copied", exact: true }),
-  ).toBeVisible();
-  const saved = await uiCommand(page, "context-packs", "edit", () =>
-    dialog
-      .getByRole("button", { name: "Keep private note copy", exact: true })
-      .click(),
-  );
-  const kept = await note(page, noteIds(saved)[0]);
-  expect(kept.private).toBe(true);
-  expect(kept.origin).toBe("owner");
-  expect(kept.machine).toBe(false);
-  expect(kept.body).toContain(revisedGoals);
-  expect(kept.body).toContain(`/n/${source.id}`);
-  expect(kept.body).toContain("baseline 2");
-  expect(kept.body).not.toContain("SOURCE-ONLY");
-  expect((await note(page, source.id)).body).toBe(changed.body);
+  await page
+    .getByRole("button", { name: "Keep private note copy", exact: true })
+    .click();
+  const receipt = page.getByRole("status").filter({ hasText: "Saved as note" });
+  await expect(receipt.getByRole("link", { name: "Open note" })).toBeVisible();
   await page.screenshot({
-    path: info.outputPath("context-pack.png"),
+    path: info.outputPath("collection-brief.png"),
     fullPage: true,
   });
-  expect(errors).toEqual([]);
+  await page
+    .getByRole("link", { name: "Collections", exact: true })
+    .last()
+    .click();
+  await page
+    .getByRole("searchbox", { name: "Search collections" })
+    .fill(suffix);
+  await page.getByRole("link", { name: new RegExp(collection) }).click();
+  const h = page.getByRole("heading", { name: collection, exact: true });
+  await expect(h).toBeVisible();
+  await expect(page.getByLabel("Collection name")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Edit collection", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Delete collection", exact: true })
+    .click();
+  await page
+    .getByRole("group", { name: "Delete collection", exact: true })
+    .getByRole("button", { name: "Delete collection", exact: true })
+    .click();
+  const unchanged = await page.request.get(`/api/v1/notes/${note.id}`);
+  expect(unchanged.status()).toBe(200);
+});
+
+test("Italian collection suggests grounded notes before the editor and preserves the chosen set while refining", async ({
+  page,
+}, info) => {
+  if (info.project.name === "chromium")
+    await page.setViewportSize({ width: 390, height: 820 });
+  await login(page, "context-packs");
+  const original = await page.request.post("/api/v1/notes", {
+    headers: { Origin: origin(), "Idempotency-Key": crypto.randomUUID() },
+    data: {
+      body: "Percorso della mostra\nLe fotografie saranno nelle due sale.",
+      source: { kind: "web" },
+    },
+  });
+  expect(original.status()).toBe(201);
+  const one = await original.json();
+  const extra = await page.request.post("/api/v1/notes", {
+    headers: { Origin: origin(), "Idempotency-Key": crypto.randomUUID() },
+    data: {
+      body: "Preventivo\nL'allestimento costa 650 euro.",
+      source: { kind: "web" },
+    },
+  });
+  expect(extra.status()).toBe(201);
+  const two = await extra.json();
+  await page.addInitScript(() => localStorage.setItem("spunto:language", "it"));
+  await page.route("**/api/v1/plugins/manifest", async (route) => {
+    const actual = await route.fetch();
+    const manifest = await actual.json();
+    await route.fulfill({
+      response: actual,
+      json: {
+        ...manifest,
+        plugins: [
+          ...manifest.plugins.filter(
+            (item: { id: string }) => item.id !== "note-assist",
+          ),
+          {
+            id: "note-assist",
+            origin: "bundled",
+            version: "1.0.0",
+            name: "Note assistance",
+            permissions: ["notes.read", "ai.chat"],
+          },
+        ],
+      },
+    });
+  });
+  let assistantCalls = 0;
+  await page.route("**/api/v1/note-assist/collections", async (route) => {
+    assistantCalls += 1;
+    const body = route.request().postDataJSON();
+    if (body.mode === "updates") {
+      expect(body.goal).toBe("Controlla le nuove sale.");
+      await route.fulfill({
+        json: {
+          title: "",
+          intro: "",
+          sources: [],
+          citations: [],
+          fingerprints: {},
+        },
+      });
+      return;
+    }
+    expect(body.goal).toContain("esposizione");
+    if (assistantCalls === 2) expect(body.selected).toEqual([one.id]);
+    await route.fulfill({
+      json: {
+        title: "Mostra di fotografia",
+        intro: "Le fotografie saranno esposte nelle due sale.",
+        citations: [one.id],
+        fingerprints: {
+          [one.id]: createHash("sha256")
+            .update(JSON.stringify([one.id, one.body, []]))
+            .digest("hex"),
+        },
+        sources: [
+          {
+            id: one.id,
+            version: one.version,
+            title: "Percorso della mostra",
+            status: "new",
+            passage: "Le fotografie saranno nelle due sale.",
+          },
+          ...(assistantCalls === 1
+            ? [
+                {
+                  id: two.id,
+                  version: two.version,
+                  title: "Preventivo",
+                  status: "new",
+                  passage: "L'allestimento costa 650 euro.",
+                },
+              ]
+            : []),
+        ],
+      },
+    });
+  });
+  await page.goto("/collections/new");
+  await page
+    .getByLabel("A cosa stai lavorando?")
+    .fill("Preparo una nuova esposizione fotografica.");
+  await page.getByRole("button", { name: "Trova le note" }).click();
+  await expect(
+    page.getByText("Le fotografie saranno nelle due sale.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Aggiungi alla selezione", exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Cosa vuoi cambiare?").fill("Togli il preventivo.");
+  await page.getByRole("button", { name: "Affina i suggerimenti" }).click();
+  await expect(page.getByText("Preventivo", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Usa questi suggerimenti" }).click();
+  await page.getByRole("button", { name: "Salva raccolta" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Mostra di fotografia", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("raccolta-assistita.png"),
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "Cosa c’è di nuovo?", exact: true })
+    .click();
+  expect(assistantCalls).toBe(2);
+  await expect(page.getByLabel("Cosa deve cercare il modello?")).toHaveValue(
+    "",
+  );
+  await expect(
+    page.getByRole("button", { name: "Cerca aggiornamenti" }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("Cosa deve cercare il modello?")
+    .fill("Controlla le nuove sale.");
+  await page.getByRole("button", { name: "Cerca aggiornamenti" }).click();
+  await expect(
+    page.getByText("Non sono emerse note pertinenti.", { exact: false }),
+  ).toBeVisible();
+  expect(assistantCalls).toBe(3);
 });
 
 async function deskModeChoices(page: Page) {

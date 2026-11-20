@@ -385,7 +385,7 @@
     <string name="settings_suggestion_accepted">This suggestion was accepted.</string>
     <string name="settings_suggestion_dismissed">This suggestion was dismissed.</string>
     <string name="settings_suggestion_unavailable">This suggestion is unavailable.</string>
-    <string name="settings_plugin_context_packs_name">Context packs</string>
+    <string name="settings_plugin_context_packs_name">Collections</string>
     <string name="settings_plugin_context_packs_description">Put project notes together in a brief and see when a source changes.</string>
     <string name="settings_plugin_tasks_name">Tasks</string>
     <string name="settings_plugin_tasks_description">See notes with unfinished checkboxes in one place.</string>

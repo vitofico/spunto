@@ -34,12 +34,8 @@ import { DecisionNoteActions } from "../features/DecisionJournal";
 import { NoteAcceptance } from "../features/NoteAcceptance";
 import { useConfirm } from "../components/core/ConfirmDialog";
 import { useToast } from "../components/core/Toast";
-import {
-  SuggestionLine,
-  usePlugins,
-  activePlugins,
-  canRunOnNote,
-} from "../features/Slots";
+import { usePlugins, activePlugins, canRunOnNote } from "../features/Slots";
+import SuggestionLine from "../features/SuggestionLine";
 import { NoteTools } from "../features/NoteTools";
 import { AppliedLabelChanges } from "../features/AppliedLabelChanges";
 import { LinkedNotes, useNoteLinks } from "../features/LinkedNotes";

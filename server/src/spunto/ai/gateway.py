@@ -270,6 +270,7 @@ class Gateway:
         source_fingerprints=None,
         source_chunks=None,
         conversation_context="",
+        ask_evidence=None,
         review_check=None,
         review_guard=None,
         external_ok=True,
@@ -302,7 +303,9 @@ class Gateway:
             if (
                 not isinstance(context_query, str)
                 or not 1 <= len(context_query) <= 20000
-                or not (0 if review_check is not None else 1) <= len(notes) <= 8
+                or not (0 if review_check is not None or ask_evidence is not None else 1)
+                <= len(notes)
+                <= 8
                 or len(note_ids) != len(notes)
                 or (
                     source_fingerprints is not None
@@ -407,6 +410,8 @@ class Gateway:
                     authoring = await review_check() if review_check is not None else ""
                     if not isinstance(authoring, str) or len(html.escape(authoring)) > 6000:
                         raise AIError("validation", "ai_context_invalid")
+                    if ask_evidence is not None:
+                        await ask_evidence[0]()
                     if context_query is not None and actual:
                         # Passage selection runs off-loop; reauthorize after it
                         # yields before any previously read text may leave.
@@ -422,6 +427,8 @@ class Gateway:
                         raise AIError("unavailable", "ai_configuration_changed")
                     if review_guard:
                         review_guard()
+                    if ask_evidence is not None and ask_evidence[2] is not None:
+                        ask_evidence[2]()
                     if check:
                         check()
                     text = prompt + ("\n" + self._fences(actual) if actual else "")
@@ -459,6 +466,10 @@ class Gateway:
                             mime=mime,
                         )
                         value = parse_output(output, raw, {n["id"] for n in actual})
+                        if ask_evidence is not None:
+                            ask_evidence[1].update(
+                                (n["id"], n["body"][:280].strip()) for n in actual
+                            )
                         if fallback:
                             await self._quirk(
                                 p, model, {**quirk, "expires_at": now_ms() + JSON_OBJECT_TTL_MS}
@@ -743,6 +754,8 @@ class ScopedGateway:
         ctx = self.ctx
         ctx.check("ai." + capability)
         if "review_check" in kwargs or "review_guard" in kwargs:
+            raise AIError("refused", "ai_authoring_refused")
+        if "ask_evidence" in kwargs and (ctx.plugin_id != "ask" or capability != "chat"):
             raise AIError("refused", "ai_authoring_refused")
         review_conversation = kwargs.pop("review_conversation", None)
         authoring_target = kwargs.pop("authoring_target", False)

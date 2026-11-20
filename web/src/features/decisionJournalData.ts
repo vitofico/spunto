@@ -75,6 +75,7 @@ export function decisionStatus(text: string) {
 export function decisionCommandLabel(id: string, title: string, args: Args) {
   switch (id) {
     case "journal":
+      if (args.operation === "schedule") return title;
       if (typeof args.cursor === "string") return t("decisions.more_decisions");
       if (typeof args.outcome_cursor === "string")
         return t("decisions.more_outcomes");
@@ -99,12 +100,15 @@ export function decisionForm(command: string, schema: Schema): Schema {
           "alternatives",
           "rationale",
           "expected",
+          "questions",
           "review_on",
           "private",
         ]
       : command === "review-decision"
         ? ["outcome", "reflection", "status", "review_on"]
-        : [];
+        : command === "journal"
+          ? ["status", "review_on"]
+          : [];
   if (!schema.properties || !fields.length) return schema;
   return {
     ...schema,

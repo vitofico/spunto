@@ -95,11 +95,13 @@ export function NoteReference({
   reason,
   onOpen,
   result,
+  keepConversation = false,
 }: {
   id: string;
   reason?: string;
   onOpen?: () => void;
   result?: boolean;
+  keepConversation?: boolean;
 }) {
   useLanguage();
   const query = useQuery({
@@ -109,6 +111,21 @@ export function NoteReference({
   });
   if (query.isError)
     return <span className="muted">{t("vocabulary.note_unavailable")}</span>;
+  if (keepConversation) {
+    const title = query.data?.title || t("slots.open_note");
+    return (
+      <div className={styles.noteRef}>
+        <a
+          href={`/n/${encodeURIComponent(id)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {title}
+        </a>
+        {reason && <blockquote>{reason}</blockquote>}
+      </div>
+    );
+  }
   return (
     <ResultNoteLink id={id} className={styles.noteRef} onOpen={onOpen}>
       <span>

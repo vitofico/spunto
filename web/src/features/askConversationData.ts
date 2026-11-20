@@ -123,3 +123,11 @@ export function askNoteActionOptions(
     ? { note_actions: true }
     : {};
 }
+
+export function supportsConversationalAsk(version: string | undefined) {
+  const parts = version?.match(/^(\d+)\.(\d+)\.\d+(?:\+[\w.-]+)?$/);
+  return (
+    parts &&
+    (Number(parts[1]) > 1 || (Number(parts[1]) === 1 && Number(parts[2]) >= 2))
+  );
+}

@@ -12,12 +12,8 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "../src/lib/api";
 import { SettingsPage } from "../src/features/Settings";
-import {
-  DailySlip,
-  EntryMeta,
-  ReviewLine,
-  SuggestionLine,
-} from "../src/features/Slots";
+import { DailySlip, EntryMeta, ReviewLine } from "../src/features/Slots";
+import SuggestionLine from "../src/features/SuggestionLine";
 import { ToastProvider } from "../src/components/core/Toast";
 import type { Note, Plugin } from "../src/lib/types";
 const plugin = {

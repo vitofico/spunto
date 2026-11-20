@@ -2178,3 +2178,16 @@ mark[data-match] {
 .decision-capture {
   margin-block: var(--s-12) var(--s-20);
 }
+
+.app[data-ask-page="true"] .topbar {
+  display: none;
+}
+
+.column.ask-column {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  margin-block: 0;
+  padding-block: var(--s-12);
+  overflow: hidden;
+}

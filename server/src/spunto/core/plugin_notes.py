@@ -1,12 +1,14 @@
 """Generation-bound plugin access to the core's transactional note operations."""
 
 import json
+import re
 import uuid
 from datetime import datetime
 
 from spunto.api.errors import Problem
 from spunto.auth.tokens import Principal
 from spunto.core.notes import Notes, _body, _cursor, _id, _next, sequence
+from spunto.core.text import fold, search_query
 from spunto.host.plugin import ContextError
 from spunto.host.views import compile_filter
 from spunto.host.vocabulary import validate_annotation
@@ -60,11 +62,13 @@ class PluginNotes:
         self.ctx.check("notes.read")
         return result
 
-    async def evidence(self, note_id):
+    async def evidence(self, note_id, *, with_parts=False):
         """Snapshot an authorized note and its complete enabled retrieval evidence."""
         from spunto.ai.passages import evidence
 
         self.ctx.check("notes.read")
+        if with_parts:
+            self.ctx.check("ai.chat")
         async with self.store.read() as conn:
             try:
                 row = await self.core._row(conn, note_id)
@@ -74,7 +78,9 @@ class PluginNotes:
                     return None
                 raise
             result = await self._value(conn, row)
-            _, result["evidence_fingerprint"] = await evidence(conn, row)
+            parts, result["evidence_fingerprint"] = await evidence(conn, row)
+            if with_parts:
+                result["evidence_parts"] = parts
         self.ctx.check("notes.read")
         return result
 
@@ -348,6 +354,81 @@ class PluginNotes:
                 [rows[limit - 1]["created_at"], rows[limit - 1]["id"]], fingerprint
             )
             if len(rows) > limit
+            else None,
+        }
+
+    async def decision_page(self, *, query, status, due, today, cursor=None):
+        """Read the bundled journal's ordinary notes and local scheduling metadata."""
+        self.ctx.check("notes.read")
+        if self.ctx.plugin_id != "decision-journal" or (
+            self.ctx._host.catalog_metadata.get("decision-journal", {}).get("origin") != "bundled"
+        ):
+            raise ContextError("decision_journal_required")
+        fingerprint = json.dumps([query, status, due, today], ensure_ascii=False)
+        after = _cursor(cursor, fingerprint)
+        if after and (
+            len(after) != 3
+            or after[0] not in (0, 1)
+            or type(after[1]) is not int
+            or not isinstance(after[2], str)
+        ):
+            raise ValueError("Invalid journal cursor.")
+        visibility, _ = self.core._visibility()
+        source_visibility, _ = self.core._visibility("source")
+        source = "json_extract(data,'$.original.source_id')"
+        clauses = [
+            "n.trashed_at IS NULL",
+            "n.conflict_of IS NULL",
+            visibility,
+            f"({source} IS NULL OR EXISTS (SELECT 1 FROM note source WHERE "  # noqa: S608
+            f"source.id={source} AND source.trashed_at IS NULL AND ({source_visibility})))",
+        ]
+        values = [today]
+        if status is not None:
+            clauses.append("json_extract(data,'$.status')=?")
+            values.append(status)
+        if due:
+            clauses.extend(
+                [
+                    "json_extract(data,'$.status')!='closed'",
+                    "json_extract(data,'$.review_date') BETWEEN '0001-01-01' AND ?",
+                ]
+            )
+            values.append(today)
+        join = ""
+        if query:
+            match, _ = search_query(query.replace("#", " "))
+            if not match:
+                return {"decisions": [], "next_cursor": None}
+            clauses.append("note_fts MATCH ?")
+            values.append(re.sub(r'"[^"]*"', lambda term: fold(term[0]), match))
+            join = " JOIN note_fts ON note_fts.rowid=n.rowid"
+        pagination = " WHERE (priority,created_at,id)<(?,?,?)" if after else ""
+        async with self.store.read() as conn:
+            rows = await conn.execute_fetchall(
+                "SELECT * FROM ("  # noqa: S608
+                "SELECT n.id,n.created_at,json_extract(data,'$.status') AS status,"
+                "json_extract(data,'$.review_date') AS review_date,"
+                "CASE WHEN json_extract(data,'$.status')!='closed' "
+                "AND json_extract(data,'$.review_date') BETWEEN '0001-01-01' AND ? "
+                "THEN 1 ELSE 0 END AS priority "
+                "FROM note n JOIN plugin_record pr ON pr.note_id=n.id "
+                "AND pr.plugin_id='decision-journal' AND pr.collection='decisions'"
+                + join
+                + " WHERE "
+                + " AND ".join(clauses)
+                + ") ranked"
+                + pagination
+                + " ORDER BY priority DESC,created_at DESC,id DESC LIMIT 11",
+                [*values, *(after or ())],
+            )
+        self.ctx.check("notes.read")
+        return {
+            "decisions": [dict(row) for row in rows[:10]],
+            "next_cursor": _next(
+                [rows[9]["priority"], rows[9]["created_at"], rows[9]["id"]], fingerprint
+            )
+            if len(rows) > 10
             else None,
         }
 

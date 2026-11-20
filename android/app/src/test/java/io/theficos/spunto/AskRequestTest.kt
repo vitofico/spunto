@@ -179,4 +179,14 @@ class AskRequestTest {
   }
  }
 
+ @Test fun collectionAllocationNegotiatesModernModeWithoutWritePrivileges()=runBlocking {
+  val requests=mutableListOf<JsonObject>()
+  conversationAskRequest("Discuss the next steps",null,{_,args ->
+   requests+=args
+   if(args["start"]==JsonPrimitive(true)) startedConversation() else JsonObject(emptyMap())
+  },{true},{},noteActionsSupported=true,conversational=true,notesOnly=true,collectionId="synthetic-collection")
+  assertEquals(buildJsonObject {put("start",true);put("conversational",true);put("collection_id","synthetic-collection")},requests[0])
+  assertEquals(buildJsonObject {put("conversation_id","allocated");put("after_turn",0);put("question","Discuss the next steps");put("notes_only",true)},requests[1])
+ }
+
 }

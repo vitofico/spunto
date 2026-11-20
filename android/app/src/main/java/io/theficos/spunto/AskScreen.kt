@@ -16,9 +16,13 @@ import androidx.compose.ui.semantics.semantics
 import io.theficos.spunto.core.design.SpuntoSpacing
 
 /** A direct destination for a temporary conversation grounded in the notes. */
-@Composable fun AskScreen(model:SpuntoViewModel,onNote:(String)->Unit) {
+@Composable fun AskScreen(model:SpuntoViewModel,onNote:(String)->Unit,collectionId:String?=null) {
  val manifest=model.manifest.collectAsState().value
- if(supportsAskConversation(manifest)) AskConversation(model,onNote) else LegacyAskScreen(model,onNote)
+ when {
+  collectionId!=null && !supportsConversationalAsk(manifest) -> Text(LocalContext.current.getString(R.string.core_ask_collection_unavailable),Modifier.padding(SpuntoSpacing.s20))
+  supportsAskConversation(manifest) -> AskConversation(model,onNote,fullPage=true,collectionId=collectionId)
+  else -> LegacyAskScreen(model,onNote)
+ }
 }
 
 /** A fresh question and the normal result sheet for servers without conversation commands. */
@@ -28,7 +32,7 @@ import io.theficos.spunto.core.design.SpuntoSpacing
  val epoch by model.pluginReplicaEpochState.collectAsState()
  val manifest=model.manifest.collectAsState().value
  val online by model.online.collectAsState()
- val enabled=model.container.manifest.enabled("ask")
+ val enabled=libraryCommandAvailable(manifest,"ask","ask")
  key(auth,epoch) {
   var question by remember {mutableStateOf("")}
   var result by remember {mutableStateOf<JsonObject?>(null)}
@@ -58,19 +62,19 @@ import io.theficos.spunto.core.design.SpuntoSpacing
  }
 }
 
-@Composable internal fun AskQuestionInput(question:String,enabled:Boolean,online:Boolean,asking:Boolean,onQuestion:(String)->Unit,onAsk:()->Unit,followup:Boolean=false,noteActions:Boolean=false) {
+@Composable internal fun AskQuestionInput(question:String,enabled:Boolean,online:Boolean,asking:Boolean,onQuestion:(String)->Unit,onAsk:()->Unit,followup:Boolean=false,noteActions:Boolean=false,compact:Boolean=false,limit:Int=500,canSend:Boolean=true) {
  val context=LocalContext.current
  val questionLength=question.codePointCount(0,question.length)
  val focus=remember {FocusRequester()}
  val keyboard=LocalSoftwareKeyboardController.current
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
-  Text(context.getString(if(noteActions && followup) R.string.core_ask_continue else if(noteActions) R.string.core_ask_notes else if(followup) R.string.core_ask_followup else R.string.core_find_answer),style=MaterialTheme.typography.headlineSmall)
-  Text(context.getString(if(noteActions) R.string.core_ask_message_hint else R.string.core_ask_hint),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  if(!compact) Text(context.getString(if(noteActions && followup) R.string.core_ask_continue else if(noteActions) R.string.core_ask_notes else if(followup) R.string.core_ask_followup else R.string.core_find_answer),style=MaterialTheme.typography.headlineSmall)
+  if(!compact) Text(context.getString(if(noteActions) R.string.core_ask_message_hint else R.string.core_ask_hint),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
   when {
    !enabled -> Text(context.getString(R.string.core_ask_off),style=MaterialTheme.typography.bodyMedium)
    !online -> Text(context.getString(R.string.core_ask_connect),style=MaterialTheme.typography.bodyMedium)
   }
-  if(noteActions && !followup && question.isBlank()) {
+  if(!compact && noteActions && !followup && question.isBlank()) {
    Text(context.getString(R.string.core_ask_starters),style=MaterialTheme.typography.labelLarge)
    FlowRow(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     listOf(R.string.core_ask_start_question to R.string.core_question_example,R.string.core_ask_start_create to R.string.core_ask_prompt_create,R.string.core_ask_start_edit to R.string.core_ask_prompt_edit).forEach {(label,prompt) ->
@@ -78,7 +82,7 @@ import io.theficos.spunto.core.design.SpuntoSpacing
     }
    }
   }
-  OutlinedTextField(question,onQuestion,Modifier.fillMaxWidth().focusRequester(focus).semantics {contentDescription=context.getString(if(noteActions) R.string.core_ask_message_notes else R.string.core_question_notes)},label={Text(context.getString(if(noteActions) R.string.core_ask_message else R.string.core_your_question))},placeholder={Text(context.getString(if(noteActions && followup) R.string.core_ask_followup_placeholder else if(noteActions) R.string.core_ask_message_placeholder else R.string.core_question_example))},minLines=3,maxLines=6,enabled=enabled && !asking,isError=questionLength>500,supportingText={if(questionLength>450) Text(context.getString(R.string.core_question_characters,questionLength))})
-  Button(onClick=onAsk,enabled=enabled && online && !asking && question.isNotBlank() && questionLength<=500,modifier=Modifier.fillMaxWidth()) {Text(if(asking) context.getString(if(noteActions) R.string.core_ask_action_pending else R.string.core_reading_notes) else context.getString(if(noteActions) R.string.core_ask_send_message else if(followup) R.string.core_ask_send else R.string.core_ask_notes))}
+  OutlinedTextField(question,onQuestion,Modifier.fillMaxWidth().focusRequester(focus).semantics {contentDescription=context.getString(if(noteActions) R.string.core_ask_message_notes else R.string.core_question_notes)},label={Text(context.getString(if(noteActions) R.string.core_ask_message else R.string.core_your_question))},placeholder={Text(context.getString(if(noteActions && followup) R.string.core_ask_followup_placeholder else if(noteActions) R.string.core_ask_message_placeholder else R.string.core_question_example))},minLines=if(compact) 1 else 3,maxLines=if(compact) 4 else 6,enabled=enabled && !asking,isError=questionLength>limit,supportingText={if(questionLength>limit-50) Text(context.getString(if(limit==500) R.string.core_question_characters else R.string.core_ask_message_characters,questionLength))})
+  Button(onClick=onAsk,enabled=enabled && online && !asking && canSend && question.isNotBlank() && questionLength<=limit,modifier=Modifier.fillMaxWidth()) {Text(if(asking) context.getString(if(noteActions) R.string.core_ask_action_pending else R.string.core_reading_notes) else context.getString(if(noteActions || compact) R.string.core_ask_send_message else if(followup) R.string.core_ask_send else R.string.core_ask_notes))}
  }
 }

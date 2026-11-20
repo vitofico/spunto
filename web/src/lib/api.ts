@@ -197,7 +197,12 @@ export async function request<T = unknown>(
       options.workspace === false
         ? actorHeaders(options.headers)
         : workspaceHeaders(options.headers);
-    if (path === "/api/v1/plugins" || path.startsWith("/api/v1/plugins/"))
+    if (
+      path === "/api/v1/plugins" ||
+      path.startsWith("/api/v1/plugins/") ||
+      path === "/api/v1/collections" ||
+      path.startsWith("/api/v1/note-assist/")
+    )
       headers.set("Accept-Language", getLanguage());
     if (options.identity === false) {
       headers.delete("X-Spunto-Account");

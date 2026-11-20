@@ -263,6 +263,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Collections */
+        post: operations["collections_api_v1_collections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/credentials": {
         parameters: {
             query?: never;
@@ -402,6 +419,23 @@ export interface paths {
         get: operations["meta_api_v1_meta_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/note-assist/{workflow}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Note Assistance */
+        post: operations["note_assistance_api_v1_note_assist__workflow__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1075,6 +1109,42 @@ export interface components {
              */
             change_mode: "ask_first" | "automatic";
         };
+        /** CollectionRequest */
+        CollectionRequest: {
+            /**
+             * Action
+             * @default list
+             * @enum {string}
+             */
+            action: "list" | "read" | "save" | "add" | "delete";
+            /** Cursor */
+            cursor?: string | null;
+            /** External */
+            external?: boolean | null;
+            /** Goal */
+            goal?: string | null;
+            /** Id */
+            id?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Intro Citations */
+            intro_citations?: {
+                [key: string]: string;
+            } | null;
+            /** Private */
+            private?: boolean | null;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /** Revision */
+            revision?: number | null;
+            /** Sources */
+            sources?: components["schemas"]["Reference"][] | null;
+            /** Title */
+            title?: string | null;
+        };
         /** Create */
         Create: {
             /** Body */
@@ -1431,6 +1501,18 @@ export interface components {
             restore_ids: string[];
             /** Workspace Role */
             workspace_role?: ("owner" | "editor" | "viewer") | null;
+        };
+        /** Reference */
+        Reference: {
+            /** Id */
+            id: string;
+            /**
+             * Pinned
+             * @default false
+             */
+            pinned: boolean;
+            /** Version */
+            version?: number | null;
         };
         /** ReindexBody */
         ReindexBody: {
@@ -2065,6 +2147,39 @@ export interface operations {
             };
         };
     };
+    collections_api_v1_collections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     credentials_api_v1_credentials_get: {
         parameters: {
             query?: never;
@@ -2283,6 +2398,43 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    note_assistance_api_v1_note_assist__workflow__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow: "collections" | "decisions";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

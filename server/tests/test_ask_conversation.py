@@ -265,3 +265,144 @@ def test_escaped_history_budget_and_reference_numbers():
         answer="Use arr[0], `[42]`, and code below [1].\n```\n[99]\n```",
         citations=["source"],
     ).found
+
+
+async def test_modern_discussion_without_notes_keeps_followups_and_explicit_save(ai_host):
+    host, provider = ai_host
+    notes = Notes(host.store, OWNER)
+    ctx = Ctx(host, "ask", principal=OWNER)
+    started = await ask.ask(ctx, start=True, conversational=True)
+    reasoning = ("A reversible experiment lets you learn before you commit. " * 26).strip()
+    assert len(reasoning) > 1200
+    provider.ask_answer = {
+        "mode": "discussion",
+        "paragraphs": [reasoning],
+        "citations": [],
+    }
+    initial = await host.invoke_command(
+        "ask",
+        "ask",
+        {"question": "Come posso provare un approccio diverso?", **continuation(started)},
+        principal=OWNER,
+    )
+    assert all(item["type"] != "notes" for item in initial["items"])
+    assert not (await notes.list())["notes"]
+    second = await ask.ask(ctx, "E se invece fossimo in due?", **continuation(initial))
+    assert reasoning in html.unescape(prompt(provider))
+    assert continuation(second)["after_turn"] == 2
+    saved = await ask.save_answer(ctx, **save_args(initial))
+    note = await notes.get(saved["ids"][0])
+    assert note["body"].endswith(reasoning)
+    assert note["machine"]
+    assert (await ask.save_answer(ctx, **save_args(initial))) == saved
+
+
+async def test_modern_notes_only_without_evidence_uses_no_chat(ai_host):
+    host, provider = ai_host
+    ctx = Ctx(host, "ask", principal=OWNER)
+    started = await ask.ask(ctx, start=True, conversational=True)
+    chat_count = len(provider.chat_bodies)
+    result = await ask.ask(ctx, "What did I agree?", **continuation(started), notes_only=True)
+    assert len(provider.chat_bodies) == chat_count
+    assert all(item.get("id") != "save-answer" for item in result["items"])
+    assert continuation(result)["after_turn"] == 1
+
+
+async def test_modern_grounded_passage_is_the_provider_evidence(ai_host):
+    host, provider = ai_host
+    notes = Notes(host.store, OWNER)
+    note = await notes.create(
+        "Synthetic workshop note. The spare key is stored in a blue envelope."
+    )
+    provider.ask_answer = {
+        "mode": "notes",
+        "paragraphs": ["The spare key is in the blue envelope [1]."],
+        "citations": [note["id"]],
+    }
+    ctx = Ctx(host, "ask", principal=OWNER)
+    started = await ask.ask(ctx, start=True, conversational=True)
+    result = await ask.ask(ctx, "Where is the spare key?", **continuation(started))
+    validate_output(result)
+    source = next(item["ids"][0] for item in result["items"] if item["type"] == "notes")
+    assert source["id"] == note["id"]
+    assert source["reason"] in html.unescape(prompt(provider))
+    assert "blue envelope" in source["reason"]
+    for payload in (
+        {"mode": "notes", "paragraphs": ["Unsupported"], "citations": []},
+        {"mode": "discussion", "paragraphs": ["Wrong."], "citations": [note["id"]]},
+        {
+            "mode": "discussion",
+            "paragraphs": ["Invented [source](/n/missing)"],
+            "citations": [],
+        },
+        {"mode": "insufficient", "paragraphs": ["Invented"], "citations": []},
+    ):
+        with pytest.raises(ValueError):
+            ask.ConversationAnswer.model_validate(payload)
+
+
+async def test_collection_scope_rejects_stale_receipts_and_excludes_unrelated_notes(
+    ai_host, monkeypatch
+):
+    host, provider = ai_host
+    notes = Notes(host.store, OWNER)
+    source = await notes.create("The workshop checklist has blue tags.")
+    unrelated = await notes.create("The workshop checklist has red tags.")
+    snapshot = {
+        "id": "collection",
+        "revision": 2,
+        "brief": "Workshop brief",
+        "source_ids": [source["id"]],
+    }
+
+    async def context(ctx, collection_id):
+        assert collection_id == snapshot["id"]
+        return dict(snapshot)
+
+    monkeypatch.setattr(ask, "collection_context", context)
+    ctx = Ctx(host, "ask", principal=OWNER)
+    provider.ask_answer = {
+        "mode": "notes",
+        "paragraphs": ["The tags are blue [1]."],
+        "citations": [source["id"]],
+    }
+    started = await ask.ask(ctx, start=True, conversational=True, collection_id="collection")
+    response = await ask.ask(
+        ctx, "What colors are the workshop checklist tags?", **continuation(started)
+    )
+    outbound = html.unescape(prompt(provider))
+    assert source["id"] in outbound and unrelated["id"] not in outbound
+    assert '<collection-data untrusted="true">Workshop brief</collection-data>' in outbound
+    snapshot["revision"] = 3
+    with pytest.raises(Problem) as failure:
+        await ask.ask(ctx, "E se invece?", **continuation(response))
+    assert failure.value.code == "ask_collection_changed"
+    with pytest.raises(Problem):
+        await ask.save_answer(ctx, **save_args(response))
+
+
+async def test_discussion_context_cannot_replay_passages_from_a_now_private_note(ai_host):
+    host, provider = ai_host
+    notes = Notes(host.store, OWNER)
+    private_later = await notes.create("Synthetic workshop uses STALE-MARKER as a code name.")
+    ctx = Ctx(host, "ask", principal=OWNER)
+    provider.ask_answer = {
+        "mode": "discussion",
+        "paragraphs": ["For a synthetic workshop, brainstorm variations on STALE-MARKER."],
+        "citations": [],
+    }
+    started = await ask.ask(ctx, start=True, conversational=True)
+    first = await ask.ask(ctx, "Brainstorm the synthetic workshop", **continuation(started))
+    assert private_later["id"] in prompt(provider)
+    await notes.flags(private_later["id"], {"private": True})
+    provider.ask_answer = {
+        "mode": "discussion",
+        "paragraphs": ["Consider a reversible approach."],
+        "citations": [],
+    }
+    await ask.ask(ctx, "What if we need a smaller approach?", **continuation(first))
+    assert private_later["id"] not in prompt(provider)
+    assert "STALE-MARKER" not in prompt(provider)
+    refused = await ask.save_answer(ctx, **save_args(first))
+    assert refused["type"] == "text" and "changed" in refused["text"]
+    assert len((await notes.list())["notes"]) == 1

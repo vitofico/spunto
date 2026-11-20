@@ -11,18 +11,23 @@ export function NotePicker({
   action,
   busy,
   onSelect,
+  onSelectMany,
+  maxSelection = 1,
   onCancel,
 }: {
   exclude: readonly string[];
   action: string;
   busy: boolean;
-  onSelect: (note: Note) => void;
+  onSelect?: (note: Note) => void;
+  onSelectMany?: (notes: Note[]) => void;
+  maxSelection?: number;
   onCancel?: () => void;
 }) {
   useLanguage();
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<{ id: string; version: number }>();
+  const [batch, setBatch] = useState<Note[]>([]);
   const id = useId();
   const current = input.trim() === query;
   useEffect(() => {
@@ -60,7 +65,11 @@ export function NotePicker({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (target && !busy && !notes.isError) onSelect(target);
+        if (busy || notes.isError) return;
+        if (onSelectMany) {
+          if (batch.length) onSelectMany(batch);
+          setBatch([]);
+        } else if (target) onSelect?.(target);
       }}
     >
       <label htmlFor={id}>{t("notepicker.search")}</label>
@@ -109,12 +118,30 @@ export function NotePicker({
           {choices.map((note) => (
             <label key={note.id}>
               <input
-                type="radio"
+                type={onSelectMany ? "checkbox" : "radio"}
                 name={id}
-                checked={note.id === target?.id}
-                onChange={() =>
-                  setSelected({ id: note.id, version: note.version })
+                checked={
+                  onSelectMany
+                    ? batch.some((item) => item.id === note.id)
+                    : note.id === target?.id
                 }
+                disabled={
+                  !!onSelectMany &&
+                  batch.length >= maxSelection &&
+                  !batch.some((item) => item.id === note.id)
+                }
+                onChange={(event) => {
+                  if (onSelectMany) {
+                    if (event.target.checked)
+                      setBatch((items) =>
+                        items.length < maxSelection ? [...items, note] : items,
+                      );
+                    else
+                      setBatch((items) =>
+                        items.filter((item) => item.id !== note.id),
+                      );
+                  } else setSelected({ id: note.id, version: note.version });
+                }}
               />
               <span>
                 <strong>{note.title || t("vocabulary.untitled_note")}</strong>
@@ -140,7 +167,12 @@ export function NotePicker({
         </button>
       )}
       <div className={styles.row}>
-        <button className="primary" disabled={!target || busy || notes.isError}>
+        <button
+          className="primary"
+          disabled={
+            (onSelectMany ? !batch.length : !target) || busy || notes.isError
+          }
+        >
           {busy ? t("app.saving") : action}
         </button>
         {onCancel && (

@@ -195,10 +195,10 @@ async def test_manual_and_weekly_share_three_proposal_cap_and_do_not_autoapply(c
     count = len(provider.requests)
     await gardener.weekly(context(host, unattended=True))
     limited = await gardener.review_now(context(host))
-    assert "limit" in limited["text"] and len(provider.requests) == count
+    assert "pending proposal limit" in limited["text"] and len(provider.requests) == count
     for item in await proposals(host):
         await decide(host.store, OWNER, item["id"], "dismiss")
-    assert "limit" in (await gardener.review_now(context(host)))["text"]
+    assert "weekly limit" in (await gardener.review_now(context(host)))["text"]
     assert len(provider.requests) == count
     assert (await notes.get(note["id"]))["body"] == note["body"]
     clock.advance(8 * 86400000)
@@ -307,6 +307,15 @@ async def test_context_honestly_limits_recent_notes_and_label_vocabulary(curatio
     assert sent.count("<note id=") <= 50
 
 
+async def test_manual_run_reports_no_new_proposals_when_evidence_is_reviewed(curation):
+    host, provider, notes, _ = curation
+    await notes.create("Synthetic architecture note #architecture")
+    result = await host.invoke_command("label-gardener", "review-now", principal=OWNER)
+    assert result["text"].startswith("No new label changes to review.")
+    assert provider.requests
+    assert not await proposals(host)
+
+
 async def test_review_now_command_is_opt_in_online_and_no_new_note_or_tool_surface(curation):
     host, _, _, _ = curation
     manifest = host.manifests["label-gardener"]
@@ -315,7 +324,7 @@ async def test_review_now_command_is_opt_in_online_and_no_new_note_or_tool_surfa
         {
             "id": "review-now",
             "title": "Review labels",
-            "where": ["palette", "slash"],
+            "where": [],
             "online": True,
         }
     ]

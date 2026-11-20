@@ -2,6 +2,10 @@
   "nativeName": "Italiano",
   "direction": "ltr",
   "messages": {
+    "settingsplugins.settings": "Impostazioni",
+    "settingsplugins.open_review": "Apri Revisione",
+    "settingsplugins.label_review_schedule": "Il giardiniere delle etichette controlla automaticamente le note idonee ogni settimana. Puoi anche avviare un controllo ora. Approva ogni proposta in Revisione.",
+    "plugin.translate.commands.language-settings.title": "Lingue di traduzione predefinite",
     "whatsnew.note_tools_title": "Rivedi le modifiche degli agenti e trova gli strumenti adatti",
     "whatsnew.note_tools_body": "Confronta ciò che un agente ha aggiunto o rimosso prima di accettare una modifica. Gli strumenti più adatti appaiono direttamente nella nota. Apri Strumenti della nota per vedere tutte le azioni disponibili.",
     "settings.browse_sections": "Esplora le impostazioni",
@@ -1273,6 +1277,7 @@
     "collaboration.preview_editor": "{recipient} può leggere e modificare il testo di questa nota e leggere gli allegati collegati.",
     "collaboration.preview_scope": "Include le modifiche future della nota, ma non la cronologia delle revisioni, le note collegate o il resto dello spazio. Altri permessi o l’appartenenza allo spazio possono dare accesso. Revocare l’accesso non cancella le copie già create.",
     "slots.stale_form_recovery": "I dati inseriti sono ancora nel modulo. Copia il testo da conservare prima di riaprire lo strumento, poi controlla le fonti modificate e riprova.",
+    "library.stats_connect": "Connettiti al server per vedere le statistiche delle note.",
     "plugin.library-stats.name": "Statistiche delle note",
     "plugin.library-stats.description": "Consulta il numero di note, le acquisizioni recenti e le note da organizzare. Senza tracciamento né IA.",
     "plugin.library-stats.commands.summary.title": "Statistiche delle note",

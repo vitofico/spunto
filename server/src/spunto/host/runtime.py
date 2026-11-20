@@ -386,6 +386,7 @@ class Host:
             )
             item["can_delete_data"] = True
             item["settings"] = self.get_settings(plugin_id)
+            item["has_settings"] = bool(manifest.get("settings", {}).get("properties"))
             configured = self.context_settings(plugin_id)
             urls = configured.get("urls", [])
             urls = urls[:10] if isinstance(urls, list) else []

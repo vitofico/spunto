@@ -2,6 +2,10 @@
   "nativeName": "Français",
   "direction": "ltr",
   "messages": {
+    "settingsplugins.settings": "Paramètres",
+    "settingsplugins.open_review": "Ouvrir la révision",
+    "settingsplugins.label_review_schedule": "Le jardinier d’étiquettes vérifie automatiquement les notes admissibles chaque semaine. Vous pouvez aussi lancer une vérification maintenant. Validez chaque proposition dans Révision.",
+    "plugin.translate.commands.language-settings.title": "Langues de traduction par défaut",
     "whatsnew.note_tools_title": "Vérifiez les modifications des agents et trouvez les bons outils",
     "whatsnew.note_tools_body": "Comparez les ajouts et suppressions d’un agent avant d’accepter sa modification. Les outils les plus pertinents apparaissent sur la note. Ouvrez les outils de la note pour voir toutes les actions disponibles.",
     "settings.browse_sections": "Parcourir les réglages",
@@ -1273,6 +1277,7 @@
     "collaboration.preview_editor": "{recipient} peut lire et modifier le texte de cette note et lire ses pièces jointes liées.",
     "collaboration.preview_scope": "Cela comprend les futures modifications de la note, mais pas son historique, les notes liées ou le reste de cet espace. D’autres autorisations ou l’appartenance à l’espace peuvent aussi donner accès. Retirer l’accès n’efface pas les copies déjà faites.",
     "slots.stale_form_recovery": "Vos saisies sont toujours dans ce formulaire. Copiez le texte à conserver avant de rouvrir l’outil, puis vérifiez les sources modifiées et réessayez.",
+    "library.stats_connect": "Connectez-vous à votre serveur pour voir les statistiques des notes.",
     "plugin.library-stats.name": "Statistiques des notes",
     "plugin.library-stats.description": "Consultez le nombre de notes, les captures récentes et les notes à organiser. Sans suivi ni IA.",
     "plugin.library-stats.commands.summary.title": "Statistiques des notes",

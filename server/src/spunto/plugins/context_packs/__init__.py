@@ -12,6 +12,7 @@ from spunto.host.language import tr
 
 plugin = Plugin("context-packs")
 COLLECTION = "packs"
+PAGE_SIZE = 3
 SECTIONS = {
     "goals": "Goals",
     "constraints": "Constraints",
@@ -80,7 +81,7 @@ def source(note):
     }
 
 
-async def provenance(ctx, pack):
+async def provenance(ctx, pack, *, owner_labels=False):
     principal = ctx.principal
     restricted = principal is not None and not principal.owner
     if restricted and pack["private"] and not principal.private_ok:
@@ -100,20 +101,24 @@ async def provenance(ctx, pack):
                 return None
             result.append({**baseline, "current_version": None, "status": "unavailable"})
         else:
-            changed = source(note) != baseline
             result.append(
                 {
                     **baseline,
                     "current_version": note["version"],
-                    "status": "changed" if changed else "current",
+                    "status": "changed" if source(note) != baseline else "current",
                     "current_private": bool(note["private"]),
                     "current_external": note["origin"] == "external",
                 }
             )
+            if owner_labels and not restricted:
+                # Reviewed in place only. The stored brief and exported Markdown
+                # never include live source titles or excerpts.
+                title = re.sub(r"[\[\]\\`*_<>&]", "", re.sub(r"\s+", " ", note.get("title") or ""))
+                result[-1]["display_title"] = title.strip()[:60]
     return result
 
 
-def markdown(pack, states):
+def markdown(pack, states, *, show_titles=False):
     lines = [
         f"# {pack['title']}",
         tr("Project: {project}", project=pack["project"] or tr("Unassigned")),
@@ -131,8 +136,10 @@ def markdown(pack, states):
             tr("Source revisions need review; this brief has not been refreshed automatically.")
         )
     for key, title in SECTIONS.items():
-        lines.extend([f"\n## {tr(title)}", pack[key] or tr("Not recorded.")])
+        if pack[key]:
+            lines.extend([f"\n## {tr(title)}", pack[key]])
     lines.append(f"\n## {tr('Sources')}")
+    first_source = len(lines)
     for item in states:
         current = (
             str(item["current_version"])
@@ -153,41 +160,120 @@ def markdown(pack, states):
     result = "\n\n".join(lines)
     if len(result) > 4000:
         raise ValueError("context pack exceeds the 4000-character brief budget")
+    if show_titles:
+        length = len(result)
+        for i, item in enumerate(states, first_source):
+            title = item.get("display_title")
+            if title:
+                generic = f"- [{tr('Note')}]"
+                named = f"- [{title}]"
+                candidate_length = length + len(named) - len(generic)
+                if candidate_length <= 4000:
+                    lines[i] = lines[i].replace(generic, named, 1)
+                    length = candidate_length
+        return "\n\n".join(lines)
     return result
 
 
-async def render(ctx, pack_id):
+def editor_args(pack_id, pack):
+    return {"pack_id": pack_id, "expected_revision": pack["revision"]}
+
+
+def sharing(pack, states):
+    if any(item["status"] == "unavailable" for item in states):
+        return tr("Agent access is blocked until unavailable sources are removed.")
+    private = pack["private"] or any(item.get("current_private") for item in states)
+    external = pack.get("external", False) or any(item.get("current_external") for item in states)
+    if private and external:
+        requirement = tr("Agents need permission to read both private and external content.")
+    elif private:
+        requirement = tr("Agents need permission to read private content.")
+    elif external:
+        requirement = tr("Agents need permission to read external content.")
+    else:
+        requirement = tr("Agents need access to this space and all sources.")
+    return requirement + " " + tr("The Context packs agent tools must also be exposed.")
+
+
+async def render(ctx, pack_id, *, export=False):
     pack = await record(ctx, pack_id)
-    states = await provenance(ctx, pack)
+    args = editor_args(pack_id, pack)
+    if pack.get("draft"):
+        return output(
+            {"type": "markdown", "text": f"# {pack['title']}"},
+            text(tr("Draft · Finish your brief to make it available to agents.")),
+            command("sources", tr("Choose sources"), **args),
+            command("edit", tr("Write brief"), **args, action="finish"),
+            command("edit", tr("Delete pack"), **args, action="confirm-delete"),
+            command("packs", tr("All context packs")),
+        )
+    states = await provenance(ctx, pack, owner_labels=not export)
     if states is None:
         return text(tr("That context pack is unavailable."))
-    args = {"pack_id": pack_id, "expected_revision": pack["revision"]}
+    brief = {"type": "markdown", "text": markdown(pack, states, show_titles=not export)}
+    ready = all(item["status"] == "current" for item in states)
+    if export:
+        items = [
+            brief,
+            text(
+                tr("Copy sends the Markdown above to your clipboard, including its source links.")
+            ),
+            text(sharing(pack, states)),
+        ]
+        if ready:
+            items.append(command("edit", tr("Keep private note copy"), **args, action="save-note"))
+        else:
+            items.append(text(tr("Review source changes before keeping a private note copy.")))
+        return output(*items, command("packs", tr("Back to brief"), pack_id=pack_id))
+    review = command("sources", tr("Review sources"), **args)
+    use = command("packs", tr("Use brief"), pack_id=pack_id, export=True)
     return output(
-        {"type": "markdown", "text": markdown(pack, states)},
-        command("edit", tr("Edit brief"), **args),
-        command("sources", tr("Review sources"), **args),
-        command("edit", tr("Keep private note copy"), **args, action="save-note"),
+        brief,
+        command("edit", tr("Edit brief"), **args, action="revise"),
+        *([use, review] if ready else [review, use]),
+        text(sharing(pack, states)),
+        command("edit", tr("Delete pack"), **args, action="confirm-delete"),
         command("packs", tr("All context packs")),
     )
 
 
-def form(properties, required=()):
-    return {
-        "type": "form",
-        "schema": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": properties,
-            "required": list(required),
-        },
+def form(properties, required=(), *, title=None):
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": list(required),
     }
+    if title:
+        schema["title"] = title
+    return {"type": "form", "schema": schema}
 
 
 def field(title, maximum, default=""):
     return {"type": "string", "title": title, "maxLength": maximum, "default": default}
 
 
-def edit_form(pack=None, note_id=None):
+def start_form(note_id):
+    props = {
+        "title": {"type": "string", "title": tr("Brief title"), "minLength": 1, "maxLength": 80},
+        "goals": field(tr("Goals"), 500),
+        "request_id": field(tr("Creation request ID"), 36, str(uuid.uuid4())),
+    }
+    if note_id:
+        props["note_id"] = {**field(tr("Initial source note"), 36, note_id), "enum": [note_id]}
+    return output(
+        text(
+            tr(
+                "Name the work and describe what you want to achieve. Next you can link the "
+                "notes that provide context."
+            )
+        ),
+        form(props, ["title", "request_id"], title=tr("Create draft")),
+        command("packs", tr("All context packs")),
+    )
+
+
+def edit_form(pack=None, note_id=None, *, action="save"):
     pack = pack or {}
     props = {
         "title": {**field(tr("Brief title"), 80, pack.get("title", "")), "minLength": 1},
@@ -210,11 +296,27 @@ def edit_form(pack=None, note_id=None):
             "default": "save",
         },
     }
+    if action in {"finish", "revise"}:
+        del props["action"]
     if not pack:
         props["title"].pop("default")
         props["request_id"] = field(tr("Creation request ID"), 36, str(uuid.uuid4()))
     if note_id:
         props["note_id"] = {**field(tr("Initial source note"), 36, note_id), "enum": [note_id]}
+    if action in {"finish", "revise"}:
+        intro = (
+            tr(
+                "Pull together the details someone needs to continue this work. Review the "
+                "access options before saving. Source notes stay linked and their text stays in "
+                "the notes."
+            )
+            if action == "finish"
+            else tr(
+                "Update what you want people and agents to know. Review access options if the "
+                "content has changed."
+            )
+        )
+        return output(text(intro), form(props, ["title"], title=tr("Save brief")))
     return output(
         text(
             tr(
@@ -229,7 +331,11 @@ def edit_form(pack=None, note_id=None):
 
 @plugin.command("packs")
 async def packs(
-    ctx: Ctx, pack_id: str | None = None, cursor: str | None = None, note_id: str | None = None
+    ctx: Ctx,
+    pack_id: str | None = None,
+    cursor: str | None = None,
+    note_id: str | None = None,
+    export: bool = False,
 ):
     owner(ctx)
     if note_id is not None:
@@ -238,22 +344,56 @@ async def packs(
             return text(tr("That source note is unavailable."))
         return output(
             text(tr("Start a project brief with this note as its first tracked source.")),
-            command("edit", tr("New context pack"), note_id=note_id),
+            command("edit", tr("New context pack"), action="start", note_id=note_id),
             command("packs", tr("All context packs")),
         )
     if pack_id is not None:
-        return await render(ctx, pack_id)
-    page = await ctx.storage.records.list(COLLECTION, limit=7, after=cursor)
-    items = [text(tr("Saved context packs")), command("edit", tr("New context pack"))]
-    for row in page[:6]:
-        if row["data"].get("deleted"):
-            continue
-        label = row["data"]["title"]
-        items.append(
-            command("packs", label if len(label) <= 24 else label[:23] + "…", pack_id=row["id"])
-        )
-    if len(page) > 6:
-        items.append(command("packs", tr("Next packs"), cursor=page[5]["id"]))
+        return await render(ctx, pack_id, export=export)
+    # Continue older in-flight UUID pages in their original order.
+    after, before = None, None
+    if cursor is not None:
+        if not isinstance(cursor, str):
+            raise ValueError("invalid pack cursor")
+        if ":" in cursor:
+            if not re.fullmatch(r"[0-9]{1,19}:[0-9a-f-]{36}", cursor):
+                raise ValueError("invalid pack cursor")
+            updated_at, last_id = cursor.split(":")
+            before = int(updated_at), identifier(last_id)
+        else:
+            after = identifier(cursor)
+    recent = after is None
+    page = []
+    async with asyncio.timeout(5):
+        while len(page) <= PAGE_SIZE:
+            rows = await ctx.storage.records.list(
+                COLLECTION, limit=25, after=after, recent=recent, before=before
+            )
+            page.extend(row for row in rows if not row["data"].get("deleted"))
+            if len(rows) < 25:
+                break
+            if recent:
+                before = rows[-1]["updated_at"], rows[-1]["id"]
+            else:
+                after = rows[-1]["id"]
+    items = [
+        text(
+            tr(
+                "Build a reusable handoff for a project, a task, or an agent. "
+                "Write a brief, link the notes behind it, and revisit it when the work changes."
+            )
+        ),
+        command("edit", tr("New context pack"), action="start"),
+    ]
+    if page:
+        items.append(text(tr("Saved context packs")))
+    for row in page[:PAGE_SIZE]:
+        pack = row["data"]
+        label = tr("Draft · {title}", title=pack["title"]) if pack.get("draft") else pack["title"]
+        items.extend([text(label), command("packs", tr("Open pack"), pack_id=row["id"])])
+    if len(page) > PAGE_SIZE:
+        last = page[PAGE_SIZE - 1]
+        next_cursor = f"{last['updated_at']}:{last['id']}" if recent else last["id"]
+        items.append(command("packs", tr("Next packs"), cursor=next_cursor))
     return output(*items)
 
 
@@ -275,11 +415,44 @@ async def edit(
     request_id: str | None = None,
 ):
     owner(ctx)
-    if action not in {"save", "delete", "save-note"}:
+    if action not in {"save", "delete", "save-note", "start", "finish", "revise", "confirm-delete"}:
         raise ValueError("unknown context pack action")
     old = await record(ctx, pack_id, expected_revision) if pack_id else None
     if old is not None and expected_revision is None:
         raise ValueError("pack revision is required")
+    if action == "start" and old is not None:
+        raise ValueError("start requires a new pack")
+    if action == "finish" and (old is None or not old.get("draft")):
+        raise ValueError("finish requires a draft pack")
+    if action == "finish":
+        states = await provenance(ctx, old)
+        if any(item["status"] != "current" for item in states):
+            message = tr(
+                "Review changed sources and remove unavailable sources before saving this draft."
+            )
+            if title is not None:
+                raise Problem(409, "version_conflict", message)
+            return output(
+                text(message),
+                command("sources", tr("Review sources"), **editor_args(pack_id, old)),
+                command("packs", tr("Back to brief"), pack_id=pack_id),
+            )
+    if action == "revise" and (old is None or old.get("draft")):
+        raise ValueError("revise requires a finished pack")
+    if action == "confirm-delete":
+        if old is None:
+            raise ValueError("a saved pack is required")
+        args = editor_args(pack_id, old)
+        return output(
+            text(
+                tr(
+                    "Delete this pack? The source notes and any private note copies will stay "
+                    "in your library."
+                )
+            ),
+            command("edit", tr("Delete pack"), **args, action="delete"),
+            command("packs", tr("Back to brief"), pack_id=pack_id),
+        )
     if action == "delete":
         # Keep only a digest receipt so a lost creation response cannot recreate
         # a subsequently deleted brief. Curated prose is erased from this record.
@@ -288,10 +461,13 @@ async def edit(
             COLLECTION, pack_id, old, tombstone
         ):
             conflict()
-        return text(tr("Context pack deleted. Any note copies remain ordinary private notes."))
+        return output(
+            text(tr("Context pack deleted. Any note copies remain ordinary private notes.")),
+            command("packs", tr("All context packs")),
+        )
     if action == "save-note":
-        if old is None:
-            raise ValueError("a saved pack is required")
+        if old is None or old.get("draft"):
+            raise ValueError("a finished pack is required")
         states = await provenance(ctx, old)
         if states is None or any(item["status"] != "current" for item in states):
             raise Problem(
@@ -313,9 +489,16 @@ async def edit(
                 )
             ),
             {"type": "notes", "ids": [note["id"]]},
+            command("packs", tr("Back to brief"), pack_id=pack_id),
         )
     if title is None:
-        return edit_form(old, note_id)
+        if action == "start":
+            if note_id is not None:
+                identifier(note_id)
+            return start_form(note_id)
+        return edit_form(old, note_id, action=action)
+    if action == "start":
+        private = True
     if type(private) is not bool or type(external) is not bool:
         raise ValueError("content classifications must be boolean")
     if old is None and expected_revision is not None:
@@ -336,6 +519,8 @@ async def edit(
         "external": external,
         "note_id": identifier(note_id) if note_id is not None else None,
     }
+    if action == "start":
+        intent["draft"] = True
     digest = hashlib.sha256(
         json.dumps(intent, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
     ).hexdigest()
@@ -351,6 +536,9 @@ async def edit(
     elif request_id is not None:
         raise ValueError("creation request IDs are only for new packs")
     sources = old["sources"] if old else []
+    source_versions = (
+        {item["id"]: item["version"] for item in sources} or None if action == "finish" else None
+    )
     if note_id is not None:
         if old:
             raise ValueError("add sources through Review sources")
@@ -358,6 +546,8 @@ async def edit(
         if note is None:
             raise ValueError("source unavailable")
         sources = [source(note)]
+        if action == "start":
+            source_versions = {note["id"]: note["version"]}
     data = {
         **{
             key: value
@@ -372,11 +562,15 @@ async def edit(
         "updated_at": ctx.clock(),
         "creation_digest": old["creation_digest"] if old else digest,
     }
+    if old and old.get("draft") and action != "finish":
+        data["draft"] = True
     states = await provenance(ctx, data)
     data["private"] |= any(item.get("current_private", False) for item in states)
     data["external"] |= any(item.get("current_external", False) for item in states)
     markdown(data, states)
-    if not await ctx.storage.records.compare_and_set(COLLECTION, pack_id, old, data):
+    if not await ctx.storage.records.compare_and_set(
+        COLLECTION, pack_id, old, data, source_versions=source_versions
+    ):
         if old is None:
             prior = await ctx.storage.records.get(COLLECTION, pack_id)
             if prior is not None and prior["creation_digest"] == digest:
@@ -500,8 +694,7 @@ async def sources(
         if len(selected) == 10:
             raise ValueError("context packs support at most ten source notes")
         selected.append(source(note))
-        if picker:
-            source_versions = {note["id"]: note["version"]}
+        source_versions = {note["id"]: note["version"]}
         private |= bool(note["private"])
         external |= note["origin"] == "external"
     elif remove != NONE:
@@ -536,7 +729,7 @@ async def sources(
             selected.append(source(note))
             private |= baseline["private"] or bool(note["private"])
             external |= baseline["external"] or note["origin"] == "external"
-        if picker and selected:
+        if selected:
             source_versions = {item["id"]: item["version"] for item in selected}
     if direct is not None or add != NONE or remove != NONE or refresh:
         new = {
@@ -565,11 +758,12 @@ async def render_sources(ctx, pack_id, data, *, query="", picker=False):
     removal_captions = []
     for index, baseline in enumerate(selected, 1):
         note = await ctx.notes.get(baseline["id"])
-        removal_captions.append(caption(note, index) if note else f"{index}. Unavailable source")
-    statuses = (
-        "; ".join(f"{index}: {item['status']}" for index, item in enumerate(states, 1))
-        or "No source notes selected."
-    )
+        removal_captions.append(
+            caption(note, index) if note else f"{index}. {tr('Unavailable source')}"
+        )
+    statuses = "; ".join(
+        f"{index} · {tr(item['status'])}" for index, item in enumerate(states, 1)
+    ) or tr("No source notes selected.")
     actions = {
         "remove": {
             "type": "string",
@@ -583,19 +777,38 @@ async def render_sources(ctx, pack_id, data, *, query="", picker=False):
             "default": False,
         },
     }
-    notes = {"type": "notes", "ids": [i["id"] for i in states if i["status"] != "unavailable"]}
+    notes = {
+        "type": "notes",
+        "items": [
+            {"id": item["id"], "reason": tr(item["status"])}
+            for item in states
+            if item["status"] != "unavailable"
+        ],
+    }
     back = command("packs", tr("Back to brief"), pack_id=pack_id)
+    continue_action = (
+        [command("edit", tr("Write brief"), **editor_args(pack_id, data), action="finish")]
+        if data.get("draft")
+        else []
+    )
     if picker:
+        intro = (
+            tr(
+                "Link the notes that explain the work. You can add up to ten, or continue "
+                "without sources."
+            )
+            if data.get("draft")
+            else tr(
+                "Open changed notes to check what is different. Acknowledge their revisions "
+                "after updating the brief as needed."
+            )
+        )
         return output(
-            text(
-                tr(
-                    "Refresh acknowledges revisions without rewriting your brief "
-                    "or clearing classifications."
-                )
-            ),
+            text(intro),
             text(statuses),
             notes,
             form({**actions, **picker_fields(data, 10)}),
+            *continue_action,
             back,
         )
     hits = (
@@ -641,6 +854,7 @@ async def render_sources(ctx, pack_id, data, *, query="", picker=False):
                 },
             }
         ),
+        *continue_action,
         back,
     )
 
@@ -655,7 +869,7 @@ async def list_packs(ctx: Ctx, cursor: str | None = None) -> dict:
         while len(result) < 11:
             page = await ctx.storage.records.list(COLLECTION, limit=50, after=after)
             for row in page:
-                if row["data"].get("deleted"):
+                if row["data"].get("deleted") or row["data"].get("draft"):
                     continue
                 states = await provenance(ctx, row["data"])
                 if states is not None:
@@ -679,7 +893,7 @@ async def list_packs(ctx: Ctx, cursor: str | None = None) -> dict:
 @plugin.mcp_tool("get")
 async def get_pack(ctx: Ctx, pack_id: str) -> dict:
     pack = await ctx.storage.records.get(COLLECTION, identifier(pack_id))
-    if pack is None or pack.get("deleted"):
+    if pack is None or pack.get("deleted") or pack.get("draft"):
         return {"found": False}
     states = await provenance(ctx, pack)
     if states is None:

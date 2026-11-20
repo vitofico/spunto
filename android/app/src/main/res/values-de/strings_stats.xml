@@ -2,4 +2,5 @@
 <resources>
     <string name="settings_plugin_library_stats_name">Bibliotheksstatistik</string>
     <string name="settings_plugin_library_stats_description">Notizanzahl, neue Notizen und Notizen mit Handlungsbedarf. Ohne Tracking oder KI.</string>
+    <string name="library_stats_connect">Verbinde dich mit deinem Server, um die Bibliotheksstatistik zu sehen.</string>
 </resources>

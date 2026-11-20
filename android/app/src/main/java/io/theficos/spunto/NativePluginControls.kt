@@ -40,7 +40,11 @@ import java.time.format.DateTimeFormatter
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s2)) {
     val tags=listOfNotNull("Android".takeIf {plugin.raw.pluginText("kind")=="device"},resources.getString(R.string.settings_default_with_ai).takeIf {plugin.raw.pluginText("default")=="on-with-ai"})
-    TextButton(onClick=onSettings,contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(localizedPluginName(resources,plugin.raw)+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface)}
+    val hasSettings=!plugin.removed && (
+     plugin.raw.pluginFlag("has_settings")==true || (catalogPluginPage(plugin).schema["properties"] as? JsonObject)?.isNotEmpty()==true ||
+     plugin.raw.pluginText("origin")=="bundled" && plugin.id in setOf("translate","dictation"))
+    val settings=if(hasSettings) " · "+resources.getString(R.string.settings_settings) else ""
+    TextButton(onClick=onSettings,contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp)) {Text(localizedPluginName(resources,plugin.raw)+settings+tags.joinToString("") {" · $it"},style=MaterialTheme.typography.titleSmall,color=MaterialTheme.colorScheme.onSurface)}
     if(localizedPluginDescription(resources,plugin.raw).isNotBlank()) Text(localizedPluginDescription(resources,plugin.raw),style=MaterialTheme.typography.bodyMedium,color=quiet,maxLines=2,overflow=TextOverflow.Ellipsis)
     if(plugin.facts(resources).isNotEmpty()) Text(plugin.facts(resources).joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3,maxLines=2,overflow=TextOverflow.Ellipsis)
    }
@@ -100,6 +104,7 @@ import java.time.format.DateTimeFormatter
  val fields=page.schema["properties"] as? JsonObject ?: JsonObject(emptyMap())
  if(fields.isEmpty()) return
  val hasMode=plugin.id in setOf("label-suggestions","title-summary","voice-memos") && "change_mode" in fields && onChangeMode!=null
+ val hasWebFields=fields.keys.any {it!="change_mode" || !hasMode}
  if(hasMode) {
   PluginHeading(resources.getString(R.string.plugin_change_behavior))
   Text(resources.getString(when(plugin.id) {
@@ -117,8 +122,8 @@ import java.time.format.DateTimeFormatter
    }
   }
  }
- if(fields.keys.any {it!="change_mode"}) PluginHeading(resources.getString(if(hasMode) R.string.plugin_advanced else R.string.settings_settings))
- if(fields.keys.any {it!="change_mode"}) Text(if(online) resources.getString(R.string.settings_server_settings_are_read_only_on_this) else resources.getString(R.string.settings_changes_need_a_connection),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+ if(hasWebFields) PluginHeading(resources.getString(if(hasMode) R.string.plugin_advanced else R.string.settings_settings))
+ if(hasWebFields) Text(if(online) resources.getString(R.string.settings_server_settings_are_read_only_on_this) else resources.getString(R.string.settings_changes_need_a_connection),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
  fields.forEach { (key,raw) -> if(hasMode && key=="change_mode") return@forEach;val field=raw as? JsonObject ?: return@forEach
   val title=localizedPluginSettingTitle(resources,plugin.raw,key,field)
   if(field.pluginFlag("x-secret")==true) {
@@ -132,7 +137,7 @@ import java.time.format.DateTimeFormatter
    if(field.pluginText("x-scope")=="device") Text(resources.getString(R.string.settings_this_phone_only),style=MaterialTheme.typography.bodySmall)
   }
  }
- if(fields.keys.any {it!="change_mode"}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online && plugin.valid) {Text(resources.getString(R.string.settings_manage_settings_in_the_web_app_owner))}
+ if(hasWebFields) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online && plugin.valid) {Text(resources.getString(R.string.settings_manage_settings_in_the_web_app_owner))}
 }
 
 internal fun pluginSettingValue(resources:android.content.res.Resources,plugin:NativePluginFacts,key:String,value:String):String {
@@ -154,20 +159,40 @@ internal fun pluginDetailCommands(plugin:NativePluginFacts,versionedAgentReview:
  (plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.filter {command ->
   command.pluginStrings("where").orEmpty().any {it in setOf("global","palette","note-actions")} &&
    plugin.id!=ThinkingDeskRoute &&
+   (plugin.id to command.pluginText("id")) !in setOf("ask" to "ask","library-stats" to "summary") &&
+   !(plugin.id=="label-gardener" && plugin.raw.pluginText("origin")=="bundled" && command.pluginText("id")=="review-now") &&
    !handledByAgentReviewPanel(plugin.id,command.pluginText("id"),versionedAgentReview)
  }.take(3)
 
-@Composable internal fun NativePluginDetailFacts(plugin:NativePluginFacts,online:Boolean,commandBusy:Boolean,versionedAgentReview:Boolean,onCommand:(JsonObject)->Unit,onWeb:(String)->Unit) {
+@Composable internal fun NativePluginDetailFacts(plugin:NativePluginFacts,online:Boolean,commandBusy:Boolean,versionedAgentReview:Boolean,onCommand:(JsonObject)->Unit,onWeb:(String)->Unit,onReview:()->Unit) {
  val locale=LocalConfiguration.current.locales[0]
  val resources=LocalContext.current.resources
  if(plugin.pin==EnvironmentPin.Managed) {Text(resources.getString(R.string.settings_set_in_the_environment ,if(plugin.wantedOn) resources.getString(R.string.settings_on_e0049) else resources.getString(R.string.settings_off)));Text("SPUNTO_PLUGINS",fontFamily=monoFont())}
  if(!plugin.removed) {
   PluginHeading(resources.getString(R.string.settings_ai));pluginDestinationFacts(resources,plugin).forEach {Text(it)}
   if(plugin.permissions.orEmpty().any {it.startsWith("ai.")}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online) {Text(resources.getString(R.string.settings_change_route_in_the_web_app_owner))}
-  PluginHeading(resources.getString(R.string.settings_run))
   val commands=pluginDetailCommands(plugin,versionedAgentReview)
+  val translationSettings=if(plugin.id=="translate" && plugin.raw.pluginText("origin")=="bundled")
+   (plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.singleOrNull {it.pluginText("id")=="language-settings"}
+   else null
+  if(translationSettings!=null && plugin.activeContribution) {
+   PluginHeading(resources.getString(R.string.settings_settings))
+   TextButton(onClick={onCommand(translationSettings)},enabled=online && !commandBusy) {
+    Text(localizedPluginCommand(resources,plugin.raw,translationSettings))
+   }
+  }
+  if(plugin.id=="label-gardener" && plugin.raw.pluginText("origin")=="bundled") {
+   Text(resources.getString(R.string.plugin_label_review_schedule),style=MaterialTheme.typography.bodySmall)
+   if(plugin.activeContribution) {
+    val reviewCommand=(plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.singleOrNull {it.pluginText("id")=="review-now"}
+    reviewCommand?.let {command ->
+     TextButton(onClick={onCommand(command)},enabled=online && !commandBusy) {Text(localizedPluginCommand(resources,plugin.raw,command))}
+    }
+    TextButton(onClick=onReview) {Text(resources.getString(R.string.plugin_open_review))}
+   }
+  }
+  if(commands.isNotEmpty() || plugin.id==ThinkingDeskRoute) PluginHeading(resources.getString(R.string.settings_run))
   if(plugin.id==ThinkingDeskRoute) Text(resources.getString(R.string.settings_thinking_desk_from_navigation))
-  else if(commands.isEmpty()) Text(resources.getString(R.string.settings_no_commands_are_declared))
   commands.forEach {command ->
    val where=command.pluginStrings("where").orEmpty()
    val title=localizedPluginCommand(resources,plugin.raw,command)

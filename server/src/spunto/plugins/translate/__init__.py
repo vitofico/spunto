@@ -27,6 +27,62 @@ class Translation(Output):
     body: str = Field(min_length=1, max_length=20_000)
 
 
+def language_preference_key(ctx: Ctx) -> str:
+    user_id = ctx.principal.user_id if ctx.principal else None
+    return f"languages:{user_id or 'local-owner'}"
+
+
+async def language_form(ctx: Ctx, *, note_id: str | None = None):
+    preferences = await ctx.storage.kv.get(language_preference_key(ctx), {})
+    fields = {
+        "source_language": {
+            "type": "string",
+            "enum": list(SOURCE_LANGUAGES),
+            "title": tr("Source language"),
+            "default": preferences.get("source_language", "auto"),
+        },
+        "language": {
+            "type": "string",
+            "enum": list(LANGUAGES),
+            "title": tr("Translate to"),
+            "default": preferences.get("language", ui_language()),
+        },
+    }
+    if note_id is not None:
+        fields = {"note_id": {"type": "string", "default": note_id}, **fields}
+    return {
+        "type": "form",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(fields),
+            "properties": fields,
+        },
+    }
+
+
+def validate_languages(source: str, language: str):
+    if language not in LANGUAGES or source not in SOURCE_LANGUAGES:
+        raise ValueError("invalid translation language")
+    if source == language:
+        raise Problem(
+            422, "translation_same_language", tr("Choose different source and target languages.")
+        )
+
+
+@plugin.command("language-settings")
+async def language_settings(
+    ctx: Ctx, language: str | None = None, source_language: str | None = None
+):
+    if language is None or source_language is None:
+        return await language_form(ctx)
+    validate_languages(source_language, language)
+    await ctx.storage.kv.set(
+        language_preference_key(ctx), {"source_language": source_language, "language": language}
+    )
+    return {"type": "text", "text": tr("Translation defaults saved."), "feedback": "success"}
+
+
 @plugin.command("translate")
 async def translate(
     ctx: Ctx, note_id: str, language: str | None = None, source_language: str | None = None
@@ -35,39 +91,10 @@ async def translate(
     if not note:
         return text(tr("This note is unavailable for Translate."))
     user_id = ctx.principal.user_id if ctx.principal else None
-    preference_key = f"languages:{user_id or 'local-owner'}"
     if language is None:
-        preferences = await ctx.storage.kv.get(preference_key, {})
-        return {
-            "type": "form",
-            "schema": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["note_id", "source_language", "language"],
-                "properties": {
-                    "note_id": {"type": "string", "default": note_id},
-                    "source_language": {
-                        "type": "string",
-                        "enum": list(SOURCE_LANGUAGES),
-                        "title": tr("Source language"),
-                        "default": preferences.get("source_language", "auto"),
-                    },
-                    "language": {
-                        "type": "string",
-                        "enum": list(LANGUAGES),
-                        "title": tr("Translate to"),
-                        "default": preferences.get("language", ui_language()),
-                    },
-                },
-            },
-        }
+        return await language_form(ctx, note_id=note_id)
     source = "auto" if source_language is None else source_language
-    if language not in LANGUAGES or source not in SOURCE_LANGUAGES:
-        raise ValueError("invalid translation language")
-    if source == language:
-        raise Problem(
-            422, "translation_same_language", tr("Choose different source and target languages.")
-        )
+    validate_languages(source, language)
     ctx.check_write()
     direction = f"from {LANGUAGES[source]} " if source != "auto" else ""
     answer = await ctx.ai.chat(
@@ -105,7 +132,9 @@ async def translate(
             "results", key, receipt, {**fresh, "expires": ctx.clock() + 900_000}
         )
     if source_language is not None:
-        await ctx.storage.kv.set(preference_key, {"source_language": source, "language": language})
+        await ctx.storage.kv.set(
+            language_preference_key(ctx), {"source_language": source, "language": language}
+        )
     return {
         "ui": 1,
         "items": [

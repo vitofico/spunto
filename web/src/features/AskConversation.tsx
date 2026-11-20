@@ -3,7 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../lib/api";
 import { requestGeneration } from "../lib/identity";
-import { subscribeOwner, useManifest, useWorkspaceRole } from "../lib/query";
+import {
+  subscribeOwner,
+  useBrowserOnline,
+  useManifest,
+  useWorkspaceRole,
+} from "../lib/query";
 import { t, useLanguage } from "../lib/i18n";
 import type { Args } from "../lib/types";
 import { VocabularyOutput, NoteReference } from "./Vocabulary";
@@ -39,9 +44,15 @@ export default function AskConversation({
   );
   const input = useRef<HTMLTextAreaElement>(null);
   const latest = useRef<HTMLElement>(null);
+  const online = useBrowserOnline();
+  const plugin = manifest.data?.plugins.find((p) => p.id === "ask");
+  const canContinue = !!plugin?.contributes?.commands?.some(
+    (command) => command.id === "clear-conversation",
+  );
   const canWrite =
+    canContinue &&
     askNoteActionOptions(manifest.data?.plugins, workspaceRole).note_actions ===
-    true;
+      true;
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
@@ -100,7 +111,7 @@ export default function AskConversation({
     if (
       !enabled ||
       pending ||
-      !navigator.onLine ||
+      !online ||
       generation.current !== requestGeneration()
     )
       return;
@@ -112,7 +123,7 @@ export default function AskConversation({
     setFailure(null);
     setDraft("");
     try {
-      if (!continuation.current) {
+      if (canContinue && !continuation.current) {
         const started = await api.command("ask", "ask", {
           start: true,
           ...askNoteActionOptions(manifest.data?.plugins, workspaceRole),
@@ -257,6 +268,7 @@ export default function AskConversation({
           {t("ask.message")}
           <textarea
             ref={input}
+            data-modal-initial
             placeholder={t(
               canWrite ? "ask.message_placeholder" : "ask.question_placeholder",
             )}
@@ -303,7 +315,7 @@ export default function AskConversation({
             !!pending ||
             !draft.trim() ||
             [...draft.trim()].length > 500 ||
-            !navigator.onLine
+            !online
           }
         >
           {t("ask.send")}

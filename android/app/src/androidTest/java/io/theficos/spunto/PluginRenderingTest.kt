@@ -47,6 +47,31 @@ class PluginRenderingTest {
    compose.runOnIdle {mounted.value=false;model.retire()}
   }
  }
+ @Test fun labelReviewResultClosesBeforeOpeningNativeReview() {
+  val app=InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+  lateinit var model:SpuntoViewModel
+  val mounted=mutableStateOf(true)
+  var opened=false
+  val result=commandEnvelope("label-gardener","review-now",JsonObject(emptyMap()),buildJsonObject {
+   put("type","text");put("text","No new label changes to review.")
+  })
+  compose.runOnIdle {model=SpuntoViewModel(app)}
+  try {
+   runBlocking {LocalFixtureAuthority.require(model.container)}
+   compose.setContent {SpuntoTheme {
+    val scope=rememberCoroutineScope()
+    val feedback=remember {Feedback(SnackbarHostState(),scope)}
+    CompositionLocalProvider(LocalFeedback provides feedback) {
+     if(mounted.value) CommandResultSheet(model,result,{}, {}, {mounted.value=false},onReview={assertFalse(mounted.value);opened=true})
+    }
+   }}
+   compose.onNodeWithText("No new label changes to review.").assertIsDisplayed()
+   compose.onNodeWithText(app.getString(R.string.plugin_open_review)).assertIsDisplayed().performClick()
+   compose.runOnIdle {assertTrue(opened)}
+  } finally {
+   compose.runOnIdle {mounted.value=false;model.retire()}
+  }
+ }
  @Test fun translationFormSubmitsLanguageWithHiddenNoteContext() {
   val form=Json.parseToJsonElement("""{"type":"form","schema":{"type":"object","required":["note_id","language"],"properties":{"note_id":{"type":"string","default":"synthetic-note-a"},"language":{"type":"string","enum":["it","en"],"title":"Translate to"}}}}""").jsonObject
   var result:JsonObject?=null

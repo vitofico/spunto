@@ -24,3 +24,9 @@ id = "save-translation"
 title = "Save as note"
 where = []
 online = true
+
+[[contributes.commands]]
+id = "language-settings"
+title = "Translation defaults"
+where = []
+online = true

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="plugin_open_review">Apri Revisione</string>
+    <string name="plugin_label_review_schedule">Il giardiniere delle etichette controlla automaticamente le note idonee ogni settimana. Puoi anche avviare un controllo ora. Approva ogni proposta in Revisione.</string>
+    <string name="plugin_translate_language_settings">Lingue di traduzione predefinite</string>
     <string name="plugin_capture_conflict">Il modulo è già stato inviato con dati diversi. Controlla le decisioni prima di riprovare.</string>
     <string name="plugin_review_details">Controlla i dati attuali del plugin.</string>
     <string name="plugin_owner_required">Solo il titolare dello spazio può eseguire questa azione.</string>

@@ -15,7 +15,7 @@ permissions = ["notes.read", "suggest", "ai.chat", "ai.embed", "schedule"]
 [[contributes.commands]]
 id = "review-now"
 title = "Review labels"
-where = ["palette", "slash"]
+where = []
 online = true
 
 [[contributes.schedules]]

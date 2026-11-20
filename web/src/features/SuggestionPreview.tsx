@@ -64,6 +64,16 @@ export function SuggestionPreview({
             })}
           </p>
         )}
+        {s.reason && <p>{s.reason}</p>}
+        {Array.isArray(s.payload.note_ids) && (
+          <ul>
+            {s.payload.note_ids.map((id) => (
+              <li key={String(id)}>
+                <NoteReference id={String(id)} />
+              </li>
+            ))}
+          </ul>
+        )}
         {impact.isPending ? (
           <p>{t("suggestionpreview.counting_affected_notes")}</p>
         ) : impact.data ? (

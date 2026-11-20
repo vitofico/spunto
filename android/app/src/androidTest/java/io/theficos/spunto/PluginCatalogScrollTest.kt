@@ -162,7 +162,7 @@ class PluginCatalogScrollTest {
   var sawScheduledRow=false
   flingBothWays {step ->
    if(step==6) {
-    compose.onNodeWithText(plugin.name).assertIsDisplayed()
+    compose.onNode(hasText("${plugin.name} · Settings") and hasClickAction()).assertIsDisplayed()
     compose.onNodeWithText(schedule,substring=true).assertIsDisplayed()
     sawScheduledRow=true
    }

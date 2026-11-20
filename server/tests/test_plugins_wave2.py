@@ -536,6 +536,31 @@ async def test_translation_language_choices_and_previews_are_user_scoped(wave):
         assert (await notes.get(note["id"]))["body"] == note["body"]
 
 
+async def test_translation_defaults_can_be_saved_without_a_note_or_model_call(wave):
+    host, provider, notes = wave
+    first = replace(OWNER, user_id="test-user-a")
+    second = replace(OWNER, user_id="test-user-b")
+    note = await notes.create("Synthetic translation source")
+
+    form = await host.invoke_command("translate", "language-settings", principal=first)
+    assert set(form["schema"]["properties"]) == {"source_language", "language"}
+    saved = await host.invoke_command(
+        "translate",
+        "language-settings",
+        {"source_language": "fr", "language": "it"},
+        principal=first,
+    )
+    assert saved["feedback"] == "success"
+    for principal, source, target in ((first, "fr", "it"), (second, "auto", "en")):
+        form = await host.invoke_command(
+            "translate", "translate", {"note_id": note["id"]}, principal=principal
+        )
+        fields = form["schema"]["properties"]
+        assert fields["source_language"]["default"] == source
+        assert fields["language"]["default"] == target
+    assert not provider.requests
+
+
 async def test_repeat_translation_refreshes_an_expired_preview(wave, monkeypatch):
     host, _, notes = wave
     note = await notes.create("Synthetic source for a repeat translation")
@@ -631,7 +656,7 @@ async def test_gardener_validation_retry_spells_schema_and_can_abstain(wave, inv
 
     provider.callback = answer
     result = await host.invoke_command("label-gardener", "review-now", principal=OWNER)
-    assert "0 tag proposals added to Review" in result["text"]
+    assert result["text"].startswith("No new label changes to review.")
     chats = [request for request in provider.requests if "messages" in request]
     assert len(chats) == 2
     assert "Required schema" in chats[1]["messages"][0]["content"]

@@ -72,7 +72,11 @@ import kotlinx.serialization.json.*
  val owner by model.workspaceIsOwner.collectAsState()
  val epoch by model.pluginReplicaEpochState.collectAsState()
  val deskAvailable=thinkingDeskAvailable(manifest,owner && auth!=null)
- val navigationLabel=context.getString(if(deskAvailable) R.string.core_open_navigation else R.string.core_choose_labels)
+ val canAsk=owner && auth!=null && libraryCommandAvailable(manifest,"ask","ask")
+ val canViewStats=owner && auth!=null && libraryCommandAvailable(manifest,"library-stats","summary")
+ var statsOpen by remember(auth,epoch) {mutableStateOf(false)}
+ LaunchedEffect(canViewStats) {if(!canViewStats) statsOpen=false}
+ val navigationLabel=context.getString(if(deskAvailable || canViewStats) R.string.core_open_navigation else R.string.core_choose_labels)
  val deskSession=if(deskAvailable && nav.contains(ThinkingDeskRoute)) remember(auth,epoch) { ThinkingDeskSession() } else null
  LaunchedEffect(manifest) {
   model.container.manifest.withCurrentPublication {
@@ -141,7 +145,7 @@ import kotlinx.serialization.json.*
   var createdTo by rememberSaveable { mutableStateOf("") }
   val brandedHeader=route=="timeline" && !WindowInsets.isImeVisible
   val headerActions:@Composable RowScope.()->Unit={
-   if(writable && (isLabelsNavigationRoute(route) || route=="search") && model.container.manifest.enabled("ask")) TextButton(onClick={nav.open("ask")},modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_ask_notes)}) {Text(context.getString(R.string.core_ask))}
+   if(route=="timeline" && canAsk) AskNotesButton {nav.open("ask")}
    if(isLabelsNavigationRoute(route)) IconButton(onClick={nav.open("search")}) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(24.dp))}
    if(filterable) IconButton(onClick={filtersOpen=true}) {
     BadgedBox(badge={if(createdFrom.isNotBlank() || createdTo.isNotBlank()) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=if(createdFrom.isNotBlank() || createdTo.isNotBlank()) context.getString(R.string.core_filters_applied) else context.getString(R.string.core_filter_notes),modifier=Modifier.size(24.dp))}
@@ -163,6 +167,7 @@ import kotlinx.serialization.json.*
     Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal)).padding(start=20.dp,end=20.dp,top=44.dp,bottom=18.dp),verticalAlignment=Alignment.CenterVertically) {
      SpuntoWordmark(Modifier.weight(1f),style=MaterialTheme.typography.displayLarge.copy(fontSize=wordmarkSize,lineHeight=wordmarkSize*1.2f,fontWeight=FontWeight.SemiBold,letterSpacing=(-2.3).sp))
      IconButton(onClick={nav.open("search")},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_search),contentDescription=context.getString(R.string.core_search),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
+     if(canAsk) AskNotesButton {nav.open("ask")}
      IconButton(onClick={nav.open("settings")},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_settings_outline),contentDescription=context.getString(R.string.core_settings),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
     }
     Row(Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -174,13 +179,11 @@ import kotlinx.serialization.json.*
       BadgedBox(badge={if(filtered) Badge()}) {Icon(painterResource(R.drawable.ic_filter),contentDescription=context.getString(if(filtered) R.string.core_filters_applied else R.string.core_filter_notes),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
      }
      val hasTools=owner && online && globalTools(catalog,manifest).isNotEmpty()
-     val hasAsk=writable && model.container.manifest.enabled("ask")
-     if(hasTools || hasAsk) Box {
+     if(hasTools) Box {
       var more by remember {mutableStateOf(false)}
       IconButton(onClick={more=true},modifier=Modifier.size(48.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
       DropdownMenu(expanded=more,onDismissRequest={more=false}) {
-       if(hasTools) DropdownMenuItem(text={Text(context.getString(R.string.plugin_global_tools))},onClick={more=false;nav.open("tools")})
-       if(hasAsk) DropdownMenuItem(text={Text(context.getString(R.string.core_ask_notes))},onClick={more=false;nav.open("ask")})
+       DropdownMenuItem(text={Text(context.getString(R.string.plugin_global_tools))},onClick={more=false;nav.open("tools")})
       }
      }
     }
@@ -190,7 +193,7 @@ import kotlinx.serialization.json.*
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
-    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null)
+    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null,onLibraryStats=if(canViewStats) {{navigationOpen=false;statsOpen=true}} else null)
     StatusLines(model)
     if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}
@@ -199,10 +202,11 @@ import kotlinx.serialization.json.*
       focusCapture=focusCapture,onCaptureFocused={focusCapture=false})
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
-     route=="tools" -> if(owner) GlobalToolsScreen(model,{nav.open("ask")})
+     route=="tools" -> if(owner) GlobalToolsScreen(model)
      route==ThinkingDeskRoute -> if(deskSession!=null) ThinkingDeskScreen(model,deskSession,openNote)
       else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
-     route=="ask" -> if(writable) AskScreen(model,onNote=openNote)
+     route=="ask" -> if(canAsk) AskScreen(model,onNote=openNote)
+      else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
      route=="archive" || route=="trash" || route.startsWith("label:") || route.startsWith("view:") -> FilteredTimeline(model,route,from=createdFrom,to=createdTo,onNote=openNote)
@@ -218,8 +222,9 @@ import kotlinx.serialization.json.*
       applyDeviceTheme(model.container.preferences,requestedTheme,choice,selected,manifestFingerprint,clearWallpaper=true);theme=requestedTheme;accent=choice;themeOverride=true;wallpaper=false
      },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()},backgroundStyle=backgroundStyle,onBackgroundStyle={backgroundStyle=it;model.container.preferences.edit().putString("background-style",it).apply()})
      route=="plugins" -> PluginsScreen(model) { nav.open("plugin:$it") }
-     route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))
+     route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'),onReview={nav.open("review")})
     }
+    if(statsOpen && canViewStats) LibraryStatsDialog(model,openNote,{statsOpen=false})
     val remote by model.remote.collectAsState()
     val decisionAccess=owner && auth?.serverUrl==remote.string("authority") && remote.string("replica_epoch")==epoch &&
      model.container.manifest.enabled(DecisionJournalId)
@@ -227,7 +232,10 @@ import kotlinx.serialization.json.*
     LaunchedEffect(writable,decisionAccess,journal) {
      if(!writable || journal && !decisionAccess) model.remote.value=JsonObject(emptyMap())
     }
-    if(writable && (if(journal) decisionAccess else online) && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())})
+    if(writable && (if(journal) decisionAccess else online) && remote.string("plugin_id").isNotBlank() && model.container.manifest.enabled(remote.string("plugin_id"))) {
+     val onReview:(()->Unit)?=if(route=="plugin:label-gardener" && remote.string("plugin_id")=="label-gardener" && remote.string("command_id")=="review-now") {{nav.open("review")}} else null
+     CommandResultSheet(model,remote,openNote,{model.remote.value=it},{model.remote.value=JsonObject(emptyMap())},onReview=onReview)
+    }
     if(writable && remote.string("suggestion_preview").isNotBlank()) {
      val outputs by model.outputs.collectAsState()
      outputs.firstOrNull { it.id==remote.string("suggestion_preview") && it.kind=="suggestion" && model.container.manifest.enabled(payload(it.payload).string("plugin")) }?.let { item -> SuggestionDecisionDialog(model,proposalData(item),openNote,{model.remote.value=JsonObject(emptyMap())}) }

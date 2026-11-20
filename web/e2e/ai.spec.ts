@@ -70,6 +70,7 @@ const ask = {
     commands: [
       { id: "ask", title: "Ask your notes", where: ["palette"] },
       { id: "save-answer", title: "Save as note", where: [] },
+      { id: "clear-conversation", title: "Clear conversation", where: [] },
     ],
   },
 };
@@ -514,7 +515,7 @@ test("keyword results render before hybrid replaces the list", async ({
   await expect(page.getByText("≈ similar meaning")).toBeVisible();
 });
 
-test("live related panel and Ask form preserve the save-answer action", async ({
+test("live related panel and direct Ask preserve the save-answer action", async ({
   page,
 }, info) => {
   const state = await fixture(page);
@@ -522,14 +523,14 @@ test("live related panel and Ask form preserve the save-answer action", async ({
   await expect(page.getByText("Related · 1 item")).toBeVisible();
   await page.getByText("Related · 1 item").click();
   await expect(page.getByText("Coffee neighbor")).toBeVisible();
-  await page.keyboard.press("Meta+k");
-  await page.getByRole("option", { name: /Ask your notes/ }).click();
-  await page
-    .getByLabel("Question", { exact: true })
-    .fill("Where did I have coffee?");
+  await page.goto("/");
   await page
     .getByRole("button", { name: "Ask your notes", exact: true })
     .click();
+  await page
+    .getByRole("textbox", { name: "Your message" })
+    .fill("Where did I have coffee?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Save as note", exact: true }),
@@ -548,18 +549,30 @@ test("live related panel and Ask form preserve the save-answer action", async ({
   );
 });
 
-test("a typed question asks directly and keeps citations and explicit save", async ({
+test("the library Ask button opens chat with citations and explicit save", async ({
   page,
 }, info) => {
   const state = await fixture(page);
   await page.goto("/");
+  const askButton = page.getByRole("button", {
+    name: "Ask your notes",
+    exact: true,
+  });
+  await expect(askButton).toHaveCount(1);
   await page.getByRole("button", { name: "Search and commands" }).click();
-  const input = page.getByRole("searchbox", { name: "Search and commands" });
-  await input.fill("Where did I have coffee?");
+  const search = page.getByRole("searchbox", { name: "Search and commands" });
+  await search.fill("Where did I have coffee?");
   await expect(
     page.getByRole("option", { name: /Ask your notes/ }),
-  ).toHaveAttribute("aria-selected", "true");
-  await input.press("Enter");
+  ).toHaveCount(0);
+  await search.press("Escape");
+  await page
+    .getByRole("button", { name: "Ask your notes", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Your message" })
+    .fill("Where did I have coffee?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(page.getByText("You had coffee in Rome.")).toBeVisible();
   await expect
     .poll(() => state.commands)
@@ -623,6 +636,11 @@ test("a typed question asks directly and keeps citations and explicit save", asy
       state.commands.some((command) => command.id === "clear-conversation"),
     )
     .toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Ask your notes" }),
+  ).toHaveCount(0);
+  await expect(askButton).toBeFocused();
 });
 
 test("private and machine notes do not request AI live panels", async ({
@@ -661,13 +679,13 @@ test("reviewed Ask note writes show a preview and require explicit confirmation 
 }) => {
   const state = await fixture(page, false, true);
   await page.goto("/");
-  await page.getByRole("button", { name: "Search and commands" }).click();
   await page
-    .getByRole("searchbox", { name: "Search and commands" })
+    .getByRole("button", { name: "Ask your notes", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Your message" })
     .fill("Create a note for the weekend?");
-  await page
-    .getByRole("searchbox", { name: "Search and commands" })
-    .press("Enter");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   const chat = page.getByRole("region", { name: "Conversation" });
   await expect(chat.getByText(/Target: New note/)).toBeVisible();
   await expect(chat.getByText(/Buy pasta and tomatoes/)).toBeVisible();
@@ -737,12 +755,8 @@ for (const width of [1024, 360, 320]) {
     };
     await page.goto("/");
     await page
-      .getByRole("button", {
-        name: width < 600 ? "Search" : "Search and commands",
-        exact: true,
-      })
+      .getByRole("button", { name: "Ask your notes", exact: true })
       .click();
-    await page.getByRole("option", { name: /Ask your notes/ }).click();
     const chat = page.getByRole("region", {
       name: "Conversation",
       exact: true,

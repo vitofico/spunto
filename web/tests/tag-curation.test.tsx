@@ -37,6 +37,7 @@ it("previews removal and counts its current impact with a null destination", asy
     </QueryClientProvider>,
   );
   expect(await screen.findByText(/2 notes will change/)).toBeTruthy();
+  expect(screen.getByText(suggestion.reason)).toBeTruthy();
   expect(
     screen.getByText(/from affected notes, including nested labels/),
   ).toBeTruthy();

@@ -237,7 +237,7 @@ async def test_postgres_label_plugins_read_vocabulary_and_reach_model(pg, pg_adm
         )
         assert "1 suggestions to review" in result["text"]
         result = await host.invoke_command("label-gardener", "review-now", principal=principal)
-        assert "0 tag proposals added to Review" in result["text"]
+        assert result["text"].startswith("No new label changes to review.")
         assert purposes == ["labels", "gardener"]
         assert (await domain.get(target["id"]))["labels"] == []
 

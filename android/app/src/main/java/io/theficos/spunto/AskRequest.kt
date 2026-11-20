@@ -43,8 +43,3 @@ internal suspend fun conversationAskRequest(question:String,continuation:JsonObj
  if(!current()) return null
  return request("ask",buildJsonObject {handle.forEach {(key,value)->put(key,value)};put("question",question)})
 }
-
-internal fun canAskSearch(question:String):Boolean {
- val text=question.trim()
- return text.isNotEmpty() && text.split(Regex("\\s+")).size>=3 && text.codePointCount(0,text.length)<=500
-}

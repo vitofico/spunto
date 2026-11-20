@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="plugin_open_review">Prüfung öffnen</string>
+    <string name="plugin_label_review_schedule">Der Schlagwort-Gärtner prüft geeignete Notizen jede Woche automatisch. Du kannst auch sofort eine Prüfung starten. Bestätige jeden Vorschlag auf der Prüfseite.</string>
+    <string name="plugin_translate_language_settings">Standardsprachen für Übersetzungen</string>
     <string name="plugin_capture_conflict">Dieses Formular wurde bereits mit anderen Angaben gesendet. Prüfe die Entscheidungen, bevor du es erneut versuchst.</string>
     <string name="plugin_review_details">Prüfe die aktuellen Angaben zum Plug-in.</string>
     <string name="plugin_owner_required">Nur der Inhaber des Bereichs kann diese Aktion ausführen.</string>

@@ -271,7 +271,7 @@ kbd {
   gap: var(--s-2);
 }
 /* The inline padding matches the label tree's base indent in App.tsx. */
-.rail nav a {
+.rail nav :is(a, .rail-action) {
   color: var(--ink-2);
   padding: var(--s-8) var(--s-12);
   border-radius: var(--r-8);
@@ -282,7 +282,7 @@ kbd {
   overflow-wrap: anywhere;
   transition: background-color var(--dur-1) var(--ease-out);
 }
-.rail nav a > .rail-label,
+.rail nav :is(a, .rail-action) > .rail-label,
 .label-tree a > span:nth-child(2) {
   min-width: 0;
 }
@@ -296,13 +296,19 @@ kbd {
 .rail-close {
   display: none;
 }
+.rail-action {
+  border: 0;
+  background: transparent;
+  text-align: start;
+  font: inherit;
+}
 .rail nav a[aria-current="page"] {
   background: var(--sunken);
   color: var(--ink);
   font-weight: 500;
 }
 @media (hover: hover) {
-  .rail nav a:hover {
+  .rail nav :is(a, .rail-action):hover {
     background: var(--sunken);
     text-decoration: none;
   }
@@ -1179,6 +1185,12 @@ mark[data-match] {
   border-bottom: 1px solid var(--rule);
   padding-right: var(--s-12);
 }
+.library-tool-head {
+  padding-inline-start: var(--s-20);
+}
+.library-tool-head > .button {
+  margin-inline-start: auto;
+}
 .palette-head input {
   width: 100%;
   min-width: 0;
@@ -1584,7 +1596,7 @@ mark[data-match] {
   }
   .button,
   button.primary,
-  .rail nav a,
+  .rail nav :is(a, .rail-action),
   .palette-row,
   .menu [role="menuitem"],
   .autocomplete [role="option"],

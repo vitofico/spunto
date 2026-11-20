@@ -2,6 +2,10 @@
   "nativeName": "Deutsch",
   "direction": "ltr",
   "messages": {
+    "settingsplugins.settings": "Einstellungen",
+    "settingsplugins.open_review": "Prüfung öffnen",
+    "settingsplugins.label_review_schedule": "Der Schlagwort-Gärtner prüft geeignete Notizen jede Woche automatisch. Du kannst auch sofort eine Prüfung starten. Bestätige jeden Vorschlag auf der Prüfseite.",
+    "plugin.translate.commands.language-settings.title": "Standardsprachen für Übersetzungen",
     "whatsnew.note_tools_title": "Agentenänderungen prüfen und passende Notizwerkzeuge finden",
     "whatsnew.note_tools_body": "Vergleiche vor der Übernahme, was ein Agent hinzugefügt oder entfernt hat. Die passendsten Werkzeuge erscheinen direkt in der Notiz. Öffne die Notizwerkzeuge, um alle verfügbaren Aktionen zu sehen.",
     "settings.browse_sections": "Einstellungen durchsuchen",
@@ -1273,6 +1277,7 @@
     "collaboration.preview_editor": "{recipient} kann den Text dieser Notiz lesen und bearbeiten und ihre verknüpften Anhänge lesen.",
     "collaboration.preview_scope": "Dies umfasst künftige Änderungen der Notiz, aber keinen Versionsverlauf, verlinkte Notizen oder den Rest dieses Bereichs. Andere Freigaben oder eine Mitgliedschaft können ebenfalls Zugriff geben. Ein Entzug löscht keine bereits erstellten Kopien.",
     "slots.stale_form_recovery": "Deine Eingaben stehen noch in diesem Formular. Kopiere den gewünschten Text, bevor du das Werkzeug erneut öffnest. Prüfe dann die geänderten Quellen und versuche es erneut.",
+    "library.stats_connect": "Verbinde dich mit deinem Server, um die Bibliotheksstatistik zu sehen.",
     "plugin.library-stats.name": "Bibliotheksstatistik",
     "plugin.library-stats.description": "Notizanzahl, neue Notizen und Notizen mit Handlungsbedarf. Ohne Tracking oder KI.",
     "plugin.library-stats.commands.summary.title": "Bibliotheksstatistik",

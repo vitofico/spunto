@@ -2,4 +2,5 @@
 <resources>
     <string name="settings_plugin_library_stats_name">Library stats</string>
     <string name="settings_plugin_library_stats_description">See note counts, recent captures and notes that could use attention. No tracking or AI.</string>
+    <string name="library_stats_connect">Connect to your server to see library stats.</string>
 </resources>

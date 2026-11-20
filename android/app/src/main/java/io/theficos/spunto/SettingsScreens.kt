@@ -210,7 +210,7 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
 }
 
 /** A plugin's own page (03 §6.4, R22): header with the switch, its settings, then the host-drawn AI, Run, Activity, Access and data sections. */
-@Composable fun PluginScreen(model:SpuntoViewModel,id:String) {
+@Composable fun PluginScreen(model:SpuntoViewModel,id:String,onReview:()->Unit) {
  val resources=LocalContext.current.resources
  val catalog by model.catalog.collectAsState();val manifest by model.manifest.collectAsState()
  val auth by model.auth.collectAsState();val connected by model.online.collectAsState()
@@ -268,7 +268,7 @@ internal fun signOutText(resources:Resources,pending:Int,online:Boolean)=
    if(online && plugin.activeContribution) commandOwner.start({deliver,complete ->
     runCommand(model,plugin.id,command.pluginText("id").orEmpty(),JsonObject(emptyMap()),deliver,onComplete=complete,scope=commandScope)
    },{model.remote.value=it})
-  },model::pluginWeb)}}}}
+  },model::pluginWeb,onReview)}}}}
  }
  PluginEnableDialog(model,enable,projection,online,busy)
 }

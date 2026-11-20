@@ -117,7 +117,7 @@ class PluginPresentationTest {
    tool("digest","digest","waiting"),tool("library-stats","summary"),tool("decision-journal","record-decision"))
   val catalog=buildJsonObject {put("plugins",JsonArray(plugins))}
   val manifest=buildJsonObject {put("plugins",JsonArray(plugins.filterNot {it["id"]==JsonPrimitive("library-stats")}))}
-  assertEquals(listOf("ask","packs","review-now"),globalTools(catalog,manifest).map {it.second["id"]!!.jsonPrimitive.content})
+  assertEquals(listOf("packs"),globalTools(catalog,manifest).map {it.second["id"]!!.jsonPrimitive.content})
  }
  @Test fun thinkingDeskConnectionLabelsTranslateTheKindFieldAndKeepWireValues() {
   val italian=settingsTestResources("it")

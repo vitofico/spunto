@@ -374,6 +374,12 @@ class Host:
         self.plugins_rev = int(rows[0][0])
         await conn.execute("UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='change_seq'")
 
+    async def wait_for_lifecycle(self):
+        """A caller can capture a snapshot synchronously as soon as this returns."""
+        while lock := next((lock for lock in self.lifecycle_locks.values() if lock.locked()), None):
+            async with lock:
+                pass
+
     def catalog(self, *, include_retired=False):
         result = []
         for plugin_id, manifest in self.manifests.items():

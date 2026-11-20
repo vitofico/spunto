@@ -92,21 +92,31 @@ internal class NativePluginManagerActions(
     }
     val row=api.toggle(id,on,if(on) permissions else emptyList(),reviewToken);ensureActive()
     if(!owns(config,attempt)) return@launch
-    require(row.pluginText("id")==id && row.pluginText("switch") in setOf("on","off") && row.pluginLong("plugins_rev")!=null) {resources.getString(R.string.settings_the_server_did_not_acknowledge_this_switch)}
+    val receiptRevision=row.pluginLong("plugins_rev")
+    require(row.pluginText("id")==id && row.pluginText("switch") in setOf("on","off") && receiptRevision!=null) {resources.getString(R.string.settings_the_server_did_not_acknowledge_this_switch)}
     if(epoch()!=expectedEpoch || !owns(config,attempt)) return@launch
-    if(!acknowledge(config,expectedEpoch,row)) {if(owns(config,attempt) && epoch()==expectedEpoch) onComplete(PluginToggleResult.Failed(resources.getString(R.string.settings_plugin_facts_changed_refresh_before_trying_again)));return@launch}
-    if(!owns(config,attempt) || epoch()!=expectedEpoch) return@launch
-    var refreshFailed=false
-    try {val snapshot=snapshot(api,expectedEpoch);ensureActive();if(owns(config,attempt) && epoch()==expectedEpoch) publish(config,snapshot)}
+    val acknowledged=try {acknowledge(config,expectedEpoch,row)}
     catch(cancelled:CancellationException) {throw cancelled}
-    catch(error:Exception) {refreshFailed=true;if(owns(config,attempt)) report(resources.getString(R.string.settings_switch_saved_refresh_unavailable))}
+    catch(error:Exception) {false}
+    if(!owns(config,attempt) || epoch()!=expectedEpoch) return@launch
+    // A rejected local publication does not undo a successful server write. Reconcile from a full snapshot.
+    val refreshed=try {
+     val snapshot=snapshot(api,expectedEpoch);ensureActive()
+     owns(config,attempt) && epoch()==expectedEpoch && publish(config,snapshot)
+    }
+    catch(cancelled:CancellationException) {throw cancelled}
+    catch(error:Exception) {false}
     if(owns(config,attempt) && epoch()==expectedEpoch) {
      val latest=current();val actual=latest.rows.firstOrNull {it.id==id}
-     if(!on && row.pluginText("switch")=="off" && latest.valid && latest.revision==row.pluginLong("plugins_rev") && actual?.canEnable==true && !actual.wantedOn && actual.permissions?.toSet()==permissions.toSet() && actual.granted?.toSet()==plugin.granted?.toSet()) {
+     val refreshFailed=!refreshed || !latest.valid || latest.revision<receiptRevision ||
+      latest.revision==receiptRevision && actual?.raw?.pluginText("switch")!=row.pluginText("switch")
+     val reconciled=acknowledged || !refreshFailed
+     if(refreshFailed) report(resources.getString(R.string.settings_switch_saved_refresh_unavailable))
+     if(reconciled && !on && row.pluginText("switch")=="off" && latest.valid && latest.revision==receiptRevision && actual?.canEnable==true && !actual.wantedOn && actual.permissions?.toSet()==permissions.toSet() && actual.granted?.toSet()==plugin.granted?.toSet()) {
       val receipt=PluginUndo(id,config.serverUrl.trimEnd('/'),permissions,actual.granted.orEmpty().toSet(),now()+7000)
       undo.value=receipt;expiry=scope.launch {delay(7000);if(undo.value===receipt) undo.value=null}
      }
-     if(actual==null || !actual.valid || actual.removed || actual.raw.pluginText("switch")!=(if(on) "on" else "off")) report(resources.getString(R.string.settings_the_plugin_changed_on_the_server_its))
+     if(reconciled && (actual==null || !actual.valid || actual.removed || actual.raw.pluginText("switch")!=(if(on) "on" else "off"))) report(resources.getString(R.string.settings_the_plugin_changed_on_the_server_its))
      onComplete(PluginToggleResult.Applied(row,refreshFailed))
     }
    } catch(cancelled:CancellationException) {throw cancelled}

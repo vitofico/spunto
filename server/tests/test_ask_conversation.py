@@ -8,6 +8,7 @@ import pytest
 from test_plugins_ai import OWNER, state
 from test_plugins_ai import ai_host as ai_host
 
+from spunto.ai.errors import AIError
 from spunto.api.errors import Problem
 from spunto.core.notes import Notes
 from spunto.core.plugin_notes import PluginNotes
@@ -406,3 +407,88 @@ async def test_discussion_context_cannot_replay_passages_from_a_now_private_note
     refused = await ask.save_answer(ctx, **save_args(first))
     assert refused["type"] == "text" and "changed" in refused["text"]
     assert len((await notes.list())["notes"]) == 1
+
+
+async def test_chat_choice_reaches_provider_and_is_scoped_to_one_conversation(ai_host):
+    host, provider = ai_host
+    available = ["alternative", "fixture-chat"]
+
+    @provider.app.get("/v1/models")
+    async def inventory():
+        return {"data": [{"id": model} for model in available]}
+
+    ctx = Ctx(host, "ask", principal=OWNER)
+    provider.ask_answer = {"mode": "discussion", "paragraphs": ["Try a sketch."], "citations": []}
+    first = continuation(await ask.ask(ctx, start=True, conversational=True))
+    answer = await ask.ask(ctx, "How can I brainstorm?", **first, chat_model="alternative")
+    next_turn = continuation(answer)
+    with pytest.raises(Problem) as changed:
+        await ask.ask(ctx, "And then?", **next_turn, chat_model="fixture-chat")
+    assert changed.value.code == "ask_conversation_changed"
+    await ask.ask(ctx, "And then?", **next_turn)
+    other = continuation(await ask.ask(ctx, start=True, conversational=True))
+    await ask.ask(ctx, "Any ideas?", **other)
+    assert [body["model"] for body in provider.chat_bodies] == [
+        "alternative",
+        "alternative",
+        "fixture-chat",
+    ]
+    available.remove("alternative")
+    with pytest.raises(AIError, match="ai_model_invalid"):
+        await ask.ask(
+            ctx,
+            "What's next?",
+            **continuation(
+                await ask.ask(ctx, start=True, conversational=True, chat_model="alternative")
+            ),
+        )
+    assert len(provider.chat_bodies) == 3
+
+
+@pytest.mark.parametrize("default_external", [False, True])
+async def test_chat_choice_respects_effective_destination_locality(
+    ai_host, monkeypatch, default_external
+):
+    host, _ = ai_host
+    profile = host.gateway.profile_for("chat").model_copy(
+        update={"base_url": "http://router.svc/v1"}
+    )
+
+    async def models(connection, *, transport):
+        assert connection == profile
+        return [
+            {"id": "fixture-chat", "capabilities": ["chat"], "leaves_network": default_external},
+            {"id": "local", "capabilities": ["chat"], "leaves_network": False},
+            {"id": "remote", "capabilities": ["chat"], "leaves_network": True},
+            {"id": "vector", "capabilities": ["embed"], "leaves_network": False},
+        ]
+
+    monkeypatch.setattr("spunto.ai.selection.inventory", models)
+    choices = await host.gateway.selection.ask_models(profile)
+    assert choices["external"] == default_external
+    assert choices["models"] == (
+        ["fixture-chat", "local", "remote"] if default_external else ["fixture-chat", "local"]
+    )
+    assert choices["external_models"] == (["fixture-chat", "remote"] if default_external else [])
+
+
+async def test_local_choice_rejects_router_drift_on_follow_up(ai_host, monkeypatch):
+    host, provider = ai_host
+    ctx = Ctx(host, "ask", principal=OWNER)
+    catalog = {"models": ["flex"], "external_models": []}
+
+    async def inventory(profile):
+        return catalog
+
+    monkeypatch.setattr(host.gateway.selection, "ask_models", inventory)
+    provider.ask_answer = {"mode": "discussion", "paragraphs": ["Try a sketch."], "citations": []}
+    first = await ask.ask(
+        ctx, start=True, conversational=True, chat_model="flex", chat_model_local_only=True
+    )
+    response = await ask.ask(ctx, "Where can I start?", **continuation(first))
+    catalog["external_models"] = ["flex"]
+    with pytest.raises(AIError, match="ai_model_locality_changed"):
+        await ask.ask(ctx, "And then?", **continuation(response))
+    assert [body["model"] for body in provider.chat_bodies] == ["flex"]
+    chat = next(row for row in provider.requests if row["path"] == "/v1/chat/completions")
+    assert chat["headers"]["x-svincolo-require-locality"] == "local"

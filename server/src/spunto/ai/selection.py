@@ -153,6 +153,26 @@ class Selection:
                     model["vision_unverified"] = False
         return {"profiles": profiles}
 
+    async def ask_models(self, profile):
+        rows = await inventory(profile, transport=self.gateway.transport)
+        # An in-network router can forward a local-looking alias to an external provider.
+        external = profile.leaves_network("chat") or any(
+            row["id"] == profile.chat_model and row["leaves_network"] for row in rows
+        )
+        choices = {
+            row["id"]: row["leaves_network"]
+            for row in rows
+            if (row["capabilities"] is None or "chat" in row["capabilities"])
+            and (external or not row["leaves_network"])
+        }
+        return {
+            "default_model": profile.chat_model,
+            "host": urlsplit(profile.base_url).hostname,
+            "external": external,
+            "models": sorted(choices),
+            "external_models": sorted(model for model, remote in choices.items() if remote),
+        }
+
     async def save(self, revision, selections):
         async with self.lock:
             await self._load()

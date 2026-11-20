@@ -30,6 +30,14 @@ does not open the source library's timeline, labels, settings, export or revisio
 history. Linked attachments are checked against the note grant. There are no
 anonymous links, invitation emails, email search or account directory.
 
+When someone adds you to a shared space or shares an individual note with you,
+you receive an entry in your web notification inbox. To hear about new notes
+from other people, turn on notifications for that shared space. Each member
+chooses which spaces to follow. Editing a note or letting autosave run is quiet.
+On Android, open **Settings → Account → Shared activity** to read activity for the space
+paired with your phone. Enable phone alerts there for periodic background
+notifications. Open the web inbox to see activity across all your spaces.
+
 Existing notes and shared notes autosave; **Save** can send an edit immediately.
 Each write carries its base version. Independent edits can merge; overlapping
 changes preserve the submitted text in a conflict copy and offer review. A server
@@ -38,6 +46,12 @@ This is versioned collaboration, without live cursors or character-level CRDTs.
 
 The default personal space stays out of the main writing flow. A space is useful
 when access changes; labels are usually enough when only the topic changes.
+
+In **Ask your notes**, use **Chat model** before sending the first question to
+choose a model for this conversation. Follow-up questions and collection chats
+support the same choice. Start a new conversation to switch models. The picker
+uses the chat provider configured for Ask and identifies external models before
+you send a message.
 
 The space owner can choose **Settings → AI** models from the configured providers'
 available inventory. Choices persist for that space; another account's personal

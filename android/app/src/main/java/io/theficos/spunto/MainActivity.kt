@@ -18,7 +18,7 @@ class MainActivity:LockedActivity() {
   lifecycleScope.launch {owner.replicas.collectLatest {replica ->
    val selected=ViewModelProvider(this@MainActivity)[replica.key,SpuntoViewModel::class.java]
    val previous=model;model=selected
-   setProtectedContent {key(replica.key) {SpuntoApp(selected,initialNoteId,guideEligible)}}
+   setProtectedContent {key(replica.key) {SpuntoApp(selected,initialNoteId,guideEligible,intent.action==ActivityRoute && intent.getStringExtra("replica")==replica.replicaId)}}
    if(previous!==selected) previous?.retire()
    repeatOnLifecycle(Lifecycle.State.STARTED) {owner.appLock.state.collectLatest {gate ->
     if(gate.unlocked) selected.auth.collectLatest {config ->if(config!=null) ChangeWaiter(selected.container.auth,selected.repository,selected.container.sync).run()}

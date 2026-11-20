@@ -440,6 +440,22 @@ async def note_assistance(
         return result
 
 
+@router.get("/ai/ask-models")
+async def ask_models(services: ServicesDep, principal: PrincipalDep):
+    _owner(principal)
+    if principal.workspace_role != "owner":
+        raise Problem(403, "owner_required", tr("Only the space owner can manage this setting."))
+    host = _host(services, "ask", enabled=True)
+
+    async def inventory():
+        if host.gateway is None:
+            raise AIError("unavailable", "ai_capability_unbound")
+        profile = host.gateway.profile_for("chat", host.states["ask"].get("ai_route"))
+        return await host.gateway.selection.ask_models(profile)
+
+    return await _call(inventory())
+
+
 @router.post("/plugins/{plugin_id}/commands/{command}")
 async def command(
     plugin_id: str,

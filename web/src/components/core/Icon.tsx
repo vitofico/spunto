@@ -1,6 +1,9 @@
 import { useLanguage } from "../../lib/i18n";
 import type { CSSProperties } from "react";
 const glyphs = {
+  bell: (
+    <path d="M5 16.5h14l-1.8-2.6V10a5.2 5.2 0 0 0-10.4 0v3.9L5 16.5ZM10 19a2.2 2.2 0 0 0 4 0" />
+  ),
   menu: <path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h15" />,
   search: (
     <>

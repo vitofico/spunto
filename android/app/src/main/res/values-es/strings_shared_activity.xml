@@ -1,0 +1,16 @@
+<resources>
+    <string name="shared_activity_title">Actividad compartida</string>
+    <string name="shared_activity_scope">Actividad en el espacio vinculado a este teléfono</string>
+    <string name="shared_activity_phone">Avisarme en este teléfono</string>
+    <string name="shared_activity_alert">Hay novedades en tu espacio vinculado.</string>
+    <string name="shared_activity_follow">Seguir las notas nuevas de este espacio</string>
+    <string name="shared_activity_permission">Abrir los ajustes de notificaciones de Android</string>
+    <string name="shared_activity_all">Todas las notificaciones de la cuenta en la web</string>
+    <string name="shared_activity_empty">Aún no hay actividad compartida</string>
+    <string name="shared_activity_joined">Te han añadido a un espacio</string>
+    <string name="shared_activity_shared">Han compartido una nota contigo</string>
+    <string name="shared_activity_created">Se ha añadido una nota</string>
+    <string name="shared_activity_read">Leída</string>
+    <string name="shared_activity_unread">Sin leer</string>
+    <string name="ask_chat_model">Modelo de chat</string>
+</resources>

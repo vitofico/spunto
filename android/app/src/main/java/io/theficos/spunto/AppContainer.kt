@@ -46,6 +46,7 @@ class AppContainer(val context:Context) {
  val manifest get()=current.manifest
  val preferences get()=current.preferences
  init {
+  scope.launch {auth.config.collect {config -> SharedActivityAlerts.onSelection(context,config)}}
   scope.launch {auth.selection.collect {selection -> if(selection.replicaId!=active.value.replicaId) {val previous=active.value;previous.retire();io.theficos.spunto.plugins.quickcapture.CaptureSurfaces.cacheSlip(context,null,null);active.value=newReplica(selection)};scheduler.periodic()}}
   connectivity.registerDefaultNetworkCallback(object:ConnectivityManager.NetworkCallback() {override fun onAvailable(network:Network) {connected.value=true};override fun onLost(network:Network) {connected.value=false}})
  }

@@ -202,12 +202,12 @@ class SpuntoViewModel internal constructor(application:Application,val container
   }
  }
  fun request(path:String,method:String="GET",body:JsonObject?=null,onResult:(JsonElement)->Unit={})=task { val config=auth.value ?: return@task; onResult(pluginApi(config,container.context.resources).request(path,method,body)) }
- fun ask(question:String,continuation:JsonObject?=null,current:()->Boolean={true},onHandle:(JsonObject)->Unit={},onError:((String)->Unit)?=null,onCollectionChanged:()->Unit={},conversational:Boolean=false,notesOnly:Boolean=false,collectionId:String?=null,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
+ fun ask(question:String,continuation:JsonObject?=null,current:()->Boolean={true},onHandle:(JsonObject)->Unit={},onError:((String)->Unit)?=null,onCollectionChanged:()->Unit={},conversational:Boolean=false,notesOnly:Boolean=false,collectionId:String?=null,chatModel:String?=null,chatModelLocalOnly:Boolean=false,onComplete:()->Unit,onResult:(JsonElement)->Unit)=task {
   val config=auth.value
   val epoch=pluginReplicaEpoch
   fun valid()=config!=null && workspaceIsOwner.value && auth.value==config && pluginReplicaEpoch==epoch && container.manifest.enabled("ask") && current()
   try {
-   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> pluginApi(it,container.context.resources).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value,it.workspaceRole),conversational=conversational,notesOnly=notesOnly,collectionId=collectionId)}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
+   completeAskRequest(request={config?.let {conversationAskRequest(question,continuation,{command,args -> pluginApi(it,container.context.resources).request("/api/v1/plugins/ask/commands/$command","POST",args)},::valid,onHandle,conversationSupported=supportsAskConversation(container.manifest.value),noteActionsSupported=supportsAskNoteActions(container.manifest.value,it.workspaceRole),conversational=conversational,notesOnly=notesOnly,collectionId=collectionId,chatModel=chatModel,chatModelLocalOnly=chatModelLocalOnly)}},onComplete=onComplete,onResult={if(valid()) onResult(it)})
   } catch(cancelled:CancellationException) {throw cancelled}
   catch(error:Exception) {
    if(valid() && error is ApiException && error.code=="ask_collection_changed") onCollectionChanged()

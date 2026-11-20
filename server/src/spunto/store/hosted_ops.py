@@ -13,6 +13,7 @@ IDENTITY_TABLES = (
     "spunto_account",
     "spunto_workspace",
     "spunto_membership",
+    "spunto_notification",
     "spunto_login_session",
     "spunto_note_share",
     "spunto_oidc_transaction",

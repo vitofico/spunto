@@ -18,6 +18,10 @@ const note = {
   annotations: [],
 };
 async function fixture(page: Page) {
+  // These fixtures serve a reachable hosted account even in isolated browser runners.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "onLine", { get: () => true });
+  });
   const writes: string[] = [];
   const saves: { body: string; version: number }[] = [];
   let pauseSave: Promise<void> | undefined;
@@ -25,6 +29,8 @@ async function fixture(page: Page) {
   let shared = { ...note };
   let conflict = false;
   const noteSpaces: string[] = [];
+  let read = false;
+  let following = false;
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -53,6 +59,30 @@ async function fixture(page: Page) {
         workspace_role: workspace === team.id ? "viewer" : "owner",
         auth_method: "oidc",
       });
+    if (path.endsWith("/notifications"))
+      return json({
+        notifications: [
+          {
+            id: "notice",
+            kind: "note_shared",
+            workspace_id: "other-space",
+            workspace_name: "",
+            note_id: note.id,
+            created_at: 1700000000000,
+            read,
+          },
+        ],
+        followable: workspace === team.id,
+        following,
+      });
+    if (path.endsWith("/notifications/notice/read")) {
+      read = true;
+      return route.fulfill({ status: 204 });
+    }
+    if (path.endsWith("/notifications/follow")) {
+      following = request.postDataJSON().following;
+      return json({ following });
+    }
     if (path.endsWith("/workspaces"))
       return json({
         workspaces: [personal, team],
@@ -280,4 +310,20 @@ test("shared-note viewers cannot edit; editors save through the shared API and r
   await expect(
     page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
+});
+
+test("opens an unread direct share from the hosted inbox", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/");
+  await page.getByRole("link", { name: "Notifications (1 unread)" }).click();
+  await page
+    .getByRole("button", { name: "A note was shared with you" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/shared/n/${note.id}\\?workspace_id=other-space$`),
+  );
+  await expect(page.getByText("Shared by Bob · Can view")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Notifications", exact: true }),
+  ).toBeVisible();
 });

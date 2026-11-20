@@ -37,15 +37,15 @@ private fun supportsAskVersion(manifest:JsonObject,minMinor:Int):Boolean {
 }
 
 /** Allocate a handle before inference so even the first pending turn can be cleared. */
-internal suspend fun conversationAskRequest(question:String,continuation:JsonObject?,request:suspend (String,JsonObject)->JsonElement,current:()->Boolean,onHandle:(JsonObject)->Unit,conversationSupported:Boolean=true,noteActionsSupported:Boolean=false,conversational:Boolean=false,notesOnly:Boolean=false,collectionId:String?=null):JsonElement? {
+internal suspend fun conversationAskRequest(question:String,continuation:JsonObject?,request:suspend (String,JsonObject)->JsonElement,current:()->Boolean,onHandle:(JsonObject)->Unit,conversationSupported:Boolean=true,noteActionsSupported:Boolean=false,conversational:Boolean=false,notesOnly:Boolean=false,collectionId:String?=null,chatModel:String?=null,chatModelLocalOnly:Boolean=false):JsonElement? {
  if(!conversationSupported) return if(current()) request("ask",buildJsonObject {put("question",question)}) else null
  val handle=continuation ?: withContext(NonCancellable) {
-  val started=request("ask",buildJsonObject {put("start",true);if(noteActionsSupported && collectionId==null) put("note_actions",true);if(conversational) put("conversational",true);collectionId?.let {put("collection_id",it)}})
+  val started=request("ask",buildJsonObject {put("start",true);chatModel?.let {put("chat_model",it);if(chatModelLocalOnly) put("chat_model_local_only",true)};if(noteActionsSupported && collectionId==null) put("note_actions",true);if(conversational) put("conversational",true);collectionId?.let {put("collection_id",it)}})
   val allocated=askContinuation(started) ?: error("Could not start a conversation.")
   if(!current()) {request("clear-conversation",buildJsonObject {put("conversation_id",allocated.string("conversation_id"))});null}
   else {onHandle(allocated);allocated}
  } ?: return null
  currentCoroutineContext().ensureActive()
  if(!current()) return null
- return request("ask",buildJsonObject {handle.forEach {(key,value)->put(key,value)};put("question",question);if(conversational && notesOnly) put("notes_only",true)})
+ return request("ask",buildJsonObject {handle.forEach {(key,value)->put(key,value)};put("question",question);chatModel?.let {put("chat_model",it);if(chatModelLocalOnly) put("chat_model_local_only",true)};if(conversational && notesOnly) put("notes_only",true)})
 }

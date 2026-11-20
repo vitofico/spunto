@@ -32,6 +32,8 @@ import {
   eraseOwnerDrafts,
 } from "../src/lib/drafts";
 import { ShareNote, SpacesPanel } from "../src/features/Collaboration";
+import NotificationsPage from "../src/pages/Notifications";
+import { FollowSpace, NotificationLink } from "../src/features/Notifications";
 import SharedNotesPage from "../src/pages/SharedNotes";
 import NotePage from "../src/pages/Note";
 import { Palette } from "../src/components/core/Palette";
@@ -72,6 +74,11 @@ function IdentityHarness({ children }: { children?: ReactNode }) {
   return owner ? <div key={owner}>{children}</div> : null;
 }
 function seed(session = ownerSession) {
+  vi.spyOn(api, "notifications").mockResolvedValue({
+    notifications: [],
+    following: false,
+    followable: false,
+  });
   queryClient.setQueryData(["meta"], { setup_pending: false });
   queryClient.setQueryData(["session"], session);
   vi.spyOn(api, "meta").mockResolvedValue({ setup_pending: false } as Awaited<
@@ -1129,4 +1136,94 @@ it("previews recipient, role and the exact note grant scope before granting acce
   await waitFor(() =>
     expect(share).toHaveBeenCalledWith(note.id, "reader@example.org", "editor"),
   );
+});
+
+it.each(["note_shared", "note_created", "space_joined"] as const)(
+  "opens a %s notification in its original workspace",
+  async (kind) => {
+    seed();
+    const event = {
+      id: "event",
+      kind,
+      workspace_name: "Team",
+      workspace_id: "team",
+      note_id: kind === "space_joined" ? null : "same-id",
+      created_at: 1700000000000,
+      read: false,
+    };
+    vi.mocked(api.notifications).mockImplementation(async () => ({
+      notifications: [{ ...event }],
+      followable: false,
+      following: false,
+    }));
+    const read = vi
+      .spyOn(api, "readNotification")
+      .mockImplementation(async () => {
+        event.read = true;
+      });
+    render(
+      <IdentityHarness>
+        <NotificationLink close={() => {}} />
+        <NotificationsPage />
+      </IdentityHarness>,
+      { wrapper: Wrapper },
+    );
+    await screen.findByRole("link", { name: "Notifications (1 unread)" });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name:
+          kind === "note_shared"
+            ? "A note was shared with you"
+            : kind === "note_created"
+              ? "New note in Team"
+              : "You were added to Team",
+      }),
+    );
+    await waitFor(() => expect(read).toHaveBeenCalledWith("event"));
+    if (kind === "note_shared") {
+      await waitFor(() =>
+        expect(window.location.pathname + window.location.search).toBe(
+          "/shared/n/same-id?workspace_id=team",
+        ),
+      );
+      expect(api.workspaceSession).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(currentSession()?.workspace_id).toBe("team"));
+      expect(window.location.pathname).toBe(
+        kind === "note_created" ? "/n/same-id" : "/",
+      );
+    }
+  },
+);
+
+it("persists a viewer's subscription to the current shared space", async () => {
+  seed({ ...ownerSession, workspace_id: "team", workspace_role: "viewer" });
+  let following = false;
+  vi.mocked(api.notifications).mockImplementation(async () => ({
+    notifications: [],
+    followable: true,
+    following,
+  }));
+  const follow = vi
+    .spyOn(api, "followSpace")
+    .mockImplementation(async (value) => {
+      following = value;
+      return { following };
+    });
+  render(
+    <IdentityHarness>
+      <FollowSpace />
+    </IdentityHarness>,
+    { wrapper: Wrapper },
+  );
+  const control = await screen.findByRole<HTMLInputElement>("checkbox", {
+    name: "Notify me about new notes in this space",
+  });
+  await waitFor(() => expect(control.disabled).toBe(false));
+  expect(control.checked).toBe(false);
+  fireEvent.click(control);
+  await waitFor(() => expect(control.checked).toBe(true));
+  fireEvent.click(control);
+  await waitFor(() => expect(control.checked).toBe(false));
+  expect(follow.mock.calls.map(([value]) => value)).toEqual([true, false]);
 });

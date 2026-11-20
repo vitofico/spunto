@@ -356,6 +356,8 @@ async def _restore_postgres_snapshot(store, directory: Path) -> dict:
         )
         pairing = staged[TABLES.index("pairing")][0]
         await connection.execute(sql.SQL("DELETE FROM pg_temp.{}").format(sql.Identifier(pairing)))
+        # Historical inserts must not announce each restored note to today's followers.
+        await connection.execute("SET LOCAL spunto.restoring = 'on'")
         counts = {}
         for entry, (temporary, names) in zip(manifest["tables"], staged, strict=True):
             result = await connection.execute(

@@ -450,6 +450,8 @@ async def propose(ctx, question, current, conversation_id, *, check):
         "source_fingerprints": {note["id"]: note["evidence_fingerprint"] for note in sources},
         "conversation_context": json.dumps(context, ensure_ascii=False),
         "review_conversation": conversation_id,
+        "ask_chat_model": current["chat_model"],
+        "ask_model_local_only": current["chat_model_local_only"],
         "authoring_target": authoring,
     }
     instruction = (

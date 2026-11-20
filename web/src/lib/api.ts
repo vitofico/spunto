@@ -43,6 +43,7 @@ import type {
   SharedNote,
   AuthOptions,
   AccountSecurity,
+  NotificationFeed,
 } from "./types";
 
 let unauthorized: (reason?: string) => void = () => {};
@@ -281,6 +282,24 @@ export const api = {
       method: "POST",
       body: { current_password },
       workspace: false,
+    }),
+  askModels: () =>
+    request<{
+      default_model: string;
+      external_models: string[];
+      models: string[];
+      external: boolean;
+      host: string;
+    }>("/api/v1/ai/ask-models"),
+  notifications: () => request<NotificationFeed>("/api/v1/notifications"),
+  followSpace: (following: boolean) =>
+    request<{ following: boolean }>("/api/v1/notifications/follow", {
+      method: "PUT",
+      body: { following },
+    }),
+  readNotification: (id: string) =>
+    request<void>(`/api/v1/notifications/${segment(id)}/read`, {
+      method: "POST",
     }),
   workspaces: () =>
     request<{ workspaces: Workspace[]; active_workspace_id: string }>(

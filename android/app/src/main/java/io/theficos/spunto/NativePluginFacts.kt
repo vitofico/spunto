@@ -177,7 +177,7 @@ internal fun pluginPageCacheKey(server:String,plugin:NativePluginFacts):String {
 internal fun pluginWebUrl(server:String,httpConsent:Boolean,path:String):String?=runCatching {
  val root=URI(server);require(root.scheme in setOf("http","https") && root.host!=null && root.rawUserInfo==null && root.rawQuery==null && root.rawFragment==null && root.rawPath in setOf("","/"))
  require(root.scheme=="https" || httpConsent)
- require(path in setOf("/settings/plugins","/settings/ai","/settings/devices","/status") || path.startsWith("/settings/plugins/") && pluginIdPattern.matches(path.removePrefix("/settings/plugins/")))
+ require(path in setOf("/settings/plugins","/settings/ai","/settings/devices","/status","/notifications") || path.startsWith("/settings/plugins/") && pluginIdPattern.matches(path.removePrefix("/settings/plugins/")))
  server.trimEnd('/')+path
 }.getOrNull()
 internal data class PluginUndo(val pluginId:String,val server:String,val permissions:List<String>,val grants:Set<String>,val expiresAt:Long)

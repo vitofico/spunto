@@ -358,7 +358,7 @@ class HostedIdentityMiddleware:
             if request.method in _UNSAFE:
                 check_origin(request, manager.settings, required=principal.kind == "session")
                 account_action = request.url.path.startswith(
-                    "/api/v1/shared-notes"
+                    ("/api/v1/shared-notes", "/api/v1/notifications/")
                 ) or request.url.path in {
                     "/api/v1/auth/logout",
                     "/api/v1/auth/pairing",
@@ -484,6 +484,7 @@ async def _local_guess(request, services, username, *, registration=False):
 
 def create_hosted_app(services):
     from spunto.api.collaboration import router as collaboration_router
+    from spunto.api.notifications import router as notifications_router
 
     manager = services.hosted
     app = FastAPI(
@@ -886,6 +887,7 @@ def create_hosted_app(services):
     if services.settings.mcp_enabled:
         app.add_route("/mcp", HostedMCP(), methods=["POST", "GET", "DELETE", "OPTIONS"])
     app.include_router(collaboration_router)
+    app.include_router(notifications_router)
     app.include_router(web.router)
     app.add_middleware(HostedIdentityMiddleware, manager=manager)
     app.add_middleware(SecurityHeadersMiddleware)

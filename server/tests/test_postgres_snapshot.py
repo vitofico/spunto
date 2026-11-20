@@ -7,6 +7,7 @@ import stat
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import psycopg
 import pytest
 from psycopg import sql
 from test_host import bind
@@ -56,10 +57,16 @@ def rewrite_manifest(path, manifest):
 
 
 async def test_snapshot_roundtrip_preserves_notes_plugins_vectors_and_invalidates_credentials(
-    pg, tmp_path
+    pg, tmp_path, pg_admin_url
 ):
     root, bounds, users, spaces, _ = pg
     first, other = bounds
+    async with await psycopg.AsyncConnection.connect(pg_admin_url) as conn:
+        await conn.execute(
+            "INSERT INTO public.spunto_membership(workspace_id,user_id,role,following) "
+            "VALUES(%s,%s,'editor',TRUE)",
+            (spaces[0], users[1]),
+        )
     note = await notes(first, users[0]).create("Caffè private fixture #snapshot")
     await notes(other, users[1]).create("Another workspace must never enter the snapshot")
     plugin_host = Host(first, SimpleNamespace(data_dir=tmp_path, plugins=""), catalog=[])
@@ -98,6 +105,12 @@ async def test_snapshot_roundtrip_preserves_notes_plugins_vectors_and_invalidate
     assert all(entry["rows"] == len(before[entry["table"]]) for entry in manifest["tables"])
     await empty(first)
     receipt = await snapshots.restore_postgres_snapshot(first, target)
+    async with await psycopg.AsyncConnection.connect(pg_admin_url) as conn:
+        restored_alerts = await conn.execute(
+            "SELECT kind FROM public.spunto_notification WHERE recipient_id=%s AND workspace_id=%s",
+            (users[1], spaces[0]),
+        )
+        assert await restored_alerts.fetchall() == [("space_joined",)]
     assert receipt["external_credentials_invalidated"] == 1 and receipt["pairings_cleared"] == 1
     for table in snapshots.TABLES:
         if table not in {"meta", "credential", "pairing"}:

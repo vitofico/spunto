@@ -1,4 +1,6 @@
 {
+  "This model now uses an external provider. Choose a model in a new conversation.": "Ce modèle utilise désormais un fournisseur externe. Choisissez un modèle dans une nouvelle conversation.",
+  "This model is unavailable. Choose another model in a new conversation.": "Ce modèle est indisponible. Choisissez-en un autre dans une nouvelle conversation.",
   "A source changed while drafting. Try again or continue manually.": "Une source a changé pendant la rédaction. Réessayez ou continuez manuellement.",
   "Decision evidence changed. Draft again or continue manually.": "Les éléments à l’appui ont changé. Recréez le brouillon ou continuez manuellement.",
   "No eligible note evidence was found. You can continue manually.": "Aucune note admissible n’a été trouvée. Vous pouvez continuer manuellement.",

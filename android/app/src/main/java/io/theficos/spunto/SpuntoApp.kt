@@ -37,10 +37,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun SpuntoApp(model:SpuntoViewModel,initialNoteId:String?=null,guideEligible:Boolean=false) {
+@Composable fun SpuntoApp(model:SpuntoViewModel,initialNoteId:String?=null,guideEligible:Boolean=false,initialActivity:Boolean=false) {
  val context=LocalContext.current
  val pages=rememberSaveableStateHolder()
- val nav=rememberNavigator(initialNoteId,pages)
+ val nav=rememberNavigator(initialNoteId,pages,initialActivity)
  val route=nav.route
  val guideStore=remember {FirstRunGuideStore(firstRunGuidePreferences(model.container.context))}
  var focusCapture by rememberSaveable { mutableStateOf(false) }
@@ -210,6 +210,7 @@ import kotlinx.serialization.json.*
       else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
      route=="ask" || route.startsWith("ask:") -> if(canAsk) AskScreen(model,onNote=openNote,collectionId=route.substringAfter(':',"").ifBlank {null})
       else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
+     route==ActivityRoute -> SharedActivityScreen(model,openNote)
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
      route==DecisionManagerRoute || route==DecisionViewRoute || route.startsWith(DecisionDetailPrefix) ->

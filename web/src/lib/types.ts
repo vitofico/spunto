@@ -48,6 +48,20 @@ export interface Meta {
   min_android_build: number;
   max_upload_bytes?: number;
 }
+export interface CollaborationNotification {
+  id: string;
+  kind: "space_joined" | "note_shared" | "note_created";
+  workspace_id: string;
+  workspace_name: string;
+  note_id: string | null;
+  created_at: number;
+  read: boolean;
+}
+export interface NotificationFeed {
+  notifications: CollaborationNotification[];
+  following: boolean;
+  followable: boolean;
+}
 export interface Session {
   owner_id: string;
   credential_id?: string;

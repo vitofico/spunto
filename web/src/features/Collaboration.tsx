@@ -13,6 +13,7 @@ import {
   type Workspace,
 } from "../lib";
 import { choiceLabel } from "./format";
+import { FollowSpace } from "./Notifications";
 import { Dialog } from "./Dialog";
 import { ErrorLine } from "./SettingsParts";
 import styles from "./Feature.module.css";
@@ -275,6 +276,7 @@ function HostedSpaces() {
       />
       {workspace && !workspace.personal && (
         <>
+          <FollowSpace />
           <div className={styles.between}>
             <h2>{t("collaboration.members")}</h2>
             <Link href="/" className="button">

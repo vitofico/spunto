@@ -361,3 +361,44 @@ it("keeps an adopted handle and per-answer Save alive through StrictMode's effec
     conversation_id: "temporary",
   });
 });
+
+it("retries a failed first question with the same model and locality", async () => {
+  const manifest = client.getQueryData<
+    Awaited<ReturnType<typeof api.manifest>>
+  >(["manifest"])!;
+  client.setQueryData(["manifest"], {
+    ...manifest,
+    plugins: manifest.plugins.map((p) => ({ ...p, version: "1.2.0" })),
+  });
+  vi.spyOn(api, "askModels").mockResolvedValue({
+    models: ["default", "offline"],
+    default_model: "default",
+    external: true,
+    external_models: ["default"],
+    host: "models.example.org",
+  });
+  vi.spyOn(api, "catalog").mockResolvedValue({ plugins: [], plugins_rev: 1 });
+  const request = vi
+    .spyOn(api, "request")
+    .mockRejectedValue(new Error("Unavailable"));
+  render(wrap(<AskConversation value={undefined} page />));
+  const model = await screen.findByRole<HTMLSelectElement>("combobox", {
+    name: "Chat model",
+  });
+  fireEvent.change(model, { target: { value: "offline" } });
+  send("My question");
+  const retry = await screen.findByRole("button", { name: "Try again" });
+  expect(model.disabled).toBe(true);
+  fireEvent.click(retry);
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+  expect(request.mock.calls[0][1]?.body).toMatchObject({
+    question: "My question",
+    chat_model: "offline",
+    chat_model_local_only: true,
+  });
+  expect(request.mock.calls[1][1]?.body).toEqual(
+    request.mock.calls[0][1]?.body,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "New conversation" }));
+  expect(model.value).toBe("");
+});

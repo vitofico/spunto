@@ -1022,6 +1022,7 @@ async def test_read_and_status_pats_cannot_enter_account_sharing_controlplane(ho
             "/api/v1/workspaces",
             "/api/v1/shared-notes",
             "/api/v1/shared-notes/" + note["id"],
+            "/api/v1/notifications",
         ):
             assert (await client.get(path, headers=bearer)).status_code == 403
         assert (
@@ -1033,8 +1034,8 @@ async def test_read_and_status_pats_cannot_enter_account_sharing_controlplane(ho
         ).status_code == 403
 
 
-async def _sync_phone(client, user):
-    grant = await client.post("/api/v1/auth/pairing", headers=headers(user))
+async def _sync_phone(client, user, workspace=None):
+    grant = await client.post("/api/v1/auth/pairing", headers=headers(user, workspace))
     assert grant.status_code == 200, grant.text
     paired = await client.post(
         "/api/v1/auth/pairing/exchange",
@@ -1702,3 +1703,124 @@ async def test_storage_quota_rejected_uploads_leave_no_final_or_staged_bytes(hos
         (alice["account"]["id"],),
     )
     assert usage is None or usage["bytes"] == 0
+
+
+async def test_collaboration_inbox_obeys_membership_follow_and_device_authority(hosted):
+    client, _, (alice, bob, carol), _ = hosted
+    path = "/api/v1/notifications"
+    space = (
+        await client.post(
+            "/api/v1/workspaces", headers=headers(alice), json={"name": "Synthetic team"}
+        )
+    ).json()["id"]
+    owner, member = headers(alice, space), headers(bob, space)
+    grant = {"user_id": bob["account"]["id"], "role": "editor"}
+    members = f"/api/v1/workspaces/{space}/members"
+    for _ in range(2):
+        assert (await client.post(members, headers=owner, json=grant)).status_code == 200
+
+    async def inbox(auth):
+        response = await client.get(path, headers=auth)
+        assert response.status_code == 200, response.text
+        assert "no-store" in response.headers["cache-control"]
+        return response.json()
+
+    (joined,) = (await inbox(headers(bob)))["notifications"]
+    assert joined["kind"] == "space_joined" and joined["workspace_name"] == "Synthetic team"
+    assert joined["note_id"] is None and not joined["read"]
+    assert (await inbox(headers(carol)))["notifications"] == []
+    assert not (await inbox(headers(bob)))["followable"]
+    personal_device, _ = await _sync_phone(client, bob)
+    assert (await inbox(personal_device))["notifications"] == []
+    read_url = f"{path}/{joined['id']}/read"
+    for foreign in (headers(carol), personal_device):
+        assert (await client.post(read_url, headers=foreign)).status_code == 404
+    assert (await client.post(read_url, headers=member)).status_code == 204
+    assert (await inbox(member))["notifications"][0]["read"]
+
+    async def note(auth, **extra):
+        response = await client.post(
+            "/api/v1/notes", headers=auth, json={"body": f"Synthetic note {uuid.uuid4()}", **extra}
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    await note(owner)
+    assert len((await inbox(member))["notifications"]) == 1
+    phone = await _sync_phone(client, alice, space)
+    member_phone, _ = await _sync_phone(client, bob, space)
+    assert (
+        await client.put(f"{path}/follow", headers=member_phone, json={"following": True})
+    ).status_code == 200
+    assert (await inbox(member))["following"]
+    await note(member)
+    await note(owner, private=True)
+    created = await note(owner)
+    assert (
+        await client.patch(
+            f"/api/v1/notes/{created['id']}",
+            headers={**owner, "If-Match": f'"{created["version"]}"'},
+            json={"body": "Synthetic edit"},
+        )
+    ).status_code == 200
+    native_note = str(uuid.uuid7())
+    op = _sync_op("note.create", native_note, body="Synthetic paired note")
+    assert (await _sync_push(client, phone, op))[0]["status"] == "applied"
+    assert (await _sync_push(client, phone, op))[0]["status"] == "duplicate"
+    updates = [
+        e for e in (await inbox(member_phone))["notifications"] if e["kind"] == "note_created"
+    ]
+    assert [e["note_id"] for e in updates] == [native_note, created["id"]]
+    assert (await inbox(owner))["notifications"] == []
+    assert (
+        await client.post(
+            f"/api/v1/notes/{created['id']}/flags", headers=owner, json={"private": True}
+        )
+    ).status_code == 200
+    assert (
+        await client.post(
+            f"/api/v1/notes/{native_note}/flags", headers=owner, json={"trashed": True}
+        )
+    ).status_code == 200
+    assert [e["kind"] for e in (await inbox(member))["notifications"]] == ["space_joined"]
+    role_url = members + "/" + grant["user_id"]
+    assert (await client.patch(role_url, headers=owner, json={"role": "viewer"})).status_code == 204
+    assert (
+        await client.put(f"{path}/follow", headers=member_phone, json={"following": False})
+    ).status_code == 200
+    await note(owner)
+    assert [e["kind"] for e in (await inbox(member))["notifications"]] == ["space_joined"]
+    assert (await client.delete(role_url, headers=owner)).status_code == 204
+    assert (await inbox(headers(bob)))["notifications"] == []
+    assert (await client.get(path, headers=member_phone)).status_code == 404
+    assert (await client.post(members, headers=owner, json=grant)).status_code == 200
+    (rejoined,) = (await inbox(member))["notifications"]
+    assert rejoined["id"] != joined["id"] and not (await inbox(member))["following"]
+
+
+async def test_direct_note_notification_tracks_only_the_current_grant(hosted):
+    client, _, (alice, bob, carol), _ = hosted
+    path = "/api/v1/notifications"
+    private_note = (
+        await client.post(
+            "/api/v1/notes",
+            headers=headers(alice),
+            json={"body": "Synthetic direct", "private": True},
+        )
+    ).json()
+    grant_path = f"/api/v1/notes/{private_note['id']}/shares"
+    grant = {"user_id": bob["account"]["id"], "role": "viewer"}
+    for _ in range(2):
+        assert (
+            await client.post(grant_path, headers=headers(alice), json=grant)
+        ).status_code == 200
+    assert (await client.get(path, headers=headers(carol))).json()["notifications"] == []
+    response = await client.get(path, headers=headers(bob))
+    (item,) = response.json()["notifications"]
+    assert item["kind"] == "note_shared" and item["note_id"] == private_note["id"]
+    assert item["workspace_name"] == "" and private_note["body"] not in response.text
+    assert (
+        await client.delete(grant_path + "/" + grant["user_id"], headers=headers(alice))
+    ).status_code == 204
+    assert (await client.get(path, headers=headers(bob))).json()["notifications"] == []
+    assert (await client.post(f"{path}/{item['id']}/read", headers=headers(bob))).status_code == 404

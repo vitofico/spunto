@@ -128,7 +128,14 @@ async def test_thinking_desk_private_and_external_source_fences(hosted):
         desk_id = await create(client, alice, note_id=source["id"])
         rendered = await desk.desk(restricted, desk_id)
         assert source["body"] not in str(rendered)
-        assert rendered["items"][1]["ids"] == []
+        assert source["id"] not in str(rendered)
+        assert any(
+            item["type"] == "markdown" and "Unavailable note" in item["text"]
+            for item in rendered["items"]
+        )
+        assert not any(
+            item.get("args", {}).get("action") == "snapshot" for item in rendered["items"]
+        )
         with pytest.raises(Problem):
             await desk.edit(restricted, desk_id, 1, action="snapshot")
 

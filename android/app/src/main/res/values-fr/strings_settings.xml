@@ -32,6 +32,7 @@
     <string name="settings_about">À propos</string>
     <string name="settings_export">Exporter</string>
     <string name="settings_download_all_synced_notes_as_a_zip">Téléchargez toutes les notes synchronisées en ZIP dans l’application web</string>
+    <string name="settings_import_notes_in_browser">Importer les exports Evernote, Notion, Obsidian ou Markdown dans le navigateur</string>
     <string name="settings_show_the_guide">Afficher le guide</string>
     <string name="settings_the_four_first_run_steps_again">Revoir les quatre étapes de prise en main</string>
     <string name="settings_free_software_under_the_agpl_3_0">Logiciel libre sous licence AGPL-3.0</string>
@@ -393,7 +394,7 @@
     <string name="settings_plugin_ask_name">Interroger vos notes</string>
     <string name="settings_plugin_ask_description">Posez une question et ouvrez les notes citées dans la réponse.</string>
     <string name="settings_plugin_translate_name">Traduire</string>
-    <string name="settings_plugin_translate_description">Traduit une note entre l’italien et l’anglais et enregistre la traduction comme note liée si vous le demandez.</string>
+    <string name="settings_plugin_translate_description">Affiche un aperçu dans la langue de votre choix et enregistre la traduction comme note liée si vous le demandez.</string>
     <string name="settings_plugin_email_in_name">Courrier entrant</string>
     <string name="settings_plugin_email_in_description">Enregistrez sous forme de notes les e-mails des expéditeurs de votre choix.</string>
     <string name="settings_plugin_agent_inbox_name">Des agents</string>
@@ -424,8 +425,8 @@
     <string name="settings_plugin_voice_memos_description">Conservez un enregistrement avec sa note et ajoutez une transcription si besoin.</string>
     <string name="settings_plugin_image_text_name">Texte des images</string>
     <string name="settings_plugin_image_text_description">Retrouvez des notes grâce aux mots qui figurent dans leurs images.</string>
-    <string name="settings_plugin_markdown_import_name">Importer Markdown</string>
-    <string name="settings_plugin_markdown_import_description">Prévisualise et importe un ZIP Markdown ou un dossier choisi par l’administrateur.</string>
+    <string name="settings_plugin_markdown_import_name">Importer des notes</string>
+    <string name="settings_plugin_markdown_import_description">Prévisualisez et importez des exports d’Evernote, de Notion, d’Obsidian et d’applications Markdown.</string>
     <string name="settings_plugin_semantic_search_name">Recherche sémantique</string>
     <string name="settings_plugin_semantic_search_description">Retrouvez une note même en utilisant d’autres mots que ceux que vous avez écrits.</string>
     <string name="settings_plugin_webhooks_name">Webhooks sortants</string>

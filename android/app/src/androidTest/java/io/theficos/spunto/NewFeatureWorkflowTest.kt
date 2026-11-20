@@ -1,11 +1,14 @@
 package io.theficos.spunto
 
+import android.app.LocaleManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
+import android.os.Build
+import android.os.LocaleList
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,6 +28,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -54,12 +59,39 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 
 /** Real server workflows with isolated test credentials and a dedicated synthetic replica. */
 @RunWith(AndroidJUnit4::class)
 class NewFeatureWorkflowTest {
-    @get:Rule val compose = createComposeRule()
+    private val compose = createComposeRule()
+    @get:Rule val nativeUi: RuleChain = RuleChain.outerRule(TestRule { base, description ->
+        object : Statement() {
+            override fun evaluate() {
+                if (description.methodName != "thinkingDeskCollisionReviewsIdeaAndKeepsPrivateSnapshot" ||
+                    !disposableWorkflowEnabled()
+                ) {
+                    base.evaluate()
+                    return
+                }
+
+                // Bottom sheets create a separate Android view that uses the real app resources.
+                assumeTrue("Needs Android per-app locales", Build.VERSION.SDK_INT >= 33)
+                val context = InstrumentationRegistry.getInstrumentation().targetContext
+                val locales = requireNotNull(context.getSystemService(LocaleManager::class.java))
+                val previous = locales.applicationLocales
+                locales.applicationLocales = LocaleList.forLanguageTags("it-IT")
+                try {
+                    base.evaluate()
+                } finally {
+                    locales.applicationLocales = previous
+                }
+            }
+        }
+    }).around(compose)
     @get:Rule val timeout = org.junit.rules.Timeout(5, TimeUnit.MINUTES)
 
     private val empty = JsonObject(emptyMap())
@@ -67,11 +99,14 @@ class NewFeatureWorkflowTest {
     private lateinit var testConfig: AuthConfig
     private val suffix = java.lang.Long.toUnsignedString(System.nanoTime(), 36)
 
+    private fun disposableWorkflowEnabled(): Boolean =
+        InstrumentationRegistry.getArguments().getString("spunto.workflow.disposable") == "SPUNTO-SYNTHETIC-WORKFLOWS"
+
     @Before fun requireDisposableLoopbackServer() = runBlocking {
         val arguments = InstrumentationRegistry.getArguments()
         assumeTrue(
             "Needs explicit synthetic workflow authorization",
-            arguments.getString("spunto.workflow.disposable") == "SPUNTO-SYNTHETIC-WORKFLOWS",
+            disposableWorkflowEnabled(),
         )
         val address = requireNotNull(arguments.getString("spunto.workflow.url")) {
             "Set spunto.workflow.url to the disposable loopback server."
@@ -146,6 +181,7 @@ class NewFeatureWorkflowTest {
                                         onCommand = send,
                                         onForm = { values -> send(current.command, JsonObject(current.args + values)) },
                                         formInitial = current.args,
+                                        formLabel = thinkingDeskFormLabel(plugin, component),
                                     )
                                 }
                             }
@@ -226,14 +262,12 @@ class NewFeatureWorkflowTest {
             api.post("/api/v1/notes", buildJsonObject {put("body", body);put("private", true)})
         } }
         val flow = Workflow("thinking-desk", "desk", compactLargeText = true)
-        flow.click("New thinking desk")
-        compose.onNodeWithText("history", substring = false).assertExists()
-        compose.onNodeWithText("collision", substring = false).assertExists()
-        compose.onNodeWithText("history", substring = false).performScrollTo().performClick()
-        fill("Topic or desk title", "Native history $suffix")
-        flow.submit()
-        for(title in titles) {
-            flow.click("Review sources")
+        flow.click("Trace an idea")
+        compose.onNodeWithText("Your idea", substring = false).assertDoesNotExist()
+        fill("A name for this desk", "Native history $suffix")
+        flow.click("Create desk")
+        for((index, title) in titles.withIndex()) {
+            flow.click(if(index == 0) "Choose notes" else "Manage notes")
             fill("Search notes (blank browses recent)", title)
             flow.submit()
             compose.onNodeWithText("Source choices").assertDoesNotExist()
@@ -242,9 +276,9 @@ class NewFeatureWorkflowTest {
             compose.onNodeWithText("1. $title", substring = false).performClick()
             flow.submit()
         }
-        assertEquals(sources.map {it["id"]!!.jsonPrimitive.content}, ids(flow.output()))
         compose.onNodeWithText("Notes in creation order", substring = true).assertExists()
-        compose.onAllNodesWithText("Open note", substring = false).assertCountEquals(2)
+        val summary = resultCopyText(InstrumentationRegistry.getInstrumentation().targetContext.resources, flow.output())
+        assertTrue(titles.all { it in summary })
         val date = sources[0]["created_at"]!!.jsonPrimitive.content.take(10)
         assertTrue(compose.onAllNodesWithText(date, substring = true).fetchSemanticsNodes().isNotEmpty())
         flow.click("Connect notes")
@@ -255,7 +289,7 @@ class NewFeatureWorkflowTest {
         compose.onNodeWithContentDescription("Choose Second note").performScrollTo().performClick()
         compose.onNodeWithText("Find an option").performTextInput("earlier")
         compose.onNodeWithText("1. ${titles[0]}", substring = false).performClick()
-        flow.submit()
+        flow.click("Save connection")
         compose.onNodeWithText("Note 2 challenges note 1", substring = true).assertExists()
         flow.click("Connect notes")
         compose.onNodeWithContentDescription("Choose First note").performScrollTo().performClick()
@@ -267,9 +301,8 @@ class NewFeatureWorkflowTest {
         compose.onNodeWithText("1. ${titles[0]}", substring = false).performClick()
         compose.onNodeWithText("Remove this connection").assertExists()
         compose.onNode(isToggleable()).performScrollTo().performClick()
-        flow.submit()
+        flow.click("Save connection")
         compose.onNodeWithText("Note 2 challenges note 1", substring = true).assertDoesNotExist()
-        assertEquals(sources.map {it["id"]!!.jsonPrimitive.content}, ids(flow.output()))
         sources.forEachIndexed {index, source ->
             assertEquals(titles[index], note(source["id"]!!.jsonPrimitive.content)["body"]!!.jsonPrimitive.content)
         }
@@ -277,44 +310,87 @@ class NewFeatureWorkflowTest {
 
     @Test fun thinkingDeskCollisionReviewsIdeaAndKeepsPrivateSnapshot() {
         enable("thinking-desk")
-        val sources = listOf("Gardens $suffix #gardening", "Networks $suffix #computing").map { body ->
+        val garden = "Potatura delle piante $suffix"
+        val network = "Progetto di rete $suffix"
+        val sources = listOf(garden, network).map { title ->
             runBlocking { api.post("/api/v1/notes", buildJsonObject {
-                put("body", body)
+                put("body", "# $title")
                 put("private", true)
-            }) }
+            }) }["id"]!!.jsonPrimitive.content
         }
-        val deskId = java.util.UUID.randomUUID().toString()
-        serverCommand("thinking-desk", "edit", buildJsonObject {
-            put("request_id", deskId)
-            put("title", "Collision $suffix")
-            put("mode", "collision")
-            put("note_id", sources[0]["id"]!!)
-        })
-        val sourceId = sources[1]["id"]!!.jsonPrimitive.content
-        serverCommand("thinking-desk", "sources", buildJsonObject {
-            put("desk_id", deskId)
-            put("expected_revision", 1)
-            put("add", "1. Networks $suffix #computing")
-            put("source_choices", buildJsonArray { add("$sourceId@1") })
-        })
-        val flow = Workflow("thinking-desk", "edit", buildJsonObject {
-            put("desk_id", deskId)
-            put("expected_revision", 2)
-        })
-        val idea = "Prune weak network links like a garden."
-        fill("Your reflection or new idea", idea)
-        flow.submit()
-        val copied = resultCopyText(
-            InstrumentationRegistry.getInstrumentation().targetContext.resources, flow.output(),
-        )
-        assertTrue(copied.contains("surprising analogy"))
-        assertTrue(copied.contains(idea))
-        flow.click("Keep private note copy")
-        val saved = note(ids(flow.output()).single())
-        assertTrue(saved["private"]!!.jsonPrimitive.boolean)
-        assertFalse(saved["machine"]!!.jsonPrimitive.boolean)
-        assertTrue(saved["body"]!!.jsonPrimitive.content.contains(idea))
-        assertEquals("Gardens $suffix #gardening", note(sources[0]["id"]!!.jsonPrimitive.content)["body"]!!.jsonPrimitive.content)
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-thinking-desk-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, publishesPlugins = true)
+        val mounted = mutableStateOf(true)
+        lateinit var model: SpuntoViewModel
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+        val inSheet = hasAnyAncestor(isDialog())
+        fun show(label: String): SemanticsNodeInteraction {
+            val matcher = hasText(label, substring = false) and hasClickAction() and inSheet
+            compose.waitUntil(15_000) { compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
+            return compose.onNode(matcher).performScrollTo()
+        }
+        try {
+            compose.setContent { if (mounted.value) SpuntoApp(model, initialNoteId = sources.first()) }
+            compose.waitUntil(20_000) {
+                model.online.value && model.pluginReplicaEpoch.isNotBlank() &&
+                    supportsNotePicker(model.manifest.value, "thinking-desk") &&
+                    compose.onAllNodesWithContentDescription("Altre azioni per la nota").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithContentDescription("Altre azioni per la nota").performClick()
+            show("Tavolo delle idee").performClick()
+            show("Combina le note").assertHasClickAction()
+            compose.onNodeWithText("La nota che hai aperto sarà la prima del tavolo.").assertExists()
+            show("Combina le note").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("Nome del tavolo").fetchSemanticsNodes().isNotEmpty() }
+            val title = "Ridurre il progetto $suffix"
+            fill("Nome del tavolo", title)
+            compose.onNodeWithText("ID della richiesta di creazione").assertDoesNotExist()
+            show("Crea tavolo").performClick()
+            show("Scegli le note").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("Note recenti").fetchSemanticsNodes().isNotEmpty() }
+            fill("Cerca note", network)
+            val matchingSource = hasText(network, substring = false) and inSheet and
+                SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+            compose.waitUntil(15_000) { compose.onAllNodes(matchingSource).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(matchingSource).performScrollTo().performClick().assertIsSelected()
+            show("Aggiungi fonte").assertIsEnabled().performClick()
+            compose.waitUntil(15_000) {
+                compose.onAllNodesWithText("Nota aggiunta. Selezionate: 2.").fetchSemanticsNodes().isNotEmpty()
+            }
+            show(garden).assertExists()
+            show(network).assertExists()
+            show("Torna al tavolo").performClick()
+            show("Scrivi la tua idea").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("La tua idea").fetchSemanticsNodes().isNotEmpty() }
+            val idea = "Applica la potatura ai collegamenti meno utili."
+            fill("La tua idea", idea)
+            show("Salva idea").performClick()
+            show("Salva come nota privata").performClick()
+            compose.waitUntil(15_000) {
+                compose.onAllNodesWithText("Nota privata salvata. Aprila qui sotto oppure torna al tavolo per continuare.").fetchSemanticsNodes().isNotEmpty()
+            }
+            show(title).assertExists()
+            val savedId = runBlocking {
+                api.request("/api/v1/search", query = mapOf("q" to suffix, "mode" to "keyword"))
+                    .jsonObject.getValue("hits").jsonArray.map { it.jsonObject }
+                    .single { it["title"]?.jsonPrimitive?.content == title }
+                    .getValue("id").jsonPrimitive.content
+            }
+            val saved = note(savedId)
+            assertTrue(saved["private"]!!.jsonPrimitive.boolean)
+            assertFalse(saved["machine"]!!.jsonPrimitive.boolean)
+            val body = saved["body"]!!.jsonPrimitive.content
+            assertTrue(idea in body && sources.all { "/n/$it" in body })
+            assertEquals("# $garden", note(sources.first())["body"]!!.jsonPrimitive.content)
+            show("Torna al tavolo").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText(idea, substring = true).fetchSemanticsNodes().isNotEmpty() }
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
     }
 
     @Test fun contextPackFormsCreateEditAndKeepPrivateSnapshot() {
@@ -396,7 +472,12 @@ class NewFeatureWorkflowTest {
         compose.runOnIdle { assertEquals("save", submitted?.get("action")?.jsonPrimitive?.content) }
     }
 
-    private fun isolatedPluginReplica(app: SpuntoApplication, prefix: String, displayContext: Context = app): ReplicaContainer {
+    private fun isolatedPluginReplica(
+        app: SpuntoApplication,
+        prefix: String,
+        displayContext: Context = app,
+        publishesPlugins: Boolean = false,
+    ): ReplicaContainer {
         val files = File(app.cacheDir, prefix).apply { mkdirs() }
         val context = object : ContextWrapper(displayContext) {
             private fun databaseName(name: String) = File(name).name.let { if (it.startsWith(prefix)) it else prefix + it }
@@ -413,7 +494,7 @@ class NewFeatureWorkflowTest {
         val connected = MutableStateFlow(true)
         runBlocking { auth.save(testConfig) }
         return ReplicaContainer(context, testConfig.replicaId, 1, auth, AppLock(context), connected,
-            SyncScheduler(context), ReplicaDatabaseCache(context), publishesPlugins = false)
+            SyncScheduler(context), ReplicaDatabaseCache(context), publishesPlugins = publishesPlugins)
     }
 
     @Test fun italianReaderAcceptsMachineAndAgentNotesAndNavigatesThroughAPluginResult() {

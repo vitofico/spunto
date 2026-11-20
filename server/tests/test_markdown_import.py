@@ -340,7 +340,7 @@ def test_report_reads_as_counts_and_sizes():
     }
     assert importer.report_output(report)[0]["text"] == (
         "1 note and 2 attachments (2.4 MB). Created 1, updated 0, unchanged 0. "
-        "Kept 1 note you had edited."
+        "Kept 1 existing note as it was."
     )
     assert [importer.size(value) for value in (1, 999, 1000, 12_000_000)] == [
         "1 byte",
@@ -348,3 +348,105 @@ def test_report_reads_as_counts_and_sizes():
         "1 KB",
         "12 MB",
     ]
+
+
+async def test_obsidian_titles_links_tags_and_app_metadata(target):
+    source = importer.read_zip(
+        archive(
+            {
+                "vault/notes/Field notes.md": (
+                    "---\ntags:\n  - idea/research\ntrashed: true\n---\n"
+                    "A draft with [[Library/Source|a source]], ![[photo.png]], and `[[literal]]`.\n"
+                    "Missing [[Nowhere]]."
+                ),
+                "vault/Library/Source.md": "# Source\n\nSynthetic second note.",
+                "vault/assets/photo.png": b"\x89PNG\r\n\x1a\nsynthetic-photo",
+                "vault/.obsidian/workspace.md": "Synthetic generated configuration",
+            }
+        ),
+        "obsidian",
+    )
+    # A vault can have one wrapping folder and wiki links are vault-root relative.
+    report = await importer.run_import(target, source)
+    assert report["planned"] == {
+        "created": 2,
+        "updated": 0,
+        "unchanged": 0,
+        "skipped_owner_edits": 0,
+    }
+    assert report["attachments"] == 1 and report["missing_links"] == 1
+    assert (await importer.run_import(target, source, dry_run=False))["created"] == 2
+    note = await target.notes.lookup_import("obsidian-file:vault/notes/Field notes.md")
+    linked = await target.notes.lookup_import("obsidian-file:vault/Library/Source.md")
+    assert note["title"] == "Field notes"
+    assert note["labels"] == ["idea/research"] and not note["trashed"]
+    assert f"[a source](/n/{linked['id']})" in note["body"]
+    assert "![photo.png](/a/" in note["body"]
+    assert "`[[literal]]`" in note["body"] and "[[Nowhere]]" in note["body"]
+    assert (await importer.run_import(target, source))["planned"]["unchanged"] == 2
+
+
+async def test_notion_page_ids_remain_stable_after_rename(target):
+    page_id = "f" * 32
+    target_id = "a" * 32
+    nested_target = f"Subpage/Another note {target_id}.md"
+    first = importer.read_zip(
+        archive(
+            {
+                f"Page title {page_id}.md": (
+                    f"Body [nested page](Subpage/Another%20note%20{target_id}.md)\n"
+                    "[attachment](Subpage/Diagram.png)"
+                ),
+                nested_target: "Subpage body.",
+                "Subpage/Database.csv": "Name,Property\nExample,A",
+                "Subpage/Diagram.png": b"\x89PNG\r\n\x1a\nsynthetic-image",
+            }
+        ),
+        "notion",
+    )
+    preview = await importer.run_import(target, first)
+    assert preview["unsupported_items"] == preview["attachments"] == 1
+    assert (await importer.run_import(target, first, dry_run=False))["created"] == 2
+    note = await target.notes.lookup_import(f"notion:{page_id}")
+    linked = await target.notes.lookup_import(f"notion:{target_id}")
+    assert note["title"] == "Page title"
+    assert f"[nested page](/n/{linked['id']})" in note["body"]
+    assert "[attachment](/a/" in note["body"]
+    rename = importer.read_zip(archive({f"Renamed page {page_id}.md": "Page changed."}), "notion")
+    assert (await importer.run_import(target, rename))["planned"]["updated"] == 1
+    assert (await importer.run_import(target, rename, dry_run=False))["updated"] == 1
+    latest = await target.notes.lookup_import(f"notion:{page_id}")
+    assert latest["id"] == note["id"] and latest["title"] == "Renamed page"
+
+
+def test_enex_rejects_internal_dtd_without_reading_entities():
+    source = b"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export [<!ENTITY sample "synthetic text">]>
+<en-export><note><title>&sample;</title></note></en-export>"""
+    with pytest.raises(ValueError, match="unsupported XML declaration"):
+        importer.read_upload(source, "evernote")
+
+
+async def test_retry_after_first_receipt_write_failure_preserves_owner_edit(target, monkeypatch):
+    from spunto.host.storage import Records
+
+    first = importer.read_zip(archive({"note.md": "Synthetic import before edit"}))
+    original = Records.put
+
+    async def fail_receipt(self, collection, *args, **kwargs):
+        if collection == "imports":
+            raise OSError("synthetic interrupted receipt")
+        return await original(self, collection, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Records, "put", fail_receipt)
+        with pytest.raises(OSError, match="interrupted receipt"):
+            await importer.run_import(target, first, dry_run=False)
+
+    note = await target.notes.lookup_import("file:note.md")
+    core = Notes(target._host.store, OWNER)
+    await core.edit(note["id"], "Owner's preserved text", base_version=note["version"])
+    later = importer.read_zip(archive({"note.md": "Synthetic updated import"}))
+    assert (await importer.run_import(target, later))["planned"]["skipped_owner_edits"] == 1
+    assert (await importer.run_import(target, later, dry_run=False))["skipped_owner_edits"] == 1
+    assert (await target.notes.lookup_import("file:note.md"))["body"] == "Owner's preserved text"

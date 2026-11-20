@@ -106,18 +106,25 @@ Enable plugins in Settings → Plugins after reviewing their permissions, or thr
 
 Import from Blinko has been removed. Previously imported notes, attachments, source identifiers and edit history remain available. Its retained state is inactive; the bundled importer no longer appears in Settings. Remove any explicit `blinko-import` switch from operator configuration. See the [removal decision](decisions/2026-10-19-remove-blinko.md).
 
-## Local Markdown import
+## Import notes from other apps
 
-Enable Import Markdown in the web plugin manager, upload a ZIP, review its dry-run report, then explicitly start the import. The staged preview expires after 24 hours if not queued; an already queued durable import retains consent across restart. A running/queued import owns its staged archive, so wait for it to finish before replacing the preview. The importer preserves own-export metadata and linked assets; reruns skip owner-edited notes rather than overwriting them. Archive/expanded/asset budgets remain independent of the ordinary upload limit. See [Markdown contracts](development/M7-markdown.md).
+Open **Settings → Data → Import notes** in the web app and enable the import plugin if prompted. On Android, **Settings → About → Import notes** opens the same page in a browser where you can sign in separately. In hosted mode, select the intended space in the browser before choosing the file. Import requires a space owner session.
 
-The operator CLI also accepts a ZIP or folder. Stop the server using that data directory first; then use the same configuration and data lock:
+Choose the source format, upload an export, review the notes, attachments, planned changes and warnings, then select **Import these notes**. The preview expires after 24 hours. A queued import retains its consent across restarts and keeps the staged file until it finishes. Wait for the current import to finish before uploading another file. Smaller exports can be split by notebook, page group or vault folder to fit the 20 MB file limit.
+
+- **Markdown ZIP.** Include UTF-8 Markdown files and linked attachments together using their original relative paths. Spunto exports retain IDs, metadata, bodies and linked assets. Other Markdown exports can supply basic front-matter dates and tags. [Markdown import contracts](development/M7-markdown.md)
+- **Obsidian.** ZIP the vault’s Markdown files and attachments together. Spunto imports titles from the filenames or a title property, supported date and tag properties and standard links. It resolves simple, unambiguous wiki links and file embeds in the archive. When it cannot resolve a wiki link, it keeps the original text and counts it in the preview. Vault settings, canvas files, heading or block transclusions, and note embeds do not become Spunto features. Keep the same archive-relative paths for updates. [Obsidian files and folders](https://obsidian.md/help/data-storage)
+- **Notion.** Export **Markdown & CSV** with files and subpages included as needed. If your download wraps this export inside another ZIP, extract the inner ZIP containing the Markdown pages. Spunto imports those pages and standard relative links and assets. A Notion page ID in the filename lets Spunto identify the same page after a rename. Unlinked CSV files and nested ZIPs are skipped. Database views, permissions and Notion-specific block behavior aren’t recreated. [Notion export guide](https://www.notion.com/help/export-your-content)
+- **Evernote.** Export an **ENEX** file from the desktop app and include dates and tags where available. Titles, basic text formatting, linked resources and exported timestamps come across. Spaces in tags become hyphens. Encrypted blocks are skipped and layouts are simplified. Keep an original copy for Evernote-specific metadata and notebook structure. Since ENEX lacks a stable exported note ID, an identical note snapshot is recognized on retry and a changed snapshot imports as another note. [Evernote export guide](https://help.evernote.com/hc/en-us/articles/209005557-Export-Notes-and-Notebooks-as-ENEX-or-HTML)
+
+Spunto preserves owner edits and conservatively keeps an existing note if its previous import receipt is missing. Use the same source format for repeat imports. Each input can contain up to 10,000 notes. Archives are limited to 20 MB uploaded, 64 MB expanded, 20,000 entries and the smaller of 5 MB and the configured attachment upload limit per attachment.
+
+The operator CLI accepts a Markdown ZIP, a folder or an ENEX file. Stop the server using that data directory and use the same configuration and data lock. Use `--format obsidian` or `--format notion` to select those layouts. The `.enex` extension selects Evernote automatically. Hosted PostgreSQL operators must also supply the exact `--user-id` and `--workspace-id`.
 
 ```sh
-uv run --project server spunto plugins run markdown-import --path /absolute/synthetic-export.zip --dry-run
-uv run --project server spunto plugins run markdown-import --path /absolute/synthetic-export.zip
+uv run --project server spunto plugins run markdown-import --path /absolute/synthetic-export.enex --dry-run
+uv run --project server spunto plugins run markdown-import --path /absolute/synthetic-export.enex
 ```
-
-These are instructions for an explicitly chosen import, not evidence that an owner library was accessed.
 
 ## Android signing and future distribution
 

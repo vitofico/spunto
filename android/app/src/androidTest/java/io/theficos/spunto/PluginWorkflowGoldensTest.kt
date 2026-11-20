@@ -35,13 +35,11 @@ class PluginWorkflowGoldensTest {
         assertEquals(value, result["title"]?.jsonPrimitive?.content)
     }
 
-    @Test fun thinkingDeskFormSubmitsItsSelectedMode() {
-        val value = "Synthetic history"
-        val result = submit("thinking-desk", "Topic or desk title", value) {
-            compose.onNodeWithText("collision").performScrollTo().performClick()
-        }
+    @Test fun thinkingDeskCreationSubmitsOnlyItsTitleAndHiddenRequest() {
+        val value = "Synthetic combination"
+        val result = submit("thinking-desk", "A name for this desk", value)
         assertEquals(value, result["title"]?.jsonPrimitive?.content)
-        assertEquals("collision", result["mode"]?.jsonPrimitive?.content)
+        assertEquals(setOf("title", "request_id"), result.keys)
     }
 
     @Test fun decisionFormSubmitsOwnerWordsAndKeepsRequestIdInternal() {
@@ -55,7 +53,6 @@ class PluginWorkflowGoldensTest {
         plugin: String,
         field: String,
         value: String,
-        beforeSubmit: () -> Unit = {},
     ): JsonObject {
         val raw = instrumentation.context.assets.open("plugin-workflow-forms.json")
             .bufferedReader().use { it.readText() }
@@ -76,7 +73,10 @@ class PluginWorkflowGoldensTest {
                             online = true, running = false,
                         ) { submitted = it }
                     } else {
-                        components.forEach { Vocabulary(it, onForm = { values -> submitted = values }) }
+                        components.forEach {
+                            Vocabulary(it, onForm = { values -> submitted = values },
+                                formLabel = thinkingDeskFormLabel(plugin, it))
+                        }
                     }
                 }
             }
@@ -86,8 +86,7 @@ class PluginWorkflowGoldensTest {
         compose.onNodeWithText(requestId.jsonPrimitive.content).assertDoesNotExist()
         compose.onNode(hasSetTextAction() and hasText(field)).performScrollTo()
             .assertIsDisplayed().performTextReplacement(value)
-        beforeSubmit()
-        val button = instrumentation.targetContext.getString(
+        val button = if (plugin == "thinking-desk") "Create desk" else instrumentation.targetContext.getString(
             if (decision) R.string.decision_save else io.theficos.spunto.core.plugins.R.string.plugin_ui_run,
         )
         compose.onNodeWithText(button).performScrollTo().performClick()

@@ -34,6 +34,15 @@ class CommandResultTest {
   assertEquals("note-a",envelope["command_args"]!!.jsonObject["note_id"]!!.jsonPrimitive.content)
   assertEquals("translate",envelope["command_id"]!!.jsonPrimitive.content)
  }
+ @Test fun translationCopiesMarkdownAcrossFragmentBoundaries() {
+  val payload=Json.parseToJsonElement("""{"ui":1,"items":[
+   {"type":"markdown","text":"[Nota collegata](/n/"},
+   {"type":"markdown","text":"reference)\n\nSeconda riga"},
+   {"type":"command","id":"save-translation","title":"Salva come nota","args":{"result_id":"receipt"}}
+  ]}""")
+  val envelope=commandEnvelope("translate","translate",buildJsonObject {put("language","it")},payload)
+  assertEquals("[Nota collegata](/n/reference)\n\nSeconda riga",resultCopyText(settingsTestResources(),envelope))
+ }
  @Test fun pinnedResultHeadingSuppressesOnlyARepeatingLeadHeadingAndCopyKeepsTheSource() {
   val markdown=Json.parseToJsonElement("""{"type":"markdown","text":"# Statistiche\n\nUna nota.\n\n## Statistiche"}""").jsonObject
   assertEquals("Una nota.\n\n## Statistiche",withoutRepeatedResultHeading(markdown,"Statistiche")["text"]?.jsonPrimitive?.content)

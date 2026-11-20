@@ -10,6 +10,7 @@ from spunto.host.language import tr
 
 MAX_SINGLE = 20_000
 MAX_CONTEXT = 50_000
+NOTE_REFERENCE = re.compile(r"(?:/n/|note://)([0-9a-fA-F-]{36})")
 
 
 def text(message):
@@ -51,10 +52,10 @@ def excerpts(notes, maximum=MAX_CONTEXT):
     return result
 
 
-def cited_body(body, citations):
+def cited_body(body, citations, *, inherited_body=""):
     """Models cannot smuggle undeclared internal references into grounded output."""
-    references = set(re.findall(r"(?:/n/|note://)([0-9a-fA-F-]{36})", body))
-    if not references <= set(citations):
+    references = set(NOTE_REFERENCE.findall(body))
+    if references - set(citations) - set(NOTE_REFERENCE.findall(inherited_body)):
         raise ValueError("undeclared_citation")
     return (
         body

@@ -57,6 +57,32 @@ class PluginRenderingTest {
   compose.onNodeWithText("Italian").performClick();compose.onNodeWithText("Run").performClick()
   compose.runOnIdle { assertEquals("it",result!!["language"]!!.jsonPrimitive.content);assertEquals("synthetic-note-a",result!!["note_id"]!!.jsonPrimitive.content) }
  }
+ @Test fun translationFormChangesSourceAndTargetWithReadableChoices() {
+  val resources=InstrumentationRegistry.getInstrumentation().targetContext.resources
+  val form=Json.parseToJsonElement("""{
+   "type":"form","schema":{"type":"object","required":["note_id","source_language","language"],"properties":{
+    "note_id":{"type":"string","default":"synthetic-note-a"},
+    "source_language":{"type":"string","title":"Source language","default":"auto","enum":["auto","en","it","es","fr","de"]},
+    "language":{"type":"string","title":"Translate to","default":"it","enum":["en","it","es","fr","de"]}
+   }}
+  }""").jsonObject
+  var result:JsonObject?=null
+  compose.setContent {SpuntoTheme {
+   Vocabulary(form,onForm={result=it},formLabel="Translate",choiceLabel={field,value ->
+    pluginFormChoice(resources,"translate",field,value)
+   })
+  }}
+  compose.onNodeWithText("synthetic-note-a").assertDoesNotExist()
+  compose.onNodeWithText("Automatic detection").assertIsDisplayed()
+  compose.onNodeWithContentDescription("Choose Source language").performClick()
+  compose.onNodeWithText("Find an option").performTextInput("French")
+  compose.onNode(hasText("French") and hasAnyAncestor(isDialog()) and hasClickAction() and !hasSetTextAction()).performClick()
+  compose.onNodeWithText("German").performClick()
+  compose.onNodeWithText("Translate").performClick()
+  compose.runOnIdle {assertEquals(buildJsonObject {
+   put("note_id","synthetic-note-a");put("source_language","fr");put("language","de")
+  },result)}
+ }
  @Test fun overflowExpandsTheCurrentRowAndNamesThePlugin() {
   val proposals=(1..4).map { index -> buildJsonObject { put("id","p$index");put("plugin","tidy");put("title","Proposal $index");put("action","replace_body") } }
   val selected=mutableListOf<String>()

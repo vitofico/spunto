@@ -2682,7 +2682,9 @@ export interface operations {
     };
     upload_api_v1_plugins_markdown_import_upload_post: {
         parameters: {
-            query?: never;
+            query?: {
+                source_format?: "markdown" | "obsidian" | "notion" | "evernote";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2696,6 +2698,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

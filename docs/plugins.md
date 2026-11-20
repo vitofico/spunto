@@ -70,6 +70,12 @@ Open **Link to note** from a saved note’s actions, or use the web command pale
 
 **Tidy text** returns a comparison focused on changed lines with a small amount of surrounding context. **Apply changes** accepts the full proposed body at its original note version. Long-line results direct you to Review for the full comparison. Labels, links and meaning remain guarded; running Tidy never silently edits the note.
 
+## Translate a note
+
+Enable **Translate** in **Settings → Plugins** with a chat model available. Open **Translate** from the saved note's tools on web or Android. Pick a source language or **Automatic detection**, then choose English, Italian, Spanish, French or German as the target. On the first use, the target starts in the app's language. Later openings start with your last successful choices in this space, including on another signed-in device.
+
+**Translate** sends the eligible note to the configured chat model and shows a preview. Use **Change languages** to try another pair, or **Save as note** to create a linked machine-written note. Saving checks that the source still matches the translated revision and leaves the original intact. Private, machine-written and trashed notes are ineligible.
+
 ## Model choices, waiting states and recovery
 
 The space owner can choose chat, embedding, vision and transcription models in the server's web **Settings → AI**. Provider URLs, credentials and request limits remain environment settings. Saved space choices override environment defaults; **Use environment defaults**, followed by **Save models**, resets them. A plugin's explicit profile route still takes priority over the default binding, so check that route when a plugin appears to use another profile. See [AI operations](operations.md#ai-profiles-and-index-recovery).
@@ -98,7 +104,12 @@ A manual plugin may declare `creates = "owner"`. Its notes carry `origin=owner`,
 
 ## Thinking desk
 
-Enable the optional **Thinking desk** plugin to follow a topic through selected notes in creation order, or to intentionally combine notes from different subjects. History records your directed **builds-on**, **challenges**, and **replaces** connections; originals stay intact. Collision supplies creative prompts and an editor for your own idea, with no AI or external processing. Use **Review sources** to add notes from the searchable picker or update the current sources. Both workflows offer a reviewed private note snapshot. Commands need a connection; saved snapshots are ordinary notes that Android can sync for offline reading. Changed sources require explicit review before saving another snapshot. See the [Thinking desk contract and acceptance steps](decisions/2026-10-31-thinking-desk.md).
+Enable **Thinking desk** in **Settings → Plugins**. Open it from the web command palette, the plugin page or a note’s actions. If you start from a note, the desk adds it as your first source.
+
+- **Trace an idea** puts selected notes in creation order. Connect two notes to record whether one builds on, challenges or replaces the other. You can also write a reflection.
+- **Combine notes** brings together two to five notes from different subjects. Choose the notes, then use the prompts to write a new idea in your own words.
+
+Name the desk and choose notes from recent results or search. Your work stays in **Your saved desks**. Use **Save as private note** to keep a separate note with your work and links to the originals. Review changed notes or remove unavailable ones before creating a new copy. Desks use a connection. Saved notes can sync to Android for offline reading. See the [Thinking desk contract and acceptance steps](decisions/2026-10-31-thinking-desk.md).
 
 ## Library stats
 

@@ -124,15 +124,19 @@ export function NoteReference({
 }
 export type Callbacks = {
   formLabel?: string;
+  beforeForm?: ReactNode;
+  hideForm?: boolean;
   formSchema?: (schema: Schema) => Schema;
   formChoices?: (key: string, value: Json) => string | undefined;
   formDetails?: { label: string; fields: readonly string[] };
   formSubmitDisabled?: boolean;
+  formSubmitOnChange?: boolean;
   commandLabel?: (id: string, title: string, args: Args) => string;
   displayText?: (text: string) => string;
   result?: boolean;
   onOpenNote?: () => void;
   primaryCommand?: string;
+  primaryActions?: readonly unknown[];
   onSuggestion?: (id: string) => void;
   onCommand?: (id: string, args: Args) => void;
   onForm?: (args: Args) => void;
@@ -211,7 +215,8 @@ export function VocabularyItem({
         <button
           className={
             actions.result
-              ? actions.primaryCommand === value.id
+              ? actions.primaryActions?.includes(value) ||
+                actions.primaryCommand === value.id
                 ? "primary"
                 : "button"
               : undefined
@@ -230,40 +235,46 @@ export function VocabularyItem({
       );
     case "form":
       return (
-        <Suspense fallback={null}>
-          <SchemaForm
-            schema={
-              actions.formSchema?.(value.schema as Schema) ??
-              (value.schema as Schema)
-            }
-            optionLabel={actions.formChoices}
-            optionalDetails={actions.formDetails}
-            submitDisabled={actions.formSubmitDisabled}
-            hiddenFields={Object.entries(
-              (value.schema as Schema).properties ?? {},
-            )
-              .filter(
-                ([key, field]) =>
-                  [
-                    "request_id",
-                    "note_id",
-                    "pack_id",
-                    "decision_id",
-                    "expected_revision",
-                    "base_version",
-                    "revision",
-                    "source_choices",
-                    "selected_ids",
-                    "max_sources",
-                    "removal_choices",
-                  ].includes(key) && field.default !== undefined,
-              )
-              .map(([key]) => key)}
-            onSave={(values) => actions.onForm?.(values)}
-            disabled={!actions.onForm}
-            submitLabel={actions.formLabel ?? t("settingsplugins.run")}
-          />
-        </Suspense>
+        <>
+          {actions.beforeForm}
+          {!actions.hideForm && (
+            <Suspense fallback={null}>
+              <SchemaForm
+                schema={
+                  actions.formSchema?.(value.schema as Schema) ??
+                  (value.schema as Schema)
+                }
+                optionLabel={actions.formChoices}
+                optionalDetails={actions.formDetails}
+                submitDisabled={actions.formSubmitDisabled}
+                submitOnChange={actions.formSubmitOnChange}
+                hiddenFields={Object.entries(
+                  (value.schema as Schema).properties ?? {},
+                )
+                  .filter(
+                    ([key, field]) =>
+                      [
+                        "request_id",
+                        "note_id",
+                        "pack_id",
+                        "decision_id",
+                        "expected_revision",
+                        "base_version",
+                        "revision",
+                        "source_choices",
+                        "selected_ids",
+                        "max_sources",
+                        "removal_choices",
+                      ].includes(key) && field.default !== undefined,
+                  )
+                  .map(([key]) => key)}
+                onSave={(values) => actions.onForm?.(values)}
+                disabled={!actions.onForm}
+                submitLabel={actions.formLabel ?? t("settingsplugins.run")}
+              />
+            </Suspense>
+          )}
+        </>
       );
     case "diff":
       return (

@@ -108,8 +108,6 @@ const formTitles: Record<string, string> = {
   "review-decision": "Record outcome",
   edit: "Edit context pack",
   sources: "Pack sources",
-  "thinking-desk:edit": "Edit thinking desk",
-  "thinking-desk:sources": "Choose thinking sources",
 };
 
 async function run(
@@ -507,22 +505,30 @@ test("bundled plugin settings and decision outcomes follow Italian with an Engli
       exact: true,
     })
     .click();
-  await page.getByRole("button", { name: "Nuovo tavolo", exact: true }).click();
   await expect(
-    page.getByRole("button", {
-      name: name("pluginui.choice.history"),
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Ricostruisci un’idea", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", {
-      name: name("pluginui.choice.collision"),
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Combina le note", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Collision", exact: true }),
+    page.getByRole("button", { name: "Combine notes", exact: true }),
   ).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath("thinking-desk-choices-it.png"),
+  });
+  await page
+    .getByRole("button", { name: "Combina le note", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Nome del tavolo", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Crea tavolo", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("ID della richiesta di creazione")).toHaveCount(
+    0,
+  );
 
   await page.goto("/v/decision-journal/journal");
   const commandHeaders: string[] = [];
@@ -775,52 +781,98 @@ test("thinking desk collision combines selected subjects and saves an authored p
     sources.push(await response.json());
   }
   const dialog = await palette(page, "Thinking desk");
+  const chooseAction = (title: string) =>
+    dialog.getByRole("button", { name: title, exact: true }).click();
   await uiCommand(page, "thinking-desk", "desk", () =>
     dialog.getByRole("option", { name: /^Thinking desk/ }).click(),
   );
+  await expect(
+    dialog.getByRole("heading", { name: "Follow one idea" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "Make a new connection" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Copy text", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath("thinking-desk-choices.png"),
+    fullPage: true,
+  });
   await uiCommand(page, "thinking-desk", "edit", () =>
-    dialog
-      .getByRole("button", { name: "New thinking desk", exact: true })
-      .click(),
+    chooseAction("Combine notes"),
   );
-  await dialog
-    .getByLabel("Topic or desk title", { exact: true })
-    .fill(`Collision ${suffix}`);
-  await dialog
-    .getByRole("group", { name: "Desk type", exact: true })
-    .getByRole("button", { name: "Collision", exact: true })
-    .click();
-  await run(page, dialog, "thinking-desk", "edit");
+  const name = `Collision ${suffix}`;
+  await dialog.getByLabel("A name for this desk", { exact: true }).fill(name);
+  await expect(dialog.getByLabel("Your idea", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText("Creation request ID")).toHaveCount(0);
+  await uiCommand(page, "thinking-desk", "edit", () =>
+    chooseAction("Create desk"),
+  );
+  await expect(dialog.getByText(/Choose at least two notes/)).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Save as private note" }),
+  ).toHaveCount(0);
   await uiCommand(page, "thinking-desk", "sources", () =>
-    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
+    dialog.getByRole("button", { name: "Choose notes", exact: true }).click(),
   );
-  for (const source of sources)
-    await pickSource(page, dialog, "thinking-desk", source.body);
+  const [garden, network] = sources;
+  await dialog.getByRole("radio", { name: new RegExp(network.body) }).check();
+  await uiCommand(page, "thinking-desk", "sources", () =>
+    chooseAction("Add source"),
+  );
+  await expect(
+    dialog.getByText("Note added. 1 selected.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Update notes", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole("searchbox", { name: "Search notes", exact: true }),
+  ).toBeFocused();
+  await pickSource(page, dialog, "thinking-desk", garden.body);
+  await expect(
+    dialog.getByText("Note added. 2 selected.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Back to desk", exact: true }),
+  ).toBeFocused();
   await uiCommand(page, "thinking-desk", "desk", () =>
     dialog.getByRole("button", { name: "Back to desk", exact: true }).click(),
   );
-  await expect(dialog.getByText(/surprising analogy/)).toBeVisible();
   await uiCommand(page, "thinking-desk", "edit", () =>
-    dialog
-      .getByRole("button", { name: "Write reflection", exact: true })
-      .click(),
+    chooseAction("Write your idea"),
   );
+  await expect(dialog.getByText(/surprising analogy/)).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: garden.body, exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: network.body, exact: true }),
+  ).toBeVisible();
   const idea = "Prune weak network connections like a garden.";
-  await dialog
-    .getByLabel("Your reflection or new idea", { exact: true })
-    .fill(idea);
-  await run(page, dialog, "thinking-desk", "edit");
+  await dialog.getByLabel("Your idea", { exact: true }).fill(idea);
+  await uiCommand(page, "thinking-desk", "edit", () =>
+    chooseAction("Save idea"),
+  );
   await expect(dialog.getByText(idea, { exact: true })).toBeVisible();
   const saved = await uiCommand(page, "thinking-desk", "edit", () =>
-    dialog
-      .getByRole("button", { name: "Keep private note copy", exact: true })
-      .click(),
+    chooseAction("Save as private note"),
   );
   const snapshot = await note(page, noteIds(saved)[0]);
   expect(snapshot.private).toBe(true);
   expect(snapshot.machine).toBe(false);
   expect(snapshot.body).toContain(idea);
-  expect((await note(page, sources[0].id)).body).toBe(sources[0].body);
+  expect(snapshot.body).toContain(`/n/${garden.id}`);
+  expect(snapshot.body).toContain(`/n/${network.id}`);
+  expect(snapshot.body).not.toContain("surprising analogy");
+  expect((await note(page, garden.id)).body).toBe(garden.body);
+  await expect(dialog.getByText(/Private note saved/)).toBeVisible();
+  await expect(dialog.getByRole("link", { name, exact: true })).toBeVisible();
+  await uiCommand(page, "thinking-desk", "desk", () =>
+    chooseAction("Back to desk"),
+  );
+  await expect(dialog.getByText(idea, { exact: true })).toBeVisible();
 });
 
 test("thinking history exposes both desk modes and connects and removes selected sources", async ({
@@ -854,25 +906,20 @@ test("thinking history exposes both desk modes and connects and removes selected
   await uiCommand(page, "thinking-desk", "desk", () =>
     dialog.getByRole("option", { name: /^Thinking desk/ }).click(),
   );
+  await expect(
+    dialog.getByRole("button", { name: "Combine notes", exact: true }),
+  ).toBeVisible();
   await uiCommand(page, "thinking-desk", "edit", () =>
-    dialog
-      .getByRole("button", { name: "New thinking desk", exact: true })
-      .click(),
+    dialog.getByRole("button", { name: "Trace an idea", exact: true }).click(),
   );
-  const types = dialog.getByRole("group", { name: "Desk type", exact: true });
-  await expect(
-    types.getByRole("button", { name: "History", exact: true }),
-  ).toBeVisible();
-  await expect(
-    types.getByRole("button", { name: "Collision", exact: true }),
-  ).toBeVisible();
-  await types.getByRole("button", { name: "History", exact: true }).click();
   await dialog
-    .getByLabel("Topic or desk title", { exact: true })
+    .getByLabel("A name for this desk", { exact: true })
     .fill(`History ${suffix}`);
-  await run(page, dialog, "thinking-desk", "edit");
+  await uiCommand(page, "thinking-desk", "edit", () =>
+    dialog.getByRole("button", { name: "Create desk", exact: true }).click(),
+  );
   await uiCommand(page, "thinking-desk", "sources", () =>
-    dialog.getByRole("button", { name: "Review sources", exact: true }).click(),
+    dialog.getByRole("button", { name: "Choose notes", exact: true }).click(),
   );
   for (const source of sources)
     await pickSource(page, dialog, "thinking-desk", source.body);
@@ -885,9 +932,7 @@ test("thinking history exposes both desk modes and connects and removes selected
       exact: true,
     }),
   ).toBeVisible();
-  await expect(
-    dialog.getByText(/\d{4}-\d{2}-\d{2}:.*revision 1/).first(),
-  ).toBeVisible();
+  await expect(dialog.getByText(/\d{4}-\d{2}-\d{2}/).first()).toBeVisible();
   for (const remove of [false, true]) {
     await uiCommand(page, "thinking-desk", "sources", () =>
       dialog
@@ -920,7 +965,11 @@ test("thinking history exposes both desk modes and connects and removes selected
       await dialog
         .getByLabel("Remove this connection", { exact: true })
         .check();
-    await run(page, dialog, "thinking-desk", "sources");
+    await uiCommand(page, "thinking-desk", "sources", () =>
+      dialog
+        .getByRole("button", { name: "Save connection", exact: true })
+        .click(),
+    );
     if (remove)
       await expect(
         dialog.getByText("Note 2 challenges note 1", { exact: true }),

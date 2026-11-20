@@ -14,6 +14,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { api } from "../src/lib/api";
+import { setLanguage } from "../src/lib/i18n";
 import { PaletteCommands, SlashCommands } from "../src/features/Slots";
 import type { Note, Plugin, Schema } from "../src/lib/types";
 
@@ -155,6 +156,138 @@ function manifest(...plugins: Partial<Plugin>[]) {
     })),
   });
 }
+
+it("configures a translation, previews it, changes languages and saves the linked note explicitly", async () => {
+  await setLanguage("it");
+  client.setQueryDefaults(["manifest"], { refetchOnMount: false });
+  manifest({
+    id: "translate",
+    origin: "bundled",
+    creates: "machine",
+    contributes: {
+      commands: [
+        { id: "translate", title: "Translate", where: ["note-actions"] },
+        { id: "save-translation", title: "Save as note", where: [] },
+      ],
+    },
+  });
+  const translationForm = (source: string, target: string) => ({
+    type: "form",
+    schema: {
+      type: "object",
+      required: ["note_id", "source_language", "language"],
+      properties: {
+        note_id: { type: "string", default: "source-note" },
+        source_language: {
+          type: "string",
+          title: "Lingua di origine",
+          default: source,
+          enum: ["auto", "en", "it", "es", "fr", "de"],
+        },
+        language: {
+          type: "string",
+          title: "Traduci in",
+          default: target,
+          enum: ["en", "it", "es", "fr", "de"],
+        },
+      },
+    } satisfies Schema,
+  });
+  const preview = (body: string, receipt: string) => ({
+    ui: 1,
+    preview_html: `<p>${body}</p><a href="/n/related-note">Nota collegata</a>`,
+    items: [
+      {
+        type: "markdown",
+        text: body.slice(0, 3),
+        html: `<p>${body.slice(0, 3)}</p>`,
+      },
+      {
+        type: "markdown",
+        text: body.slice(3),
+        html: `<p>${body.slice(3)}</p>`,
+      },
+      {
+        type: "command",
+        id: "translate",
+        args: { note_id: "source-note" },
+        title: "Cambia lingue",
+      },
+      {
+        type: "command",
+        id: "save-translation",
+        args: { result_id: receipt },
+        title: "Salva come nota",
+      },
+    ],
+  });
+  const command = vi
+    .spyOn(api, "command")
+    .mockResolvedValueOnce(preview("Bonjour", "first-preview"))
+    .mockResolvedValueOnce(translationForm("en", "fr"))
+    .mockResolvedValueOnce(preview("Hallo", "second-preview"))
+    .mockResolvedValueOnce({ type: "text", text: "Traduzione salvata" });
+  const pick = (label: string, choice: string) => {
+    const select = screen.getByRole<HTMLSelectElement>("combobox", {
+      name: label,
+    });
+    const option = within(select).getByRole<HTMLOptionElement>("option", {
+      name: choice,
+    });
+    fireEvent.change(select, { target: { value: option.value } });
+  };
+  try {
+    render(
+      wrap(
+        <CommandResult
+          value={translationForm("auto", "it")}
+          origin={{
+            plugin: "translate",
+            command: "translate",
+            args: { note_id: "source-note" },
+          }}
+        />,
+      ),
+    );
+    await screen.findByRole("option", {
+      name: "Rilevamento automatico",
+      selected: true,
+    });
+    expect(screen.queryByDisplayValue("source-note")).toBeNull();
+    expect(command).not.toHaveBeenCalled();
+    pick("Lingua di origine", "inglese");
+    pick("Traduci in", "francese");
+    fireEvent.click(screen.getByRole("button", { name: "Traduci" }));
+    expect(await screen.findByText("Anteprima in francese")).toBeTruthy();
+    expect(screen.getByText("Bonjour")).toBeTruthy();
+    expect(screen.queryByText("Bon")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Nota collegata" }).getAttribute("href"),
+    ).toBe("/n/related-note");
+    expect(command).toHaveBeenNthCalledWith(1, "translate", "translate", {
+      note_id: "source-note",
+      source_language: "en",
+      language: "fr",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cambia lingue" }));
+    await screen.findByRole("option", { name: "francese", selected: true });
+    pick("Traduci in", "tedesco");
+    fireEvent.click(screen.getByRole("button", { name: "Traduci" }));
+    expect(await screen.findByText("Hallo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Salva come nota" }));
+    expect(await screen.findByText("Traduzione salvata")).toBeTruthy();
+    expect(command).toHaveBeenNthCalledWith(
+      4,
+      "translate",
+      "save-translation",
+      { result_id: "second-preview" },
+    );
+    expect(api.createNote).not.toHaveBeenCalled();
+  } finally {
+    cleanup();
+    await setLanguage("en");
+  }
+});
 
 function decisionPanel(id: string, summary: string) {
   return {

@@ -109,7 +109,7 @@ def validate_annotation(kind: str, value: object) -> None:
         raise ManifestError("unknown annotation kind")
 
 
-def render_output(value):
+def render_output(value, *, joined_markdown=False):
     """Only the server adds HTML; plugins submit the closed Markdown vocabulary."""
     from spunto.core.render import render_markdown
 
@@ -119,5 +119,14 @@ def render_output(value):
         result = {key: render_output(item) for key, item in value.items()}
         if value.get("type") == "markdown":
             result["html"] = render_markdown(value.get("text", value.get("markdown", "")))
+        elif joined_markdown and "items" in value:
+            # Keep the bounded fragments for older clients. Render the complete Markdown for web.
+            fragments = [
+                item.get("text", item.get("markdown", ""))
+                for item in value["items"]
+                if item["type"] == "markdown"
+            ]
+            if len(fragments) > 1:
+                result["preview_html"] = render_markdown("".join(fragments))
         return result
     return value

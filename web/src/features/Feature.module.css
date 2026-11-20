@@ -785,6 +785,16 @@
 .resultBody pre {
   overflow-x: auto;
 }
+.deskChoices > div:has(> h3) {
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s-12);
+}
+.deskChoices h3 {
+  margin: 0 0 var(--s-8);
+}
+.deskChoices h3 + p {
+  margin: 0;
+}
 .resultPanel > footer {
   display: flex;
   flex-wrap: wrap;

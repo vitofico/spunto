@@ -146,6 +146,17 @@ requires 300 words, and `short_text` indicates nonempty text within the
 uses attachment metadata and validates URL syntax locally. The commands
 verify access and current inputs again when run.
 
+Call `POST /api/v1/plugins/translate/commands/translate` with `note_id` to get
+the language form and remembered values. Submit the same command with `language`
+as the target and `source_language` as the source. Both fields accept `en`, `it`,
+`es`, `fr`, and `de`. The source also accepts `auto`, which is the default when
+legacy callers omit the source. An explicit successful pair is remembered for
+the current user and space. The returned preview includes a `save-translation`
+command with a result ID valid for 15 minutes. For long results, the optional
+`preview_html` renders the complete translation while the existing Markdown
+items preserve the original text in order. Saving creates the linked
+translation at most once without updating the source note.
+
 A simple read after obtaining a token:
 
 ```sh
@@ -248,7 +259,7 @@ The eight organization/development plugins (`title-summary`, `tidy`, `duplicates
 
 Voice memos, image text, link enrichment and webhooks also default off. Native retained recordings use Ogg Opus links such as `[Recording 0:30](/a/{id})`. Voice memos must be switched on with all declared grants; a Waiting transcription profile still allows native recording-only capture. Recording and ordinary offline Dictate are separate actions. Transcription requires a configured healthy binding and supported linked audio, rechecks privacy/source eligibility, and produces an owner-accepted proposal. Native validation and server transcription support bounded Ogg Opus; the server also recognizes PCM WAV, with a maximum one-hour transcription duration and the configured attachment-byte cap. Other uploaded media is retained without implying transcription support. See [capture contracts](development/M7-capture.md).
 
-Markdown import is an explicit preview/import flow: owner-session multipart `POST /plugins/markdown-import/upload` stages a ZIP and returns `{archive_id, report}`; the web flow explicitly queues `POST /plugins/markdown-import/import` with that `archive_id`, and reads the report after the durable job finishes. ZIPs remain capped at 20,000,000 bytes/64,000,000 expanded bytes, with individual assets capped at the smaller of 5,000,000 bytes and `max_upload_bytes`. Raising the ordinary upload limit does not raise importer limits. See [Markdown import](development/M7-markdown.md) for exact frontmatter/round-trip and owner-edit safeguards.
+Note import uses the owner-session multipart `POST /plugins/markdown-import/upload` with one `file` part. Its optional `source_format` query is `markdown` (the default ZIP behavior), `obsidian`, `notion`, or `evernote` (ENEX). An `.enex` filename also selects Evernote under the default. The upload stages the file and returns `{archive_id, report}` with note and attachment totals, predicted changes in `planned`, `missing_links` and `unsupported_items`. Explicitly queue `POST /plugins/markdown-import/import` with that `archive_id`, then read the report after the durable job finishes. The 20 MB file cap and 64 MB expanded cap apply independently of the ordinary upload limit. Each linked asset must fit the smaller of 5 MB and `max_upload_bytes`. [Import formats and limits](operations.md#import-notes-from-other-apps)
 
 Catalog cards report authoritative `origin` (`bundled`, `operator`, `unknown`), safe `source_kind`, `can_enable`, `can_delete_data` and scoped `data_count`/`data_counts`/`data_size_bytes`. A retained missing plugin is `state=removed`, `switch=off`, `can_enable=false`; no missing code is imported or dispatched. A known retained ID can remain `pinned_by_env` when listed in `SPUNTO_PLUGINS`; truly unknown IDs still reject startup. Removed settings/enable/commands return 404. Unpinned Removed disable returns its actual Off receipt; environment-pinned disable returns 409 `pinned_by_environment`. Owner-session+Origin `DELETE /plugins/{id}/data` remains available for a known Removed card, preserves its notes and metadata card, and clears only scoped plugin data. Devices use the web owner-sign-in management action rather than receiving DELETE authority.
 

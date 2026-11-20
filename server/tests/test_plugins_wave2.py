@@ -65,7 +65,7 @@ class Provider:
             answer = {"title": "Synthetic long note", "summary": "A short faithful summary."}
         elif "Tidy punctuation" in prompt:
             answer = {"body": "Synthetic sentence.\n\nSecond paragraph.", "meaning_preserved": True}
-        elif "Translate between" in prompt:
+        elif "Translate the note" in prompt:
             answer = {"body": "Testo sintetico."}
         elif "label improvements" in prompt:
             answer = {
@@ -481,6 +481,105 @@ async def test_translate_live_explicit_save_idempotent_and_develop_links(wave):
     assert developed == await develop.develop(ctx(host, "develop"), seed["id"])
     assert (await notes.get(seed["id"]))["body"] == seed["body"]
     assert (await notes.get(developed["ids"][0]))["machine"]
+
+
+async def test_translation_language_choices_and_previews_are_user_scoped(wave):
+    host, provider, notes = wave
+    first = replace(OWNER, user_id="test-user-a")
+    second = replace(OWNER, user_id="test-user-b")
+    note = await notes.create("Synthetic translation source")
+
+    async def run(principal, **options):
+        return await host.invoke_command(
+            "translate", "translate", {"note_id": note["id"], **options}, principal=principal
+        )
+
+    with use_language("it"):
+        form = (await run(first))["schema"]["properties"]
+        assert form["source_language"] == {
+            "type": "string",
+            "enum": ["auto", "en", "it", "es", "fr", "de"],
+            "title": "Lingua di origine",
+            "default": "auto",
+        }
+        assert form["language"]["default"] == "it"
+        assert form["language"]["title"] == "Traduci in"
+        with pytest.raises(Problem) as error:
+            await run(first, source_language="fr", language="fr")
+        assert error.value.code == "translation_same_language"
+        assert not provider.requests
+        result = await run(first, source_language="en", language="fr")
+        assert result["items"][-2] == {
+            "type": "command",
+            "id": "translate",
+            "title": "Cambia lingue",
+            "args": {"note_id": note["id"]},
+        }
+        assert "from English into French" in provider.requests[-1]["messages"][1]["content"]
+        receipt = result["items"][-1]["args"]
+        blocked = await host.invoke_command(
+            "translate", "save-translation", receipt, principal=second
+        )
+        assert blocked["type"] == "text"
+        assert len((await notes.list())["notes"]) == 1
+
+    with use_language("es"):
+        form = (await run(first))["schema"]["properties"]
+        assert (form["source_language"]["default"], form["language"]["default"]) == ("en", "fr")
+        form = (await run(second))["schema"]["properties"]
+        assert (form["source_language"]["default"], form["language"]["default"]) == ("auto", "es")
+        await run(second, source_language="auto", language="de")
+        prompt = provider.requests[-1]["messages"][1]["content"]
+        assert "into German" in prompt and "Detect the source language" in prompt
+        saved = await host.invoke_command("translate", "save-translation", receipt, principal=first)
+        assert note["id"] in (await notes.get(saved["ids"][0]))["body"]
+        assert (await notes.get(note["id"]))["body"] == note["body"]
+
+
+async def test_repeat_translation_refreshes_an_expired_preview(wave, monkeypatch):
+    host, _, notes = wave
+    note = await notes.create("Synthetic source for a repeat translation")
+    context = ctx(host, "translate")
+    first = await translate.translate(context, note["id"], "it")
+    key = first["items"][-1]["args"]["result_id"]
+    now = host.clock()
+    monkeypatch.setattr(host, "clock", lambda: now + 900_001)
+    assert (await translate.save(context, key))["type"] == "text"
+    assert await translate.translate(context, note["id"], "it") == first
+    assert (await translate.save(context, key))["type"] == "notes"
+
+
+async def test_translation_preserves_inherited_note_links_and_previews_complete_markdown(wave):
+    host, provider, notes = wave
+    linked = await notes.create("Referenced synthetic note")
+    href = f"/n/{linked['id']}"
+    source = await notes.create(f"Synthetic body [linked note]({href})")
+    body = "x" * 3985 + f" [note citée]({href})\n\n```text\n" + "same line " * 460 + "\n```"
+    provider.override = json.dumps({"body": body})
+
+    async def run():
+        return await host.invoke_command(
+            "translate", "translate", {"note_id": source["id"], "language": "fr"}, principal=OWNER
+        )
+
+    preview = await run()
+    fragments = [item["text"] for item in preview["items"] if item["type"] == "markdown"]
+    assert len(fragments) == 3 and "".join(fragments) == body
+    assert f'href="{href}"' in preview["preview_html"]
+    assert preview["preview_html"].count("<pre>") == 1
+    saved = await translate.save(ctx(host, "translate"), preview["items"][-1]["args"]["result_id"])
+    saved_note = await notes.get(saved["ids"][0])
+    assert saved_note["body"].startswith(body + "\n\n")
+    assert f"(/n/{source['id']})" in saved_note["body"]
+    assert href in saved_note["body"] and (await notes.get(source["id"]))["body"] == source["body"]
+
+    fake = "/n/0192f3c4-1111-7000-8000-123456789012"
+    provider.override = json.dumps({"body": f"{body}\n\n[fake]({fake})"})
+    with pytest.raises(ValueError, match="translation_changed_labels_or_links"):
+        await run()
+    provider.override = json.dumps({"body": f"{body}\n\nFake reference {fake}"})
+    with pytest.raises(ValueError, match="undeclared_citation"):
+        await run()
 
 
 async def test_gardener_cluster_atomic_and_refusal_permanent(wave):

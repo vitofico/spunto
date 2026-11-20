@@ -54,14 +54,27 @@ import kotlinx.serialization.json.*
 internal fun commandEnvelope(plugin:String,command:String,args:JsonObject,result:JsonElement)=buildJsonObject {
  put("plugin_id",plugin);put("command_id",command);put("command_args",args);put("payload",result)
 }
-internal fun resultCopyText(resources:Resources,data:JsonElement):String=outputComponents(data).mapNotNull { component ->
- when(component.string("type")) {
-  "text" -> component.string("text")
-  "markdown" -> component.string("text").ifEmpty { component.string("markdown") }
-  "diff" -> component.objects("hunks").joinToString("\n\n") {hunk ->val (before,after)=diffHunkTexts(hunk);resources.getString(R.string.settings_before_n_n_nafter_n ,before,after)}
-  else -> null
- }
-}.joinToString("\n\n")
+private fun translationPreviewBody(data:JsonElement,components:List<JsonObject>):String? {
+ val wrapper=data as? JsonObject ?: return null
+ if(wrapper.string("plugin_id")!="translate" || wrapper.string("command_id")!="translate" ||
+  components.none {it.string("type")=="command" && it.string("id")=="save-translation"}) return null
+ return components.filter {it.string("type")=="markdown"}.joinToString("") {
+  it.string("text").ifEmpty {it.string("markdown")}
+ }.takeIf(String::isNotEmpty)
+}
+
+internal fun resultCopyText(resources:Resources,data:JsonElement):String {
+ val components=outputComponents(data)
+ translationPreviewBody(data,components)?.let {return it}
+ return components.mapNotNull { component ->
+  when(component.string("type")) {
+   "text" -> component.string("text")
+   "markdown" -> component.string("text").ifEmpty { component.string("markdown") }
+   "diff" -> component.objects("hunks").joinToString("\n\n") {hunk ->val (before,after)=diffHunkTexts(hunk);resources.getString(R.string.settings_before_n_n_nafter_n ,before,after)}
+   else -> null
+  }
+ }.joinToString("\n\n")
+}
 
 internal fun runCommand(model:SpuntoViewModel,plugin:String,id:String,args:JsonObject,onResult:(JsonObject)->Unit,onComplete:()->Unit={},scope:CoroutineScope=model.viewModelScope,onError:(String)->Unit={model.message.value=it},pickerSession:NotePickerSession?=null,requireOwner:Boolean=false)=model.task(scope) {
  val resources=model.container.context.resources
@@ -450,7 +463,18 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
  val journal=plugin==DecisionJournalId
  val initial=wrapper["command_args"] as? JsonObject ?: JsonObject(emptyMap())
  val components=outputComponents(data)
+ val translating=plugin=="translate" && command=="translate"
+ val translatedLanguage=initial.string("language")
+ val translatedBody=translationPreviewBody(data,components)
+ val translationPreview=translatedLanguage in translationLanguages && translatedBody!=null
  val sourcePicker=sourcePickerState(plugin,command,initial,components)
+ val deskPicker=plugin=="thinking-desk" && sourcePicker!=null
+ val deskPickerChanged=deskPicker && (initial.string("add_id").isNotBlank() || initial.string("remove").isNotBlank() || initial["refresh"]==JsonPrimitive(true))
+ val deskPrimary=when {
+  deskPicker -> components.takeWhile {it.string("type")!="form"}.firstOrNull {it.string("type")=="command" && it.string("id")=="desk"}
+  plugin=="thinking-desk" -> components.firstOrNull(::thinkingDeskWorkAction)
+  else -> null
+ }
  val pickerSupported=plugin in setOf("thinking-desk","context-packs") && supportsNotePicker(model.manifest.collectAsState().value,plugin)
  val pickerSession=if(pickerSupported) remember(plugin) {NotePickerSession.open(model,plugin)} else null
  val ownsPicker=if(pickerSession==null || !canWrite) false else {
@@ -481,11 +505,22 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value=resources.getString(R.string.settings_sync_to_review_this_suggestion) }
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   if(components.isEmpty() && command.isNotBlank()) Text(resources.getString(R.string.settings_this_result_has_no_preview_in_this),style=MaterialTheme.typography.bodySmall)
+  if(translationPreview) {
+   Text(resources.getString(R.string.plugin_translation_preview,translationLanguageName(resources,translatedLanguage)),style=MaterialTheme.typography.titleMedium,modifier=Modifier.semantics {heading()})
+   Text(resources.getString(R.string.plugin_translation_linked_note),style=MaterialTheme.typography.bodySmall)
+  }
+  if(translatedBody!=null) Markdown(translatedBody,machine=true,onLink={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/"))})
   components.filterNot {it.string("type")=="pill" && hideSuggestion.isNotBlank() && it.string("suggestion_id")==hideSuggestion}.forEachIndexed { index,raw ->
+   if(translatedBody!=null && raw.string("type")=="markdown") return@forEachIndexed
    val component=if(index==0) withoutRepeatedResultHeading(raw,headingShown) else raw
+   if(index==0 && deskPickerChanged && component.string("type")=="text") {
+    Text(component.string("text"),modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+    return@forEachIndexed
+   }
    if(component.string("type")=="form" && sourcePicker!=null && pickerSession!=null) {
     SourceNotePicker(model,sourcePicker,pickerSession,online,running,pickerRefresh,onQueryChanged={error=""}) {run(command,it)}
     if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
+    if(plugin=="thinking-desk" && sourcePicker.selectedIds.isEmpty()) return@forEachIndexed
    }
    if(journal) when(component.string("type")) {
     "text" -> if(command=="journal") {
@@ -520,6 +555,13 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
    val output=if(wrapper.string("content_language").isBlank()) pluginFormComponent(resources,plugin,component) else component
    Vocabulary(output,onNote,review,run,online=online && canWrite && !running,
     choiceLabel={field,value -> pluginFormChoice(resources,plugin,field,value)},
+    formSubmitOnChange=deskPicker,
+    formLabel=if(translating) resources.getString(R.string.settings_bundled_title_6) else thinkingDeskFormLabel(plugin,output),
+    primaryCommand=when {
+     translationPreview -> "save-translation"
+     component === deskPrimary || plugin=="thinking-desk" && thinkingDeskStartAction(component) -> component.string("id")
+     else -> null
+    },
     onForm=if(canWrite && command.isNotBlank()) { args -> run(command,sourcePicker?.update(args) ?: JsonObject(initial+args)) } else null,
     formInitial=if(sourcePicker!=null) sourcePicker.args else initial,
     formHidden=if(sourcePicker!=null) setOf("selected_ids","max_sources") else initial.keys.filter { it=="note_id" }.toSet(),
@@ -608,7 +650,7 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
  val canWrite by model.workspaceCanWrite.collectAsState()
  val locked=journalSubmitting || applying
  val command=(plugin?.get("contributes") as? JsonObject)?.objects("commands")?.firstOrNull {it.string("id")==result.string("command_id")}
- val title=if(plugin!=null && command!=null) localizedPluginCommand(resources,plugin,command,catalog)
+ val title=if(plugin!=null && command!=null && plugin.string("id")!="thinking-desk") localizedPluginCommand(resources,plugin,command,catalog)
   else plugin?.let {localizedPluginName(resources,it,catalog)} ?: resources.getString(R.string.settings_tool_result)
  val ask=result.string("plugin_id")=="ask" && supportsAskConversation(manifest) && askContinuation(result)!=null
  val maximumHeight=(LocalConfiguration.current.screenHeightDp * 0.88f).dp
@@ -640,43 +682,44 @@ internal fun commandReviewMatches(result:JsonObject,proposal:JsonObject?,note:No
       if(applyError.isNotBlank()) Text(applyError,color=MaterialTheme.colorScheme.error,modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite})
      }
     }
-    val copied=resultCopyText(resources,result)
+    val deskLanding=plugin?.string("id")=="thinking-desk" && outputComponents(result).any(::thinkingDeskStartAction)
+    val copied=if(deskLanding) "" else resultCopyText(resources,result)
     if(matching || copied.isNotBlank()) {
      HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
      FlowRow(Modifier.fillMaxWidth().padding(bottom=SpuntoSpacing.s8),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-    if(matching && proposal!=null) {
-     if(diff==null && !fullReview) Button(onClick={fullReview=true}) {Text(resources.getString(R.string.plugin_review_changes))}
-     else Button(enabled=!applying && canWrite,onClick={
-      val auth=model.auth.value
-      if(active && !applying && auth!=null) {
-       applying=true
-       applyError=""
-       focusManager.clearFocus()
-       val epoch=model.pluginReplicaEpoch
-       fun current()=active && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.workspaceCanWrite.value
-       sheetScope.launch {
-        try {
-         val response=pluginApi(auth,resources).guarded {current()}.post("/api/v1/suggestions/$suggestionId/accept",JsonObject(emptyMap()))
-         model.synchronize().join()
-         if(current()) {
-          if(response.pluginFlag("applied")==true) {
-           val receipt=(response["suggestion"] as? JsonObject)?.get("receipt") as? JsonObject
-           feedback.show(receiptLabel(resources,proposal),resources.getString(R.string.settings_undo).takeIf {receipt?.pluginFlag("undoable")==true}) {model.decide(suggestionId,"undo")}
-          }
-          close()
+      if(matching && proposal!=null) {
+       if(diff==null && !fullReview) Button(onClick={fullReview=true}) {Text(resources.getString(R.string.plugin_review_changes))}
+       else Button(enabled=!applying && canWrite,onClick={
+        val auth=model.auth.value
+        if(active && !applying && auth!=null) {
+         applying=true
+         applyError=""
+         focusManager.clearFocus()
+         val epoch=model.pluginReplicaEpoch
+         fun current()=active && model.auth.value==auth && model.pluginReplicaEpoch==epoch && model.workspaceCanWrite.value
+         sheetScope.launch {
+          try {
+           val response=pluginApi(auth,resources).guarded {current()}.post("/api/v1/suggestions/$suggestionId/accept",JsonObject(emptyMap()))
+           model.synchronize().join()
+           if(current()) {
+            if(response.pluginFlag("applied")==true) {
+             val receipt=(response["suggestion"] as? JsonObject)?.get("receipt") as? JsonObject
+             feedback.show(receiptLabel(resources,proposal),resources.getString(R.string.settings_undo).takeIf {receipt?.pluginFlag("undoable")==true}) {model.decide(suggestionId,"undo")}
+            }
+            close()
+           }
+          } catch(error:CancellationException) {throw error}
+          catch(error:Exception) {
+           if(current()) {
+            if(error is ApiException && error.status==401) model.reauthenticate.value=true
+            if(error is ApiException && error.status==409) model.synchronize().join()
+            applyError=if(error is ApiException) pluginApiError(resources,error) else resources.getString(R.string.sys_server_unreachable)
+           }
+          } finally {applying=false}
          }
-        } catch(error:CancellationException) {throw error}
-        catch(error:Exception) {
-         if(current()) {
-          if(error is ApiException && error.status==401) model.reauthenticate.value=true
-          if(error is ApiException && error.status==409) model.synchronize().join()
-          applyError=if(error is ApiException) pluginApiError(resources,error) else resources.getString(R.string.sys_server_unreachable)
-         }
-        } finally {applying=false}
-       }
+        }
+       }) {Text(resources.getString(if(applying) R.string.settings_saving else R.string.settings_apply_changes))}
       }
-     }) {Text(resources.getString(if(applying) R.string.settings_saving else R.string.settings_apply_changes))}
-    }
       if(copied.isNotBlank()) TextButton(onClick={clipboard.setText(AnnotatedString(copied));feedback.show(resources.getString(R.string.core_copied))},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(if(diff!=null) R.string.settings_copy_changes else R.string.settings_copy))}
      }
     }

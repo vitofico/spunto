@@ -40,9 +40,10 @@ class NoteExportStateTest {
  }
  @Test fun fullLibraryAndProfileUseOnlyValidatedOwnerWebRoutesAndNoCredentials() {
   val config=AuthConfig("https://synthetic.invalid","synthetic-export-token","synthetic-device","Phone")
-  for(section in listOf("data","profile")) {
+  for(section in listOf("data","profile","import")) {
    val target=ownerWebSettingsTarget(context,config,"https://synthetic.invalid",true,section)
-   assertEquals("https://synthetic.invalid/settings/$section",target.url);assertFalse(target.url!!.contains(config.token))
+   val page=if(section=="import") "data#import-notes" else section
+   assertEquals("https://synthetic.invalid/settings/$page",target.url);assertFalse(target.url!!.contains(config.token))
    assertNull(ownerWebSettingsTarget(context,config,"https://other.invalid",true,section).url)
    assertNull(ownerWebSettingsTarget(context,config,"https://synthetic.invalid",false,section).url)
    assertNull(ownerWebSettingsTarget(context,config,"https://synthetic.invalid",true,section,true).url)

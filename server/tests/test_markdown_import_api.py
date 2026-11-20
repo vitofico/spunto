@@ -148,3 +148,77 @@ async def test_queued_import_archive_survives_replacement_upload(owner):
     assert (
         owner.services.settings.data_dir / "imports" / (preview["archive_id"] + ".zip")
     ).is_file()
+
+
+async def test_evernote_preview_confirmation_resources_and_retry(owner):
+    import base64
+    import hashlib
+
+    image = b"\x89PNG\r\n\x1a\nsynthetic-enex-image"
+    resource_hash = hashlib.md5(image, usedforsecurity=False).hexdigest()
+    encoded = base64.b64encode(image).decode()
+    source = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "https://xml.evernote.com/pub/evernote-export4.dtd">
+<en-export><note><title>Plan &amp; review</title><content><![CDATA[
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note><div>Hello <strong>synthetic world</strong>.</div>
+<en-media hash="{resource_hash}" type="image/png"/>
+<en-crypt>synthetic-encrypted-payload</en-crypt></en-note>]]></content>
+<created>20201013T100000Z</created><updated>20201014T100000Z</updated>
+<tag>Idea notes</tag><tag>Projects/Synthetic</tag>
+<resource><data encoding="base64">{encoded}</data><mime>image/png</mime>
+<resource-attributes><file-name>Sample image.png</file-name></resource-attributes>
+</resource></note></en-export>"""
+
+    async def upload_enex():
+        return await owner.client.post(
+            "/api/v1/plugins/markdown-import/upload?source_format=evernote",
+            files={"file": ("fixture.enex", source.encode(), "application/xml")},
+            headers=ORIGIN,
+        )
+
+    response = await upload_enex()
+    assert response.status_code == 200, response.text
+    preview = response.json()
+    assert preview["report"]["notes"] == preview["report"]["attachments"] == 1
+    assert preview["report"]["planned"]["created"] == preview["report"]["unsupported_items"] == 1
+    assert (await owner.client.get("/api/v1/notes")).json()["notes"] == []
+    queued = await owner.client.post(
+        "/api/v1/plugins/markdown-import/import",
+        json={"archive_id": preview["archive_id"]},
+        headers=ORIGIN,
+    )
+    assert queued.status_code == 200
+    for _ in range(100):
+        result = await upload_enex()
+        if result.status_code != 409:
+            break
+        await asyncio.sleep(0.02)
+    assert result.status_code == 200, result.text
+    assert result.json()["report"]["planned"]["unchanged"] == 1
+    notes = (await owner.client.get("/api/v1/notes")).json()["notes"]
+    (note,) = notes
+    assert note["title"] == "Plan & review"
+    assert note["labels"] == ["Idea-notes", "Projects/Synthetic"]
+    assert "**synthetic world**" in note["body"] and "![Sample image.png](/a/" in note["body"]
+    assert "synthetic-encrypted-payload" not in note["body"]
+    assert note["created_at"].startswith("2020-10-13T10:00:00")
+    assert note["updated_at"].startswith("2020-10-14T10:00:00")
+
+
+async def test_notion_outer_zip_validation_is_actionable_and_localized(owner):
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as zip_file:
+        zip_file.writestr("Synthetic export.zip", archive())
+    response = await owner.client.post(
+        "/api/v1/plugins/markdown-import/upload?source_format=notion",
+        files={"file": ("Synthetic outer.zip", data.getvalue(), "application/zip")},
+        headers={**ORIGIN, "Accept-Language": "it"},
+    )
+    assert response.status_code == 422
+    assert response.headers["Content-Language"] == "it"
+    problem = response.json()
+    assert problem["code"] == "invalid_import_file"
+    assert "ZIP esterno" in problem["detail"]
+    assert "Synthetic" not in problem["detail"]

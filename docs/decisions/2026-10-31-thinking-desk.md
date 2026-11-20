@@ -2,12 +2,12 @@
 
 Status: implemented additive plugin contract; local verification is recorded by the delivery checks.
 
-The optional **Thinking desk** plugin provides two deliberate workflows without AI:
+The optional **Thinking desk** plugin provides two manual workflows.
 
-- **History**: choose notes on a topic, read their live cards in creation order, and explicitly record directed `builds-on`, `challenges`, or `replaces` connections. The first note has the stated relation to the second. Remove a connection explicitly; replacing never edits or deletes a source.
-- **Collision**: choose two to five notes from different subjects, optionally state a problem, then use analogy, disagreement/experiment, and transferred-principle prompts to write an idea. Subject diversity is a human choice; the plugin does not claim automatic topic detection.
+- **Trace an idea** shows selected notes in creation order. You can record that the first note builds on, challenges or replaces the second. Each connection records your interpretation and can be removed.
+- **Combine notes** brings together two to five notes from different subjects. After adding the notes, use the creative prompts to write your own idea. You can add an optional question in **Desk details**.
 
-Both modes have an authored reflection and an explicitly requested **Keep private note copy** action. The displayed desk is the preview of that snapshot. Collision snapshots require at least two sources and a nonempty authored idea. Snapshots are ordinary owner-authored private notes, not AI output, and never follow subsequent desk changes. Originals are never modified. History supports ten sources and twenty directed connections. These are workspaces, not projects, tasks, reminders, or a feed.
+Start with a name and choose notes. Starting from a note adds that note first. Use **Your saved desks** to return to work in progress. **Save as private note** makes a separate owner-authored note that includes the written idea or reflection and source links. The copy stays as written and source notes remain editable. Combining notes requires at least two sources and a written idea before a copy can be saved. A timeline supports ten sources and twenty directed connections.
 
 ## Contracts and fences
 
@@ -21,9 +21,9 @@ Three commands fit the plugin contribution budget: `desk`, `edit`, and `sources`
 
 ## Acceptance
 
-Enable Thinking desk in Plugins, then open it in the command palette or a note's actions. Create a History, select at least two notes, open **Connect notes**, and connect the newer note to the older with **challenges**. Confirm the dated chronological view, explicit direction and unchanged originals. Remove the connection and confirm only the relationship disappears.
+Enable Thinking desk in Plugins and open it from the command palette or a note’s actions. Choose **Trace an idea**, name the desk, choose at least two notes and connect the newer note to the older with **challenges**. Confirm the dated chronological view, explicit direction and unchanged originals. Remove the connection and confirm the source notes remain.
 
-Create a Collision, select notes from two subjects, enter a question and write an idea using the creative prompts. Review the displayed result, then keep a private note copy. Confirm the copy contains the authored idea, is private and works as an ordinary offline-synced Android note. Edit a source elsewhere: the desk reports a changed revision and snapshot saving fails. Review sources, acknowledge revisions and retry. Delete or revoke access to a source: its card disappears and saving remains blocked until it is removed. Concurrent desk edits reject the stale save with recovery guidance.
+Choose **Combine notes**, name the desk and choose notes from two subjects. Write an idea using the prompts, then save it as a private note. Open the copy or return to the desk. Confirm the copy contains the authored idea and source links and syncs as an ordinary note to Android. Edit a source elsewhere and confirm saving a copy requires review. Review the note and acknowledge its current revision. Delete or revoke access to a source and confirm saving requires removing that source. Concurrent desk edits reject stale saves and keep the form text available for recovery.
 
 Automated coverage: `server/tests/test_thinking_desk.py`, the Thinking desk case in `web/e2e/new-features.spec.ts`, and `thinkingDeskCollisionReviewsIdeaAndKeepsPrivateSnapshot` in Android `NewFeatureWorkflowTest`. Browser/native acceptance uses disposable synthetic servers; it is not evidence of production rollout or physical-device acceptance.
 

@@ -334,6 +334,27 @@ class SyncEngineTest {
 
  @Test fun differentServerCannotReceivePreviousReplica()=runBlocking {val id=repo.create("private synthetic replica");val before=repo.dao.outbox();repo.dao.putState(SyncStateEntity(epoch="old",cursor="old.9",serverUrl="https://previous.example"));assertEquals(SyncStatus.Waiting("different_server"),engine().sync());assertEquals(0,server.requestCount);assertEquals(before,repo.dao.outbox());assertEquals("private synthetic replica",repo.dao.get(id)!!.body)}
 
+ @Test fun syncStartupPreservesPluginPublicationThatWinsBeforeTheOwnedRead()=runBlocking {
+  val config=hostedConfig("owner")
+  val workspace=NotesRepository(db,config.replicaId)
+  val before=SyncStateEntity(epoch="e",cursor="e.7",serverUrl=config.serverUrl,replicaId=config.replicaId,pluginsRev=3,
+   manifest="""{"plugins_rev":3,"plugins":[{"id":"dictation"}]}""",
+   catalog="""{"plugins_rev":3,"plugins":[{"id":"dictation","switch":"on"}]}""")
+  val published=before.copy(
+   manifest="""{"plugins_rev":4,"plugins":[]}""",
+   catalog="""{"plugins_rev":4,"plugins":[{"id":"dictation","switch":"off"}]}""")
+  workspace.dao.putState(before)
+  server.enqueue(response("""{"code":"synthetic_unavailable"}""",503))
+  var checks=0
+  val engine=SyncEngine(workspace,{
+   // The first transaction's credential check is the last point before sync can send a request.
+   if(++checks==3) workspace.dao.putState(published)
+   config
+  })
+  assertEquals(SyncStatus.Waiting("synthetic_unavailable"),engine.sync())
+  assertEquals(published,workspace.dao.state())
+ }
+
  @Test fun mergedAckAndFlagAckNeverAdvanceAnUnseenBodyAncestor()=runBlocking {
   val id=uuidV7();val copy=uuidV7();repo.putNote(Note(id,"A\nB",serverRev=1));repo.dao.putState(SyncStateEntity(epoch="e",cursor="e.0"));repo.update(id,"A phone\nB");repo.setFlags(id,archived=true)
   val paused=CountDownLatch(1);val release=CountDownLatch(1);val merged="A phone\nB\nSERVER";var calls=0

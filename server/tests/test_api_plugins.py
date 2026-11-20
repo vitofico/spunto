@@ -1,6 +1,7 @@
 """REST authentication, lifecycle visibility, revisions and plugin dispatch."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -138,6 +139,105 @@ async def test_manifest_auth_csrf_permissions_and_etag(plugin_server):
         for item in (await server.client.get("/api/v1/plugins/manifest")).json()["plugins"]
     } == {"dictation", "quick-capture"}
     assert (await server.client.get("/api/v1/plugins/tasks/route")).status_code == 404
+
+
+@pytest.mark.parametrize("plugin_id", ["context-packs", "decision-journal"])
+async def test_catalog_revision_keeps_its_switch_snapshot(plugin_server, monkeypatch, plugin_id):
+    server = plugin_server
+    await setup(server)
+    host, store = server.services.host, server.services.store
+    initial_revision = host.plugins_rev
+    catalog = host.catalog
+    read = store.read
+    paused = asyncio.Event()
+    resume = asyncio.Event()
+    captured = False
+
+    def capture_catalog(**kwargs):
+        nonlocal captured
+        if asyncio.current_task() is request:
+            captured = True
+        return catalog(**kwargs)
+
+    @asynccontextmanager
+    async def pause_catalog_stats():
+        if asyncio.current_task() is request and captured:
+            paused.set()
+            await resume.wait()
+        async with read() as conn:
+            yield conn
+
+    monkeypatch.setattr(host, "catalog", capture_catalog)
+    monkeypatch.setattr(store, "read", pause_catalog_stats)
+    request = asyncio.create_task(server.client.get("/api/v1/plugins"))
+    try:
+        await asyncio.wait_for(paused.wait(), 5)
+        await enable(server, plugin_id)
+        manifest = (await server.client.get("/api/v1/plugins/manifest")).json()
+        assert manifest["plugins_rev"] > initial_revision
+        assert plugin_id in {row["id"] for row in manifest["plugins"]}
+    finally:
+        resume.set()
+        old_catalog = (await request).json()
+
+    old_row = next(row for row in old_catalog["plugins"] if row["id"] == plugin_id)
+    assert old_row["switch"] == "off"
+    assert old_catalog["plugins_rev"] == initial_revision
+    updated = (await server.client.get("/api/v1/plugins")).json()
+    assert updated["plugins_rev"] == manifest["plugins_rev"]
+    assert next(row for row in updated["plugins"] if row["id"] == plugin_id)["switch"] == "on"
+
+
+@pytest.mark.parametrize("path", ["/api/v1/plugins", "/api/v1/plugins/manifest"])
+async def test_plugin_snapshot_waits_for_in_flight_switch(plugin_server, monkeypatch, path):
+    server = plugin_server
+    await setup(server)
+    plugin_id = "decision-journal"
+    await enable(server, plugin_id)
+    host, store = server.services.host, server.services.store
+    initial_revision = host.plugins_rev
+    write = store.write
+    paused = asyncio.Event()
+    resume = asyncio.Event()
+    snapshot_waiting = asyncio.Event()
+
+    class ObservedLock(asyncio.Lock):
+        async def acquire(self):
+            if self.locked():
+                snapshot_waiting.set()
+            return await super().acquire()
+
+    monkeypatch.setitem(host.lifecycle_locks, plugin_id, ObservedLock())
+
+    @asynccontextmanager
+    async def pause_switch_write():
+        if asyncio.current_task() is toggle:
+            paused.set()
+            await resume.wait()
+        async with write() as conn:
+            yield conn
+
+    monkeypatch.setattr(store, "write", pause_switch_write)
+    toggle = asyncio.create_task(host.disable(plugin_id))
+    request = None
+    try:
+        await asyncio.wait_for(paused.wait(), 5)
+        assert host.states[plugin_id]["switch"] == "off"
+        assert host.plugins_rev == initial_revision
+        request = asyncio.create_task(server.client.get(path))
+        await asyncio.wait_for(snapshot_waiting.wait(), 5)
+        assert not request.done()
+    finally:
+        resume.set()
+        await toggle
+        snapshot = (await request).json() if request is not None else None
+
+    assert snapshot["plugins_rev"] > initial_revision
+    rows = {row["id"]: row for row in snapshot["plugins"]}
+    if path.endswith("/manifest"):
+        assert plugin_id not in rows
+    else:
+        assert rows[plugin_id]["switch"] == "off"
 
 
 async def test_settings_secrets_and_management_pat_rejection(plugin_server, monkeypatch):

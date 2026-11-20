@@ -41,11 +41,18 @@ class SyncEngine internal constructor(private val repository:NotesRepository, pr
   mutableState.value=SyncStatus.Running
   try {
    val api=apiFactory(config).guarded {owns(config)}; val dao=repository.dao
-   var state=dao.state()?:SyncStateEntity()
    val serverUrl=config.serverUrl.trimEnd('/')
-   if(state.serverUrl.isNotEmpty() && state.serverUrl!=serverUrl) return@withLock SyncStatus.Waiting("different_server").also { mutableState.value=it }
-   if(state.replicaId.isNotEmpty() && state.replicaId!=config.replicaId) return@withLock SyncStatus.Waiting("different_identity").also {mutableState.value=it}
-   state=state.copy(replicaId=config.replicaId);ownedTransaction {dao.putState(state)}
+   fun ownerMismatch(state:SyncStateEntity)=when {
+    state.serverUrl.isNotEmpty() && state.serverUrl!=serverUrl -> "different_server"
+    state.replicaId.isNotEmpty() && state.replicaId!=config.replicaId -> "different_identity"
+    else -> null
+   }
+   var state=ownedTransaction {
+    val current=dao.state()?:SyncStateEntity()
+    if(ownerMismatch(current)!=null || current.replicaId==config.replicaId) current
+    else current.copy(replicaId=config.replicaId).also {dao.putState(it)}
+   }
+   ownerMismatch(state)?.let {return@withLock SyncStatus.Waiting(it).also {status -> mutableState.value=status}}
    val previousEpoch=state.epoch
    val meta=api.meta(); val epoch=meta["sync_epoch"]?.jsonPrimitive?.content ?: state.epoch
    var role=if(config.hosted) meta.hostedWorkspaceRole()?.also {publishRole(config,it)} ?: workspaceRole(config) else null

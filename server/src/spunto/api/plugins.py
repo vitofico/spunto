@@ -222,7 +222,10 @@ def _secret_status(manifest):
 async def catalog(principal: PrincipalDep, services: ServicesDep):
     _owner(principal)
     host = _host(services)
+    # Capture the lifecycle revision with its rows before loading storage statistics.
+    await host.wait_for_lifecycle()
     result = host.catalog()
+    revision = host.plugins_rev
     async with services.store.read() as conn:
         for item in result:
             rows = await conn.execute_fetchall(
@@ -250,7 +253,7 @@ async def catalog(principal: PrincipalDep, services: ServicesDep):
             item["data_count"] = sum(counts.values())
             item["permission_sentences"] = _permission_sentences(item)
             item["secrets"] = _secret_status(host.manifests.get(item["id"], {}))
-    return {"plugins": result, "plugins_rev": host.plugins_rev}
+    return {"plugins": result, "plugins_rev": revision}
 
 
 @router.get("/plugins/manifest")
@@ -260,6 +263,7 @@ async def manifest(request: Request, principal: PrincipalDep, services: Services
     from fastapi.responses import JSONResponse
 
     preferences = await _preferences(services)
+    await host.wait_for_lifecycle()
     payload = {
         **host.manifest(),
         "theme": host.themes.selected(preferences["theme"], preferences["theme_accent"]),

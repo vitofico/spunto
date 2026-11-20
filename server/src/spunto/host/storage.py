@@ -105,10 +105,24 @@ class Records:
         self.ctx.check()
         return json.loads(rows[0][0]) if rows else default
 
-    async def list(self, collection, *, note_id=None, key=None, limit=100, after=None):
+    async def list(
+        self,
+        collection,
+        *,
+        note_id=None,
+        key=None,
+        limit=100,
+        after=None,
+        recent=False,
+        before=None,
+        exclude_data=None,
+    ):
+        """List records by ID or recent update. The exclusion matches exact stored JSON."""
         self.ctx.check()
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ManifestError("record limit must be 1 to 1000")
+        if (recent and after is not None) or (not recent and before is not None):
+            raise ManifestError("record cursor must match the listing order")
         sql = (
             "SELECT id,note_id,key,data,updated_at FROM plugin_record WHERE "
             "plugin_id=? AND collection=?"
@@ -117,14 +131,24 @@ class Records:
         if after is not None:
             sql += " AND id>?"
             args.append(globals()["key"](after))
+        if before is not None:
+            updated_at, record_id = before
+            if type(updated_at) is not int or not 0 <= updated_at < 2**63:
+                raise ManifestError("record cursor timestamp must fit in a signed integer")
+            sql += " AND (updated_at,id)<(?,?)"
+            args.extend((updated_at, globals()["key"](record_id)))
+        if exclude_data is not None:
+            sql += " AND data<>?"
+            args.append(encoded(exclude_data))
         if key is not None:
             globals()["key"](key)
         for column, value in (("note_id", note_id), ("key", key)):
             if value is not None:
                 sql += f" AND {column}=?"
                 args.append(value)
+        order = "updated_at DESC,id DESC" if recent else "id"
         async with self.ctx._host.store.read() as conn:
-            rows = await conn.execute_fetchall(sql + " ORDER BY id LIMIT ?", (*args, limit))
+            rows = await conn.execute_fetchall(sql + f" ORDER BY {order} LIMIT ?", (*args, limit))
         self.ctx.check()
         return [{**dict(row), "data": json.loads(row["data"])} for row in rows]
 

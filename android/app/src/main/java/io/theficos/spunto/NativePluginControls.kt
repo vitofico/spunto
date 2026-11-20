@@ -153,6 +153,7 @@ internal fun pluginSettingValue(resources:android.content.res.Resources,plugin:N
 internal fun pluginDetailCommands(plugin:NativePluginFacts,versionedAgentReview:Boolean):List<JsonObject> =
  (plugin.contribution["commands"] as? JsonArray).orEmpty().mapNotNull {it as? JsonObject}.filter {command ->
   command.pluginStrings("where").orEmpty().any {it in setOf("global","palette","note-actions")} &&
+   plugin.id!=ThinkingDeskRoute &&
    !handledByAgentReviewPanel(plugin.id,command.pluginText("id"),versionedAgentReview)
  }.take(3)
 
@@ -165,7 +166,8 @@ internal fun pluginDetailCommands(plugin:NativePluginFacts,versionedAgentReview:
   if(plugin.permissions.orEmpty().any {it.startsWith("ai.")}) TextButton(onClick={onWeb("/settings/plugins/${plugin.id}")},enabled=online) {Text(resources.getString(R.string.settings_change_route_in_the_web_app_owner))}
   PluginHeading(resources.getString(R.string.settings_run))
   val commands=pluginDetailCommands(plugin,versionedAgentReview)
-  if(commands.isEmpty()) Text(resources.getString(R.string.settings_no_commands_are_declared))
+  if(plugin.id==ThinkingDeskRoute) Text(resources.getString(R.string.settings_thinking_desk_from_navigation))
+  else if(commands.isEmpty()) Text(resources.getString(R.string.settings_no_commands_are_declared))
   commands.forEach {command ->
    val where=command.pluginStrings("where").orEmpty()
    val title=localizedPluginCommand(resources,plugin.raw,command)

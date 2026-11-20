@@ -51,6 +51,7 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
  snapshot:LabelsNavigationSnapshot,onRoute:(String)->Unit,onSettings:()->Unit,
  onManageLabels:(String)->Unit,onManageViews:()->Unit,onDismiss:()->Unit,
  managementAvailable:Boolean=false,managementMessage:String?=null,reviewWaiting:Int=0,allNotes:Int?=null,
+ onThinkingDesk:(()->Unit)?=null,
 ) {
  val context=LocalContext.current
  var query by remember {mutableStateOf("")};var showMore by remember {mutableStateOf(false)}
@@ -64,6 +65,9 @@ internal fun LazyListScope.labelTreeItems(rows:List<LabelTreeRow>,onLabel:(Strin
    items(listOfNotNull(Triple("timeline",context.getString(R.string.core_all_notes),R.drawable.ic_notes),Triple("archive",context.getString(R.string.core_archive_title),R.drawable.ic_archive),Triple("trash",context.getString(R.string.core_trash),R.drawable.ic_trash),Triple("review",context.getString(R.string.core_review),R.drawable.ic_inbox).takeIf {reviewWaiting>0 || snapshot.route=="review"}),key={it.first}) {(route,title,glyph) ->
     val count=when(route) {"timeline" -> allNotes;"review" -> reviewWaiting;else -> null}
     SheetRow(title,snapshot.route==route,count=count,description=count?.let {context.getString(R.string.core_title_count,title,notesCount(context.resources,it))}.takeIf {route=="timeline"},glyph=glyph) {onRoute(route)}
+   }
+   if(onThinkingDesk!=null) item(key=ThinkingDeskRoute) {
+    SheetRow(context.getString(R.string.settings_plugin_thinking_desk_name),false,glyph=R.drawable.ic_inbox,onClick=onThinkingDesk)
    }
    if(views.isNotEmpty()) {
     item(key="views") {SheetOverline(context.getString(R.string.core_views)) {if(views.any {it.hidden}) TextButton(onClick={showMore=!showMore}) {Text(if(showMore) context.getString(R.string.core_fewer_views) else context.getString(R.string.core_more_views))}}}

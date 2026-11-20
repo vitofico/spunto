@@ -104,12 +104,12 @@ A manual plugin may declare `creates = "owner"`. Its notes carry `origin=owner`,
 
 ## Thinking desk
 
-Enable **Thinking desk** in **Settings → Plugins**. Open it from the web command palette, the plugin page or a note’s actions. If you start from a note, the desk adds it as your first source.
+Enable **Thinking desk** in **Settings → Plugins**, then open it from navigation. The web command palette also opens the page. The first visit offers two ways to start. On later visits, choose a saved desk by title or select **New desk**.
 
 - **Trace an idea** puts selected notes in creation order. Connect two notes to record whether one builds on, challenges or replaces the other. You can also write a reflection.
 - **Combine notes** brings together two to five notes from different subjects. Choose the notes, then use the prompts to write a new idea in your own words.
 
-Name the desk and choose notes from recent results or search. Your work stays in **Your saved desks**. Use **Save as private note** to keep a separate note with your work and links to the originals. Review changed notes or remove unavailable ones before creating a new copy. Desks use a connection. Saved notes can sync to Android for offline reading. See the [Thinking desk contract and acceptance steps](decisions/2026-10-31-thinking-desk.md).
+Name the desk and choose notes from recent results or search. The saved list puts the most recently edited desk first. Use **Save as private note** to keep a separate note with your work and links to the originals. Review changed notes or remove unavailable ones before creating a new copy. Desks use a connection. Saved notes can sync to Android for offline reading. See the [Thinking desk contract and acceptance steps](decisions/2026-10-31-thinking-desk.md).
 
 ## Library stats
 

@@ -40,6 +40,7 @@ import {
 } from "./Slots";
 import { useCommandProposals } from "./suggestionFeedback";
 import { ResultNoteLink, safePluginHtml, VocabularyOutput } from "./Vocabulary";
+import { deskWorkspace } from "./thinkingDeskData";
 import { outputText, record, validComponent } from "./vocabularyData";
 import styles from "./Feature.module.css";
 
@@ -144,12 +145,18 @@ function saveCommand(
     }
   }
 }
+type DeskPageActions = {
+  route: (args: Args, origin: CommandOrigin | undefined) => boolean;
+  changed: (value: unknown, command: string, args?: Args) => void;
+};
+
 export default function CommandResult(props: {
   value: unknown;
   onDismiss?: () => void;
   onOpenNote?: () => void;
   surroundingTitle?: string;
   origin?: CommandOrigin;
+  deskPage?: DeskPageActions;
 }) {
   const sourceId = props.origin?.args?.note_id;
   if (
@@ -230,12 +237,14 @@ function PluginResult({
   onOpenNote,
   surroundingTitle,
   origin,
+  deskPage,
 }: {
   value: unknown;
   onDismiss?: () => void;
   onOpenNote?: () => void;
   surroundingTitle?: string;
   origin?: CommandOrigin;
+  deskPage?: DeskPageActions;
 }) {
   useLanguage();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -279,7 +288,19 @@ function PluginResult({
     typeof noteId === "string" ? noteId : undefined,
     proposalIds,
   );
-  const resultItems = askItems(display);
+  const workspace = deskPage ? deskWorkspace(display) : undefined;
+  const resultItems = workspace?.items ?? askItems(display);
+  const pageItems = deskPage
+    ? resultItems.filter(
+        (item) =>
+          item.type !== "command" ||
+          item.id !== "desk" ||
+          (record(item.args) && Object.keys(item.args).length > 0) ||
+          (currentOrigin?.command === "edit" &&
+            currentOrigin.args?.action === "start" &&
+            typeof currentOrigin.args.title !== "string"),
+      )
+    : resultItems;
   const interactive = resultItems.some(
     (item) => item.type === "form" || item.type === "pill",
   );
@@ -485,6 +506,7 @@ function PluginResult({
       )
         return;
       if (choice.plugin === "ask") askPendingHandle.current = undefined;
+      deskPage?.changed(next, choice.id, choice.args);
       setDisplay(next);
       setCurrentOrigin({
         plugin: choice.plugin,
@@ -674,7 +696,7 @@ function PluginResult({
       <div
         className={
           deskStartActions.length
-            ? `${styles.resultBody} ${styles.deskChoices}`
+            ? `${styles.resultBody} ${styles.deskChoices}${deskPage ? " " + styles.deskPageChoices : ""}`
             : styles.resultBody
         }
         aria-busy={followup.isPending}
@@ -721,10 +743,12 @@ function PluginResult({
           }
           value={
             deskPickerStatus
-              ? resultItems.slice(1)
+              ? pageItems.slice(1)
               : translationHtml
                 ? resultItems.filter((item) => item.type !== "markdown")
-                : visibleResult
+                : deskPage
+                  ? pageItems
+                  : visibleResult
           }
           formLabel={
             deskFormLabel ??
@@ -732,7 +756,9 @@ function PluginResult({
           }
           onCommand={
             currentOrigin && online && !followup.isPending
-              ? (id, args) =>
+              ? (id, args) => {
+                  if (id === "desk" && deskPage?.route(args, currentOrigin))
+                    return;
                   followup.mutate({
                     plugin: currentOrigin.plugin,
                     id,
@@ -747,7 +773,8 @@ function PluginResult({
                         ? { ...args, picker: true }
                         : args,
                     session,
-                  })
+                  });
+                }
               : undefined
           }
           onSuggestion={
@@ -809,49 +836,50 @@ function PluginResult({
           {t("commandproposal.applied")}
         </p>
       )}
-      {((!decisionCommand &&
-        !interactive &&
-        text &&
-        !deskStartActions.length) ||
-        saved?.id ||
-        onDismiss) && (
-        <footer>
-          {!decisionCommand &&
-            !interactive &&
-            text &&
-            !deskStartActions.length && (
+      {!deskPage &&
+        ((!decisionCommand &&
+          !interactive &&
+          text &&
+          !deskStartActions.length) ||
+          saved?.id ||
+          onDismiss) && (
+          <footer>
+            {!decisionCommand &&
+              !interactive &&
+              text &&
+              !deskStartActions.length && (
+                <button
+                  className="button"
+                  onClick={() => void copyText(text).then(setCopied)}
+                >
+                  {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
+                </button>
+              )}
+            {genericSave && !interactive && text && (
               <button
-                className="button"
-                onClick={() => void copyText(text).then(setCopied)}
+                className="primary"
+                disabled={!online || save.isPending || !!saved}
+                onClick={() => save.mutate()}
               >
-                {copied ? t("settingsaccess.copied") : t("slots.copy_text")}
+                {saved
+                  ? t("slots.saved_as_note")
+                  : save.isPending
+                    ? t("app.saving")
+                    : t("slots.save_as_note")}
               </button>
             )}
-          {genericSave && !interactive && text && (
-            <button
-              className="primary"
-              disabled={!online || save.isPending || !!saved}
-              onClick={() => save.mutate()}
-            >
-              {saved
-                ? t("slots.saved_as_note")
-                : save.isPending
-                  ? t("app.saving")
-                  : t("slots.save_as_note")}
-            </button>
-          )}
-          {saved?.id && (
-            <ResultNoteLink id={saved.id} onOpen={onOpenNote}>
-              {t("slots.open_note")}
-            </ResultNoteLink>
-          )}
-          {onDismiss && (
-            <button className="button" onClick={onDismiss}>
-              {t("slots.back")}
-            </button>
-          )}
-        </footer>
-      )}
+            {saved?.id && (
+              <ResultNoteLink id={saved.id} onOpen={onOpenNote}>
+                {t("slots.open_note")}
+              </ResultNoteLink>
+            )}
+            {onDismiss && (
+              <button className="button" onClick={onDismiss}>
+                {t("slots.back")}
+              </button>
+            )}
+          </footer>
+        )}
       {save.isError && (
         <p role="alert" className="error">
           {save.error.message}

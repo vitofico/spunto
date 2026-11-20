@@ -78,7 +78,7 @@ class NewFeatureWorkflowTest {
                     return
                 }
 
-                // Bottom sheets create a separate Android view that uses the real app resources.
+                // The navigation sheet and Desk page both use the real app resources.
                 assumeTrue("Needs Android per-app locales", Build.VERSION.SDK_INT >= 33)
                 val context = InstrumentationRegistry.getInstrumentation().targetContext
                 val locales = requireNotNull(context.getSystemService(LocaleManager::class.java))
@@ -261,7 +261,7 @@ class NewFeatureWorkflowTest {
         val sources = titles.map { body -> runBlocking {
             api.post("/api/v1/notes", buildJsonObject {put("body", body);put("private", true)})
         } }
-        val flow = Workflow("thinking-desk", "desk", compactLargeText = true)
+        val flow = Workflow("thinking-desk", "desk", buildJsonObject { put("action", "new") }, compactLargeText = true)
         flow.click("Trace an idea")
         compose.onNodeWithText("Your idea", substring = false).assertDoesNotExist()
         fill("A name for this desk", "Native history $suffix")
@@ -324,23 +324,27 @@ class NewFeatureWorkflowTest {
         val mounted = mutableStateOf(true)
         lateinit var model: SpuntoViewModel
         compose.runOnIdle { model = SpuntoViewModel(app, container) }
-        val inSheet = hasAnyAncestor(isDialog())
         fun show(label: String): SemanticsNodeInteraction {
-            val matcher = hasText(label, substring = false) and hasClickAction() and inSheet
+            val matcher = hasText(label, substring = false) and hasClickAction() and !hasSetTextAction()
             compose.waitUntil(15_000) { compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
             return compose.onNode(matcher).performScrollTo()
         }
+        fun openDeskFromNavigation() {
+            compose.onNodeWithContentDescription("Apri il menu di navigazione").performClick()
+            val deskEntry = hasText("Tavolo delle idee", substring = false) and hasClickAction() and hasAnyAncestor(isDialog())
+            compose.waitUntil(15_000) { compose.onAllNodes(deskEntry).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(deskEntry).performScrollTo().performClick()
+        }
         try {
-            compose.setContent { if (mounted.value) SpuntoApp(model, initialNoteId = sources.first()) }
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
             compose.waitUntil(20_000) {
                 model.online.value && model.pluginReplicaEpoch.isNotBlank() &&
                     supportsNotePicker(model.manifest.value, "thinking-desk") &&
-                    compose.onAllNodesWithContentDescription("Altre azioni per la nota").fetchSemanticsNodes().isNotEmpty()
+                    compose.onAllNodesWithContentDescription("Apri il menu di navigazione").fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithContentDescription("Altre azioni per la nota").performClick()
-            show("Tavolo delle idee").performClick()
-            show("Combina le note").assertHasClickAction()
-            compose.onNodeWithText("La nota che hai aperto sarà la prima del tavolo.").assertExists()
+            openDeskFromNavigation()
+            show("Ricostruisci un’idea").assertHasClickAction()
+            compose.onNodeWithText("La nota che hai aperto sarà la prima del tavolo.").assertDoesNotExist()
             show("Combina le note").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithText("Nome del tavolo").fetchSemanticsNodes().isNotEmpty() }
             val title = "Ridurre il progetto $suffix"
@@ -349,14 +353,16 @@ class NewFeatureWorkflowTest {
             show("Crea tavolo").performClick()
             show("Scegli le note").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithText("Note recenti").fetchSemanticsNodes().isNotEmpty() }
-            fill("Cerca note", network)
-            val matchingSource = hasText(network, substring = false) and inSheet and
-                SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
-            compose.waitUntil(15_000) { compose.onAllNodes(matchingSource).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNode(matchingSource).performScrollTo().performClick().assertIsSelected()
-            show("Aggiungi fonte").assertIsEnabled().performClick()
-            compose.waitUntil(15_000) {
-                compose.onAllNodesWithText("Nota aggiunta. Selezionate: 2.").fetchSemanticsNodes().isNotEmpty()
+            for ((index, sourceTitle) in listOf(garden, network).withIndex()) {
+                fill("Cerca note", sourceTitle)
+                val matchingSource = hasText(sourceTitle, substring = false) and
+                    SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+                compose.waitUntil(15_000) { compose.onAllNodes(matchingSource).fetchSemanticsNodes().isNotEmpty() }
+                compose.onNode(matchingSource).performScrollTo().performClick().assertIsSelected()
+                show("Aggiungi fonte").assertIsEnabled().performClick()
+                compose.waitUntil(15_000) {
+                    compose.onAllNodesWithText("Nota aggiunta. Selezionate: ${index + 1}.").fetchSemanticsNodes().isNotEmpty()
+                }
             }
             show(garden).assertExists()
             show(network).assertExists()
@@ -366,6 +372,24 @@ class NewFeatureWorkflowTest {
             val idea = "Applica la potatura ai collegamenti meno utili."
             fill("La tua idea", idea)
             show("Salva idea").performClick()
+            show("Salva come nota privata").assertExists()
+            compose.onNodeWithContentDescription("Indietro").performClick()
+            show(title).assertExists()
+            compose.onNodeWithText("Riprendi un tavolo", substring = false).assertIsDisplayed()
+            show("Nuovo tavolo").assertHasClickAction()
+            if (InstrumentationRegistry.getArguments().getString("spunto.workflow.screenshot") == "yes") {
+                compose.waitForIdle()
+                val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+                automation.waitForIdle(600, 5_000)
+                val image = requireNotNull(automation.takeScreenshot())
+                File(requireNotNull(app.getExternalFilesDir(null)), "thinking-desk-resume-it.png").outputStream().use {
+                    check(image.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+            }
+            compose.onNodeWithContentDescription("Indietro").performClick()
+            openDeskFromNavigation()
+            show(title).performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText(idea, substring = true).fetchSemanticsNodes().isNotEmpty() }
             show("Salva come nota privata").performClick()
             compose.waitUntil(15_000) {
                 compose.onAllNodesWithText("Nota privata salvata. Aprila qui sotto oppure torna al tavolo per continuare.").fetchSemanticsNodes().isNotEmpty()
@@ -383,6 +407,9 @@ class NewFeatureWorkflowTest {
             val body = saved["body"]!!.jsonPrimitive.content
             assertTrue(idea in body && sources.all { "/n/$it" in body })
             assertEquals("# $garden", note(sources.first())["body"]!!.jsonPrimitive.content)
+            show(title).performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText(idea, substring = true).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("Indietro").performClick()
             show("Torna al tavolo").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithText(idea, substring = true).fetchSemanticsNodes().isNotEmpty() }
         } finally {

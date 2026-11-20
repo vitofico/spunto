@@ -1,7 +1,6 @@
 export { SettingsPage, StatusPage } from "./Settings";
 export { ReviewPage } from "./Review";
 export {
-  PluginRailViews,
   ReviewLine,
   DailySlip,
   SuggestionLine,

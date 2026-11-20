@@ -243,6 +243,8 @@ function pluginNeedsReview(plugin: Plugin) {
   );
 }
 function pluginLocations(plugin: Plugin) {
+  if (plugin.id === "thinking-desk" && isBundledPlugin(plugin))
+    return [{ title: plugin.name, href: "/thinking-desk" }];
   const contributions = plugin.contributes ?? {};
   const commands =
     contributions.commands?.flatMap(
@@ -831,9 +833,11 @@ export function PluginPage({ id }: { id: string }) {
   const plugin = catalog.data?.plugins.find((p) => p.id === id);
   const removed = plugin?.state === "removed";
   const locations = plugin ? pluginLocations(plugin) : [];
-  const canRun = plugin?.contributes?.commands?.some((command) =>
-    (command.where ?? command.surfaces ?? []).includes("palette"),
-  );
+  const canRun =
+    !(id === "thinking-desk" && plugin && isBundledPlugin(plugin)) &&
+    plugin?.contributes?.commands?.some((command) =>
+      (command.where ?? command.surfaces ?? []).includes("palette"),
+    );
   const query = useQuery({
     queryKey: ["plugin-settings", id],
     queryFn: () => api.pluginSettings(id),

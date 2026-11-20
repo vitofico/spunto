@@ -117,7 +117,9 @@
         "type": "command",
         "id": "desk",
         "title": "Back to choices",
-        "args": {}
+        "args": {
+          "action": "new"
+        }
       }
     ]
   },

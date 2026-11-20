@@ -27,6 +27,8 @@ from spunto.plugins.context_packs import (
 
 plugin = Plugin("thinking-desk")
 COLLECTION = "desks"
+PAGE_SIZE = 4
+TOMBSTONE = {"deleted": True}
 RELATIONS = ["builds-on", "challenges", "replaces"]
 PROMPTS = [
     "What principle from one subject could solve a problem in the other?",
@@ -207,18 +209,9 @@ async def render(ctx, desk_id):
     )
 
 
-@plugin.command("desk")
-async def desk(
-    ctx: Ctx, desk_id: str | None = None, cursor: str | None = None, note_id: str | None = None
-):
-    owner(ctx)
-    if desk_id:
-        return await render(ctx, desk_id)
+def choices(note_id=None, *, back=False):
     start_args = {"action": "start"}
     if note_id:
-        note = await ctx.notes.get(identifier(note_id))
-        if note is None:
-            return text(tr("That source note is unavailable."))
         start_args["note_id"] = note_id
 
     items = [
@@ -246,19 +239,62 @@ async def desk(
         },
         command("edit", tr("Combine notes"), **start_args, mode="collision"),
     ]
+    if back:
+        items.append(command("desk", tr("All thinking desks")))
+    return output(*items)
+
+
+@plugin.command("desk")
+async def desk(
+    ctx: Ctx,
+    desk_id: str | None = None,
+    cursor: str | None = None,
+    note_id: str | None = None,
+    action: str | None = None,
+):
+    owner(ctx)
+    if action not in {None, "new"}:
+        raise ValueError("unknown thinking desk navigation")
+    if desk_id:
+        return await render(ctx, desk_id)
     if note_id:
-        return output(*items, command("desk", tr("All thinking desks")))
-    page = await ctx.storage.records.list(COLLECTION, limit=4, after=cursor)
-    saved = [
-        command("desk", label if len(label) <= 24 else label[:23] + "…", desk_id=row["id"])
-        for row in page[:3]
-        if not row["data"].get("deleted")
-        for label in [row["data"]["title"]]
-    ]
-    if saved or len(page) > 3:
-        items.extend([{"type": "markdown", "text": "### " + tr("Your saved desks")}, *saved])
-    if len(page) > 3:
-        items.append(command("desk", tr("More desks"), cursor=page[2]["id"]))
+        if await ctx.notes.get(identifier(note_id)) is None:
+            return text(tr("That source note is unavailable."))
+        return choices(note_id, back=True)
+    if action == "new":
+        return choices(back=True)
+
+    # An already open older client may still be holding an ascending ID cursor.
+    after, before = None, None
+    if cursor is not None:
+        if not isinstance(cursor, str):
+            raise ValueError("invalid desk cursor")
+        if ":" in cursor:
+            if not re.fullmatch(r"[0-9]{1,19}:[0-9a-f-]{36}", cursor):
+                raise ValueError("invalid desk cursor")
+            updated_at, last_id = cursor.split(":")
+            before = int(updated_at), identifier(last_id)
+        else:
+            after = identifier(cursor)
+    page = await ctx.storage.records.list(
+        COLLECTION,
+        limit=PAGE_SIZE + 1,
+        recent=after is None,
+        before=before,
+        after=after,
+        exclude_data=TOMBSTONE,
+    )
+    if not page and cursor is None:
+        return choices()
+    items = [command("desk", tr("New desk"), action="new")]
+    for row in page[:PAGE_SIZE]:
+        items.extend(
+            [text(row["data"]["title"]), command("desk", tr("Open desk"), desk_id=row["id"])]
+        )
+    if len(page) > PAGE_SIZE:
+        last = page[PAGE_SIZE - 1]
+        next_cursor = last["id"] if after else f"{last['updated_at']}:{last['id']}"
+        items.append(command("desk", tr("More desks"), cursor=next_cursor))
     return output(*items)
 
 
@@ -323,7 +359,11 @@ async def edit(
                     },
                     ["title"],
                 ),
-                command("desk", tr("Back to choices"), **({"note_id": note_id} if note_id else {})),
+                command(
+                    "desk",
+                    tr("Back to choices"),
+                    **({"note_id": note_id} if note_id else {"action": "new"}),
+                ),
             )
         action = "save"
     if action in {"details", "write", "confirm-delete"}:
@@ -404,9 +444,7 @@ async def edit(
     if action == "delete":
         if not old:
             raise ValueError("a saved desk is required")
-        await ctx.storage.records.compare_and_set(
-            COLLECTION, desk_id, old, {"deleted": True}
-        ) or conflict()
+        await ctx.storage.records.compare_and_set(COLLECTION, desk_id, old, TOMBSTONE) or conflict()
         return output(
             text(tr("Desk deleted. Original notes and saved copies remain intact.")),
             command("desk", tr("All thinking desks")),

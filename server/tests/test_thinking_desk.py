@@ -146,11 +146,73 @@ async def test_manifest_and_forms(host):
     manifest = read_manifest(Path(desk.__file__).parent)
     assert manifest["default"] == "off"
     assert manifest["permissions"] == ["notes.read", "notes.create"]
+    assert manifest["version"] == "1.2.0"
+    assert manifest["contributes"]["commands"][0]["where"] == ["palette"]
     validate_output(await desk.desk(ctx(host)))
     validate_output(await desk.edit(ctx(host)))
     desk_id = await create(host)
     validate_output(await desk.sources(ctx(host), desk_id, 1))
     validate_output(await desk.relate(ctx(host), desk_id, 1))
+
+
+def saved_desks(result):
+    validate_output(result)
+    return [
+        (title["text"], open_desk["args"]["desk_id"])
+        for title, open_desk in zip(result["items"], result["items"][1:], strict=False)
+        if title["type"] == "text" and "desk_id" in open_desk.get("args", {})
+    ]
+
+
+async def test_desk_home_resumes_full_titles_in_work_order(host, monkeypatch):
+    context = ctx(host)
+    now = 0
+    monkeypatch.setattr(host, "clock", lambda: now)
+    first_use = await desk.desk(context)
+    validate_output(first_use)
+    assert [item["args"]["mode"] for item in first_use["items"] if item.get("id") == "edit"] == [
+        "history",
+        "collision",
+    ]
+    assert len(first_use["items"]) == 5
+
+    records = [
+        (
+            f"Synthetic desk {number} with an authored title > 24 characters",
+            str(uuid.UUID(int=number)),
+        )
+        for number in range(1, 8)
+    ]
+    for index, (title, desk_id) in enumerate(records):
+        now = 1_750_000_000_000 + index // 2
+        await desk.edit(context, title=title, request_id=desk_id)
+
+    now += 100
+    await desk.edit(context, records[-1][1], 1, action="delete")
+    await desk.edit(context, records[0][1], 1, action="write", thinking="Private work in progress")
+
+    home = await desk.desk(context)
+    assert home["items"][0] == desk.command("desk", "New desk", action="new")
+    assert saved_desks(home) == [records[i] for i in (0, 5, 4, 3)]
+    assert "Private work" not in str(home)
+    assert records[-1][1] not in str(home)
+    cursor = home["items"][-1]["args"]
+    assert saved_desks(await desk.desk(context, **cursor)) == [records[i] for i in (2, 1)]
+    assert saved_desks(await desk.desk(context, cursor=records[1][1])) == records[2:6]
+
+    new = await desk.desk(context, **home["items"][0]["args"])
+    validate_output(new)
+    assert new["items"][:5] == first_use["items"]
+    assert new["items"][-1]["args"] == {}
+    title_form = await desk.edit(context, **new["items"][2]["args"])
+    assert title_form["items"][-1]["args"] == {"action": "new"}
+
+    await desk.desk(context, desk_id=records[1][1])
+    assert saved_desks(await desk.desk(context)) == saved_desks(home)
+    for index, (_, desk_id) in enumerate(records[:-1]):
+        await desk.edit(context, desk_id, 2 if index == 0 else 1, action="delete")
+    assert await desk.desk(context) == first_use
+    assert (await desk.desk(context, **cursor))["items"] == [home["items"][0]]
 
 
 async def test_desk_picker_keeps_committed_revision_and_skips_legacy_search(host):

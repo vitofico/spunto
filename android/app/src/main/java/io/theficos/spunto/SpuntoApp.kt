@@ -70,6 +70,10 @@ import kotlinx.serialization.json.*
  val online by model.online.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
  val owner by model.workspaceIsOwner.collectAsState()
+ val epoch by model.pluginReplicaEpochState.collectAsState()
+ val deskAvailable=thinkingDeskAvailable(manifest,owner && auth!=null)
+ val navigationLabel=context.getString(if(deskAvailable) R.string.core_open_navigation else R.string.core_choose_labels)
+ val deskSession=if(deskAvailable && nav.contains(ThinkingDeskRoute)) remember(auth,epoch) { ThinkingDeskSession() } else null
  LaunchedEffect(manifest) {
   model.container.manifest.withCurrentPublication {
   val quick=model.container.manifest.enabled("quick-capture"); val dictate=model.container.manifest.enabled("dictation")
@@ -80,7 +84,14 @@ import kotlinx.serialization.json.*
   }
  }
  // While a note is being edited, Back finishes the edit before leaving.
- fun navigateBack() { if(route.startsWith("note:") && noteBack!=null) noteBack?.invoke() else nav.back() }
+ fun navigateBack() {
+  when {
+   route.startsWith("note:") && noteBack!=null -> noteBack?.invoke()
+   route==ThinkingDeskRoute && deskSession?.busy==true -> Unit
+   route==ThinkingDeskRoute && deskSession?.insideDesk==true -> deskSession.reset()
+   else -> nav.back()
+  }
+ }
  BackHandler(nav.canGoBack && !navigationOpen) { navigateBack() }
  BackHandler(navigationOpen) { navigationOpen=false }
  val management=sharedManagementTarget(context,auth,replicaState?.serverUrl,online,needsSignIn=reauth || sync==SyncStatus.NeedsSignIn)
@@ -141,7 +152,7 @@ import kotlinx.serialization.json.*
    topBar.actions?.invoke(this)
   }
   val headerTitle:@Composable (Boolean,Modifier)->Unit={compact,modifier ->
-   if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=modifier.semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=if(compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
+   if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=modifier.semantics {contentDescription=navigationLabel}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=if(compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
    else routeTitle(context,route)?.let { Text(it,modifier=modifier,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis) }
   }
   Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable || route in setOf("settings","appearance","plugins","status",WhatsNewRoute)),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
@@ -156,7 +167,7 @@ import kotlinx.serialization.json.*
     }
     Row(Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
      Box(Modifier.weight(1f)) {
-      TextButton(onClick={navigationOpen=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription=context.getString(R.string.core_choose_labels)}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)}  ⌄",style=MaterialTheme.typography.titleLarge.copy(fontSize=21.sp,lineHeight=28.sp),color=MaterialTheme.colorScheme.onSurface,maxLines=2,overflow=TextOverflow.Ellipsis)}
+      TextButton(onClick={navigationOpen=true},contentPadding=PaddingValues(0.dp),modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription=navigationLabel}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)}  ⌄",style=MaterialTheme.typography.titleLarge.copy(fontSize=21.sp,lineHeight=28.sp),color=MaterialTheme.colorScheme.onSurface,maxLines=2,overflow=TextOverflow.Ellipsis)}
      }
      val filtered=createdFrom.isNotBlank() || createdTo.isNotBlank()
      IconButton(onClick={filtersOpen=true},modifier=Modifier.size(48.dp)) {
@@ -179,7 +190,7 @@ import kotlinx.serialization.json.*
    // Clear of bars, cutouts and the keyboard; on wide screens the page stays a readable column.
    Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),contentAlignment=Alignment.TopCenter) { Column(Modifier.widthIn(max=640.dp).fillMaxSize()) {
     if(filtersOpen && filterable) NoteFiltersSheet(createdFrom,createdTo,onDismiss={filtersOpen=false},onApply={from,to ->createdFrom=from;createdTo=to;filtersOpen=false})
-    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value)
+    if(navigationOpen) LabelsSheet(LabelsNavigationSnapshot(route,navigationLabels,manifest,catalog),onRoute={requested ->navigationOpen=false;nav.filter(requested)},onSettings={navigationOpen=false;nav.open("settings")},onManageLabels={openManagement(it)},onManageViews={openManagement()},onDismiss={navigationOpen=false},managementAvailable=management.url!=null,managementMessage=management.message,reviewWaiting=waitingProposals(model,model.outputs.collectAsState().value).size,allNotes=model.noteCount.collectAsState().value,onThinkingDesk=if(deskAvailable) {{navigationOpen=false;nav.open(ThinkingDeskRoute)}} else null)
     StatusLines(model)
     if(filterable && (createdFrom.isNotBlank() || createdTo.isNotBlank())) DateFilterPill(createdFrom,createdTo) {createdFrom="";createdTo=""}
     val openNote:(String)->Unit={nav.open("note:$it")}
@@ -189,6 +200,8 @@ import kotlinx.serialization.json.*
      route.startsWith("note:") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it})
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="tools" -> if(owner) GlobalToolsScreen(model,{nav.open("ask")})
+     route==ThinkingDeskRoute -> if(deskSession!=null) ThinkingDeskScreen(model,deskSession,openNote)
+      else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
      route=="ask" -> if(writable) AskScreen(model,onNote=openNote)
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
@@ -208,7 +221,6 @@ import kotlinx.serialization.json.*
      route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'))
     }
     val remote by model.remote.collectAsState()
-    val epoch by model.pluginReplicaEpochState.collectAsState()
     val decisionAccess=owner && auth?.serverUrl==remote.string("authority") && remote.string("replica_epoch")==epoch &&
      model.container.manifest.enabled(DecisionJournalId)
     val journal=journalResult(remote)

@@ -68,6 +68,7 @@ internal fun noteTools(
  (plugin["contributes"] as? JsonObject)?.objects("commands").orEmpty().filter {command ->
   (command["where"] as? JsonArray)?.any {(it as? JsonPrimitive)?.content=="note-actions"}==true &&
   (!stock || when(id to command.string("id")) {
+   ThinkingDeskRoute to "desk" -> false
    DecisionJournalId to "record-decision", DecisionJournalId to "review-decision" -> false
    AgentInboxId to AgentReviewCommand -> !versionedAgentReview && legacyAgentReview
    "image-text" to "read" -> inputs.image

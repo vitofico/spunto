@@ -500,7 +500,7 @@ internal fun withoutRepeatedResultHeading(component:JsonObject,header:String):Js
   runCommand(model,plugin,id,input,deliver,{running=false;onRunning(false)},scope,onError={
    error=it
    if(sourcePicker!=null && id=="sources") pickerRefresh++
-  },pickerSession=pickerSession.takeIf {usesPicker})
+  },pickerSession=pickerSession.takeIf {usesPicker},requireOwner=plugin==ThinkingDeskRoute)
  }
  val review:(String)->Unit={ id -> if(model.outputs.value.any { it.id==id && it.kind=="suggestion" }) { onProposalOpen();model.remote.value=buildJsonObject { put("suggestion_preview",id) } } else model.message.value=resources.getString(R.string.settings_sync_to_review_this_suggestion) }
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
@@ -843,7 +843,7 @@ internal fun suggestionStatus(resources:Resources,status:String)=resources.getSt
 
 private val globalToolCommands=mapOf(
  "ask" to "ask", "digest" to "digest", "library-stats" to "summary",
- "context-packs" to "packs", "thinking-desk" to "desk", "label-gardener" to "review-now",
+ "context-packs" to "packs", "label-gardener" to "review-now",
 )
 
 internal fun globalTools(catalog:JsonObject,manifest:JsonObject):List<Pair<NativePluginFacts,JsonObject>> =

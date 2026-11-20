@@ -1188,3 +1188,37 @@
 .decisionTools a {
   padding: var(--s-8);
 }
+
+.deskPageChoices {
+  row-gap: var(--s-16);
+}
+
+.deskPageChoices > div:has(> h3) {
+  padding-top: var(--s-16);
+}
+
+@media (min-width: 768px) {
+  .deskPageChoices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--s-24);
+  }
+  .deskPageChoices > p {
+    grid-column: 1 / -1;
+  }
+  .deskPageChoices > div:has(> h3):nth-of-type(1),
+  .deskPageChoices > button:first-of-type {
+    grid-column: 1;
+  }
+  .deskPageChoices > div:has(> h3):nth-of-type(2),
+  .deskPageChoices > button:nth-of-type(2) {
+    grid-column: 2;
+  }
+  .deskPageChoices > div:has(> h3) {
+    grid-row: 2;
+  }
+  .deskPageChoices > button {
+    grid-row: 3;
+    justify-self: start;
+  }
+}

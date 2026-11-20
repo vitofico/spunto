@@ -1,6 +1,6 @@
 id = "thinking-desk"
 name = "Thinking desk"
-version = "1.1.0"
+version = "1.2.0"
 api = "1.0"
 kind = "server"
 runtime = "in-process"
@@ -16,7 +16,7 @@ permissions = ["notes.read", "notes.create"]
 [[contributes.commands]]
 id = "desk"
 title = "Thinking desk"
-where = ["palette", "slash", "note-actions"]
+where = ["palette"]
 online = true
 
 [[contributes.commands]]

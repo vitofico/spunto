@@ -63,7 +63,7 @@ class ApiClientTest {
  @Test fun credentialPostNeverFollowsRedirectToAnotherServer() = runBlocking {val destination=MockWebServer();destination.start();try {server.enqueue(MockResponse().setResponseCode(307).setHeader("Location",destination.url("/steal")));try {api("").signIn("synthetic-password","Phone");fail("Redirect must be rejected")}catch(e:ApiException){assertEquals(307,e.status)};assertEquals(0,destination.requestCount)}finally{destination.shutdown()} }
  @Test fun latestAgentWireMetadataIsNormalized() { assertTrue(noteFromWire(buildJsonObject {put("id","fixture");put("body","owner-created");put("origin","owner");put("updated_via_agent",true)}).updatedViaAgent) }
  @Test fun plaintextNeedsExplicitConsent() { try {ApiClient(AuthConfig(server.url("/").toString(),"","",""));fail() } catch(e:LocalOperationException) {assertEquals(LocalOperationProblem.UnencryptedConnectionConsentRequired,e.problem);assertTrue(e.message!!.contains("Confirm"))} }
- @Test fun onlyExactSlowCommandPostsUseExtendedActualCallAndReadDeadlines() = runBlocking {
+ @Test fun onlyExactSlowOperationsUseExtendedActualCallAndReadDeadlines() = runBlocking {
   val callTimeouts=ConcurrentLinkedQueue<Long>();val readTimeouts=ConcurrentLinkedQueue<Int>()
   val client=OkHttpClient.Builder().readTimeout(35,TimeUnit.SECONDS).callTimeout(40,TimeUnit.SECONDS)
    .eventListener(object:EventListener() { override fun callStart(call:Call) { callTimeouts.add(TimeUnit.NANOSECONDS.toSeconds(call.timeout().timeoutNanos())) } })
@@ -91,6 +91,9 @@ class ApiClientTest {
     Triple("POST","/api/v1/plugins/translate/commands/translate",true),
     Triple("POST","/api/v1/plugins/develop/commands/develop",true),
     Triple("POST","/api/v1/ai/check",true),
+    Triple("PUT","/api/v1/ai/models",true),
+    Triple("GET","/api/v1/ai/models",false),
+    Triple("PUT","/api/v1/ai/models/",false),
    )
    cases.forEach { (method,path,_) ->
     server.enqueue(MockResponse().setBody("{}"));api.request(path,method)

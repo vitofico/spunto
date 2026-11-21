@@ -43,7 +43,12 @@ class ApiClient(val config:AuthConfig, client:OkHttpClient=defaultApiHttpClient,
  private suspend fun checkAuthority() {check(authority()) {"credentials_changed"}}
  private val client=client.newBuilder().followRedirects(false).followSslRedirects(false).build()
  private val extendedCommandClient by lazy { this.client.newBuilder().readTimeout(240,TimeUnit.SECONDS).callTimeout(240,TimeUnit.SECONDS).build() }
- private fun requestClient(path:String,method:String):OkHttpClient = if(method=="POST" && pluginCommandPath.matches(path) || method=="POST" && path=="/api/v1/ai/check") extendedCommandClient else client
+ private fun requestClient(path:String,method:String):OkHttpClient = when {
+  method=="POST" && (pluginCommandPath.matches(path) || path=="/api/v1/ai/check") -> extendedCommandClient
+  // Saving choices verifies changed providers and may probe a new embedding model.
+  method=="PUT" && path=="/api/v1/ai/models" -> extendedCommandClient
+  else -> client
+ }
  private val json=Json { ignoreUnknownKeys=true }
  private fun problem(response:Response,text:String,fallback:String):ApiException {
   val data=runCatching {json.parseToJsonElement(text).jsonObject}.getOrNull()

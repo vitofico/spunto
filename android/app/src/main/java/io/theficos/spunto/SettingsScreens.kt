@@ -67,6 +67,7 @@ import kotlinx.serialization.json.*
     if(modern) try {context.startActivity(Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS,Uri.parse("package:${context.packageName}")))} catch(_:ActivityNotFoundException) {feedback.show(resources.getString(R.string.settings_language_unavailable))}
     else try {context.startActivity(Intent(android.provider.Settings.ACTION_LOCALE_SETTINGS))} catch(_:ActivityNotFoundException) {feedback.show(resources.getString(R.string.settings_language_unavailable))}
    })
+   if(auth!=null) SettingsRow(resources.getString(R.string.settings_ai_models),opensPage=true,onClick={onRoute(WorkspaceModelsRoute)})
    SettingsRow(resources.getString(R.string.settings_plugins),when {plugins.valid -> resources.getString(R.string.settings_of_on ,plugins.onCount,plugins.rows.size);auth==null -> resources.getString(R.string.settings_connect_your_server_to_choose_plugins);else -> resources.getString(R.string.settings_sync_to_load_your_plugins)},opensPage=true,onClick={onRoute("plugins")})
   }
   item {

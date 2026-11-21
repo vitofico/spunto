@@ -44,6 +44,8 @@ const glyphs = {
       <path d="M5 6.5h14M5 12h14M5 17.5h9" />
     </>
   ),
+  add: <path d="M12 5v14M5 12h14" />,
+  send: <path d="M12 19V5m-6 6 6-6 6 6" />,
   archive: (
     <>
       <rect x="3.5" y="4.5" width="17" height="4" rx="1.2" />

@@ -1,0 +1,15 @@
+<resources>
+    <string name="models_scope">I modelli scelti si applicano a questo spazio. Selezionare un modello sceglie anche il fornitore per quella funzione. Ogni plugin può scegliere un altro fornitore nelle proprie impostazioni.</string>
+    <string name="models_owner">Solo il proprietario di uno spazio può cambiare i modelli.</string>
+    <string name="models_default">Predefinito del server (%1$s)</string>
+    <string name="models_off">Disattivato</string>
+    <string name="models_refresh">Aggiorna modelli</string>
+    <string name="models_save">Salva modelli</string>
+    <string name="models_saved">Scelte dei modelli salvate.</string>
+    <string name="models_discard_reload">Scarta modifiche e ricarica</string>
+    <string name="models_provider_failed">Impossibile caricare i modelli da %1$s. Le scelte salvate sono conservate.</string>
+    <string name="models_unverified">funzione non verificata</string>
+    <string name="models_unknown_network">Posizione di rete non disponibile</string>
+    <string name="models_stale">La selezione dei modelli è cambiata. Ricaricala prima di salvare.</string>
+    <string name="models_embedding_rebuild">Cambiare il modello di embedding ricostruisce l’indice di ricerca.</string>
+</resources>

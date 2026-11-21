@@ -33,14 +33,16 @@ export default function AskPage() {
         }
       }}
     >
-      <Link href={back} className={styles.back} onClick={restoreLauncher}>
-        <Icon name="back" />{" "}
-        {t(collection ? "ask.back_collection" : "app.all_notes")}
-      </Link>
       <AskConversation
         key={collection ?? ""}
         value={undefined}
         page
+        backLink={
+          <Link href={back} className={styles.back} onClick={restoreLauncher}>
+            <Icon name="back" />{" "}
+            {t(collection ? "ask.back_collection" : "app.all_notes")}
+          </Link>
+        }
         collectionId={collection ?? undefined}
       />
     </div>

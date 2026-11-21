@@ -109,7 +109,7 @@ The [hosted guide](docs/hosted.md) explains multiple accounts, shared spaces, ro
 
 ## AI on your terms
 
-The core needs no model service. Configure local or cloud profiles when you want semantic search, related notes, translation, summaries, tag suggestions or cited answers. Chat, vision, transcription and embeddings can use different profiles; for example, keep embeddings local while choosing a cloud chat model. Choose models from your configured providers in web **Settings → AI**; provider addresses, credentials and limits stay under operator control.
+The core needs no model service. Configure local or cloud profiles when you want semantic search, related notes, translation, summaries, tag suggestions or cited answers. Chat, vision, transcription and embeddings can use different profiles; for example, keep embeddings local while choosing a cloud chat model. Space owners can choose models in **Settings → AI** on the web or **Settings → AI models** on Android. A saved choice applies across the space. The model picker in Ask can override the chat model for one conversation. Provider addresses, credentials and limits stay under operator control.
 
 Proposed rewrites wait for review. Label automation is an explicit setting restricted to existing labels; new labels and taxonomy cleanup always require your approval. The decision journal, manually curated context packs and Thinking desk work without AI.
 

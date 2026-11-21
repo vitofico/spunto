@@ -1,0 +1,15 @@
+<resources>
+    <string name="models_scope">Model choices apply to this space. Selecting a model also chooses its provider for that capability. Each plugin can choose a different provider in its settings.</string>
+    <string name="models_owner">Only a space owner can change models.</string>
+    <string name="models_default">Server default (%1$s)</string>
+    <string name="models_off">Off</string>
+    <string name="models_refresh">Refresh models</string>
+    <string name="models_save">Save models</string>
+    <string name="models_saved">Model choices saved.</string>
+    <string name="models_discard_reload">Discard changes and reload</string>
+    <string name="models_provider_failed">Could not load models from %1$s. Saved choices are kept.</string>
+    <string name="models_unverified">capability unverified</string>
+    <string name="models_unknown_network">Network locality unavailable</string>
+    <string name="models_stale">Model choices have changed. Reload before saving again.</string>
+    <string name="models_embedding_rebuild">Changing the embedding model rebuilds the search index.</string>
+</resources>

@@ -85,9 +85,7 @@ async def models(
 
 
 @router.put("/models")
-async def select_models(
-    body: ModelSelectionBody, services: ServicesDep, session: SessionDep, principal: PrincipalDep
-):
+async def select_models(body: ModelSelectionBody, services: ServicesDep, principal: PrincipalDep):
     require_manage(principal)
     try:
         changed = await services.ai.selection.save(

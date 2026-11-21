@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.theficos.spunto
 
 import androidx.compose.foundation.layout.*
@@ -9,6 +11,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -47,6 +52,8 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
   val writeStates=remember {mutableMapOf<String,AskWriteState>()}
   val actionScope=rememberCoroutineScope()
   val listState=rememberLazyListState()
+  val composerFocus=remember {FocusRequester()}
+  val keyboard=LocalSoftwareKeyboardController.current
   fun turn(id:Int,question:String,result:JsonObject):AskTurn {
    val action=askWriteAction(result)
    val state=action?.let {writeStates.getOrPut(it.id) {AskWriteState(it)}}
@@ -119,19 +126,49 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
   Column(Modifier.fillMaxSize().imePadding()) {
    LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=listState,contentPadding=PaddingValues(SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s16)) {
     item(key="conversation") {
-     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-      TextButton(onClick={temporaryInfo=!temporaryInfo},modifier=Modifier.weight(1f)) {
-       Text(resources.getString(R.string.core_ask_temporary_title),style=MaterialTheme.typography.bodySmall)
+     Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+      FlowRow(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+       TextButton(onClick={temporaryInfo=!temporaryInfo},contentPadding=PaddingValues(horizontal=4.dp)) {
+        Icon(painterResource(R.drawable.ic_history),null,Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(resources.getString(R.string.core_ask_temporary_title),style=MaterialTheme.typography.labelMedium)
+       }
+       models?.let {inventory -> AskModelPicker(inventory,chatModel,pending==null && turns.isEmpty() && continuation==null && retry.isBlank()) {chosen ->
+        chatModel=chosen;chatModelLocalOnly=chosen!=null && !inventory.leavesNetwork(chosen)
+       }}
+       if(turns.isNotEmpty() || pending!=null || question.isNotBlank() || failure!=null)
+        TextButton(onClick={discard(keepDraft=staleCollection)}) {Text(resources.getString(R.string.core_new_conversation))}
       }
-      TextButton(onClick={discard(keepDraft=staleCollection)}) {Text(resources.getString(R.string.core_new_conversation))}
+      if(temporaryInfo) Text(resources.getString(R.string.core_ask_temporary),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      val target=models
+      if(fullPage && (target?.leavesNetwork(chatModel) ?: (destination!=null))) Text(resources.getString(R.string.settings_at,chatModel ?: target?.default ?: destination?.string("model").orEmpty(),target?.host ?: destination?.string("host").orEmpty(),resources.getString(R.string.settings_outside_your_network)),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      if(turns.isEmpty() && pending==null && fullPage) {
+       Spacer(Modifier.height(8.dp))
+       Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.primaryContainer) {
+        Icon(painterResource(R.drawable.ic_ask),null,Modifier.padding(12.dp).size(28.dp),tint=MaterialTheme.colorScheme.onPrimaryContainer)
+       }
+       Text(resources.getString(intro),style=MaterialTheme.typography.headlineSmall)
+       if(question.isEmpty() && enabled && !staleCollection) {
+        val starters=buildList {
+         add(Triple(R.string.core_ask_start_question,R.string.core_question_example,R.drawable.ic_search))
+         if(noteActions) {
+          add(Triple(R.string.core_ask_start_create,R.string.core_ask_prompt_create,R.drawable.ic_notes))
+          add(Triple(R.string.core_ask_start_edit,R.string.core_ask_prompt_edit,R.drawable.ic_checklist))
+         }
+        }
+        Spacer(Modifier.height(4.dp))
+        starters.forEach {(label,prompt,icon) ->
+         Surface(onClick={question=resources.getString(prompt);composerFocus.requestFocus();keyboard?.show()},
+          modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.surfaceContainerLow) {
+          Row(Modifier.heightIn(min=48.dp).padding(horizontal=14.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+           Icon(painterResource(icon),null,Modifier.size(20.dp),tint=MaterialTheme.colorScheme.primary)
+           Text(resources.getString(label),style=MaterialTheme.typography.titleSmall)
+          }
+         }
+        }
+       }
+      } else if(turns.isEmpty() && pending==null) Text(resources.getString(intro),style=MaterialTheme.typography.titleMedium)
      }
-     if(temporaryInfo) Text(resources.getString(R.string.core_ask_temporary),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-     if(turns.isEmpty() && pending==null) Text(resources.getString(intro),style=MaterialTheme.typography.titleMedium)
-     models?.let {inventory -> AskModelPicker(inventory,chatModel,pending==null && turns.isEmpty() && continuation==null && retry.isBlank()) {chosen ->
-      chatModel=chosen;chatModelLocalOnly=chosen!=null && !inventory.leavesNetwork(chosen)
-     }}
-     val target=models
-     if(fullPage && (target?.leavesNetwork(chatModel) ?: (destination!=null))) Text(resources.getString(R.string.settings_at,chatModel ?: target?.default ?: destination?.string("model").orEmpty(),target?.host ?: destination?.string("host").orEmpty(),resources.getString(R.string.settings_outside_your_network)),style=MaterialTheme.typography.bodySmall)
     }
     items(turns,key={it.id}) {turn ->
      Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
@@ -158,10 +195,9 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
     }}
     failure?.let {error -> item(key="failure") {Text(error,color=MaterialTheme.colorScheme.error);if(!staleCollection) Text(resources.getString(R.string.core_ask_retry_hint));TextButton(onClick={if(staleCollection) discard(keepDraft=true) else submit(retry)}) {Text(resources.getString(if(staleCollection) R.string.core_new_conversation else R.string.core_ask_retry))}}}
    }
-   HorizontalDivider()
    Column(Modifier.fillMaxWidth().padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s8)) {
-    if(modern) FilterChip(selected=notesOnly,onClick={notesOnly=!notesOnly},enabled=pending==null,label={Text(resources.getString(R.string.core_ask_only_notes))})
-    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=noteActions,compact=fullPage,limit=if(modern) 2000 else 500,canSend=!staleCollection)
+    if(modern) FilterChip(selected=notesOnly,onClick={notesOnly=!notesOnly},enabled=pending==null,shape=MaterialTheme.shapes.extraLarge,leadingIcon={Icon(painterResource(R.drawable.ic_notes),null,Modifier.size(16.dp))},label={Text(resources.getString(R.string.core_ask_only_notes))})
+    AskQuestionInput(question,enabled,online,pending!=null,{question=it},{submit(question.trim())},followup=turns.isNotEmpty(),noteActions=noteActions,compact=fullPage,limit=if(modern) 2000 else 500,canSend=!staleCollection,focus=composerFocus)
    }
   }
   preview?.let {(id,passage) -> AskSourcePreview(model,id,passage) {preview=null}}
@@ -170,7 +206,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
 }
 
 @Composable private fun AskMessage(question:String) {
- Surface(shape=RoundedCornerShape(16.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
+ Surface(modifier=Modifier.padding(start=32.dp),shape=RoundedCornerShape(topStart=20.dp,topEnd=20.dp,bottomStart=20.dp,bottomEnd=6.dp),color=MaterialTheme.colorScheme.secondaryContainer) {
   Text(question,Modifier.padding(horizontal=SpuntoSpacing.s12,vertical=SpuntoSpacing.s8),style=MaterialTheme.typography.bodyLarge)
  }
 }

@@ -867,6 +867,74 @@ class NewFeatureWorkflowTest {
         }
     }
 
+    @Test fun savedWorkspaceChatModelReopensInSettingsAndNewAskAndCanBeReset() {
+        val alternative = InstrumentationRegistry.getArguments().getString("spunto.workflow.chatAlternative")
+        assumeTrue("Needs an alternative model on a disposable provider", !alternative.isNullOrBlank())
+        requireNotNull(alternative)
+        val original = runBlocking { api.get("/api/v1/ai/ask-models").getValue("default_model").jsonPrimitive.content }
+        require(original != alternative)
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
+        val prefix = "native-model-settings-$suffix-"
+        val container = isolatedPluginReplica(app, prefix, publishesPlugins = true)
+        val mounted = mutableStateOf(true)
+        lateinit var model: SpuntoViewModel
+        compose.runOnIdle { model = SpuntoViewModel(app, container) }
+
+        fun openSettings() {
+            compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("AI models").performClick()
+            compose.waitUntil(15_000) {
+                compose.onAllNodes(hasText("Chat") and isEnabled() and hasClickAction()).fetchSemanticsNodes().size == 1
+            }
+        }
+        fun back() = compose.onNodeWithContentDescription("Back").performClick()
+        fun save() {
+            compose.onNodeWithText("Save models").performScrollTo().performClick()
+            compose.waitUntil(20_000) {
+                compose.onAllNodesWithText("Model choices saved.").fetchSemanticsNodes().isNotEmpty()
+            }
+        }
+        fun verifyFreshAsk(expected: String) {
+            back()
+            back()
+            compose.onNodeWithContentDescription("Ask your notes").performClick()
+            compose.waitUntil(15_000) {
+                compose.onAllNodesWithText(expected).fetchSemanticsNodes().size == 1
+            }
+            compose.onNodeWithText(expected).assertIsDisplayed()
+            back()
+        }
+        try {
+            compose.setContent { if (mounted.value) SpuntoApp(model) }
+            compose.waitUntil(30_000) {
+                supportsConversationalAsk(model.manifest.value) && model.online.value
+            }
+            openSettings()
+            val chat = hasText("Chat") and hasClickAction()
+            compose.onNode(chat and hasText("Server default (", substring = true)).performClick()
+            compose.onNodeWithText(alternative, substring = true).performScrollTo().performClick()
+            save()
+            back()
+            back()
+            openSettings()
+            compose.onNode(chat and hasText(alternative, substring = true)).assertIsDisplayed()
+            verifyFreshAsk(alternative)
+
+            openSettings()
+            compose.onNode(chat).performClick()
+            val defaults = hasText("Server default (", substring = true) and
+                SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+            compose.onNode(defaults).performClick()
+            save()
+            verifyFreshAsk(original)
+        } finally {
+            compose.runOnIdle { mounted.value = false; model.retire(); container.retire() }
+            runBlocking { container.auth.clear() }
+            container.database.close()
+            app.deleteDatabase(prefix + "spunto.db")
+        }
+    }
+
     @Test fun askOpensFromTheHeaderWithAVisibleComposerAndStrictMode() {
         assumeTrue(
             "Requires a disposable real-model Ask provider",
@@ -894,6 +962,17 @@ class NewFeatureWorkflowTest {
                     compose.onAllNodes(composer).fetchSemanticsNodes().size == 1
             }
             compose.onNode(title).assertIsDisplayed()
+            if (InstrumentationRegistry.getArguments().getString("spunto.workflow.screenshot") == "yes") {
+                compose.waitForIdle()
+                val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                File(requireNotNull(app.getExternalFilesDir(null)), "ask-empty.png").outputStream().use {
+                    check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+            }
+            compose.onNodeWithText("Create a note").performScrollTo().performClick()
+            compose.onNode(composer).assertIsFocused().assertTextContains("Weekend shopping", substring = true)
+            compose.onNode(composer).performTextClearance()
+            androidx.test.espresso.Espresso.closeSoftKeyboard()
             compose.onNodeWithText("Only from notes").assertIsDisplayed().performClick().assertIsSelected()
             compose.onNode(composer).performTextInput("What did I promise about a nonexistent synthetic code?")
             compose.onNodeWithText("Send", substring = false).assertIsDisplayed().assertIsEnabled()

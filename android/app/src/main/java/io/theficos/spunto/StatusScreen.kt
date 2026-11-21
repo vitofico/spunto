@@ -33,7 +33,7 @@ internal data class AiStatus(val ai:JsonObject,val loading:Boolean,val error:Str
  return AiStatus(ai ?: cached,loading,error)
 }
 
-/** Read-only on the phone (03 A9): models, where they run and the search index. Choosing models and running a check need the owner's browser session. */
+/** Capability and indexing status. Provider diagnostics open in the web app. */
 @Composable internal fun AiSettingsSection(status:AiStatus,online:Boolean,onWeb:(String)->Unit) {
  val resources=LocalContext.current.resources
  SettingsSection(resources.getString(R.string.settings_ai))
@@ -46,5 +46,5 @@ internal data class AiStatus(val ai:JsonObject,val loading:Boolean,val error:Str
  }
  if(ai["indexing"]!=null && !off) SettingsRow(resources.getString(R.string.settings_ai_search),aiIndexDescription(resources,ai))
  if(status.error.isNotBlank()) Text(status.error,Modifier.padding(horizontal=SpuntoSpacing.s20,vertical=SpuntoSpacing.s4),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
- SettingsRow(resources.getString(R.string.settings_ai_models),resources.getString(R.string.settings_choose_models_and_run_a_check_in),enabled=online,onClick={onWeb("/settings/ai")})
+ SettingsRow(resources.getString(R.string.settings_run_a_check_from_the_web_app),enabled=online,onClick={onWeb("/settings/ai")})
 }

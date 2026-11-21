@@ -107,6 +107,7 @@ function AIModelSettings({
     onMutate: () => client.cancelQueries({ queryKey: ["ai"] }),
     onSuccess: (status) => {
       accept(status);
+      void client.resetQueries({ queryKey: ["ask-models"] });
       for (const key of [
         "ai",
         "catalog",
@@ -546,6 +547,16 @@ export function AISettings() {
             {t("aisettings.providers_are_set_by_whoever_runs_the_server")}
           </p>
           {ai.quota && <AIAllowance quota={ai.quota} />}
+          {ai.model_selection && (
+            <AIModelSettings
+              ai={ai}
+              selection={ai.model_selection}
+              onSaved={() => {
+                check.reset();
+                reindex.reset();
+              }}
+            />
+          )}
           {ai.profiles.map((profile) => (
             <section key={profile.name} className={styles.connection}>
               <h2>{profile.name}</h2>
@@ -567,16 +578,6 @@ export function AISettings() {
               </ul>
             </section>
           ))}
-          {ai.model_selection && (
-            <AIModelSettings
-              ai={ai}
-              selection={ai.model_selection}
-              onSaved={() => {
-                check.reset();
-                reindex.reset();
-              }}
-            />
-          )}
           <h2>{t("aisettings.default_routes")}</h2>
           <dl className={styles.keyValues}>
             {capabilities().map(([capability, title]) => (
@@ -679,6 +680,8 @@ export function AIRouting({ plugin }: { plugin: Plugin }) {
   const save = useMutation({
     mutationFn: () => api.saveAIRoute(plugin.id, routes),
     onSuccess: () => {
+      if (plugin.id === "ask")
+        void client.resetQueries({ queryKey: ["ask-models"] });
       for (const key of ["catalog", "manifest", "ai", "plugin-panel", "search"])
         void client.invalidateQueries({ queryKey: [key] });
     },

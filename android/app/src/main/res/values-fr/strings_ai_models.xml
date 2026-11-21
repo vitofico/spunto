@@ -1,0 +1,15 @@
+<resources>
+    <string name="models_scope">Les modèles choisis s’appliquent à cet espace. Choisir un modèle sélectionne aussi son fournisseur pour cette capacité. Chaque extension peut choisir un autre fournisseur dans ses réglages.</string>
+    <string name="models_owner">Seul un propriétaire de l’espace peut modifier les modèles.</string>
+    <string name="models_default">Par défaut du serveur (%1$s)</string>
+    <string name="models_off">Désactivé</string>
+    <string name="models_refresh">Actualiser les modèles</string>
+    <string name="models_save">Enregistrer les modèles</string>
+    <string name="models_saved">Choix des modèles enregistrés.</string>
+    <string name="models_discard_reload">Abandonner les modifications et recharger</string>
+    <string name="models_provider_failed">Impossible de charger les modèles de %1$s. Les choix enregistrés sont conservés.</string>
+    <string name="models_unverified">capacité non vérifiée</string>
+    <string name="models_unknown_network">Emplacement réseau indisponible</string>
+    <string name="models_stale">La sélection des modèles a changé. Rechargez-la avant de réessayer.</string>
+    <string name="models_embedding_rebuild">Changer de modèle de plongements reconstruit l’index de recherche.</string>
+</resources>

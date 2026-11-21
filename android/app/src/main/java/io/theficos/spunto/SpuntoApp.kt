@@ -161,7 +161,7 @@ import kotlinx.serialization.json.*
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=modifier.semantics {contentDescription=navigationLabel}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=if(compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
    else routeTitle(context,route)?.let { Text(it,modifier=modifier,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis) }
   }
-  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable || route in setOf("settings","appearance","plugins","status",WhatsNewRoute)),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
+  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable || route in setOf("settings","appearance","plugins","status",WorkspaceModelsRoute,WhatsNewRoute)),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
    if(brandedHeader) Column {
     val largeBrand=LocalDensity.current.fontScale>1.3f
     val narrowBrand=LocalConfiguration.current.screenWidthDp<360
@@ -211,6 +211,7 @@ import kotlinx.serialization.json.*
      route=="ask" || route.startsWith("ask:") -> if(canAsk) AskScreen(model,onNote=openNote,collectionId=route.substringAfter(':',"").ifBlank {null})
       else Text(context.getString(R.string.settings_this_plugin_is_unavailable_sync_to_refresh),Modifier.padding(SpuntoSpacing.s20))
      route==ActivityRoute -> SharedActivityScreen(model,openNote)
+     route==WorkspaceModelsRoute -> WorkspaceModelsScreen(model)
      route=="settings" -> SettingsScreen(model,appearanceSummary(context.resources,activeSelection.id,appearanceManifest?.catalog,themeOverride,mode,readingFace,readingSize),onRoute={nav.open(it)})
      route==WhatsNewRoute -> WhatsNewScreen(onAppearance={nav.open("appearance")})
      route==DecisionManagerRoute || route==DecisionViewRoute || route.startsWith(DecisionDetailPrefix) ->

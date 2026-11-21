@@ -1,7 +1,13 @@
 package io.theficos.spunto
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.res.stringResource
@@ -24,17 +30,24 @@ internal fun askModels(response: JsonObject): AskModels? {
 
 @Composable internal fun AskModelPicker(models: AskModels, selected: String?, enabled: Boolean, choose: (String?) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    if (models.options.size > 1) Column {
-        Text(stringResource(R.string.ask_chat_model), style = MaterialTheme.typography.labelMedium)
-        Box {
-            OutlinedButton(onClick = { expanded = true }, enabled = enabled) { Text(selected ?: models.default) }
-            DropdownMenu(expanded && enabled, onDismissRequest = { expanded = false }) {
-                models.options.forEach { option ->
-                    DropdownMenuItem(text = { Text(option) }, onClick = {
-                        choose(option.takeUnless { it == models.default })
-                        expanded = false
-                    })
-                }
+    if (models.options.size <= 1) return
+    val current = selected ?: models.default
+    val modelLabel = stringResource(R.string.ask_chat_model)
+    Box {
+        AssistChip(
+            modifier = Modifier.semantics { contentDescription = "$modelLabel, $current" },
+            onClick = { expanded = true },
+            enabled = enabled,
+            label = { Text(current, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            trailingIcon = { Icon(painterResource(R.drawable.ic_expand), null, Modifier.size(16.dp)) },
+            shape = MaterialTheme.shapes.extraLarge,
+        )
+        DropdownMenu(expanded && enabled, onDismissRequest = { expanded = false }) {
+            models.options.forEach { option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = {
+                    choose(option.takeUnless { it == models.default })
+                    expanded = false
+                })
             }
         }
     }

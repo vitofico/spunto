@@ -46,6 +46,7 @@ fun routeTitle(context:Context,route:String):String?=when {
 }
 private fun existingRouteTitle(context:Context,route:String):String?=when(route) {
  "settings" -> context.getString(R.string.core_settings); "appearance" -> context.getString(R.string.core_appearance); "plugins" -> context.getString(R.string.core_plugins); "ask" -> context.getString(R.string.core_ask_notes)
+ WorkspaceModelsRoute -> context.getString(R.string.settings_ai_models)
  ActivityRoute -> context.getString(R.string.shared_activity_title)
  "tools" -> context.getString(R.string.plugin_global_tools)
  CollectionsRoute -> context.getString(R.string.collections_title)

@@ -2,6 +2,8 @@
   "nativeName": "English",
   "direction": "ltr",
   "messages": {
+    "ask.model_settings": "Model settings",
+    "ask.default_model": "Default ({model})",
     "ask.chat_model": "Chat model",
     "notifications.title": "Notifications",
     "notifications.unread": "Notifications ({count} unread)",

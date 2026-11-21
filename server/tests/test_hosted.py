@@ -565,11 +565,13 @@ async def test_ai_model_choices_are_owner_managed_scoped_and_survive_restart(hos
 
     monkeypatch.setattr("spunto.ai.selection.inventory", models)
     monkeypatch.setattr(Gateway, "health_check", health)
-    current = (await client.get("/api/v1/ai", headers=headers(alice))).json()
+    phone, _ = await _sync_phone(client, alice)
+    assert (await client.get("/api/v1/ai/models", headers=phone)).status_code == 200
+    current = (await client.get("/api/v1/ai", headers=phone)).json()
     selection = {"chat": {"profile": "fixture", "model": "new"}}
     updated = await client.put(
         "/api/v1/ai/models",
-        headers=headers(alice),
+        headers=phone,
         json={"revision": current["model_selection"]["revision"], "selections": selection},
     )
     assert updated.status_code == 200, updated.text
@@ -606,6 +608,14 @@ async def test_ai_model_choices_are_owner_managed_scoped_and_survive_restart(hos
                 json={"revision": status.json()["model_selection"]["revision"], "selections": {}},
             )
         ).status_code == 403
+        member_phone, _ = await _sync_phone(client, user, shared["id"])
+        assert (await client.get("/api/v1/ai/models", headers=member_phone)).status_code == 403
+        denied = await client.put(
+            "/api/v1/ai/models",
+            headers=member_phone,
+            json={"revision": status.json()["model_selection"]["revision"], "selections": {}},
+        )
+        assert denied.status_code == 403
         assert (await client.post("/api/v1/ai/check", headers=scoped)).status_code == 403
         assert (await client.post("/api/v1/ai/reindex", headers=scoped, json={})).status_code == 403
 

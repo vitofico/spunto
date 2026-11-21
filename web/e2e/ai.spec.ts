@@ -109,6 +109,7 @@ async function fixture(
     can_manage: true,
     profiles: ai.profiles.map((profile) => ({
       ...profile,
+      ...(selections.chat ? { chat_model: selections.chat.model } : {}),
       ...(selections.embed ? { embed_model: selections.embed.model } : {}),
       ...(selections.vision ? { vision_model: selections.vision.model } : {}),
       leaves_network: { ...profile.leaves_network, vision: true },
@@ -186,7 +187,7 @@ async function fixture(
     if (path.endsWith("/ai/ask-models"))
       return modern
         ? json({
-            default_model: "fixture-chat",
+            default_model: selections.chat?.model ?? "fixture-chat",
             models: ["fixture-chat", "offline-chat", "alternate-chat"],
             external_models: ["fixture-chat", "alternate-chat"],
             external: true,
@@ -207,6 +208,11 @@ async function fixture(
             profile: "local",
             error: null,
             models: [
+              {
+                id: "alternate-chat",
+                capabilities: ["chat"],
+                leaves_network: true,
+              },
               {
                 id: "fixture-embedding-v2",
                 capabilities: ["embed"],
@@ -518,6 +524,25 @@ test("model inventory choices and environment reset require Save on mobile", asy
   await expect
     .poll(() => state.modelSaves.at(-1))
     .toEqual({ revision: "fixture-revision-2", selections: {} });
+});
+
+test("a saved chat model becomes the default on returning to Ask", async ({
+  page,
+}) => {
+  await fixture(page, true, false, true);
+  await page.goto("/ask");
+  const chat = page.getByRole("combobox", { name: "Chat model" });
+  await expect(chat.locator("option:checked")).toHaveText(
+    "Default (fixture-chat)",
+  );
+  await page.getByRole("link", { name: "Model settings" }).click();
+  await chat.selectOption({ label: "alternate-chat" });
+  await page.getByRole("button", { name: "Save models" }).click();
+  await expect(page.getByText("Model choices saved.")).toBeVisible();
+  await page.goBack();
+  await expect(chat.locator("option:checked")).toHaveText(
+    "Default (alternate-chat)",
+  );
 });
 
 test("AI profiles, checks, indexing and route reset on mobile", async ({

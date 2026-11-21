@@ -33,8 +33,8 @@ import androidx.compose.ui.Alignment
   entries.addAll(next.drop(kept))
  }
 }
-@Composable internal fun rememberNavigator(initialNoteId:String?,states:SaveableStateHolder):Navigator {
- val entries=rememberSaveable(initialNoteId,saver=listSaver<SnapshotStateList<String>,String>({ it.toList() },{ it.toMutableStateList() })) { mutableStateListOf("timeline").apply { initialNoteId?.let { add("note:$it") } } }
+@Composable internal fun rememberNavigator(initialNoteId:String?,states:SaveableStateHolder,initialActivity:Boolean=false):Navigator {
+ val entries=rememberSaveable(initialNoteId,initialActivity,saver=listSaver<SnapshotStateList<String>,String>({ it.toList() },{ it.toMutableStateList() })) { mutableStateListOf("timeline").apply { if(initialActivity) add(ActivityRoute) else initialNoteId?.let { add("note:$it") } } }
  return remember(entries,states) { Navigator(entries,states::removeState) }
 }
 val LocalNavigator=staticCompositionLocalOf<Navigator> { error("Navigator is provided by SpuntoApp.") }
@@ -46,6 +46,7 @@ fun routeTitle(context:Context,route:String):String?=when {
 }
 private fun existingRouteTitle(context:Context,route:String):String?=when(route) {
  "settings" -> context.getString(R.string.core_settings); "appearance" -> context.getString(R.string.core_appearance); "plugins" -> context.getString(R.string.core_plugins); "ask" -> context.getString(R.string.core_ask_notes)
+ ActivityRoute -> context.getString(R.string.shared_activity_title)
  "tools" -> context.getString(R.string.plugin_global_tools)
  CollectionsRoute -> context.getString(R.string.collections_title)
  ThinkingDeskRoute -> context.getString(R.string.settings_plugin_thinking_desk_name)

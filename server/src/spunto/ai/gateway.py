@@ -271,6 +271,7 @@ class Gateway:
         source_chunks=None,
         conversation_context="",
         ask_evidence=None,
+        require_local=False,
         review_check=None,
         review_guard=None,
         external_ok=True,
@@ -460,6 +461,7 @@ class Gateway:
                             output,
                             purpose=purpose,
                             mode=quirk.get("mode", "json_schema"),
+                            require_local=require_local,
                             schema_prompt=bool(quirk) or attempt > 0,
                             retry=attempt > 0,
                             image=image,
@@ -794,8 +796,26 @@ class ScopedGateway:
             "external_ok": getattr(ctx, "principal", None) is None or ctx.principal.external_ok,
         }
 
-    async def chat(self, output, prompt, **kwargs):
+    async def chat(
+        self, output, prompt, *, ask_chat_model=None, ask_model_local_only=False, **kwargs
+    ):
         options = self._options("chat", {**kwargs, "prompt": prompt})
+        if ask_chat_model is not None:
+            if self.ctx.plugin_id != "ask":
+                raise AIError("refused", "ai_model_invalid")
+            profile = options["profile"]
+            choices = await self.gateway.selection.ask_models(profile)
+            if ask_model_local_only and ask_chat_model in choices["external_models"]:
+                raise AIError("refused", "ai_model_locality_changed")
+            if ask_chat_model not in choices["models"]:
+                raise AIError("validation", "ai_model_invalid")
+            # Refresh the permission and destination after provider inventory I/O.
+            options = self._options("chat", {**kwargs, "prompt": prompt})
+            if options["profile"] != profile:
+                raise AIError("unavailable", "ai_configuration_changed")
+            options["profile"] = profile.with_model("chat", ask_chat_model)
+            # A router can reload while inference waits in the profile queue.
+            options["require_local"] = ask_chat_model not in choices["external_models"]
         return await self.gateway.chat(output, **options)
 
     async def embed(self, texts, **kwargs):

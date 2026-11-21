@@ -15,6 +15,16 @@ import org.junit.Test
 
 class AskEntryTest {
  @get:Rule val compose=createComposeRule()
+ @Test fun selectedModelIsVisibleAndStaysLockedDuringTheConversation() {
+  val inventory = AskModels("local", listOf("local", "remote"), false, "provider.example", setOf("remote"))
+  var selected by mutableStateOf<String?>(null)
+  var editing by mutableStateOf(true)
+  compose.setContent { SpuntoTheme("carta","light") { AskModelPicker(inventory, selected, editing) { selected=it } } }
+  compose.onNodeWithText("local").performClick()
+  compose.onNodeWithText("remote").performClick()
+  compose.runOnIdle { assertEquals("remote", selected); assertTrue(inventory.leavesNetwork(selected)); editing=false }
+  compose.onNodeWithText("remote").assertIsNotEnabled()
+ }
  @Test fun directAskExplainsOfflineStateAndAcceptsQuestionsWithoutSearchWordThreshold() {
   var question by mutableStateOf("");var online by mutableStateOf(false);var enabled by mutableStateOf(true);var asking by mutableStateOf(false)
   var submitted:String?=null

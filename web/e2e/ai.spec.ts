@@ -1,6 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { AIModelSelections } from "../src/lib/types";
 
+test.use({ locale: "en-US" });
+
 const id = "0192f3c4-1111-7000-8000-000000000001";
 const note = {
   id,
@@ -181,6 +183,16 @@ async function fixture(
         hidden_mcp_tools: [],
       });
     if (path.endsWith("/ai")) return json(withModels ? modelStatus() : ai);
+    if (path.endsWith("/ai/ask-models"))
+      return modern
+        ? json({
+            default_model: "fixture-chat",
+            models: ["fixture-chat", "offline-chat", "alternate-chat"],
+            external_models: ["fixture-chat", "alternate-chat"],
+            external: true,
+            host: "chat.example.org",
+          })
+        : json({}, 404);
     if (path.endsWith("/ai/models")) {
       if (request.method() === "PUT") {
         const body = request.postDataJSON();
@@ -963,3 +975,61 @@ for (const width of [1024, 360, 320]) {
     ]);
   });
 }
+
+for (const collection of [false, true]) {
+  test(`keeps the chat model through ${collection ? "collection" : "library"} Ask follow-ups and resets on new conversation`, async ({
+    page,
+  }) => {
+    const state = await fixture(page, false, false, true);
+    await page.goto(collection ? `/ask?collection=${id}` : "/ask");
+    const select = page.getByRole("combobox", { name: "Chat model" });
+    const externalProvider = page.getByText(
+      "Chat uses the configured provider at chat.example.org, outside your network.",
+      { exact: true },
+    );
+    await expect(externalProvider).toBeVisible();
+    await select.selectOption("offline-chat");
+    await expect(externalProvider).toHaveCount(0);
+    await select.selectOption("alternate-chat");
+    await expect(externalProvider).toBeVisible();
+    const submit = async (question: string) => {
+      await page.getByLabel("Your message").fill(question);
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      await expect
+        .poll(
+          () =>
+            state.commands.find((call) => call.args.question === question)?.args
+              .chat_model,
+        )
+        .toBe("alternate-chat");
+    };
+    await submit("What is here?");
+    await expect(select).toBeDisabled();
+    await submit("Tell me more");
+    await page
+      .getByRole("button", { name: "New conversation", exact: true })
+      .click();
+    await expect(select).toHaveValue("");
+    await expect(select).toBeEnabled();
+  });
+}
+
+test("keeps a local-only selection bound to local inference", async ({
+  page,
+}) => {
+  const state = await fixture(page, false, false, true);
+  await page.goto("/ask");
+  await page
+    .getByRole("combobox", { name: "Chat model" })
+    .selectOption("offline-chat");
+  await page.getByLabel("Your message").fill("Local conversation");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(
+      () =>
+        state.commands.find(
+          (call) => call.args.question === "Local conversation",
+        )?.args,
+    )
+    .toMatchObject({ chat_model: "offline-chat", chat_model_local_only: true });
+});

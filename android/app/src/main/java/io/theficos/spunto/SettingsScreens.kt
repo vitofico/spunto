@@ -74,6 +74,7 @@ import kotlinx.serialization.json.*
    val config=auth
    if(config==null) SettingsRow(resources.getString(R.string.settings_connect_to_your_server),resources.getString(R.string.settings_sign_in_or_scan_a_pairing_code),onClick={onRoute("login")})
    else {
+    if(config.hosted) SettingsRow(resources.getString(R.string.shared_activity_title),resources.getString(R.string.shared_activity_scope),opensPage=true,onClick={onRoute(ActivityRoute)})
     AccountIdentityRow(config,accountIdentity) {accountDetails=true}
     SettingsRow(config.serverUrl.removePrefix("https://"),resources.getString(R.string.settings_this_phone_is ,config.name))
     if(needsSignIn) SettingsRow(resources.getString(R.string.settings_sign_in_again),resources.getString(R.string.settings_sync_is_paused_until_this_phone_signs),onClick={onRoute("login")})

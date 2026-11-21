@@ -12,6 +12,7 @@ from markdown_it import MarkdownIt
 from pydantic import Field, model_validator
 
 from spunto.ai.errors import AIError
+from spunto.ai.models import MODEL_ID
 from spunto.ai.output import Output, field
 from spunto.ai.vectors import VectorUnavailable
 from spunto.api.errors import Problem
@@ -213,7 +214,15 @@ def receipts(ctx):
     return memory(ctx)[1]
 
 
-def new_conversation(ctx, *, note_actions=False, conversational=False, collection=None):
+def new_conversation(
+    ctx,
+    *,
+    note_actions=False,
+    conversational=False,
+    collection=None,
+    chat_model=None,
+    chat_model_local_only=False,
+):
     ctx.check()
     conversations, pending = memory(ctx)
     key = secrets.token_urlsafe(24)
@@ -228,6 +237,8 @@ def new_conversation(ctx, *, note_actions=False, conversational=False, collectio
         "note_actions": note_actions,
         "conversational": conversational,
         "collection": collection,
+        "chat_model": chat_model,
+        "chat_model_local_only": chat_model_local_only,
     }
     conversations[key] = value
     while len(conversations) > MAX_CONVERSATIONS:
@@ -259,13 +270,6 @@ def controls(key, value):
             "args": {"conversation_id": key},
         },
     ]
-
-
-def start_conversation(ctx, *, note_actions=False, conversational=False, collection=None):
-    key, value = new_conversation(
-        ctx, note_actions=note_actions, conversational=conversational, collection=collection
-    )
-    return {"ui": 1, "items": controls(key, value)}
 
 
 @plugin.command("clear-conversation")
@@ -344,7 +348,15 @@ async def ask(
     conversational: bool = False,
     notes_only: bool = False,
     collection_id: str | None = None,
+    chat_model: str | None = None,
+    chat_model_local_only: bool = False,
 ) -> dict:
+    if type(chat_model_local_only) is not bool or (chat_model_local_only and chat_model is None):
+        raise ValueError("local-only selection requires a chat model")
+    if chat_model is not None and (
+        not isinstance(chat_model, str) or not MODEL_ID.fullmatch(chat_model)
+    ):
+        raise AIError("validation", "ai_model_invalid")
     if any(type(flag) is not bool for flag in (start, note_actions, conversational, notes_only)):
         raise ValueError("conversation options must be booleans")
     if note_actions and conversation_id is not None:
@@ -364,9 +376,15 @@ async def ask(
         collection = (
             await collection_context(ctx, collection_id) if collection_id is not None else None
         )
-        return start_conversation(
-            ctx, note_actions=note_actions, conversational=conversational, collection=collection
+        key, value = new_conversation(
+            ctx,
+            note_actions=note_actions,
+            conversational=conversational,
+            collection=collection,
+            chat_model=chat_model,
+            chat_model_local_only=chat_model_local_only,
         )
+        return {"ui": 1, "items": controls(key, value)}
     if conversation_id is None and after_turn is not None:
         raise ValueError("after_turn requires a conversation")
     current = conversation(ctx, conversation_id) if conversation_id is not None else None
@@ -390,6 +408,14 @@ async def ask(
         )
     if current["active"] is not None:
         raise Problem(409, "ask_question_in_progress", tr("A question is already being answered."))
+    if chat_model is not None:
+        model_bound = current["turn"] > 0 or current["chat_model"] is not None
+        if model_bound and current["chat_model"] != chat_model:
+            raise Problem(
+                409, "ask_conversation_changed", tr("The conversation changed. Start a new one.")
+            )
+        current["chat_model"] = chat_model
+        current["chat_model_local_only"] |= chat_model_local_only
     request = object()
     current["active"] = request
     try:
@@ -562,6 +588,8 @@ async def answer_question(ctx, question, current, *, notes_only=False, check_req
         prompt=answer_language() + prompt,
         notes=sources,
         purpose="ask",
+        ask_chat_model=current["chat_model"],
+        ask_model_local_only=current["chat_model_local_only"],
         max_note_chars=MAX_CONTEXT,
         note_char_limits={note["id"]: MAX_CONTEXT // len(sources) for note in sources},
         context_query=query,

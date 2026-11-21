@@ -1,0 +1,16 @@
+<resources>
+    <string name="shared_activity_title">Gemeinsame Aktivitäten</string>
+    <string name="shared_activity_scope">Aktivitäten im mit diesem Gerät gekoppelten Bereich</string>
+    <string name="shared_activity_phone">Auf diesem Gerät benachrichtigen</string>
+    <string name="shared_activity_alert">In deinem gekoppelten Bereich gibt es Neuigkeiten.</string>
+    <string name="shared_activity_follow">Neuen Notizen in diesem Bereich folgen</string>
+    <string name="shared_activity_permission">Android-Benachrichtigungseinstellungen öffnen</string>
+    <string name="shared_activity_all">Alle Kontobenachrichtigungen im Web</string>
+    <string name="shared_activity_empty">Noch keine gemeinsamen Aktivitäten</string>
+    <string name="shared_activity_joined">Du wurdest einem Bereich hinzugefügt</string>
+    <string name="shared_activity_shared">Eine Notiz wurde mit dir geteilt</string>
+    <string name="shared_activity_created">Eine neue Notiz wurde hinzugefügt</string>
+    <string name="shared_activity_read">Gelesen</string>
+    <string name="shared_activity_unread">Ungelesen</string>
+    <string name="ask_chat_model">Chatmodell</string>
+</resources>

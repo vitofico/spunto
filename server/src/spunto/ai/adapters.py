@@ -28,9 +28,11 @@ class OpenAI:
     async def close(self):
         await self.client.aclose()
 
-    async def request(self, path, **kwargs):
+    async def request(self, path, *, require_local=False, **kwargs):
         key = self.profile.api_key.get_secret_value()
         headers = {"Authorization": "Bearer " + key} if key else {}
+        if require_local:
+            headers["x-svincolo-require-locality"] = "local"
         sending()
         try:
             response = await self.client.post(
@@ -63,6 +65,7 @@ class OpenAI:
         purpose,
         mode,
         schema_prompt,
+        require_local=False,
         retry=False,
         image=None,
         mime=None,
@@ -103,6 +106,7 @@ class OpenAI:
         )
         result = await self.request(
             "/chat/completions",
+            require_local=require_local,
             json={
                 "model": model,
                 "messages": [
@@ -175,6 +179,7 @@ class Anthropic:
         schema,
         *,
         purpose,
+        require_local=False,
         retry=False,
         image=None,
         mime=None,
@@ -203,6 +208,11 @@ class Anthropic:
                 system=system,
                 messages=[{"role": "user", "content": content}],
                 output_format=schema,
+                **(
+                    {"extra_headers": {"x-svincolo-require-locality": "local"}}
+                    if require_local
+                    else {}
+                ),
                 output_config={"effort": "low" if "label" in purpose else "medium"},
             )
         except ValidationError, json.JSONDecodeError:

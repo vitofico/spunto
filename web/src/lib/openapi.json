@@ -2103,6 +2103,25 @@
         "summary": "Configuration"
       }
     },
+    "/api/v1/ai/ask-models": {
+      "get": {
+        "operationId": "ask_models_api_v1_ai_ask_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ask Models",
+        "tags": [
+          "Plugins"
+        ]
+      }
+    },
     "/api/v1/ai/check": {
       "post": {
         "operationId": "check_api_v1_ai_check_post",

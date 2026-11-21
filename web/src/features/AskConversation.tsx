@@ -69,6 +69,11 @@ export default function AskConversation({
       true;
   const limit = modern ? 2000 : 500;
   const [draft, setDraft] = useState("");
+  const [selection, setSelection] = useState<{
+    model: string;
+    localOnly: boolean;
+  }>();
+  const chatModel = selection?.model ?? "";
   const [notesOnly, setNotesOnly] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -86,6 +91,13 @@ export default function AskConversation({
     manifest.data?.plugins.some(
       (p) => p.id === "ask" && (p.state === undefined || p.state === "enabled"),
     ) ?? true;
+  const models = useQuery({
+    queryKey: ["ask-models", generation.current],
+    queryFn: api.askModels,
+    enabled: modern && enabled && workspaceRole === "owner",
+    retry: false,
+    staleTime: 60_000,
+  });
   const clearHandle = (args: Args | undefined) => {
     if (args && generation.current === requestGeneration())
       void api
@@ -100,6 +112,7 @@ export default function AskConversation({
     clearHandle(continuation.current);
     continuation.current = undefined;
     setTurns([]);
+    setSelection(undefined);
     if (!keepDraft) setDraft("");
     setPending(null);
     setFailure(null);
@@ -135,6 +148,7 @@ export default function AskConversation({
   async function submit(question: string) {
     if (
       !enabled ||
+      models.isLoading ||
       pending ||
       failure?.stale ||
       !online ||
@@ -172,6 +186,10 @@ export default function AskConversation({
       const args = {
         ...continuation.current,
         question,
+        ...(selection && {
+          chat_model: selection.model,
+          ...(selection.localOnly && { chat_model_local_only: true }),
+        }),
         ...(modern && notesOnly && { notes_only: true }),
       };
       const result = await api.request("/api/v1/plugins/ask/commands/ask", {
@@ -241,6 +259,13 @@ export default function AskConversation({
   const Heading = page ? "h1" : "h2";
   const destination = catalog.data?.plugins.find((item) => item.id === "ask")
     ?.ai_destinations?.chat;
+  const externalHost =
+    models.data && Array.isArray(models.data.external_models)
+      ? (chatModel
+          ? models.data.external_models.includes(chatModel)
+          : models.data.external) && models.data.host
+      : destination?.leaves_network &&
+        (destination.host ?? destination.profile);
   return (
     <section
       className={page ? chatStyles.page : styles.result}
@@ -263,7 +288,12 @@ export default function AskConversation({
             </p>
           )}
         </div>
-        <button onClick={() => discard(failure?.stale === true)}>
+        <button
+          onClick={() => {
+            discard(failure?.stale === true);
+            requestAnimationFrame(() => input.current?.focus());
+          }}
+        >
           {t("ask.new_conversation")}
         </button>
       </header>
@@ -276,10 +306,10 @@ export default function AskConversation({
         ) : (
           <p className={chatStyles.temporary}>{t("ask.temporary")}</p>
         )}
-        {page && destination?.leaves_network && (
+        {page && externalHost && (
           <p className={chatStyles.temporary}>
             {t("ask.external_provider", {
-              host: destination.host ?? destination.profile,
+              host: externalHost,
             })}
           </p>
         )}
@@ -406,6 +436,41 @@ export default function AskConversation({
           </p>
         )}
         <div className={chatStyles.composerActions}>
+          {modern && !!models.data?.models?.length && (
+            <label className={chatStyles.model}>
+              {t("ask.chat_model")}
+              <select
+                className="field"
+                value={chatModel}
+                disabled={!!pending || !!failure || turns.length > 0}
+                onChange={(event) => {
+                  const model = event.target.value;
+                  setSelection(
+                    model
+                      ? {
+                          model,
+                          localOnly:
+                            !models.data.external_models.includes(model),
+                        }
+                      : undefined,
+                  );
+                }}
+              >
+                <option value="">
+                  {t("aisettings.server_default_choice", {
+                    model: models.data.default_model,
+                  })}
+                </option>
+                {models.data.models
+                  .filter((model) => model !== models.data.default_model)
+                  .map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
           {modern && (
             <label className={chatStyles.onlyNotes}>
               <input
@@ -422,6 +487,7 @@ export default function AskConversation({
             className="primary"
             disabled={
               !enabled ||
+              models.isLoading ||
               !!pending ||
               !!failure?.stale ||
               !draft.trim() ||

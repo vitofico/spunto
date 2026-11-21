@@ -37,6 +37,7 @@ import { useToast } from "./components/core/Toast";
 import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
 import { useModalFocus } from "./components/core/useModalFocus";
+import { NotificationLink } from "./features/Notifications";
 import { AccountIdentityLink } from "./features/AccountIdentity";
 import { hasCompletedGuide, markGuideCompleted } from "./lib/guide";
 import { supportsCollections } from "./features/collectionsAccess";
@@ -66,6 +67,7 @@ function lazyPages() {
         default: module.FirstRunGuide,
       })),
     ),
+    NotificationsPage: lazy(() => import("./pages/Notifications")),
     SharedNotesPage: lazy(() => import("./pages/SharedNotes")),
     NotePage: lazy(loadNote),
     ThinkingDeskPage: lazy(() => import("./pages/ThinkingDesk")),
@@ -387,6 +389,7 @@ function Rail({
         </nav>
         {hosted && (
           <nav>
+            <NotificationLink close={close} />
             <Link
               href="/shared"
               onClick={close}
@@ -1069,6 +1072,9 @@ export default function App() {
               </Route>
               <Route path="/n/:id">
                 {(params) => <NotePage id={params.id} />}
+              </Route>
+              <Route path="/notifications">
+                <pages.NotificationsPage />
               </Route>
               <Route path="/shared/n/:id">
                 {(params) => <SharedNotesPage id={params.id} />}

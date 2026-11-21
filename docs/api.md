@@ -67,6 +67,23 @@ Workspace APIs require a browser session. `X-Spunto-Workspace` selects a workspa
 | `PATCH /shared-notes/{id}?workspace_id={source_workspace}` | Editor sends `{body, version}`; returns the updated note or a preserved conflict |
 | `GET /shared-notes/{id}/attachments/{attachment_id}?workspace_id={source_workspace}` | Reads a linked attachment only while that note grant remains valid |
 
+### Hosted notifications
+
+| Method and path | Behavior |
+|---|---|
+| `GET /notifications` | Lists the 50 most recent visible entries, newest first. Returns `notifications`, plus `followable` and `following` for the selected space. |
+| `PUT /notifications/follow` | Sets the caller's preference for the selected shared space using `{"following": true}` or `{"following": false}`. |
+| `POST /notifications/{id}/read` | Marks the caller's entry as read and returns 204. |
+
+Each entry has an `id`, a `kind` (`space_joined`, `note_shared` or `note_created`),
+a `workspace_id`, a `workspace_name`, a nullable `note_id`, a `created_at` time
+in Unix milliseconds and a `read` flag. A browser session can see entries across
+its account. A paired Android device can see entries for its bound space.
+For an individual note grant, use the shared-note route with the source
+workspace ID. The workspace name is empty for recipients outside its membership.
+
+### Sharing and note identity
+
 Recipients must already have an account with the exact username, verified email or user ID. A grant request accepts exactly one recipient selector; username lookup is normalized and exact. There is no email search, directory endpoint, email delivery or anonymous share link. Personal-space membership cannot be expanded: create a shared space or grant one note. Owners manage access; editors can edit notes; viewers are read-only. Individual-note grants do not expose the source workspace's label browser, settings or revision-history APIs. Sharing/membership routes require a browser cookie even when a PAT has write scope.
 
 Treat a shared note's identity as `(workspace_id, id)`: imported libraries can contain the same note ID. Always retain the source workspace in requests, browser links (`/shared/n/{id}?workspace_id=…`), cache/draft keys and conflict links. Omitting it is accepted only for one unambiguous legacy grant. Shared-note edits use the normal versioned autosave/merge mechanism; a 409 includes `conflict_id` and preserves the incoming text. Keep the edited draft until acknowledged. Neither CRDTs nor live cursors are implemented.
@@ -238,6 +255,15 @@ The production host serves immutable hashed assets and sends the SPA index with 
 ## M4 AI contracts
 
 `GET /api/v1/ai` requires a browser session or device token and returns safe profile configuration, independent capability bindings, probe results, daily counters, provider quirks and indexing progress. `can_manage` is true only for the space owner; hosted editors/viewers may inspect status but cannot change models, run checks or reindex. `POST /ai/check` runs fixed-content checks; `POST /ai/reindex` accepts only `{"drop": false}` (or true to discard retained vectors). Both require a space-owner browser session and matching Origin. These endpoints accept no provider keys or endpoint URLs.
+
+`GET /api/v1/ai/ask-models` returns `default_model`, `models`, `host`,
+`external` (the default's locality) and `external_models` for the enabled Ask
+plugin's chat profile. It accepts a space owner's session or paired device.
+Ask accepts an optional `chat_model` on conversation start or the first question.
+Send `chat_model_local_only: true` when the selected model was shown as local.
+The server retains both choices for follow-ups, checks the current inventory
+before inference and rejects an unavailable model or a local choice that now
+routes externally. Omitting the choice uses the configured Ask default.
 
 `GET /api/v1/ai/models` lists models from the configured provider profiles, optionally filtered by exact `?profile=name`. It requires a space-owner browser session or device. The response is `{"profiles":[{"profile":"ollama","models":[{"id":"embeddinggemma-2:270m","capabilities":["embed"],"leaves_network":false}],"error":null}]}`. Capabilities use `chat`, `embed`, `transcribe` and `vision`; `null` means the provider did not verify compatibility and an empty list means none is advertised. Multimodal embeddings do not establish generative vision or transcription. A failed profile returns an empty model list with `error="ai_inventory_unavailable"`; successful profiles remain usable. Inventory requests are bounded, send no notes and never pull/install models.
 

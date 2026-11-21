@@ -12,6 +12,10 @@ class AIError(Exception):
     @property
     def detail(self):
         """Useful owner guidance without provider response bodies or note content."""
+        if self.code == "ai_model_locality_changed":
+            return "This model now uses an external provider. Choose a model in a new conversation."
+        if self.code == "ai_model_invalid":
+            return "This model is unavailable. Choose another model in a new conversation."
         if self.code == "ai_source_changed":
             return "A source changed while the answer was being prepared. Ask again."
         if self.code == "ai_note_refused":

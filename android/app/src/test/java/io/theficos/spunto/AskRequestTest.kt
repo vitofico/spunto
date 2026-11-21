@@ -83,6 +83,18 @@ class AskRequestTest {
  }
 
  private fun startedConversation()=buildJsonObject {put("ui",1);put("items",JsonArray(listOf(buildJsonObject {put("type","command");put("id","ask");put("title","Ask a follow-up");put("args",buildJsonObject {put("conversation_id","allocated");put("after_turn",0)})})))}
+ @Test fun selectedChatModelIsSentOnStartAndEveryTurn()=runBlocking {
+  val args=mutableListOf<JsonObject>()
+  var handle:JsonObject?=null
+  val send:suspend (String,JsonObject)->JsonElement={_,body ->
+   args+=body
+   if(body["start"]==JsonPrimitive(true)) startedConversation() else JsonObject(emptyMap())
+  }
+  conversationAskRequest("One",null,send,{true},{handle=it},collectionId="collection",chatModel="chosen",chatModelLocalOnly=true)
+  conversationAskRequest("Two",handle,send,{true},{},chatModel="chosen",chatModelLocalOnly=true)
+  assertEquals(3,args.size)
+  assertTrue(args.all {it["chat_model"]==JsonPrimitive("chosen") && it["chat_model_local_only"]==JsonPrimitive(true)})
+ }
  @Test fun allocatesBeforeFirstInferenceAndPublishesTheHandle()=runBlocking {
   val commands=mutableListOf<Pair<String,JsonObject>>()
   var handle:JsonObject?=null

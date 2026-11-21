@@ -124,13 +124,14 @@ export function useWorkspaceIssue() {
     () => null,
   );
 }
-export async function switchWorkspace(workspace: Workspace) {
+export async function switchWorkspace(workspace: Workspace | string) {
+  const workspaceId = typeof workspace === "string" ? workspace : workspace.id;
   const session = activeSession;
   if (
     !session ||
     switchingWorkspace ||
     refreshingAuthentication ||
-    session.workspace_id === workspace.id
+    session.workspace_id === workspaceId
   )
     return;
   const revision = authenticationRevision;
@@ -142,19 +143,19 @@ export async function switchWorkspace(workspace: Workspace) {
   queryClient.clear();
   let next: Session | null = session;
   try {
-    const validated = await api.workspaceSession(workspace.id);
+    const validated = await api.workspaceSession(workspaceId);
     if (signedOut || revision !== authenticationRevision)
       throw new ApiError(401, "unauthenticated");
     if (
       (validated.user_id ?? validated.owner_id) !==
         (session.user_id ?? session.owner_id) ||
       validated.credential_id !== session.credential_id ||
-      validated.workspace_id !== workspace.id
+      validated.workspace_id !== workspaceId
     )
       throw new ApiError(409, "identity_changed");
     next = validated;
     try {
-      sessionStorage.setItem(workspaceStorageKey(session), workspace.id);
+      sessionStorage.setItem(workspaceStorageKey(session), workspaceId);
     } catch {}
   } catch (error) {
     workspaceIssue =

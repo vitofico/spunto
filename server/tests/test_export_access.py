@@ -399,6 +399,8 @@ async def test_reference_is_static_offline_and_openapi_describes_note_responses(
     assert "script-src 'self'" in response.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     document = (await server.client.get("/api/v1/openapi.json")).json()
+    assert "/api/v1/notifications" not in document["paths"]
+    assert (await server.client.get("/api/v1/notifications")).status_code == 404
     note = document["components"]["schemas"]["Note"]
     assert {"id", "body", "version", "labels", "source", "origin", "private", "created_at"} <= set(
         note["properties"]

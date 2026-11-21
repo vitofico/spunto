@@ -18,6 +18,8 @@ import androidx.compose.ui.text.AnnotatedString
 import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.design.Markdown
 import io.theficos.spunto.core.plugins.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -66,9 +68,21 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
   var active by remember {mutableStateOf(true)}
   var request by remember {mutableStateOf<Job?>(null)}
   val config=auth
+  var models by remember {mutableStateOf<AskModels?>(null)}
+  var chatModel by remember {mutableStateOf<String?>(null)}
+  var chatModelLocalOnly by remember {mutableStateOf(false)}
+  LaunchedEffect(config,online,enabled,modern) {
+   if(config!=null && online && enabled && modern) {
+    try {
+     val api=pluginApi(config,resources).guarded {model.container.auth.config.first()==config}
+     models=askModels(api.get("/api/v1/ai/ask-models"))
+    } catch(cancelled:CancellationException) {throw cancelled}
+    catch(_:Exception) { /* Older servers expose only their configured Ask model. */ }
+   }
+  }
   fun clearHandle(args:JsonObject?) {if(args!=null && model.auth.value==config && model.pluginReplicaEpoch==epoch) model.request("/api/v1/plugins/ask/commands/clear-conversation","POST",buildJsonObject {put("conversation_id",args.string("conversation_id"))})}
   fun discard(keepDraft:Boolean=false) {
-   revision++;conversationGeneration++;request?.cancel();clearHandle(continuation);continuation=null;turns=emptyList();writeStates.clear()
+   revision++;conversationGeneration++;chatModel=null;chatModelLocalOnly=false;request?.cancel();clearHandle(continuation);continuation=null;turns=emptyList();writeStates.clear()
    if(!keepDraft) question=""
    pending=null;failure=null;retry="";preview=null;staleCollection=false
   }
@@ -81,7 +95,7 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
    fun current()=active && revision==attempt && model.auth.value==config && model.pluginReplicaEpoch==epoch && model.container.manifest.enabled("ask")
    request=model.ask(submitted,continuation,current=::current,onHandle={continuation=it},onError={if(current()) {failure=it;question=submitted;pending=null}},onCollectionChanged={
     if(current()) {staleCollection=true;failure=resources.getString(R.string.core_ask_collection_changed);question=submitted;pending=null}
-   },conversational=modern,notesOnly=notesOnly,collectionId=collectionId,onComplete={if(current()) pending=null}) {raw ->
+   },conversational=modern,notesOnly=notesOnly,collectionId=collectionId,chatModel=chatModel,chatModelLocalOnly=chatModelLocalOnly,onComplete={if(current()) pending=null}) {raw ->
     val result=raw as? JsonObject
     if(current() && result!=null) {
      turns=(turns+turn(attempt,submitted,result)).takeLast(20)
@@ -113,7 +127,11 @@ private data class AskTurn(val id:Int,val question:String,val result:JsonObject,
      }
      if(temporaryInfo) Text(resources.getString(R.string.core_ask_temporary),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
      if(turns.isEmpty() && pending==null) Text(resources.getString(intro),style=MaterialTheme.typography.titleMedium)
-     if(fullPage && destination!=null) Text(resources.getString(R.string.settings_at,destination.string("model"),destination.string("host"),resources.getString(R.string.settings_outside_your_network)),style=MaterialTheme.typography.bodySmall)
+     models?.let {inventory -> AskModelPicker(inventory,chatModel,pending==null && turns.isEmpty() && continuation==null && retry.isBlank()) {chosen ->
+      chatModel=chosen;chatModelLocalOnly=chosen!=null && !inventory.leavesNetwork(chosen)
+     }}
+     val target=models
+     if(fullPage && (target?.leavesNetwork(chatModel) ?: (destination!=null))) Text(resources.getString(R.string.settings_at,chatModel ?: target?.default ?: destination?.string("model").orEmpty(),target?.host ?: destination?.string("host").orEmpty(),resources.getString(R.string.settings_outside_your_network)),style=MaterialTheme.typography.bodySmall)
     }
     items(turns,key={it.id}) {turn ->
      Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {

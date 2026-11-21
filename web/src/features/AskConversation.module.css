@@ -278,3 +278,14 @@
   min-height: 44px;
   cursor: pointer;
 }
+
+.composerActions .model {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  max-width: 100%;
+}
+.model select {
+  min-width: 0;
+  max-width: 100%;
+}

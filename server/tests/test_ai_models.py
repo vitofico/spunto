@@ -555,7 +555,7 @@ async def test_pending_refresh_retries_only_superseded_owner_generation(model_se
     assert host.states["semantic-search"]["state"] == "disabled"
 
 
-async def test_model_routes_require_session_origin_and_reject_pat(model_server):
+async def test_model_routes_require_cookie_origin_and_reject_pat(model_server):
     server, _, _ = model_server
     body = {"revision": server.services.ai.selection.revision, "selections": {}}
     assert (await server.client.put("/api/v1/ai/models", json=body)).status_code == 403
@@ -567,6 +567,34 @@ async def test_model_routes_require_session_origin_and_reject_pat(model_server):
     assert (
         await server.client.put("/api/v1/ai/models", headers=headers, json=body)
     ).status_code == 403
+
+
+async def test_paired_device_can_save_models_with_revision_and_origin_guards(model_server):
+    server, _, _ = model_server
+    path = "/api/v1/ai/models"
+    grant = await server.client.post("/api/v1/auth/pairing", headers=ORIGIN)
+    assert grant.status_code == 200
+    paired = await server.client.post(
+        "/api/v1/auth/pairing/exchange", json={"code": grant.json()["code"], "name": "Ask fixture"}
+    )
+    assert paired.status_code == 200
+    bearer = {"Authorization": "Bearer " + paired.json()["token"]}
+    server.client.cookies.clear()
+    assert (await server.client.get(path, headers=bearer)).status_code == 200
+    status = (await server.client.get("/api/v1/ai", headers=bearer)).json()
+    choices = {"chat": {"profile": "local", "model": "chat-new"}}
+    body = {"revision": status["model_selection"]["revision"], "selections": choices}
+    denied = await server.client.put(
+        path, headers={**bearer, "Origin": "https://other.example"}, json=body
+    )
+    assert denied.status_code == 403 and denied.json()["code"] == "origin_mismatch"
+    updated = await server.client.put(path, headers=bearer, json=body)
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["model_selection"]["selections"] == choices
+    stale = await server.client.put(path, headers=bearer, json={**body, "selections": {}})
+    assert stale.status_code == 409 and stale.json()["code"] == "ai_selection_changed"
+    reloaded = (await server.client.get("/api/v1/ai", headers=bearer)).json()
+    assert reloaded["model_selection"] == updated.json()["model_selection"]
 
 
 async def test_stale_profile_removal_is_visible_and_fails_only_affected_binding(model_server):

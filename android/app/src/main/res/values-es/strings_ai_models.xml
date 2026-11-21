@@ -1,0 +1,15 @@
+<resources>
+    <string name="models_scope">Los modelos elegidos se aplican a este espacio. Al seleccionar un modelo también eliges su proveedor para esa función. Cada complemento puede elegir otro proveedor en sus ajustes.</string>
+    <string name="models_owner">Solo el propietario de un espacio puede cambiar los modelos.</string>
+    <string name="models_default">Predeterminado del servidor (%1$s)</string>
+    <string name="models_off">Desactivado</string>
+    <string name="models_refresh">Actualizar modelos</string>
+    <string name="models_save">Guardar modelos</string>
+    <string name="models_saved">Modelos elegidos guardados.</string>
+    <string name="models_discard_reload">Descartar cambios y recargar</string>
+    <string name="models_provider_failed">No se pudieron cargar los modelos de %1$s. Las elecciones guardadas se conservan.</string>
+    <string name="models_unverified">función sin verificar</string>
+    <string name="models_unknown_network">Ubicación de red no disponible</string>
+    <string name="models_stale">La selección de modelos ha cambiado. Vuelve a cargarla antes de guardar.</string>
+    <string name="models_embedding_rebuild">Cambiar el modelo de embeddings reconstruye el índice de búsqueda.</string>
+</resources>

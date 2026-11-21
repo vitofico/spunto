@@ -8,8 +8,16 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.Job
 import kotlinx.serialization.json.*
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -62,10 +70,9 @@ import io.theficos.spunto.core.design.SpuntoSpacing
  }
 }
 
-@Composable internal fun AskQuestionInput(question:String,enabled:Boolean,online:Boolean,asking:Boolean,onQuestion:(String)->Unit,onAsk:()->Unit,followup:Boolean=false,noteActions:Boolean=false,compact:Boolean=false,limit:Int=500,canSend:Boolean=true) {
+@Composable internal fun AskQuestionInput(question:String,enabled:Boolean,online:Boolean,asking:Boolean,onQuestion:(String)->Unit,onAsk:()->Unit,followup:Boolean=false,noteActions:Boolean=false,compact:Boolean=false,limit:Int=500,canSend:Boolean=true,focus:FocusRequester=remember {FocusRequester()}) {
  val context=LocalContext.current
  val questionLength=question.codePointCount(0,question.length)
- val focus=remember {FocusRequester()}
  val keyboard=LocalSoftwareKeyboardController.current
  Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
   if(!compact) Text(context.getString(if(noteActions && followup) R.string.core_ask_continue else if(noteActions) R.string.core_ask_notes else if(followup) R.string.core_ask_followup else R.string.core_find_answer),style=MaterialTheme.typography.headlineSmall)
@@ -82,7 +89,44 @@ import io.theficos.spunto.core.design.SpuntoSpacing
     }
    }
   }
-  OutlinedTextField(question,onQuestion,Modifier.fillMaxWidth().focusRequester(focus).semantics {contentDescription=context.getString(if(noteActions) R.string.core_ask_message_notes else R.string.core_question_notes)},label={Text(context.getString(if(noteActions) R.string.core_ask_message else R.string.core_your_question))},placeholder={Text(context.getString(if(noteActions && followup) R.string.core_ask_followup_placeholder else if(noteActions) R.string.core_ask_message_placeholder else R.string.core_question_example))},minLines=if(compact) 1 else 3,maxLines=if(compact) 4 else 6,enabled=enabled && !asking,isError=questionLength>limit,supportingText={if(questionLength>limit-50) Text(context.getString(if(limit==500) R.string.core_question_characters else R.string.core_ask_message_characters,questionLength))})
-  Button(onClick=onAsk,enabled=enabled && online && !asking && canSend && question.isNotBlank() && questionLength<=limit,modifier=Modifier.fillMaxWidth()) {Text(if(asking) context.getString(if(noteActions) R.string.core_ask_action_pending else R.string.core_reading_notes) else context.getString(if(noteActions || compact) R.string.core_ask_send_message else if(followup) R.string.core_ask_send else R.string.core_ask_notes))}
+  val fieldDescription=context.getString(if(noteActions) R.string.core_ask_message_notes else R.string.core_question_notes)
+  val placeholder=context.getString(if(noteActions && followup) R.string.core_ask_followup_placeholder else if(noteActions) R.string.core_ask_message_placeholder else R.string.core_question_example)
+  val sendEnabled=enabled && online && !asking && canSend && question.isNotBlank() && questionLength<=limit
+  val sendLabel=context.getString(when {
+   asking -> if(noteActions) R.string.core_ask_action_pending else R.string.core_reading_notes
+   noteActions || compact -> R.string.core_ask_send_message
+   followup -> R.string.core_ask_send
+   else -> R.string.core_ask_notes
+  })
+  if(compact) {
+   val colors=MaterialTheme.colorScheme
+   var focused by remember {mutableStateOf(false)}
+   val counter=context.getString(if(limit==500) R.string.core_question_characters else R.string.core_ask_message_characters,questionLength)
+   Surface(shape=RoundedCornerShape(24.dp),color=colors.surfaceContainerLow,
+    border=BorderStroke(if(focused) 2.dp else 1.dp,when {questionLength>limit -> colors.error;focused -> colors.primary;else -> colors.outlineVariant})) {
+    Row(Modifier.fillMaxWidth().padding(start=16.dp,end=6.dp,top=4.dp,bottom=4.dp),verticalAlignment=Alignment.Bottom) {
+     BasicTextField(value=question,onValueChange=onQuestion,enabled=enabled && !asking,maxLines=4,
+      textStyle=MaterialTheme.typography.bodyLarge.copy(color=colors.onSurface),
+      cursorBrush=SolidColor(colors.primary),
+      modifier=Modifier.weight(1f).align(Alignment.CenterVertically).focusRequester(focus)
+       .onFocusChanged {focused=it.isFocused}.semantics {contentDescription=fieldDescription;if(questionLength>limit) error(counter)}.padding(vertical=8.dp),
+      decorationBox={inner ->
+       Box {
+        if(question.isEmpty()) Text(placeholder,style=MaterialTheme.typography.bodyLarge,color=colors.onSurfaceVariant,maxLines=2)
+        inner()
+       }
+      })
+     Button(onClick=onAsk,enabled=sendEnabled,contentPadding=PaddingValues(horizontal=16.dp)) {Text(context.getString(R.string.core_ask_send_message))}
+    }
+   }
+   if(questionLength>limit-50) Text(counter,
+    style=MaterialTheme.typography.labelSmall,color=if(questionLength>limit) colors.error else colors.onSurfaceVariant)
+  } else {
+   OutlinedTextField(question,onQuestion,Modifier.fillMaxWidth().focusRequester(focus).semantics {contentDescription=fieldDescription},
+    label={Text(context.getString(if(noteActions) R.string.core_ask_message else R.string.core_your_question))},placeholder={Text(placeholder)},
+    minLines=3,maxLines=6,enabled=enabled && !asking,isError=questionLength>limit,
+    supportingText={if(questionLength>limit-50) Text(context.getString(if(limit==500) R.string.core_question_characters else R.string.core_ask_message_characters,questionLength))})
+   Button(onClick=onAsk,enabled=sendEnabled,modifier=Modifier.fillMaxWidth()) {Text(sendLabel)}
+  }
  }
 }

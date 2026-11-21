@@ -1,0 +1,15 @@
+<resources>
+    <string name="models_scope">Die Modellauswahl gilt für diesen Bereich. Mit einem Modell wählst du auch dessen Anbieter für diese Fähigkeit. Jede Erweiterung kann in ihren Einstellungen einen anderen Anbieter wählen.</string>
+    <string name="models_owner">Nur ein Bereichseigentümer kann Modelle ändern.</string>
+    <string name="models_default">Serverstandard (%1$s)</string>
+    <string name="models_off">Aus</string>
+    <string name="models_refresh">Modelle aktualisieren</string>
+    <string name="models_save">Modelle speichern</string>
+    <string name="models_saved">Modellauswahl gespeichert.</string>
+    <string name="models_discard_reload">Änderungen verwerfen und neu laden</string>
+    <string name="models_provider_failed">Modelle von %1$s konnten nicht geladen werden. Die gespeicherte Auswahl bleibt erhalten.</string>
+    <string name="models_unverified">Fähigkeit nicht überprüft</string>
+    <string name="models_unknown_network">Netzwerklokalität nicht verfügbar</string>
+    <string name="models_stale">Die Modellauswahl hat sich geändert. Lade sie vor dem Speichern erneut.</string>
+    <string name="models_embedding_rebuild">Ein Wechsel des Embedding-Modells baut den Suchindex neu auf.</string>
+</resources>

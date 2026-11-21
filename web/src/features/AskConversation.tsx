@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Icon } from "../components/core/Icon";
 import { Link } from "wouter";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/errors";
@@ -33,12 +34,14 @@ export default function AskConversation({
   question = "",
   onDismiss,
   page = false,
+  backLink,
   collectionId,
 }: {
   value: unknown;
   question?: string;
   onDismiss?: () => void;
   page?: boolean;
+  backLink?: ReactNode;
   collectionId?: string;
 }) {
   useLanguage();
@@ -144,7 +147,12 @@ export default function AskConversation({
     else latest.current?.scrollIntoView({ block: "start" });
   }, [page, pending, turns]);
   if (collectionId && !modern)
-    return <p role="status">{t("ask.collection_unavailable")}</p>;
+    return (
+      <div>
+        {backLink}
+        <p role="status">{t("ask.collection_unavailable")}</p>
+      </div>
+    );
   async function submit(question: string) {
     if (
       !enabled ||
@@ -233,7 +241,8 @@ export default function AskConversation({
       if (alive.current && attempt === revision.current) setPending(null);
     }
   }
-  const starters = turns.length === 0 && !pending && (
+  const empty = turns.length === 0 && !pending;
+  const starters = empty && (
     <div className={chatStyles.starters} aria-label={t("ask.try_message")}>
       <p className="muted">{t("ask.try_message")}</p>
       {(["ask", ...(canWrite ? ["create", "edit"] : [])] as const).map(
@@ -249,6 +258,11 @@ export default function AskConversation({
               input.current?.focus();
             }}
           >
+            <Icon
+              name={
+                kind === "ask" ? "search" : kind === "create" ? "add" : "edit"
+              }
+            />
             <strong>{t(`ask.starter_${kind}`)}</strong>
             <span>{t(`ask.example_${kind}`)}</span>
           </button>
@@ -257,6 +271,24 @@ export default function AskConversation({
     </div>
   );
   const Heading = page ? "h1" : "h2";
+  const introduction = (
+    <>
+      <Heading>{t("plugin.ask.name")}</Heading>
+      {(!page || empty) && (
+        <p>
+          {t(
+            collectionId
+              ? "ask.collection_intro"
+              : modern
+                ? "ask.discussion_intro"
+                : canWrite
+                  ? "ask.intro"
+                  : "ask.intro_readonly",
+          )}
+        </p>
+      )}
+    </>
+  );
   const destination = catalog.data?.plugins.find((item) => item.id === "ask")
     ?.ai_destinations?.chat;
   const externalHost =
@@ -272,48 +304,46 @@ export default function AskConversation({
       aria-label={t("ask.conversation")}
     >
       <header className={chatStyles.header}>
-        <div>
-          <Heading>{t("plugin.ask.name")}</Heading>
-          {(!page || (turns.length === 0 && !pending)) && (
-            <p className="muted">
-              {t(
-                collectionId
-                  ? "ask.collection_intro"
-                  : modern
-                    ? "ask.discussion_intro"
-                    : canWrite
-                      ? "ask.intro"
-                      : "ask.intro_readonly",
-              )}
-            </p>
-          )}
-        </div>
+        {page ? backLink : <div>{introduction}</div>}
         <button
           onClick={() => {
             discard(failure?.stale === true);
             requestAnimationFrame(() => input.current?.focus());
           }}
         >
-          {t("ask.new_conversation")}
+          <Icon name="add" /> {t("ask.new_conversation")}
         </button>
       </header>
       <div className={page ? chatStyles.transcript : undefined} ref={scroll}>
+        {page && (
+          <div className={empty ? chatStyles.welcome : chatStyles.threadTitle}>
+            <span className={chatStyles.mark}>
+              <Icon name="ask" />
+            </span>
+            <div>{introduction}</div>
+          </div>
+        )}
+        {page && starters}
         {page ? (
-          <details className={chatStyles.temporary}>
-            <summary>{t("ask.temporary_title")}</summary>
-            <p>{t("ask.temporary")}</p>
-          </details>
+          <div className={chatStyles.conversationInfo}>
+            <details className={chatStyles.temporary}>
+              <summary>{t("ask.temporary_title")}</summary>
+              <p>{t("ask.temporary")}</p>
+            </details>
+            {modern &&
+              workspaceRole === "owner" &&
+              empty &&
+              !draft &&
+              !failure && (
+                <Link href="/settings/ai">
+                  <Icon name="tune" />
+                  {t("ask.model_settings")}
+                </Link>
+              )}
+          </div>
         ) : (
           <p className={chatStyles.temporary}>{t("ask.temporary")}</p>
         )}
-        {page && externalHost && (
-          <p className={chatStyles.temporary}>
-            {t("ask.external_provider", {
-              host: externalHost,
-            })}
-          </p>
-        )}
-        {page && starters}
         <div role="log" aria-live="polite" aria-busy={pending !== null}>
           {turns.map((turn) => (
             <article
@@ -412,6 +442,13 @@ export default function AskConversation({
             void submit(draft.trim());
         }}
       >
+        {page && externalHost && (
+          <p className={chatStyles.provider}>
+            {t("ask.external_provider", {
+              host: externalHost,
+            })}
+          </p>
+        )}
         <label>
           <span className={page ? "sr-only" : undefined}>
             {t("ask.message")}
@@ -438,7 +475,8 @@ export default function AskConversation({
         <div className={chatStyles.composerActions}>
           {modern && !!models.data?.models?.length && (
             <label className={chatStyles.model}>
-              {t("ask.chat_model")}
+              <Icon name="tune" />
+              <span className="sr-only">{t("ask.chat_model")}</span>
               <select
                 className="field"
                 value={chatModel}
@@ -457,7 +495,7 @@ export default function AskConversation({
                 }}
               >
                 <option value="">
-                  {t("aisettings.server_default_choice", {
+                  {t("ask.default_model", {
                     model: models.data.default_model,
                   })}
                 </option>
@@ -495,7 +533,7 @@ export default function AskConversation({
               !online
             }
           >
-            {t("ask.send")}
+            <Icon name="send" /> <span>{t("ask.send")}</span>
           </button>
         </div>
       </form>

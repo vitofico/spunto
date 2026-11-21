@@ -2,6 +2,8 @@
   "nativeName": "Español",
   "direction": "ltr",
   "messages": {
+    "ask.model_settings": "Ajustes de modelos",
+    "ask.default_model": "Predeterminado ({model})",
     "ask.chat_model": "Modelo de chat",
     "notifications.title": "Notificaciones",
     "notifications.unread": "Notificaciones ({count} sin leer)",

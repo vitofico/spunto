@@ -7,7 +7,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from spunto.ai.errors import AIError
-from spunto.ai.models import inventory
+from spunto.ai.models import inventory, latest_router_releases
 from spunto.ai.profiles import CAPABILITIES
 
 KEY = "ai_model_selection"
@@ -112,7 +112,7 @@ class Selection:
                 models = await inventory(
                     self.environment.ai_profiles[name], transport=self.gateway.transport
                 )
-                return {"profile": name, "models": models, "error": None}
+                return {"profile": name, "models": latest_router_releases(models), "error": None}
             except AIError:
                 return {"profile": name, "models": [], "error": "ai_inventory_unavailable"}
 
@@ -161,7 +161,7 @@ class Selection:
         )
         choices = {
             row["id"]: row["leaves_network"]
-            for row in rows
+            for row in latest_router_releases(rows)
             if (row["capabilities"] is None or "chat" in row["capabilities"])
             and (external or not row["leaves_network"])
         }

@@ -20,6 +20,8 @@ ORIGIN = {"Origin": PUBLIC_URL}
 CAPS = {
     "chat:cloud": ["completion"],
     "chat-new": ["completion"],
+    "gpt-6.1-sol": ["completion"],
+    "gpt-6.2-sol": ["completion"],
     "embeddinggemma:latest": ["embedding"],
     "embeddinggemma-2:270m": ["embedding"],
     "nomic-embed-text:latest": ["embedding"],
@@ -128,6 +130,7 @@ async def test_inventory_capabilities_locality_and_no_provider_details(model_ser
     assert rows["image-generator"]["capabilities"] == ["chat", "vision"]
     assert rows["unknown"]["capabilities"] is None
     assert rows["chat:cloud"]["leaves_network"]
+    assert {"gpt-6.1-sol", "gpt-6.2-sol"} <= rows.keys()
     assert all(
         str(url).startswith("http://provider.synthetic.test/") for url, _, _ in provider.requests
     )
@@ -172,6 +175,16 @@ async def test_router_catalog_capabilities_grouping_and_save_validation(model_se
         ("low", {"chat": "managed", "messages": "raw"}, "cloud"),
         ("audio", {"transcriptions": "raw"}, "local"),
         ("responses-only", {"responses": "raw"}, "cloud"),
+        ("gpt-6-astra", {"chat": "managed"}, "cloud"),
+        ("gpt-6.2-astra", {"chat": "managed"}, "cloud"),
+        ("gpt-6-sol", {"chat": "managed"}, "local"),
+        ("gpt-6.1-sol", {"chat": "managed"}, "cloud"),
+        ("gpt-6.2-sol", {"chat": "managed"}, "cloud"),
+        ("gpt-6.10-sol", {"chat": "managed"}, "cloud"),
+        ("gpt-6.1-terra", {"chat": "managed"}, "cloud"),
+        ("gpt-7-sol", {"responses": "raw"}, "cloud"),
+        ("claude-sonnet-5-2", {"chat": "managed", "messages": "raw"}, "cloud"),
+        ("claude-sonnet-5-5", {"chat": "managed", "messages": "raw"}, "cloud"),
     ]
 
     def router(request):
@@ -219,6 +232,17 @@ async def test_router_catalog_capabilities_grouping_and_save_validation(model_se
         assert models["primary"]["high"]["leaves_network"] is True
         assert models["primary"]["audio"]["capabilities"] == ["transcribe"]
         assert models["primary"]["responses-only"]["capabilities"] == []
+        current = {"gpt-6.2-astra", "gpt-6.10-sol", "gpt-6.1-terra", "claude-sonnet-5-5"}
+        old = {"gpt-6-astra", "gpt-6.1-sol", "gpt-6.2-sol", "claude-sonnet-5-2"}
+        assert current <= models["primary"].keys()
+        assert old.isdisjoint(models["primary"])
+        ask = await gateway.selection.ask_models(primary.with_model("chat", "gpt-6.1-sol"))
+        assert ask["external"]  # The configured default still has its original disclosure.
+        assert current <= set(ask["external_models"])
+        assert old.isdisjoint(ask["models"])
+        assert "gpt-7-sol" not in ask["models"]
+        local = await gateway.selection.ask_models(primary.with_model("chat", "gpt-6-sol"))
+        assert local["models"] == ["gpt-6-sol"]
         group = models["primary"]["low"]["route_group"]
         assert group == models["alias"]["low"]["route_group"]
         assert all(group != models[name]["low"]["route_group"] for name in ("public", "other_key"))

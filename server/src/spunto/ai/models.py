@@ -15,6 +15,31 @@ MAX_MODELS = 128
 MAX_BYTES = 1_048_576
 
 
+def latest_router_releases(rows):
+    """Keep the latest numbered chat release of each Svincolo model line."""
+    families = {}
+    for row in rows:
+        # Aliases are operator choices and can point to deliberately pinned releases.
+        if row.get("upstream_model") or "chat" not in (row["capabilities"] or []):
+            continue
+        provider = row.get("router_provider")
+        if provider == "openai":
+            match = re.fullmatch(r"gpt-(?P<version>\d+(?:\.\d+)*)-(?P<line>[a-z]+)", row["id"])
+        elif provider == "anthropic":
+            match = re.fullmatch(r"claude-(?P<line>[a-z]+)-(?P<version>\d+(?:[.-]\d+)*)", row["id"])
+        else:
+            continue
+        if match:
+            key = provider, match["line"], row["leaves_network"]
+            version = tuple(map(int, re.split(r"[.-]", match["version"])))
+            families.setdefault(key, {})[row["id"]] = version
+    older = set()
+    for versions in families.values():
+        latest = max(versions.values())
+        older.update(name for name, version in versions.items() if version < latest)
+    return [row for row in rows if row["id"] not in older]
+
+
 def router_model(profile, row, name):
     surfaces = row.get("surfaces")
     revision = row.get("route_revision")

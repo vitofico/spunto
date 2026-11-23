@@ -13,7 +13,11 @@ import {
 import type { Args, Json, Schema } from "../lib/types";
 import { askItems } from "./askConversationData";
 import CommandResult from "./CommandResult";
-import { DecisionCapture, DecisionCommand } from "./DecisionJournal";
+import {
+  DecisionCapture,
+  DecisionCommand,
+  DecisionRationale,
+} from "./DecisionJournal";
 import { NoteReference } from "./Vocabulary";
 import { decisionsPath, decisionStatus } from "./decisionJournalData";
 import { Dialog } from "./Dialog";
@@ -462,6 +466,7 @@ export default function DecisionManager({ noteId }: { noteId?: string }) {
               <article>
                 <p className={styles.facts}>{decisionStatus(summary)}</p>
                 <NoteBody note={original.data} preview />
+                <DecisionRationale note={original.data} />
                 <div className={styles.row}>
                   {upgraded && assist ? (
                     <button

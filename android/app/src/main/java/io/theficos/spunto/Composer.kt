@@ -41,6 +41,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.theficos.spunto.core.design.*
+import io.theficos.spunto.core.model.DecisionJournal
 import io.theficos.spunto.core.model.LabelCount
 import io.theficos.spunto.core.plugins.*
 import kotlinx.serialization.json.*
@@ -99,6 +100,12 @@ import kotlinx.coroutines.flow.flowOf
  LaunchedEffect(deviceSettings.language) { language=deviceSettings.language }
  val manifest=model.manifest.collectAsState().value
  val catalog=model.catalog.collectAsState().value
+ val workspaceOwner by model.workspaceIsOwner.collectAsState()
+ val plainCapture=id=="capture" && onPlainCaptureSaved!=null
+ val decisionAvailable=plainCapture && workspaceOwner && supportsDecisionCapture(manifest)
+ var decision by remember(id,draftId) {mutableStateOf<DecisionJournal?>(null)}
+ var captureGeneration by remember(id,draftId) {mutableIntStateOf(0)}
+ val decisionValid=decision?.let {decisionAvailable && validDecisionDate(it.reviewOn)} ?: true
  val voiceFacts=remember(manifest,catalog) {recordingPluginFacts(manifest.toString(),catalog.toString())}
  SideEffect {voice.policy(voiceFacts)}
  LaunchedEffect(Unit) {model.container.recordingRecovery.await()}
@@ -159,6 +166,7 @@ import kotlinx.coroutines.flow.flowOf
   // Room's observed note can lag a completed restore. Open from one saved snapshot,
   // keeping an unsent draft ahead of the saved body without replacing active typing.
   val (draft,current)=model.repository.openEditor(lease)
+  if(plainCapture) decision=lease.decisionJournal
   val body=draft ?: ((current ?: initial)+if(startNewParagraph && current!=null) "\n\n" else "")
   // The caret opens where the reader tapped (A5) unless a draft changed the text; otherwise at the end.
   value=TextFieldValue(body,TextRange(caret?.takeIf { body==(current ?: initial) }?.coerceIn(0,body.length) ?: body.length))
@@ -188,7 +196,7 @@ import kotlinx.coroutines.flow.flowOf
   model.message.value=if(error is LocalOperationException) localOperationMessage(context.resources,error) else if(error is IllegalArgumentException) error.message.orEmpty() else context.getString(R.string.core_save_failed)
   false
  }
- LaunchedEffect(value.text,ready,saving) {
+ LaunchedEffect(value.text,decision,ready,saving) {
   if(!ready || saved) return@LaunchedEffect
   onTextChanged(value.text)
   if(saving) return@LaunchedEffect
@@ -327,7 +335,7 @@ import kotlinx.coroutines.flow.flowOf
   }
  }
  fun saveNow() {
-    if(startingVoice || saving || imageBusy || imageStore!=null && images==null) return
+    if(!decisionValid || startingVoice || saving || imageBusy || imageStore!=null && images==null) return
     val tappedRevision=ownerRevision
     val tappedWrite=model.repository.editorWrite(lease,value.text)
     retaining=recordingActive(voice.state.value.phase) || voice.state.value.recording!=null || pendingRecording!=null
@@ -349,8 +357,8 @@ import kotlinx.coroutines.flow.flowOf
       val acknowledged=ownerRevision==tappedRevision
       if(id=="capture") {
        lease=model.repository.beginEditor(null,draftId)
-       if(acknowledged) {saved=true;value=TextFieldValue("");dictatedText=false}
-       else {saved=false;model.repository.persistEditor(model.repository.editorWrite(lease,value.text))}
+       if(acknowledged) {saved=true;value=TextFieldValue("");dictatedText=false;decision=null;captureGeneration++}
+       else {saved=false;lease.decisionJournal=decision;model.repository.persistEditor(model.repository.editorWrite(lease,value.text))}
       } else {saved=true}
       onRecordingSaved(noteId)
      } else {
@@ -363,7 +371,10 @@ import kotlinx.coroutines.flow.flowOf
         model.repository.capture(model.repository.editorWrite(lease,body),if(dictated) "dictation" else null)
        } else {onSave(body);null}
        if(id=="capture" && captured==null) model.container.scope.launch { runCatching { model.repository.clearDraft(draftId,body) } }
-       if(value.text==body) { saved=true;value=TextFieldValue("");dictatedText=false }
+       if(value.text==body) {
+        saved=true;value=TextFieldValue("");dictatedText=false
+        if(plainCapture) {decision=null;lease.decisionJournal=null;captureGeneration++}
+       }
        if(autoFocus) focus.requestFocus()
        captured?.let {onPlainCaptureSaved?.invoke(it)}
       }
@@ -373,7 +384,7 @@ import kotlinx.coroutines.flow.flowOf
     finally { saving=false;retaining=false }
    }
  }
- val canSave=canWrite && ready && !closing && !saving && !imageBusy && (imageStore==null || images!=null) && (value.text.isNotBlank() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty)
+ val canSave=decisionValid && canWrite && ready && !closing && !saving && !imageBusy && (imageStore==null || images!=null) && (value.text.isNotBlank() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || canSaveEmpty)
  val switchLanguage:()->Unit={scope.launch {
   val restart=listening || dictation.phase==DictationPhase.NeedsLanguage;session.stopAndKeep()
   language=when(language) {"it-IT" -> "en-US";"en-US" -> if(autoAvailable) "auto" else "it-IT";else -> "it-IT"};device.update(language=language)
@@ -390,6 +401,11 @@ import kotlinx.coroutines.flow.flowOf
      }
      if(compact && showSaveAction && (!focused || value.text.count {it=='\n'}<3)) Button(onClick={saveNow()},enabled=canSave && !startingVoice,modifier=Modifier.heightIn(min=48.dp),shape=androidx.compose.foundation.shape.RoundedCornerShape(10.dp),contentPadding=PaddingValues(horizontal=16.dp,vertical=10.dp),colors=ButtonDefaults.buttonColors(disabledContainerColor=MaterialTheme.colorScheme.primary.copy(alpha=.8f),disabledContentColor=MaterialTheme.colorScheme.onPrimary)) {
       Text(context.getString(if(saving) R.string.sys_saving else R.string.sys_save),style=SpuntoType.readingSmall.copy(fontSize=15.sp))
+     }
+    }
+    if(plainCapture && (decisionAvailable || decision!=null)) key(captureGeneration) {
+     DecisionCaptureFields(decision,decisionAvailable,ready && canWrite && !saving && !closing) { changed ->
+      saved=false;ownerRevision++;lease.decisionJournal=changed;decision=changed
      }
     }
     fun openSettings() {context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:${context.packageName}")))}

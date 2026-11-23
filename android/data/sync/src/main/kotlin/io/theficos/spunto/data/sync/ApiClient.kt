@@ -127,6 +127,7 @@ fun wireOperation(op:OutboxOperation):JsonObject = buildJsonObject {
  put("op_id",op.opId); put("type",op.type); op.noteId?.let { put("note_id",it) };op.body?.let { put("body",it) };op.baseVersion?.let { put("base_version",it) };op.createdAt?.let { put("created_at",it) };op.at?.let { put("at",it) }
  op.pinnedAt?.let { put("pinned_at",it) };op.archivedAt?.let { put("archived_at",it) };op.trashedAt?.let { put("trashed_at",it) };op.privateAt?.let { put("private_at",it) };
  op.pinned?.let { put("pinned",it) };op.archived?.let { put("archived",it) };op.trashed?.let { put("trashed",it) };op.privateNote?.let { put("private",it) };op.suggestionId?.let { put("suggestion_id",it) };op.decision?.let { put("decision",it) }
+ op.decisionJournal?.let {put("decision_journal",Json.encodeToJsonElement(it))}
  op.reviewedVersion?.let {put("reviewed_version",it)}
  op.sourceKind?.let { kind -> put("source",buildJsonObject { put("kind",kind);op.sourceRef?.let { put("ref",it) };op.sourceUrl?.let { put("url",it) } }) }
 }

@@ -46,7 +46,7 @@ class LegacyImageMigrationEpochTest {
    old.insertOrThrow("sync_state",null,ContentValues().apply {put("id",1);put("epoch","old");put("cursor","old.2");put("pluginsRev",0);put("manifest","{\"plugins\":[]}");put("catalog","{\"plugins\":[]}");put("serverUrl",root)})
    old.version=4
   }
-  return Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).build() to rows
+  return Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8).build() to rows
  }
  @Test fun realFourToFiveMigrationThenEpochRestoresOnlyLinkedSameRootImageAndKeepsConcurrentWordsFlags()=runBlocking {
   val context=ApplicationProvider.getApplicationContext<Context>();val server=MockWebServer();server.start()

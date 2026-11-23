@@ -988,7 +988,7 @@ class NewFeatureWorkflowTest {
         }
     }
 
-    @Test fun applicationShowsDecisionCaptureOnlyWhenUsableAndKeepsAnOpenFormOffline() {
+    @Test fun applicationSavesAnOfflineComposerDecisionAndReviewsTheSyncedNote() {
         runBlocking { api.post("/api/v1/plugins/decision-journal/disable", empty) }
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as SpuntoApplication
         val prefix = "native-decision-$suffix-"
@@ -1006,26 +1006,30 @@ class NewFeatureWorkflowTest {
             updateManifest()
             compose.setContent { if (mounted.value) SpuntoApp(model) }
             compose.waitUntil(15_000) { model.online.value }
-            compose.onNodeWithText("Record decision").assertDoesNotExist()
+            compose.onNodeWithText("Decision").assertDoesNotExist()
 
             enable(DecisionJournalId)
             updateManifest()
-            compose.onNode(hasScrollAction()).performScrollToNode(hasText("Record decision") and hasClickAction())
-            compose.onNodeWithText("Record decision").assertIsDisplayed().performClick()
-            compose.waitUntil(15_000) { compose.onAllNodesWithText("What did you decide?").fetchSemanticsNodes().isNotEmpty() }
             val decision = "Keep the synthetic launch reversible $suffix."
-            fill("What did you decide?", decision)
+            val body = compose.onNodeWithContentDescription("Note text")
+            body.performTextInput(decision)
+            androidx.test.espresso.Espresso.closeSoftKeyboard()
+            compose.onNodeWithText("Decision").performScrollTo().performClick()
             compose.runOnIdle { connected.value = false }
             compose.waitUntil(5_000) { !model.online.value }
-            compose.onNodeWithText("Save decision").assertIsNotEnabled()
-            compose.onNodeWithText(decision).assertExists()
+            fill("Why this choice? (optional)", "We can undo it.")
+            androidx.test.espresso.Espresso.closeSoftKeyboard()
+            body.assertTextContains(decision)
+            compose.onNodeWithText("Save").performScrollTo().performClick()
+            compose.waitUntil(10_000) { model.notes.value.any { it.body == decision } }
+            val saved = model.notes.value.single { it.body == decision }
             compose.runOnIdle { connected.value = true }
-            compose.waitUntil(10_000) { model.online.value }
-            compose.onNodeWithText("Save decision").performScrollTo().performClick()
-            compose.waitUntil(20_000) { compose.onAllNodesWithText("Open decision note").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Decision saved.").assertExists()
-            compose.onNodeWithText("Open decision note").performClick()
+            runBlocking { container.sync.sync() }
+            assertEquals(decision, note(saved.id).string("body"))
+            compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription(decision, substring = true))
+            compose.onNode(hasContentDescription(decision, substring = true) and hasClickAction()).performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("Review decision").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("We can undo it.").assertExists()
             compose.onNodeWithText("View outcomes").assertIsDisplayed()
             compose.runOnIdle { connected.value = false }
             compose.waitUntil(5_000) { !model.online.value }

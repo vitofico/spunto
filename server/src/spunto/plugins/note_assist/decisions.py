@@ -36,7 +36,7 @@ class OutcomeDraft(Output):
 
 
 def is_original(note):
-    return note["source"]["ref"] == "decision-journal" and any(
+    return any(
         item["plugin_id"] == "decision-journal" and item["kind"] == "member:journal"
         for item in note.get("annotations", [])
     )

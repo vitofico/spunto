@@ -230,6 +230,8 @@ export function useDraftEditor({
   return {
     ...snapshot,
     setBody: controller.setBody,
+    setDecision: controller.setDecision,
+    switchDraft: controller.switchDraft,
     save: controller.save,
     resumeReviewed: controller.resumeReviewed,
     discard: controller.discard,

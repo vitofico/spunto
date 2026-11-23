@@ -89,7 +89,7 @@ class RecordingRepository(private val notes:NotesRepository,directory:File) {
    val target=noteId?:before.noteId
    if(target!=null) {val current=dao.get(target);requireLocal(current!=null && dao.tombstone(target)==null && !current.trashed,LocalOperationProblem.NoteUnavailable) {"This note is no longer available."};requireLocal(targetBefore!=null && current.body==targetBefore.body && current.serverRev==targetBefore.serverRev,LocalOperationProblem.NoteChangedWhileSaving) {"The note changed while the recording was being saved."};if(before.noteId==target && before.baseBodyHash!=null) requireLocal(current.note().bodyHash==before.baseBodyHash || current.body==body || editorWrite?.lease?.committedBody==current.body,LocalOperationProblem.NoteChangedDuringRecording) {"The note changed during recording. Keep the current text before attaching the clip."}}
    val marker="[recording:$id]";val text=if(marker in body) body else if(body.isEmpty()) marker else body+"\n\n"+marker
-   val saved=notes.save(text,target,sourceKind=sourceKind,sourceRef=if(target==null && sourceKind=="android" && before.capturedText) "dictation" else null)
+   val saved=notes.save(text,target,sourceKind=sourceKind,sourceRef=if(target==null && sourceKind=="android" && before.capturedText) "dictation" else null,decisionJournal=editorWrite?.decisionJournal)
    if(target==null && privateNote) notes.setFlags(saved,privateNote=true)
    val enabled=recordingPluginFacts(dao.state()).captureAllowed
    dao.putAttachment(AttachmentEntity(id,saved,file.absolutePath,"audio/ogg",kind="recording",durationMs=metadata.durationMs,byteSize=metadata.byteSize,sha256=metadata.sha256,serverUrl=before.serverUrl.ifEmpty {root},marker=marker,status=if(enabled) "queued" else "paused"))

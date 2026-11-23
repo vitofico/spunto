@@ -1,5 +1,6 @@
 import type { components } from "./api-types";
 import type { Theme } from "./theme-catalog";
+export type DecisionFields = components["schemas"]["DecisionJournalCapture"];
 export type Note = Omit<
   components["schemas"]["Note"],
   "suggestions" | "annotations"

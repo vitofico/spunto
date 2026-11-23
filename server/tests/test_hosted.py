@@ -247,6 +247,25 @@ async def test_hosted_decision_journal_owner_privacy_and_purge_replay(hosted):
         "private": True,
         "request_id": str(uuid.uuid7()),
     }
+    capture = {
+        "body": "A synthetic capture with #labels",
+        "source": {"kind": "web"},
+        "decision_journal": {"review_on": "2027-01-18", "rationale": "Easy to review."},
+    }
+    recorded = await client.post("/api/v1/notes", headers=owner, json=capture)
+    assert recorded.status_code == 201, recorded.text
+    captured_id = recorded.json()["id"]
+    assert recorded.json()["body"] == capture["body"]
+    assert (await journal_command("journal", {"manager": True}))["items"][0]["items"][0][
+        "id"
+    ] == captured_id
+    for member in (bob, carol):
+        blocked = await client.post("/api/v1/notes", headers=headers(member, space), json=capture)
+        assert blocked.status_code == 403, blocked.text
+        isolated = await client.get(f"/api/v1/notes/{captured_id}", headers=headers(member))
+        assert isolated.status_code == 404
+    await purge_note(captured_id)
+
     [note_id] = (await journal_command("record-decision", decision))["ids"]
     outcome = {
         "note_id": note_id,

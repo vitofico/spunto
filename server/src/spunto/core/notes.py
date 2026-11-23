@@ -504,6 +504,7 @@ class Notes:
         conflict_of: str | None = None,
         allow_empty: bool = False,
         machine: bool = False,
+        decision_journal=None,
     ) -> dict:
         _body(body, allow_empty=allow_empty or conflict_of is not None)
         now = now_ms()
@@ -547,6 +548,10 @@ class Notes:
         )
         await self._index(conn, row)
         await self._revision(conn, row, "create", coalesce=False)
+        if decision_journal is not None:
+            from spunto.core.decision_capture import register_capture
+
+            await register_capture(conn, row, decision_journal, self)
         if agent:
             from spunto.core.agent_review import remember_creation
 
@@ -565,6 +570,8 @@ class Notes:
         private: bool = False,
         op_id: str | None = None,
         dedupe: bool = False,
+        *,
+        decision_journal=None,
     ) -> dict:
         self._write_allowed()
         _body(body)
@@ -595,7 +602,7 @@ class Notes:
                     result = json.loads(prior[0][0])
                     await self._row(conn, result["id"])
                     return result
-            if dedupe:
+            if dedupe and decision_journal is None:
                 duplicate = await conn.execute_fetchall(
                     (
                         "SELECT *,rowid AS fts_id FROM note WHERE created_by=? AND body_hash=? "
@@ -644,6 +651,7 @@ class Notes:
                     created_at if created_at is not None else now,
                     source or {},
                     private,
+                    decision_journal=decision_journal,
                 )
             if op_id:
                 await conn.execute(

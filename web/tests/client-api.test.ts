@@ -23,6 +23,13 @@ it("uses generated create contract, same-origin cookies and a stable idempotency
     private: false,
     source: { kind: "web" },
   });
+  await api.createNote("decided", key, {});
+  expect(await calls[1].json()).toEqual({
+    body: "decided",
+    private: false,
+    source: { kind: "web" },
+    decision_journal: {},
+  });
   vi.unstubAllGlobals();
 });
 it("sends the edited version and never puts note text in a URL", async () => {

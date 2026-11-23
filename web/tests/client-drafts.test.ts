@@ -138,6 +138,89 @@ describe("durable saves", () => {
     expect(recovered.getSnapshot().body).toBe("newer");
     expect(recovered.getSnapshot().dirty).toBe(true);
   });
+  it("restores decision fields with the typed draft and retries the same submitted decision after reload", async () => {
+    const store = memory();
+    const create = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(0, "unreachable"))
+      .mockResolvedValue(note("chosen"));
+    const restore = () =>
+      new DraftController(
+        store,
+        "draft",
+        { create, update: vi.fn() },
+        undefined,
+        () => key,
+      );
+    const draft = restore();
+    const fields = { rationale: "Fits #architecture", review_on: "2030-05-01" };
+    draft.setBody("chosen");
+    draft.setDecision(fields);
+    const reopened = restore();
+    reopened.setDecision(undefined);
+    const paused = restore();
+    expect(paused.getSnapshot().decision).toBeUndefined();
+    paused.setDecision({});
+    expect(paused.getSnapshot().decision).toEqual(fields);
+    reopened.setDecision({});
+    expect(reopened.getSnapshot()).toMatchObject({
+      body: "chosen",
+      decision: fields,
+    });
+    await reopened.save();
+    expect(reopened.getSnapshot().decision).toBeUndefined();
+    reopened.setBody("next");
+    const recovered = restore();
+    await recovered.saveAutomatically();
+    expect(create.mock.calls).toEqual([
+      ["chosen", key, fields],
+      ["chosen", key, fields],
+    ]);
+    expect(recovered.getSnapshot().body).toBe("next");
+    recovered.setDecision({});
+    recovered.setDecision(undefined);
+    await recovered.save();
+    expect(create).toHaveBeenLastCalledWith("next", key);
+  });
+  it("recovers a refused decision independently from the next draft typed while saving", async () => {
+    const pending = deferred<Note>();
+    const create = vi
+      .fn()
+      .mockImplementationOnce(() => pending.promise)
+      .mockResolvedValue(note("plain"));
+    const store = memory();
+    const restore = () =>
+      new DraftController(
+        store,
+        "draft",
+        { create, update: vi.fn() },
+        undefined,
+        () => key,
+      );
+    const draft = restore();
+    draft.setBody("first");
+    draft.setDecision({ rationale: "reason" });
+    const saving = draft.save();
+    draft.setBody("second");
+    pending.reject(new ApiError(403, "forbidden"));
+    await saving;
+    const recovered = restore();
+    expect(recovered.getSnapshot()).toMatchObject({
+      body: "first",
+      decision: { rationale: "reason" },
+      hasNextDraft: true,
+    });
+    recovered.switchDraft();
+    expect(recovered.getSnapshot().body).toBe("second");
+    expect(recovered.getSnapshot().decision).toBeUndefined();
+    await recovered.save();
+    expect(create).toHaveBeenLastCalledWith("second", key);
+    expect(recovered.getSnapshot()).toMatchObject({
+      body: "first",
+      decision: { rationale: "reason" },
+      hasNextDraft: false,
+    });
+  });
   it("preserves conflict copies and newer local text without another automatic mutation", async () => {
     const conflict = "00000000-0000-4000-8000-000000000002";
     const store = memory();

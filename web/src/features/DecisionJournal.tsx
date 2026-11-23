@@ -104,6 +104,24 @@ export function DecisionCapture({ plugin }: { plugin: Plugin | undefined }) {
   ) : null;
 }
 
+export function DecisionRationale({ note }: { note: Note }) {
+  if (!isOriginalDecision(note)) return null;
+  const panel = note.annotations.find(
+    (item) => item.plugin === journal && item.kind === "panel",
+  );
+  const text = askItems(panel?.payload)
+    .flatMap((item) =>
+      item.type === "text" && typeof item.text === "string" ? [item.text] : [],
+    )
+    .join("");
+  return text ? (
+    <div>
+      <strong>{t("decisions.rationale")}</strong>
+      <p className={styles.quote}>{text}</p>
+    </div>
+  ) : null;
+}
+
 export function DecisionNoteActions({
   note,
   editing,
@@ -147,6 +165,7 @@ export function DecisionNoteActions({
       aria-label={t("plugin.decision-journal.name")}
     >
       {status && <p className={styles.facts}>{status}</p>}
+      <DecisionRationale note={note} />
       <div className={styles.row}>
         {status && role === "owner" && (
           <>

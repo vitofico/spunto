@@ -1168,6 +1168,7 @@ export interface components {
             body: string;
             /** Created At */
             created_at?: string | null;
+            decision_journal?: components["schemas"]["DecisionJournalCapture"] | null;
             /** Id */
             id?: string | null;
             /**
@@ -1176,6 +1177,13 @@ export interface components {
              */
             private: boolean;
             source?: components["schemas"]["Source"] | null;
+        };
+        /** DecisionJournalCapture */
+        DecisionJournalCapture: {
+            /** Rationale */
+            rationale?: string;
+            /** Review On */
+            review_on?: string;
         };
         /** DeviceCredential */
         DeviceCredential: {

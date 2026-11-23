@@ -259,6 +259,40 @@ class SyncEngineTest {
   }}
   assertTrue(engine().sync() is SyncStatus.Complete);assertEquals("new.1",repo.dao.state()!!.cursor);assertEquals("survives restore",repo.dao.get(id)!!.body)
  }
+ @Test fun queuedDecisionRetriesSameCreateAfterEpochChangeWithCompactedBodyAndPrivacy()=runBlocking {
+  val journal=DecisionJournal(rationale="Synthetic rationale",reviewOn="2027-01-15")
+  val id=repo.save("First wording",decisionJournal=journal)
+  repo.update(id,"Edited choice #plan")
+  repo.setFlags(id,privateNote=true)
+  repo.dao.putState(SyncStateEntity(epoch="old",cursor="old.1"))
+  val original=repo.dao.outbox().single()
+  val received=mutableListOf<JsonObject>()
+  server.dispatcher=object:Dispatcher(){override fun dispatch(request:RecordedRequest):MockResponse=when(request.requestUrl!!.encodedPath){
+   "/api/v1/meta"->response("""{"sync_epoch":"new"}""")
+   "/api/v1/sync/reconcile"->response("""{"epoch":"new","restore_ids":["$id"]}""")
+   "/api/v1/sync/push"->{
+    val op=Json.parseToJsonElement(request.body.readUtf8()).jsonObject.getValue("ops").jsonArray.single().jsonObject
+    received+=op
+    if(received.size==1) response("{}",503)
+    else response("""{"epoch":"new","results":[{"op_id":${op["op_id"]},"status":"applied","version":1}]}""")
+   }
+   "/api/v1/sync/pull"->response("""{"epoch":"new","cursor":"new.1","has_more":false,"plugins_rev":0,"items":[]}""")
+   "/api/v1/plugins","/api/v1/plugins/manifest"->response("""{"plugins":[]}""")
+   else->response("{}",404)
+  }}
+  assertTrue(engine().sync() is SyncStatus.Waiting)
+  assertEquals(original.copy(sent=true),repo.dao.outbox().single())
+  assertEquals(SyncStatus.Complete(0),engine().sync())
+  assertEquals(2,received.size);assertEquals(received[0],received[1])
+  val create=received.first()
+  assertEquals("note.create",create.getValue("type").jsonPrimitive.content)
+  assertEquals(original.opId,create.getValue("op_id").jsonPrimitive.content)
+  assertEquals("Edited choice #plan",create.getValue("body").jsonPrimitive.content)
+  assertTrue(create.getValue("private").jsonPrimitive.boolean)
+  assertEquals(buildJsonObject {put("rationale",journal.rationale);put("review_on",journal.reviewOn)},create["decision_journal"])
+  assertEquals(1,repo.dao.all().size)
+ }
+
  @Test fun typingAndFlagsDuringRestoreRemainQueuedUntilTheirOwnAck()=runBlocking {
   val id=repo.create("snapshot");repo.dao.putState(SyncStateEntity(epoch="old",cursor="old.9"));val paused=CountDownLatch(1);val release=CountDownLatch(1)
   var serverBody="";var archived=false;var version=0
@@ -421,7 +455,7 @@ class SyncEngineTest {
   assertEquals(SyncStatus.Complete(0),engine().sync());assertEquals(SyncStatus.Complete(0),engine().sync())
   assertEquals(1,pushed.size);assertEquals(0,repo.pendingCount.first());assertEquals(mapOf(id to "not_found"),repo.refused.first())
   assertEquals("Phone words",repo.dao.get(id)!!.body)
-  val copy=repo.keepRefusedAsNewNote(id)
+  val copy=repo.keepRefusedAsNewNote(id,"Reason","Review date")
   assertEquals(emptyMap<String,String>(),repo.refused.first());assertEquals("Phone words",repo.dao.get(copy)!!.body);assertEquals(1,repo.pendingCount.first())
   assertEquals(SyncStatus.Complete(0),engine().sync())
   assertEquals("Newer server words",repo.dao.get(id)!!.body);assertFalse(repo.dao.get(id)!!.pending);assertFalse(repo.dao.get(copy)!!.pending);assertTrue(repo.dao.outbox().isEmpty())

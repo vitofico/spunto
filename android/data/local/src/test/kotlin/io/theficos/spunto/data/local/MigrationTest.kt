@@ -50,7 +50,7 @@ class MigrationTest {
     old.insertOrThrow("sync_state",null,ContentValues().apply {put("id",1);put("epoch","old");put("cursor","old.5");put("pluginsRev",2);put("manifest","{}");put("catalog","{}");if(hasBinding)put("serverUrl","https://previous.example")})
     old.version=version
    }
-   val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).allowMainThreadQueries().build()
+   val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8).allowMainThreadQueries().build()
    try {
     val dao=upgraded.dao();assertEquals(op.body,dao.get(id)!!.body);assertTrue(dao.get(id)!!.privateNote);assertFalse(dao.get(id)!!.updatedViaAgent);assertEquals(1,dao.get(id)!!.openTasks)
     assertEquals(payload,dao.outbox().single().payload);assertTrue(dao.outbox().single().sent);assertEquals("Draft words still waiting",dao.draft("capture").first()!!.body)
@@ -73,11 +73,11 @@ class MigrationTest {
    outbox=old.rawQuery("SELECT payload FROM outbox ORDER BY createdAt, rowid",null).use { cursor -> buildList {while(cursor.moveToNext())add(cursor.getString(0))} }
    count=old.rawQuery("SELECT COUNT(*) FROM notes",null).use {it.moveToFirst();it.getInt(0)}
   }
-  val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).allowMainThreadQueries().build()
+  val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8).allowMainThreadQueries().build()
   try {val db=upgraded.openHelper.writableDatabase
    assertEquals(count,upgraded.dao().all().size);assertEquals(outbox,upgraded.dao().outbox().map {it.payload})
    val retainedDrafts=db.query("SELECT id || ':' || body FROM drafts ORDER BY id").use {cursor->buildList{while(cursor.moveToNext())add(cursor.getString(0))}}
-   assertEquals(drafts,retainedDrafts);assertEquals(7,db.version)
+   assertEquals(drafts,retainedDrafts);assertEquals(8,db.version)
   } finally {upgraded.close();context.deleteDatabase(name)}
  }
 

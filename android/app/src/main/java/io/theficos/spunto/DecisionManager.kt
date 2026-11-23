@@ -27,10 +27,7 @@ internal fun DecisionManager(model: SpuntoViewModel, noteId: String?, onDetail: 
     val auth by model.auth.collectAsState()
     val epoch by model.pluginReplicaEpochState.collectAsState()
     val plugin = manifest.objects("plugins").firstOrNull { it.string("id") == DecisionJournalId }
-    val version = plugin?.string("version").orEmpty().split('.')
-    val major = version.firstOrNull()?.toIntOrNull() ?: 0
-    val minor = version.getOrNull(1)?.toIntOrNull() ?: 0
-    val upgraded = major > 1 || (major == 1 && minor >= 1)
+    val upgraded = decisionVersionAtLeast(plugin, 1)
     val route = DecisionViewRoute
     if (!online && noteId == null) {
         FilteredTimeline(model, route, onNote = onNote)
@@ -120,6 +117,8 @@ internal fun DecisionManager(model: SpuntoViewModel, noteId: String?, onDetail: 
                 Text(localizedJournalLabel(resources, statusText), style = MaterialTheme.typography.bodyMedium)
                 val body = current.body.takeUnless { it.startsWith("# ") } ?: current.body.substringAfter('\n', "").trimStart()
                 Markdown(body, onLink = { if (it.startsWith("/n/")) onNote(it.removePrefix("/n/")) })
+                val outputs by model.outputs.collectAsState()
+                DecisionRationale(noteId, outputs)
                 val reviewArgs = buildJsonObject { put("note_id", noteId) }
                 if (upgraded && assist) {
                     Button(onClick = { draft = true }) { Text(stringResource(R.string.decision_what_happened)) }

@@ -1,7 +1,20 @@
 import { getLanguage, t } from "../lib/i18n";
-import type { Args, Note, Schema } from "../lib/types";
+import { isBundledPlugin } from "../lib/localizePlugins";
+import type { Args, Note, Plugin, Schema } from "../lib/types";
 
 export const decisionsPath = "/v/decision-journal/journal";
+
+export function supportsDecisionCapture(plugin?: Plugin) {
+  if (!plugin || plugin.id !== "decision-journal" || !isBundledPlugin(plugin))
+    return false;
+  const [major, minor] = plugin.version.split(".").map(Number);
+  return (
+    (major > 1 || (major === 1 && minor >= 2)) &&
+    !!plugin.contributes?.commands?.some(
+      (command) => command.id === "record-decision",
+    )
+  );
+}
 
 export function isOriginalDecision(note: Note) {
   return note.annotations?.some(

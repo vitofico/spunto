@@ -3,13 +3,14 @@ package io.theficos.spunto.data.local
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import io.theficos.spunto.core.model.DecisionJournal
 import io.theficos.spunto.core.model.LocalOperationException
 import io.theficos.spunto.core.model.LocalOperationProblem
 import io.theficos.spunto.core.model.OutboxOperation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -28,7 +29,7 @@ class CaptureSaveTest {
  private lateinit var databaseName:String
  private val context get()=ApplicationProvider.getApplicationContext<android.content.Context>()
  private fun open() {
-  db=Room.databaseBuilder(context,SpuntoDatabase::class.java,databaseName).addMigrations(MIGRATION_6_7).allowMainThreadQueries().build()
+  db=Room.databaseBuilder(context,SpuntoDatabase::class.java,databaseName).addMigrations(MIGRATION_6_7,MIGRATION_7_8).allowMainThreadQueries().build()
   notes=NotesRepository(db)
   images=DraftImageStore(notes,directory)
  }
@@ -65,6 +66,71 @@ class CaptureSaveTest {
    assertEquals(pending,notes.dao.outbox().filter {it.noteId==id}.map {Json.decodeFromString<OutboxOperation>(it.payload)})
    assertTrue(attachments.all {File(it.localPath).isFile})
   }
+ }
+
+ @Test fun decisionDraftRestoresMetadataAndOnlyAcknowledgesTheSubmittedVersion()=runBlocking {
+  val body="# A choice\n\nKeep the exact #plan."
+  val original=DecisionJournal(rationale="a".repeat(279)+"🪴"+"b".repeat(35),reviewOn="2027-01-15")
+  val first=notes.beginEditor(null)
+  first.decisionJournal=original
+  notes.persistEditor(notes.editorWrite(first,body))
+  db.close();open()
+  val lease=notes.beginEditor(null)
+  assertEquals(body,notes.openEditor(lease).first)
+  assertEquals(original,lease.decisionJournal)
+  val submitted=notes.editorWrite(lease,body)
+
+  lease.decisionJournal=DecisionJournal(rationale="Later reason")
+  notes.persistEditor(notes.editorWrite(lease,body))
+  val id=notes.capture(submitted)
+  assertEquals(body,notes.dao.get(id)?.body)
+  val op=Json.decodeFromString<OutboxOperation>(notes.dao.outbox().single().payload)
+  assertEquals(original,op.decisionJournal)
+  assertNotNull(notes.dao.output("annotation","decision-journal/$id/member:journal"))
+  val panel=Json.parseToJsonElement(notes.dao.output("annotation","decision-journal/$id/panel")!!.payload)
+   .jsonObject.getValue("payload").jsonObject.getValue("items").jsonArray
+  assertEquals("journal",panel.first().jsonObject.getValue("id").jsonPrimitive.content)
+  assertEquals(listOf("a".repeat(279)+"🪴","b".repeat(35)),panel.drop(1).map {it.jsonObject.getValue("text").jsonPrimitive.content})
+  val reopened=notes.beginEditor(null)
+  notes.openEditor(reopened)
+  assertEquals(lease.decisionJournal,reopened.decisionJournal)
+
+  reopened.decisionJournal=null
+  notes.persistEditor(notes.editorWrite(reopened,body))
+  val plain=notes.capture(notes.editorWrite(reopened,body))
+  assertNull(Json.decodeFromString<OutboxOperation>(notes.dao.outbox().single {it.noteId==plain}.payload).decisionJournal)
+  assertNull(notes.dao.draftSnapshot("capture"))
+ }
+
+ @Test fun refusedDecisionRetriesWithSameMetadataAndPrivacy()=runBlocking {
+  val journal=DecisionJournal(reviewOn="2027-02-01")
+  val id=notes.save("A choice",decisionJournal=journal)
+  notes.setFlags(id,privateNote=true)
+  val original=notes.dao.outbox().single()
+  notes.dao.reject(original.opId,"plugin_unavailable")
+  notes.update(id,"Revised choice")
+  val retry=Json.decodeFromString<OutboxOperation>(notes.dao.outbox().single().payload)
+  assertEquals("note.create",retry.type)
+  assertEquals(journal,retry.decisionJournal);assertEquals(true,retry.privateNote)
+  assertEquals(id,retry.noteId);assertNull(retry.baseVersion);assertNotEquals(original.opId,retry.opId)
+ }
+
+ @Test fun retainingRefusedDecisionAsOrdinaryNoteKeepsItsFieldsPrivacyAndAttachment()=runBlocking {
+  val lease=notes.beginEditor(null)
+  lease.decisionJournal=DecisionJournal("Keep the reasoning","2027-03-01")
+  pick(lease)
+  val id=notes.capture(notes.editorWrite(lease,"A choice"))
+  notes.setFlags(id,privateNote=true)
+  val original=notes.dao.get(id)!!
+  val image=notes.dao.attachmentsForNote(id).single()
+  notes.dao.reject(notes.dao.outbox().single().opId,"plugin_disabled")
+  val copy=notes.keepRefusedAsNewNote(id,"Reason","Review date")
+  assertNull(notes.dao.get(id));assertNull(notes.dao.output("annotation","decision-journal/$id/member:journal"))
+  val expected=original.body+"\n\n## Reason\nKeep the reasoning\n\n## Review date\n2027-03-01"
+  assertEquals(expected,notes.dao.get(copy)?.body)
+  val op=Json.decodeFromString<OutboxOperation>(notes.dao.outbox().single().payload)
+  assertNull(op.decisionJournal);assertEquals(true,op.privateNote);assertEquals(expected,op.body)
+  assertEquals(image.copy(noteId=copy),notes.dao.attachmentsForNote(copy).single())
  }
 
  @Test fun failedSecondImageRollsBackNoteAndFirstImageAndKeepsDraftForRetry()=runBlocking {
@@ -136,12 +202,16 @@ class CaptureSaveTest {
   assertEquals(10,directory.listFiles().orEmpty().size)
  }
 
- @Test fun migrationSixToSevenRetainsExistingDraftText()=runBlocking {
+ @Test fun migrationFromSixRetainsExistingDraftText()=runBlocking {
   val text="Existing version six draft"
   notes.saveDraft("capture",text)
   db.close()
   SQLiteDatabase.openDatabase(context.getDatabasePath(databaseName).absolutePath,null,SQLiteDatabase.OPEN_READWRITE).use {legacy ->
    legacy.execSQL("DROP TABLE draft_images")
+   legacy.execSQL("ALTER TABLE drafts RENAME TO saved_drafts")
+   legacy.execSQL("CREATE TABLE drafts (id TEXT NOT NULL PRIMARY KEY, body TEXT NOT NULL, updatedAt INTEGER NOT NULL)")
+   legacy.execSQL("INSERT INTO drafts SELECT id,body,updatedAt FROM saved_drafts")
+   legacy.execSQL("DROP TABLE saved_drafts")
    legacy.version=6
   }
   open()
@@ -149,7 +219,7 @@ class CaptureSaveTest {
   assertEquals(text,notes.openEditor(lease).first)
   assertTrue(images.observe("capture").first().isEmpty())
   pick(lease)
-  assertEquals(7,db.openHelper.writableDatabase.version)
+  assertEquals(8,db.openHelper.writableDatabase.version)
   assertEquals(1,images.observe("capture").first().size)
  }
 }

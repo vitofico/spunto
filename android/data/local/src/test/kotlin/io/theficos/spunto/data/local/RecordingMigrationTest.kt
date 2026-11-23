@@ -42,9 +42,9 @@ class RecordingMigrationTest {
    old.execSQL("INSERT INTO server_revisions VALUES (?,?,?,?,?,?,?,?)",arrayOf("https://same.example","e",id,3,"Canonical owner words",1L,"device","edit"))
    old.execSQL("INSERT INTO history_cache VALUES (?,?,?,?,?)",arrayOf("https://same.example","e",id,2L,3));old.version=4
   }
-  val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7).allowMainThreadQueries().build()
+  val upgraded=Room.databaseBuilder(context,SpuntoDatabase::class.java,name).addMigrations(MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8).allowMainThreadQueries().build()
   try {
-   val dao=upgraded.dao();assertEquals(7,upgraded.openHelper.writableDatabase.version);assertEquals(operation.body,dao.get(id)!!.body);assertTrue(dao.get(id)!!.privateNote);assertTrue(dao.get(id)!!.pinned)
+   val dao=upgraded.dao();assertEquals(8,upgraded.openHelper.writableDatabase.version);assertEquals(operation.body,dao.get(id)!!.body);assertTrue(dao.get(id)!!.privateNote);assertTrue(dao.get(id)!!.pinned)
    assertEquals(payload,dao.outbox().single().payload);assertTrue(dao.outbox().single().sent);assertEquals("Synthetic retained draft",dao.draft("capture").first()!!.body)
    assertEquals("e.42",dao.state()!!.cursor);assertEquals("https://same.example",dao.state()!!.serverUrl);assertEquals(LEGACY_UPLOAD_LIMIT,dao.state()!!.maxUploadBytes)
    assertEquals("Canonical owner words",dao.serverHistory(id).first().single().body);assertEquals(3,dao.historyCache(id).first()!!.maxVersion)

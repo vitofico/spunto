@@ -60,7 +60,7 @@ import kotlinx.coroutines.delay
 }
 internal fun notesCount(resources:Resources,count:Int)=resources.getQuantityString(R.plurals.settings_notes,count,count)
 /** On a note whose change the server refused: what happened, and the way out that keeps every word. */
-@Composable internal fun RefusedChangeNotice(model:SpuntoViewModel,id:String,code:String,onEdit:(()->Unit)?=null) {
+@Composable internal fun RefusedChangeNotice(model:SpuntoViewModel,id:String,code:String,decision:Boolean=false,onEdit:(()->Unit)?=null) {
  val resources=LocalContext.current.resources
  val nav=LocalNavigator.current; val feedback=LocalFeedback.current
  val writable by model.workspaceCanWrite.collectAsState()
@@ -68,13 +68,13 @@ internal fun notesCount(resources:Resources,count:Int)=resources.getQuantityStri
   Column(Modifier.fillMaxWidth().padding(SpuntoSpacing.s16),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
    Row(horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
     Text("●",color=SpuntoColors.warn,style=MaterialTheme.typography.bodySmall)
-    Text(refusedChangeMessage(resources,code),style=MaterialTheme.typography.bodyMedium)
+    Text(if(decision && code in setOf("owner_required","plugin_disabled")) resources.getString(R.string.decision_capture_refused) else refusedChangeMessage(resources,code),style=MaterialTheme.typography.bodyMedium)
    }
    if(writable) {
     if(code=="too_large") onEdit?.let {edit ->
      Button(onClick=edit,modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.core_edit_note))}
     }
-    else Button(onClick={model.task {model.requireWorkspaceWrite();val copy=model.repository.keepRefusedAsNewNote(id);nav.back();nav.open("note:$copy");feedback.show(resources.getString(R.string.settings_kept_as_a_new_note))}},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_keep_as_new_note))}
+    else Button(onClick={model.task {model.requireWorkspaceWrite();val copy=model.repository.keepRefusedAsNewNote(id,resources.getString(R.string.decision_reason),resources.getString(R.string.decision_review_date_label));nav.back();nav.open("note:$copy");feedback.show(resources.getString(R.string.settings_kept_as_a_new_note))}},modifier=Modifier.heightIn(min=48.dp)) {Text(resources.getString(R.string.settings_keep_as_new_note))}
    }
   }
  }

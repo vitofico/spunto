@@ -1943,7 +1943,7 @@ mark[data-match] {
 .composer.compact .editor-wrap {
   min-height: 48px;
 }
-.composer.compact textarea,
+.composer.compact .editor-wrap textarea,
 .composer.compact .highlight {
   min-height: 48px;
   padding: 13px 0;
@@ -1981,6 +1981,20 @@ mark[data-match] {
   top: 100%;
   left: 14px;
   padding: 6px 0 0;
+}
+.composer-decision {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--s-12);
+  padding-bottom: var(--s-8);
+}
+.decision-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  width: fit-content;
+  min-height: 36px;
+  cursor: pointer;
 }
 .composer.compact > .error {
   grid-column: 1 / -1;

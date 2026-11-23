@@ -24,6 +24,7 @@ import {
 } from "../lib";
 import { formatShortcut } from "../lib/platform";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { supportsDecisionCapture } from "../features/decisionJournalData";
 import { activePlugins, ReviewLine, DailySlip } from "../features/Slots";
 import { Editor } from "../components/core/Editor";
 import { Icon } from "../components/core/Icon";
@@ -95,7 +96,8 @@ export default function Timeline({
   label?: string;
 }) {
   const language = useLanguage();
-  const canEdit = useWorkspaceRole() !== "viewer";
+  const role = useWorkspaceRole();
+  const canEdit = role !== "viewer";
   const [, navigate] = useLocation();
   const toast = useToast();
   const [confirm, confirmDialog] = useConfirm();
@@ -107,6 +109,7 @@ export default function Timeline({
         ?.contributes?.views?.find((item) => item.id === view.split("/")[1])
     : undefined;
   const journal = plugins.find((plugin) => plugin.id === "decision-journal");
+  const decisionCapture = role === "owner" && supportsDecisionCapture(journal);
   const decisionsView = view === "decision-journal/journal";
   const notes = useNotes({ view, label, limit: 50 });
   const draft = useDraftEditor({
@@ -121,6 +124,7 @@ export default function Timeline({
   const [emptyBusy, setEmptyBusy] = useState(false);
   const [emptyError, setEmptyError] = useState<string | null>(null);
   const sentinel = useRef<HTMLDivElement>(null);
+  const reviewDate = useRef<HTMLInputElement>(null);
   const all = useMemo(
     () => notes.data?.pages.flatMap((p) => p.notes) ?? [],
     [notes.data],
@@ -158,6 +162,11 @@ export default function Timeline({
     return () => observer.disconnect();
   }, [notes.hasNextPage, notes.isFetchingNextPage, notes.fetchNextPage]);
   async function save() {
+    if (
+      draft.decision &&
+      (!decisionCapture || reviewDate.current?.reportValidity() === false)
+    )
+      return;
     // The view's label is added once, on save, unless the owner removed the chip.
     if (
       label &&
@@ -309,6 +318,69 @@ export default function Timeline({
             upload={draft.uploadAttachment}
             autoFocus={false}
             compact
+            saveDisabled={!!draft.decision && !decisionCapture}
+            onRecordDecision={
+              decisionCapture
+                ? () => draft.setDecision(draft.decision ?? {})
+                : undefined
+            }
+            captureOptions={
+              (decisionCapture || draft.decision) && (
+                <div className="composer-decision">
+                  <label className="decision-toggle">
+                    <input
+                      type="checkbox"
+                      checked={!!draft.decision}
+                      onChange={(event) =>
+                        draft.setDecision(event.target.checked ? {} : undefined)
+                      }
+                    />{" "}
+                    {t("decisions.composer_type")}
+                  </label>
+                  {draft.decision && (
+                    <>
+                      {!decisionCapture && (
+                        <p role="status">
+                          {t("decisions.composer_unavailable")}
+                        </p>
+                      )}
+                      <label className="stack">
+                        {t("decisions.form.rationale")}
+                        <textarea
+                          className="field"
+                          rows={2}
+                          maxLength={700}
+                          value={draft.decision.rationale ?? ""}
+                          onChange={(event) =>
+                            draft.setDecision({
+                              ...draft.decision,
+                              rationale: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="stack">
+                        {t("decisions.form.review_on")}
+                        <input
+                          className="field"
+                          ref={reviewDate}
+                          type="date"
+                          min="0001-01-01"
+                          max="9999-12-31"
+                          value={draft.decision.review_on ?? ""}
+                          onChange={(event) =>
+                            draft.setDecision({
+                              ...draft.decision,
+                              review_on: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              )
+            }
             // Offline, the banner above already says the server can't be reached.
             error={
               online || draft.error?.status !== 0
@@ -322,7 +394,12 @@ export default function Timeline({
               {t("note.device_storage_is_full_or_unavailable_keep_this")}
             </p>
           )}
-          {!label && journal && (
+          {draft.hasNextDraft && (
+            <button className="button" onClick={draft.switchDraft}>
+              {t("decisions.switch_draft")}
+            </button>
+          )}
+          {!label && journal && !decisionCapture && (
             <div className="decision-capture">
               <Suspense fallback={null}>
                 <DecisionCapture plugin={journal} />

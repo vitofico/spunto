@@ -338,6 +338,16 @@
             ],
             "title": "Created At"
           },
+          "decision_journal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionJournalCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "anyOf": [
               {
@@ -369,6 +379,23 @@
           "body"
         ],
         "title": "Create",
+        "type": "object"
+      },
+      "DecisionJournalCapture": {
+        "additionalProperties": false,
+        "properties": {
+          "rationale": {
+            "maxLength": 700,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "review_on": {
+            "maxLength": 10,
+            "title": "Review On",
+            "type": "string"
+          }
+        },
+        "title": "DecisionJournalCapture",
         "type": "object"
       },
       "DeviceCredential": {

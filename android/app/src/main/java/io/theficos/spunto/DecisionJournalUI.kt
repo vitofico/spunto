@@ -2,10 +2,13 @@
 package io.theficos.spunto
 
 import android.content.res.Resources
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,6 +20,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.SpuntoSpacing
+import io.theficos.spunto.core.model.DecisionJournal
+import io.theficos.spunto.data.local.PluginOutputEntity
+import io.theficos.spunto.data.local.viewMembership
 import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.core.plugins.*
 import io.theficos.spunto.data.sync.SyncStatus
@@ -34,8 +40,69 @@ internal const val DecisionViewRoute = "view:decision-journal:journal"
 
 internal fun journalResult(result: JsonObject) = result.string("plugin_id") == DecisionJournalId
 
-internal fun isJournalNote(note: Note) = !note.trashed && note.conflictOf == null &&
-    note.sourceKind == "plugin" && note.sourceRef == DecisionJournalId
+internal fun isJournalNote(note: Note, outputs: List<PluginOutputEntity> = emptyList()) =
+    !note.trashed && note.conflictOf == null && (
+        note.sourceKind == "plugin" && note.sourceRef == DecisionJournalId ||
+            outputs.any { row -> row.noteId == note.id && viewMembership(row)?.let {
+                it.pluginId == DecisionJournalId && it.viewId == "journal"
+            } == true }
+    )
+
+internal fun composerDecisionRationale(noteId: String, outputs: List<PluginOutputEntity>): String =
+    outputs.asSequence().filter { it.noteId == noteId && it.kind == "annotation" }
+        .map { payload(it.payload) }
+        .firstOrNull { it.string("plugin").ifEmpty { it.string("plugin_id") } == DecisionJournalId && it.string("kind") == "panel" }
+        ?.let(::outputComponents).orEmpty().filter { it.string("type") == "text" }
+        .joinToString("") { it.string("text") }
+
+internal fun decisionVersionAtLeast(plugin: JsonObject?, requiredMinor: Int): Boolean {
+    val version = plugin?.string("version")?.split('.') ?: return false
+    val major = version.first().toIntOrNull() ?: return false
+    val minor = version.getOrNull(1)?.toIntOrNull() ?: return false
+    return major > 1 || major == 1 && minor >= requiredMinor
+}
+
+internal fun supportsDecisionCapture(manifest: JsonObject) =
+    decisionVersionAtLeast(activeDecisionPlugin(manifest), 2)
+
+@Composable
+internal fun DecisionCaptureFields(
+    decision: DecisionJournal?, available: Boolean, editable: Boolean,
+    onChange: (DecisionJournal?) -> Unit,
+) {
+    var previous by remember { mutableStateOf(DecisionJournal()) }
+    FilterChip(
+        selected = decision != null, enabled = editable && (available || decision != null),
+        onClick = {
+            if (decision == null) onChange(previous)
+            else { previous = decision; onChange(null) }
+        },
+        label = { Text(stringResource(R.string.decision_note_type)) },
+    )
+    if (decision == null) return
+    if (!available) Text(stringResource(R.string.decision_capture_unavailable), color = MaterialTheme.colorScheme.error)
+    OutlinedTextField(
+        decision.rationale, { if (it.codePointCount(0, it.length) <= 700) onChange(decision.copy(rationale = it)) },
+        enabled = editable && available, modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.decision_optional_field, stringResource(R.string.decision_reason))) },
+    )
+    val validDate = validDecisionDate(decision.reviewOn)
+    OutlinedTextField(
+        decision.reviewOn, { onChange(decision.copy(reviewOn = it)) },
+        enabled = editable && available, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.decision_review_date)) }, isError = !validDate,
+        supportingText = { Text(stringResource(if (validDate) R.string.decision_date_hint else R.string.decision_invalid_date)) },
+    )
+}
+
+@Composable
+internal fun DecisionRationale(noteId: String, outputs: List<PluginOutputEntity>) {
+    val rationale = remember(noteId, outputs) { composerDecisionRationale(noteId, outputs) }
+    if (rationale.isNotEmpty()) {
+        Text(stringResource(R.string.decision_reason), style = MaterialTheme.typography.labelMedium)
+        Text(rationale, style = MaterialTheme.typography.bodyMedium)
+    }
+}
 
 @Composable
 internal fun DecisionRecordAction(model: SpuntoViewModel) {
@@ -50,13 +117,14 @@ internal fun DecisionNoteActions(model: SpuntoViewModel, note: Note) {
     ))
 }
 
+private fun activeDecisionPlugin(manifest: JsonObject) = manifest.objects("plugins").firstOrNull {
+    it.string("id") == DecisionJournalId && it.bool("enabled", true) &&
+        it.string("state") !in setOf("disabled", "off", "failed", "waiting", "removed")
+}
+
 internal fun decisionActionIds(manifest: JsonObject, owner: Boolean, online: Boolean): Set<String> {
     if (!owner || !online) return emptySet()
-    val plugin = manifest.objects("plugins").firstOrNull {
-        it.string("id") == DecisionJournalId && it.bool("enabled", true) &&
-            it.string("state") !in setOf("disabled", "off", "failed", "waiting", "removed")
-    }
-    return (plugin?.get("contributes") as? JsonObject)?.objects("commands").orEmpty()
+    return (activeDecisionPlugin(manifest)?.get("contributes") as? JsonObject)?.objects("commands").orEmpty()
         .map { it.string("id") }.toSet()
 }
 

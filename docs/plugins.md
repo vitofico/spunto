@@ -40,13 +40,15 @@ On a saved collection, **What’s new?** checks for relevant notes created or ed
 
 ## Decision journal
 
-Enable **Decision journal** in Settings → Plugins and open **Decisions** from main navigation. The manager puts due decisions first and lets you search decision text, filter by status, or show only reviews that are due. Open any decision to see the original note, status, review date, and linked outcome history.
+Enable **Decision journal** in Settings → Plugins. As the space owner, you can turn on **Decision** while writing a new note on web or Android. Keep writing in the same editor and optionally add your rationale and a review date. Saving creates one note that appears in both the timeline and **Decisions**.
+
+Open **Decisions** from main navigation. The manager puts due decisions first and lets you search decision text, filter by status, or show only reviews that are due. Open any decision to see the original note, status, review date, and linked outcome history.
 
 Enter what you decided and continue. With **Note assistance** enabled and a chat model configured, Spunto looks for relevant non-private notes and shows supporting passages and related existing decisions. Review your wording and any proposed rationale, alternatives, or open questions before saving a distinct decision. Without evidence or a working model, continue with your own wording. Choosing an existing decision opens an editable update for that decision. Saving the update adds a linked journal entry and keeps the original.
 
 From a decision, **What happened since?** checks later eligible notes. Review and edit the source-linked outcome before recording it. You can also record outcomes manually, change review settings, or edit the original using the ordinary note editor. Reviews append separate notes. Moving a decision to Trash leaves those notes in your library. Restore the decision from Trash to see their history again.
 
-A decision remains an ordinary syncable and exportable note. **Private** excludes it from AI and network plugins. Space access still applies. A decision started from a private note inherits its privacy. Private notes are never sent to Note assistance. Android can still show locally synced decision notes when offline. Editing the journal and asking for assistance require a connection.
+A decision remains an ordinary syncable and exportable note. **Private** excludes it from AI and network plugins. Space access still applies. A decision started from a private note inherits its privacy. Private notes are never sent to Note assistance. On Android, you can write a decision offline and sync it when you reconnect. Reviewing decisions and asking for assistance require a connection.
 
 ## Smart tag suggestions
 

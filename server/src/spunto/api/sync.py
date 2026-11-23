@@ -15,6 +15,7 @@ from spunto.api.errors import Problem
 from spunto.api.notes import Source
 from spunto.auth.tokens import Principal
 from spunto.core import suggestions
+from spunto.core.decision_capture import DecisionJournalCapture
 from spunto.core.notes import MAX_BODY, Notes, _id, iso
 from spunto.store.db import now_ms
 
@@ -54,10 +55,13 @@ class Operation(BaseModel):
     suggestion_id: str | None = None
     decision: Literal["accept", "dismiss", "undo"] | None = None
     reviewed_version: int | None = Field(None, ge=1)
+    decision_journal: DecisionJournalCapture | None = None
 
     @model_validator(mode="after")
     def required_fields(self):
         self.op_id = str(uuid.UUID(self.op_id))
+        if self.decision_journal is not None and self.type != "note.create":
+            raise ValueError("decision_journal is accepted only for note.create")
         if self.reviewed_version is not None and (
             self.type != "suggestion.decide" or self.decision != "accept"
         ):
@@ -248,6 +252,7 @@ async def apply(conn, domain, op):
                 op.source.model_dump() if op.source else {"kind": "android"},
                 bool(op.private),
                 allow_empty=op.type == "note.restore",
+                decision_journal=op.decision_journal,
                 origin=op.origin if op.type == "note.restore" else None,
                 machine=bool(op.machine) if op.type == "note.restore" else False,
             )

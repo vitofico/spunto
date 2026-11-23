@@ -239,6 +239,66 @@ test("Link to note searches, disambiguates and inserts in one action", async ({
   expect(result.body).not.toContain(`/n/${first.id}`);
 });
 
+test("marking a note as a decision preserves the draft and opens the same note in Decisions", async ({
+  page,
+}, info) => {
+  await login(page, "decision-journal");
+  const title = `Switch to weekly backups ${Date.now()}-${info.project.name}`;
+  const body = `# ${title}\n\nKeep the last **four** copies. #backups`;
+  const editor = page.getByLabel("New note", { exact: true });
+  await editor.fill(body);
+  const decision = page.getByRole("checkbox", {
+    name: "Decision",
+    exact: true,
+  });
+  await decision.check();
+  const rationale = "The restore drill took less than an hour.";
+  await page
+    .getByRole("textbox", { name: "Why this choice? (optional)", exact: true })
+    .fill(rationale);
+  await page
+    .getByLabel("Review date (optional)", { exact: true })
+    .fill("2030-03-01");
+  await page.reload();
+  await expect(editor).toHaveValue(body);
+  await expect(decision).toBeChecked();
+  await expect(
+    page.getByRole("textbox", {
+      name: "Why this choice? (optional)",
+      exact: true,
+    }),
+  ).toHaveValue(rationale);
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === "/api/v1/notes" &&
+        r.request().method() === "POST",
+    ),
+    page.getByRole("button", { name: "Save", exact: true }).click(),
+  ]);
+  expect(response.status(), await response.text()).toBe(201);
+  const created: Note = await response.json();
+  expect(created.body).toBe(body);
+  await expect(editor).toHaveValue("");
+  await expect(decision).not.toBeChecked();
+  await page
+    .getByRole("link", { name: "Decisions", exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Search decisions").fill(title);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.locator(`a[href="/decisions/${created.id}"]`).click();
+  await expect(
+    page.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(rationale, { exact: false }).first(),
+  ).toBeVisible();
+  await expect(
+    page.locator(`a[href="/n/${created.id}"]`).first(),
+  ).toBeVisible();
+});
+
 test("decision journal creates, reviews and reopens through the browser", async ({
   page,
 }, info) => {
@@ -246,20 +306,6 @@ test("decision journal creates, reviews and reopens through the browser", async 
   page.on("pageerror", (error) => errors.push(error.message));
   await login(page, "decision-journal");
   const suffix = `${Date.now().toString(36)}-${info.project.name}`;
-  const composer = page.getByLabel("New note");
-  await composer.fill("Ordinary draft stays separate.");
-  const capture = page.getByRole("button", {
-    name: "Record decision",
-    exact: true,
-  });
-  await capture.click();
-  let dialog = page.getByRole("dialog", {
-    name: "Record decision",
-    exact: true,
-  });
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(capture).toBeFocused();
-  await expect(composer).toHaveValue("Ordinary draft stays separate.");
   await page.getByRole("link", { name: "Decisions", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Decisions", exact: true }),
@@ -270,7 +316,7 @@ test("decision journal creates, reviews and reopens through the browser", async 
   await uiCommand(page, "decision-journal", "record-decision", () =>
     page.getByRole("button", { name: "Continue", exact: true }).click(),
   );
-  dialog = page.getByRole("region", { name: "Decision draft" });
+  let dialog = page.getByRole("region", { name: "Decision draft" });
   await dialog.locator("summary").filter({ hasText: "Add details" }).click();
   await dialog
     .getByLabel("Title (optional)", { exact: true })

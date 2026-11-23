@@ -137,7 +137,10 @@ import kotlinx.serialization.json.*
    val agentEdit=context.getString(R.string.core_edited_agent).takeIf {value.updatedViaAgent && value.origin!="agent"}
    val meta=listOfNotNull(noteDay(value.createdAt,locale),provenance,agentEdit,if(value.privateNote) context.getString(R.string.core_private) else null,if(value.archived) context.getString(R.string.core_archived) else null,if(value.trashed) context.getString(R.string.core_in_trash) else null).joinToString(" · ")
    Text(meta.uppercase(),style=SpuntoType.overline,color=SpuntoColors.ink3,modifier=Modifier.semantics {contentDescription=meta})
-   if(!editing && isJournalNote(value)) DecisionNoteActions(model,value)
+   if(!editing && isJournalNote(value,outputs) && model.container.manifest.enabled(DecisionJournalId)) {
+    DecisionRationale(value.id,outputs)
+    DecisionNoteActions(model,value)
+   }
   }
   if(!editing && !restoring && acceptance.isNotEmpty()) item(key="acceptance") {NoteAcceptancePanel(model,value,acceptance,detail,editorScope,onHistory={history=true},onEdit={caret=null;editing=true})}
   if(showShortcuts && !actions) item(key="note-shortcuts") {
@@ -146,7 +149,7 @@ import kotlinx.serialization.json.*
     onResult={resultFromShortcut=true;deliverToolResult(it)})
   }
   if(value.conflictOf!=null && !value.trashed) item {ConflictCompare(model,value,onNote)}
-  refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code,onEdit=if(!editing && !restoring && !value.trashed) ({caret=null;editing=true}) else null)}}
+  refused[id]?.let {code -> item {RefusedChangeNotice(model,id,code,decision=isJournalNote(value,outputs),onEdit=if(!editing && !restoring && !value.trashed) ({caret=null;editing=true}) else null)}}
   item {
    if(editing && writable) Composer(model,id,value.body,caret=caret,onFinishReady={finishEditor=it},onRecordingSaved={editing=false},showSaveAction=false,
     trailing=if(doneInTopBar) null else ({NoteDoneAction(finishing,!finishing && !restoring && finishEditor!=null,::finishEditing)}),onSave={editing=false})

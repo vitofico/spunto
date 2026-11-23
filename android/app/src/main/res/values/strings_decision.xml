@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="decision_capture_refused">The journal could not accept this decision. You can keep its text and decision details together in a regular note.</string>
+    <string name="decision_review_date_label">Review date</string>
+    <string name="decision_note_type">Decision</string>
+    <string name="decision_capture_unavailable">Decision journal is unavailable. Turn off Decision to save as a regular note.</string>
     <string name="decision_review_settings">Review settings</string>
     <string name="decision_manual_outcome">Record outcome manually</string>
     <string name="decision_no_outcomes">No outcomes recorded yet.</string>

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="decision_capture_refused">Il diario non ha potuto accettare questa decisione. Puoi conservare il testo e i dettagli della decisione in una nota normale.</string>
+    <string name="decision_review_date_label">Data di revisione</string>
+    <string name="decision_note_type">Decisione</string>
+    <string name="decision_capture_unavailable">Il diario delle decisioni non è disponibile. Disattiva Decisione per salvare una nota normale.</string>
     <string name="decision_review_settings">Impostazioni revisione</string>
     <string name="decision_manual_outcome">Registra esito manualmente</string>
     <string name="decision_no_outcomes">Nessun esito registrato.</string>

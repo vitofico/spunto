@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from spunto.api.deps import PrincipalDep, ServicesDep, SessionDep
 from spunto.api.errors import Problem, problem_response
+from spunto.core.decision_capture import DecisionJournalCapture
 from spunto.core.export import build_zip
 from spunto.core.notes import Notes
 
@@ -103,6 +104,7 @@ class Create(Input):
     created_at: datetime | None = None
     source: Source | None = None
     private: bool = False
+    decision_journal: DecisionJournalCapture | None = None
 
     @model_validator(mode="after")
     def _timezone(self):
@@ -190,6 +192,7 @@ async def create_note(
         source=body.source.model_dump() if body.source else None,
         private=body.private,
         op_id=idempotency_key,
+        decision_journal=body.decision_journal,
     )
 
 

@@ -156,16 +156,19 @@ class SyncEngine internal constructor(private val repository:NotesRepository, pr
   for(restoreIds in restoreBatches) {
    ownedTransaction {
     val restoring=mutableSetOf<String>()
+    val journalCreates=mutableSetOf<String>()
     val superseded=mutableMapOf<String?,MutableList<String>>()
     for(row in dao.outbox()) {
      val op=Json.decodeFromString<OutboxOperation>(row.payload)
+     if(op.type=="note.create" && op.decisionJournal!=null) op.noteId?.let {journalCreates+=it}
      when(op.type) {
       "note.restore" -> op.noteId?.let {restoring+=it}
       "note.create","note.update","note.flags" -> superseded.getOrPut(row.noteId) {mutableListOf()}.add(row.opId)
      }
     }
     for(id in restoreIds) {
-     if(viewerWork?.contains(id)==false) continue
+     // Replay an unsynced decision through its original atomic create, including its journal fields.
+     if(viewerWork?.contains(id)==false || id in journalCreates) continue
      // Pending notes are represented by a restore of their latest local body;
      // retain existing operations unchanged, then replay against restored version.
      val note=dao.get(id)?.note()?:continue

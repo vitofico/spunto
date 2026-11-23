@@ -1,5 +1,12 @@
 import { t, useLanguage } from "../../lib/i18n";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { api, useLabels } from "../../lib";
 import { formatShortcut } from "../../lib/platform";
 import { Icon } from "./Icon";
@@ -87,6 +94,8 @@ interface Props {
   note?: boolean;
   busy?: boolean;
   saveDisabled?: boolean;
+  captureOptions?: ReactNode;
+  onRecordDecision?: () => void;
   error?: string | null;
   id?: string;
 }
@@ -102,6 +111,8 @@ export function Editor({
   note = false,
   busy = false,
   saveDisabled = false,
+  captureOptions,
+  onRecordDecision,
   error,
   id = "composer",
 }: Props) {
@@ -229,12 +240,12 @@ export function Editor({
             const mod = e.metaKey || e.ctrlKey;
             if (mod && e.key === "Enter") {
               e.preventDefault();
-              onSave();
+              if (!saveDisabled) onSave();
             } else if (mod && e.key.toLowerCase() === "s") {
               // In a note, ⌘S is useDraftEditor's save-in-place shortcut; editing continues.
               if (!note) {
                 e.preventDefault();
-                onSave();
+                if (!saveDisabled) onSave();
               }
             } else if (open) {
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -357,6 +368,7 @@ export function Editor({
           </button>
         </div>
       </div>
+      {captureOptions}
       {(error || uploadError) && (
         <p className="error" role="alert">
           {error || uploadError}
@@ -399,6 +411,14 @@ export function Editor({
             // The typed "/query" was only the way to the menu; it leaves with it.
             const start = body.lastIndexOf("\n", caret - 1) + 1;
             place(body.slice(0, start) + body.slice(caret), start);
+            if (
+              onRecordDecision &&
+              choice.plugin === "decision-journal" &&
+              choice.id === "record-decision"
+            ) {
+              onRecordDecision();
+              return;
+            }
             void api
               .command(choice.plugin, choice.id, choice.args ?? {})
               .then((value) =>

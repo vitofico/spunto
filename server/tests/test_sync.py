@@ -1070,3 +1070,28 @@ async def test_restore_without_base_of_a_changed_note_keeps_both_bodies(server):
     async with server.services.store.read() as conn:
         rows = await conn.execute_fetchall("SELECT body FROM note ORDER BY body")
     assert [row[0] for row in rows] == ["Device text", "Server text"]
+
+
+async def test_decision_capture_syncs_atomically_and_retries_after_enable(server):
+    headers = await signed(server)
+    host = server.services.host
+    journal = "decision-journal"
+    note_id = str(uuid.uuid7())
+    create = op("note.create", note_id, body="mobile #decision", decision_journal={})
+    invalid = op("note.update", note_id, body="draft", base_version=1, decision_journal={})
+    failed, invalid_result = await push(server, headers, [create, invalid])
+    assert failed["code"] == "plugin_disabled"
+    assert invalid_result["code"] == "invalid_operation"
+    await host.enable(journal, permissions=host.manifests[journal]["permissions"])
+    saved, replay = await push(server, headers, [create, create])
+    assert saved["status"] == "applied" and replay["status"] == "duplicate"
+    assert replay["original"]["note"] == saved["note"]
+    note = saved["note"]
+    assert note["id"] == note_id and note["source"]["kind"] == "android"
+    assert {item["kind"] for item in note["annotations"]} == {"panel", "member:journal"}
+    pulled = (await server.client.get("/api/v1/sync/pull", headers=headers)).json()
+    assert [item["data"]["id"] for item in pulled["items"] if item["kind"] == "note"] == [note_id]
+    assert {item["data"]["kind"] for item in pulled["items"] if item["kind"] == "annotation"} == {
+        "member:journal",
+        "panel",
+    }

@@ -1,6 +1,7 @@
 package io.theficos.spunto
 
 import io.theficos.spunto.data.sync.ApiException
+import io.theficos.spunto.data.local.PluginOutputEntity
 import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.core.plugins.formArguments
 import kotlinx.serialization.json.*
@@ -49,10 +50,19 @@ class PluginPresentationTest {
   assertTrue(decisionActionIds(manifest(plugin),owner=true,online=false).isEmpty())
   assertTrue(decisionActionIds(manifest(plugin),owner=false,online=true).isEmpty())
   assertTrue(decisionActionIds(manifest(JsonObject(plugin+("enabled" to JsonPrimitive(false)))),owner=true,online=true).isEmpty())
+  fun version(v:String)=JsonObject(plugin+("version" to JsonPrimitive(v)))
+  assertFalse(supportsDecisionCapture(manifest(version("1.1.9"))))
+  assertTrue(supportsDecisionCapture(manifest(version("1.2.0"))))
+  assertFalse(supportsDecisionCapture(manifest(JsonObject(version("1.2.0")+("enabled" to JsonPrimitive(false))))))
   assertTrue(noteTools(settingsTestResources(),listOf(plugin)).isEmpty())
   val ordinary=Note("note","Owner's decision words")
   val journal=ordinary.copy(sourceKind="plugin",sourceRef="decision-journal")
   assertFalse(isJournalNote(ordinary))
+  val membership=PluginOutputEntity("annotation","member",ordinary.id,"""{"plugin_id":"decision-journal","kind":"member:journal","payload":{}}""")
+  assertTrue(isJournalNote(ordinary,listOf(membership)))
+  assertFalse(isJournalNote(ordinary,listOf(membership.copy(noteId="another"))))
+  val panel=PluginOutputEntity("annotation","panel",ordinary.id,"""{"plugin":"decision-journal","kind":"panel","payload":{"ui":1,"items":[{"type":"command","id":"journal","title":"Open"},{"type":"text","text":"First "},{"type":"text","text":"and second."}]}}""")
+  assertEquals("First and second.",composerDecisionRationale(ordinary.id,listOf(membership,panel)))
   assertTrue(isJournalNote(journal))
   assertFalse(isJournalNote(journal.copy(trashed=true)))
   assertFalse(isJournalNote(journal.copy(conflictOf="other-note")))

@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, date, datetime
 
 from spunto.api.errors import Problem
+from spunto.core.decision_capture import journal_panel
 from spunto.core.text import labels, title_of
 from spunto.host import ContextError, Ctx, Plugin
 from spunto.host.language import language, tr, use_language
@@ -179,17 +180,13 @@ def action(id, title, **args):
     return {"type": "command", "id": id, "title": title, "args": args}
 
 
-async def annotate(ctx, note, *, decision_entry=False):
+async def annotate(ctx, note, *, decision_entry=False, rationale=""):
     annotations = {
         item["kind"]: item["payload"]
         for item in note["annotations"]
         if item["plugin_id"] == "decision-journal"
     }
-    panel = {
-        "ui": 1,
-        # Persist a stable action for offline clients; clients localize by command ID.
-        "items": [action("journal", "Open decision journal", note_id=note["id"])],
-    }
+    panel = journal_panel(note["id"], rationale)
     try:
         if decision_entry and "member:journal" not in annotations:
             await ctx.notes.annotate(note["id"], "member:journal", {})
@@ -556,7 +553,7 @@ async def review(
         if prior["decision_id"] != state["id"] or prior["intent"] != intent:
             raise conflict()
         if state["version"] >= prior["version"]:
-            return await review_result(ctx, root, prior["note_id"])
+            return await review_result(ctx, root, prior["note_id"], state)
 
     pending = state["pending"]
     if prior is None and not await ctx.notes.creation_acknowledged(creation_id):
@@ -674,14 +671,14 @@ async def review(
             and await records.get("outcomes", event_id) != event
         ):
             raise conflict()
-    return await review_result(ctx, root, outcome_id)
+    return await review_result(ctx, root, outcome_id, state)
 
 
-async def review_result(ctx, root, outcome_id):
+async def review_result(ctx, root, outcome_id, state):
     outcome_note = await ctx.notes.get(outcome_id)
     if outcome_note is None:
         return text(tr(OUTCOME_UNAVAILABLE))
-    await annotate(ctx, root, decision_entry=True)
+    await annotate(ctx, root, decision_entry=True, rationale=state.get("capture_rationale", ""))
     await annotate(ctx, outcome_note)
     return {"type": "notes", "ids": [outcome_id, root["id"]]}
 
@@ -839,9 +836,7 @@ async def journal(
         refs = [{"id": row["id"], "reason": summary(row, ctx.clock())} for row in page["decisions"]]
         no_matches = bool(query or status or due)
     else:
-        page = await ctx.notes.query(
-            view="journal", source="plugin:decision-journal", limit=10, cursor=cursor
-        )
+        page = await ctx.notes.query(view="journal", limit=10, cursor=cursor)
         refs = []
         for note in page["notes"]:
             entry = await entry_for_note(ctx, note["id"], note)

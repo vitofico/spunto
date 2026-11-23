@@ -62,7 +62,7 @@ Write a line, make a checklist or add a `#nested/label`. A short first-run guide
 | **Carry context into your work** | Curate selected notes into a reusable **context pack**, with a brief and source snapshots that reveal when the originals have changed. |
 | **See how your thinking changed** | Use **Thinking desk → Trace an idea** to arrange selected notes by creation date and record directed **builds-on**, **challenges** or **replaces** connections, keeping the originals intact. |
 | **Try an unexpected combination** | Use **Thinking desk → Combine notes** to choose two to five notes from different subjects, add an optional question and develop your own idea with creative prompts. |
-| **Remember why you decided** | Capture a **decision** beside a regular note. Add your reasoning or a review date if useful. Return to the **Decisions** view to record what happened in a linked outcome note. No AI required. |
+| **Remember why you decided** | Turn on **Decision** while writing a note. Add your reasoning or a review date if useful. Return to the **Decisions** view to record what happened in a linked outcome note. No AI required. |
 | **Keep your tags useful** | Suggest labels using past tagging examples. Opt in to applying confident existing tags automatically; review new labels and all curation changes yourself. |
 | **Work together** | In the web app on a multi-account installation, share one note or a space with an existing account, with explicit view or edit access. |
 | **Keep a recoverable record** | Use revision history, private notes, export, scheduled snapshots and explicit restore tools. |

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="decision_capture_refused">Le journal a refusé cette décision. Vous pouvez conserver son texte et ses détails dans une note ordinaire.</string>
+    <string name="decision_review_date_label">Date de révision</string>
+    <string name="decision_note_type">Décision</string>
+    <string name="decision_capture_unavailable">Le journal des décisions est indisponible. Désactivez Décision pour enregistrer une note ordinaire.</string>
     <string name="decision_review_settings">Réglages de révision</string>
     <string name="decision_manual_outcome">Consigner le résultat manuellement</string>
     <string name="decision_no_outcomes">Aucun résultat consigné.</string>

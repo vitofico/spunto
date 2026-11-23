@@ -826,3 +826,86 @@ async def test_confirmed_assisted_decision_checks_versions_and_keeps_source_link
     with pytest.raises(Problem, match="evidence changed"):
         await command(host, "record-decision", {**args, "request_id": str(uuid.uuid7())})
     assert (await command(host, "record-decision", args))["ids"] == [decision]
+
+
+async def test_composer_writes_the_original_note_and_reviews_it(server, journal):
+    from test_web import setup
+
+    host, notes = journal
+    await setup(server)
+    upload = await server.client.post(
+        "/api/v1/attachments",
+        files={"file": ("decision.png", b"\x89PNG\r\n\x1a\nfixture", "image/png")},
+        headers=ORIGIN,
+    )
+    assert upload.status_code == 200
+    body = (
+        "  #options\n\n"
+        + ("**Keep the existing Markdown**.\n" * 4000)[:99000]
+        + upload.json()["snippet"]
+    )
+    why = "理由 🌿 " * 140
+    request = {
+        "body": body,
+        "source": {"kind": "web"},
+        "private": True,
+        "decision_journal": {"rationale": why, "review_on": "2027-01-19"},
+    }
+    headers = {**ORIGIN, "Idempotency-Key": str(uuid.uuid4())}
+    response = await server.client.post("/api/v1/notes", json=request, headers=headers)
+    assert response.status_code == 201, response.text[:200]
+    note = response.json()
+    note_id = note["id"]
+    assert note["body"] == body and note["labels"] == ["options"] and note["private"]
+    assert note["source"]["kind"] == "web" and note["origin"] == "owner"
+    assert (await server.client.post("/api/v1/notes", json=request, headers=headers)).json() == note
+    assert [item["id"] for item in (await notes.list())["notes"]] == [note_id]
+    async with notes.store.read() as conn:
+        assert (
+            await conn.execute_fetchall(
+                "SELECT attachment_id FROM note_attachment WHERE note_id=?", (note_id,)
+            )
+        )[0][0] == upload.json()["id"]
+    for manager in (False, True):
+        page = await command(host, "journal", {"manager": manager})
+        assert page["items"][0]["items"][0]["id"] == note_id
+        assert "2027-01-19" in page["items"][0]["items"][0]["reason"]
+    reviewed = await command(host, "review-decision", outcome(note_id))
+    assert reviewed["ids"][1] == note_id
+    root = await notes.get(note_id)
+    assert root["body"] == body
+    panel = next(item["payload"] for item in root["annotations"] if item["kind"] == "panel")
+    assert panel["items"][0]["args"] == {"note_id": note_id}
+    assert "".join(fragment["text"] for fragment in panel["items"][1:]) == why
+    assert (await notes.get(reviewed["ids"][0]))["private"]
+
+
+async def test_composer_role_validation_and_disabled_journal_roll_back(server, journal):
+    from dataclasses import replace
+
+    from test_web import setup
+
+    from spunto.core.decision_capture import DecisionJournalCapture
+
+    host, notes = journal
+    await setup(server)
+    for principal in (AGENT, replace(OWNER, workspace_role="editor")):
+        with pytest.raises(Problem, match="owner") as exc:
+            await Notes(host.store, principal).create(
+                "forbidden",
+                decision_journal=DecisionJournalCapture(),
+            )
+        assert exc.value.status == 403
+    for fields in ({"review_on": "2027-02-30"}, {"rationale": "x" * 701}):
+        invalid = await server.client.post(
+            "/api/v1/notes", json={"body": "draft", "decision_journal": fields}, headers=ORIGIN
+        )
+        assert invalid.status_code == 422
+    await host.disable(PLUGIN)
+    refused = await server.client.post(
+        "/api/v1/notes", json={"body": "draft", "decision_journal": {}}, headers=ORIGIN
+    )
+    assert refused.status_code == 409 and refused.json()["code"] == "plugin_disabled"
+    assert (await notes.list())["notes"] == []
+    plain = await server.client.post("/api/v1/notes", json={"body": "plain"}, headers=ORIGIN)
+    assert plain.status_code == 201 and plain.json()["annotations"] == []

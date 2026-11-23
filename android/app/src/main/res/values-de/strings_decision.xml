@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="decision_capture_refused">Das Journal konnte diese Entscheidung nicht annehmen. Du kannst den Text und die Entscheidungsdetails zusammen in einer normalen Notiz speichern.</string>
+    <string name="decision_review_date_label">Überprüfungsdatum</string>
+    <string name="decision_note_type">Entscheidung</string>
+    <string name="decision_capture_unavailable">Das Entscheidungsjournal ist nicht verfügbar. Deaktiviere Entscheidung, um eine normale Notiz zu speichern.</string>
     <string name="decision_review_settings">Prüfungseinstellungen</string>
     <string name="decision_manual_outcome">Ergebnis manuell erfassen</string>
     <string name="decision_no_outcomes">Noch keine Ergebnisse erfasst.</string>

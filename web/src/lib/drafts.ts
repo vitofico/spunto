@@ -1,14 +1,19 @@
 import { ApiError, safeError } from "./errors";
-import type { Note } from "./types";
-export interface PendingSave {
-  revision: number;
+import type { DecisionFields, Note } from "./types";
+interface CaptureDraft {
   body: string;
+  decision?: DecisionFields;
+  decisionOff?: boolean;
+}
+export interface PendingSave extends CaptureDraft {
+  revision: number;
   key: string;
   noteId?: string;
   version?: number;
 }
-export interface Draft {
-  body: string;
+export interface Draft extends CaptureDraft {
+  /** New typing set aside while a refused capture is being corrected. */
+  nextDrafts?: CaptureDraft[];
   revision: number;
   noteId?: string;
   version?: number;
@@ -25,11 +30,13 @@ export interface DraftStorage {
   removeItem(key: string): void;
 }
 export interface DraftTransport {
-  create(body: string, key: string): Promise<Note>;
+  create(body: string, key: string, decision?: DecisionFields): Promise<Note>;
   update(id: string, body: string, version: number): Promise<Note>;
 }
 export interface DraftSnapshot {
   body: string;
+  decision?: DecisionFields;
+  hasNextDraft?: boolean;
   dirty: boolean;
   state: "saved" | "unsaved" | "saving" | "error" | "conflict";
   error: ApiError | null;
@@ -121,9 +128,18 @@ export function eraseOwnerDrafts(storage: Storage, owner: string) {
     }
   }
 }
-const validSave = (p: PendingSave) =>
+const validCapture = (p: CaptureDraft) =>
   !!p &&
   typeof p.body === "string" &&
+  (p.decisionOff === undefined || typeof p.decisionOff === "boolean") &&
+  (p.decision === undefined ||
+    (p.decision !== null &&
+      typeof p.decision === "object" &&
+      [p.decision.rationale, p.decision.review_on].every(
+        (v) => v === undefined || typeof v === "string",
+      )));
+const validSave = (p: PendingSave) =>
+  validCapture(p) &&
   Number.isSafeInteger(p.revision) &&
   /^[a-f0-9-]{36}$/i.test(p.key);
 function load(storage: DraftStorage, key: string): Draft | undefined {
@@ -132,7 +148,9 @@ function load(storage: DraftStorage, key: string): Draft | undefined {
     if (!value || typeof value !== "object") return;
     const d = value as Draft;
     if (
-      typeof d.body !== "string" ||
+      !validCapture(d) ||
+      (d.nextDrafts !== undefined &&
+        (!Array.isArray(d.nextDrafts) || !d.nextDrafts.every(validCapture))) ||
       !Number.isSafeInteger(d.revision) ||
       d.revision < 0
     )
@@ -185,6 +203,7 @@ export class DraftController {
     };
     this.snapshot = {
       body: this.draft.body,
+      ...this.captureState(),
       dirty: !!restored,
       state: this.draft.conflict ? "conflict" : restored ? "unsaved" : "saved",
       error: null,
@@ -207,8 +226,14 @@ export class DraftController {
       this.listeners.delete(listener);
     };
   };
+  private captureState() {
+    return {
+      decision: this.draft.decisionOff ? undefined : this.draft.decision,
+      hasNextDraft: !!this.draft.nextDrafts?.length,
+    };
+  }
   private emit(patch: Partial<DraftSnapshot>) {
-    this.snapshot = { ...this.snapshot, ...patch };
+    this.snapshot = { ...this.snapshot, ...patch, ...this.captureState() };
     for (const listener of this.listeners) listener();
   }
   /** Composer captures queue in the outbox; edits, including a legacy capture tied to its note, are sent directly. */
@@ -253,7 +278,14 @@ export class DraftController {
             };
     else return;
     try {
-      if (next && (next.body || next.outbox?.length || next.noteId))
+      if (
+        next &&
+        (next.body ||
+          next.decision ||
+          next.nextDrafts?.length ||
+          next.outbox?.length ||
+          next.noteId)
+      )
         this.storage.setItem(this.key, JSON.stringify(next));
       else this.storage.removeItem(this.key);
     } catch {
@@ -270,6 +302,41 @@ export class DraftController {
       error: null,
     });
     // Persist synchronously too: a closed tab never depends on the idle timer firing.
+    this.persist();
+  };
+  setDecision = (decision?: DecisionFields) => {
+    if (!this.allowed || !this.queued()) return;
+    // Disabling the type leaves its fields in this draft until it is submitted.
+    this.draft = {
+      ...this.draft,
+      decision:
+        this.draft.decisionOff || !decision
+          ? (this.draft.decision ?? decision)
+          : decision,
+      decisionOff: decision ? undefined : true,
+      revision: this.draft.revision + 1,
+    };
+    this.emit({ dirty: true, state: "unsaved", error: null });
+    this.persist();
+  };
+  switchDraft = () => {
+    const [next, ...rest] = this.draft.nextDrafts ?? [];
+    if (!this.allowed || !next) return;
+    if (this.draft.body || this.draft.decision) rest.push(this.capture());
+    this.draft = {
+      ...this.draft,
+      body: next.body,
+      decision: next.decision,
+      decisionOff: next.decisionOff,
+      nextDrafts: rest,
+      revision: this.draft.revision + 1,
+    };
+    this.emit({
+      body: next.body,
+      dirty: true,
+      state: "unsaved",
+      error: null,
+    });
     this.persist();
   };
   deactivate() {
@@ -383,21 +450,30 @@ export class DraftController {
   waiting = (): PendingSave[] => this.draft.outbox ?? [];
   save = (): Promise<Note | undefined> =>
     this.queued() ? this.submit() : this.send();
+  private capture(): CaptureDraft {
+    const { body, decision, decisionOff } = this.draft;
+    return { body, decision, decisionOff };
+  }
   private submit(): Promise<Note | undefined> {
     if (!this.allowed) return Promise.resolve(undefined);
     if (this.draft.body.trim()) {
       const sent = {
-        body: this.draft.body,
+        ...this.capture(),
         revision: this.draft.revision,
         key: this.uuid(),
       };
+      const [next, ...rest] = this.draft.nextDrafts ?? [];
       this.draft = {
-        body: "",
+        body: next?.body ?? "",
+        decision: next?.decision,
+        decisionOff: next?.decisionOff,
+        nextDrafts: rest.length ? rest : undefined,
         revision: this.draft.revision + 1,
         outbox: [...(this.draft.outbox ?? []), sent],
       };
       this.emit({
-        body: "",
+        body: this.draft.body,
+
         dirty: true,
         error: null,
         submitted: true,
@@ -408,12 +484,17 @@ export class DraftController {
     }
     return this.flush();
   }
+  private create(sent: PendingSave) {
+    return sent.decision && !sent.decisionOff
+      ? this.transport.create(sent.body, sent.key, sent.decision)
+      : this.transport.create(sent.body, sent.key);
+  }
   private flush(): Promise<Note | undefined> {
     const sent = this.draft.outbox?.[0];
     if (this.flight || !this.allowed || !sent)
       return this.flight ?? Promise.resolve(undefined);
     this.emit({ state: "saving", error: null });
-    this.flight = this.transport.create(sent.body, sent.key).then(
+    this.flight = this.create(sent).then(
       (note) => {
         this.flight = undefined;
         if (!this.allowed) {
@@ -422,7 +503,11 @@ export class DraftController {
         }
         const outbox = this.draft.outbox?.filter((p) => p.key !== sent.key);
         this.draft = { ...this.draft, outbox };
-        const dirty = !!this.draft.body || !!outbox?.length;
+        const dirty =
+          !!this.draft.body ||
+          !!this.draft.decision ||
+          !!this.draft.nextDrafts?.length ||
+          !!outbox?.length;
         if (dirty) this.persist();
         else this.clear();
         this.emit({
@@ -441,12 +526,22 @@ export class DraftController {
         if (!this.allowed) return undefined;
         if (!safe.retryable) {
           // The server refused this capture: its text returns to the composer instead of retrying forever.
-          const body = this.draft.body.trim()
-            ? sent.body + "\n\n" + this.draft.body
-            : sent.body;
+          const keepSeparate =
+            (sent.decision || this.draft.decision) &&
+            (this.draft.body || this.draft.decision);
+          const nextDrafts = keepSeparate
+            ? [this.capture(), ...(this.draft.nextDrafts ?? [])]
+            : this.draft.nextDrafts;
+          const body =
+            !keepSeparate && this.draft.body.trim()
+              ? sent.body + "\n\n" + this.draft.body
+              : sent.body;
           this.draft = {
             ...this.draft,
             body,
+            decision: sent.decision,
+            decisionOff: sent.decisionOff,
+            nextDrafts,
             revision: this.draft.revision + 1,
             outbox: this.draft.outbox?.filter((p) => p.key !== sent.key),
           };
@@ -455,6 +550,7 @@ export class DraftController {
         this.persist();
         this.emit({
           body: this.draft.body,
+
           state: "error",
           error: safe,
           submitted: !!this.draft.outbox?.length,
@@ -495,7 +591,7 @@ export class DraftController {
     });
     const operation = sent.noteId
       ? this.transport.update(sent.noteId, sent.body, sent.version!)
-      : this.transport.create(sent.body, sent.key);
+      : this.create(sent);
     this.flight = operation
       .then((note) => {
         if (!this.allowed) {
@@ -579,7 +675,10 @@ export function keptDrafts(storage: Storage, owner: string) {
     if (!draft) continue;
     const queued = draft.outbox?.length ?? 0;
     waiting += queued + (draft.pending ? 1 : 0);
-    unsent += queued + (draft.pending || draft.body.trim() ? 1 : 0);
+    unsent +=
+      queued +
+      (draft.nextDrafts?.length ?? 0) +
+      (draft.pending || draft.body.trim() || draft.decision ? 1 : 0);
   }
   return { waiting, unsent };
 }

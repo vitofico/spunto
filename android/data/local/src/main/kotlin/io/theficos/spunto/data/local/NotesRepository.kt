@@ -36,6 +36,7 @@ class EditorLease internal constructor(noteId:String?,draftId:String) {
  /** A conflict moves a live editor onto its copy, so later typing never lands on the original again. */
  var noteId=noteId; internal set
  var draftId=draftId; internal set
+ @Volatile var decisionJournal:DecisionJournal?=null
  internal val sequence=AtomicLong()
  internal var active=true
  internal var accepted=0L
@@ -46,7 +47,9 @@ class EditorLease internal constructor(noteId:String?,draftId:String) {
  /** Whether [known] holds words this editor saved, rather than text it opened on or took in from a sync. */
  internal var saved=false
 }
-data class EditorWrite internal constructor(val lease:EditorLease,val body:String,internal val sequence:Long)
+data class EditorWrite internal constructor(val lease:EditorLease,val body:String,val decisionJournal:DecisionJournal?,internal val sequence:Long) {
+ internal fun draft()=DraftEntity(lease.draftId,body,System.currentTimeMillis(),decisionJournal?.let {Json.encodeToString(it)})
+}
 
 class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private val onChange: () -> Unit = {}) {
  val dao = db.dao()
@@ -63,10 +66,11 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  suspend fun openEditor(lease:EditorLease):Pair<String?,String?> = db.withTransaction {
   val (noteId,draftId)=synchronized(editors) { lease.noteId to lease.draftId }
   val note=noteId?.let { dao.get(it) }
-  val draft=dao.unsavedDraft(draftId,noteId?:draftId)
+  val draft=if(noteId==null) dao.draftSnapshot(draftId) else dao.unsavedDraft(draftId,noteId)
+  lease.decisionJournal=draft?.decisionJournal?.let {Json.decodeFromString<DecisionJournal>(it)}
   val origin=if(draft!=null && noteId!=null) dao.replacedSince(noteId,draft.updatedAt) else null
   synchronized(editors) { lease.base=origin?.version ?: note?.serverRev;lease.known=origin?.body ?: note?.body }
-  draft?.body to note?.body
+  draft?.body?.takeIf { it.isNotEmpty() } to note?.body
  }
  /**
   * What a sync has brought into the note of an editor whose every word is saved (an edit made elsewhere, or the server's
@@ -94,7 +98,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   synchronized(editors) { lease.noteId=copy.id;if(draftId==noteId) lease.draftId=copy.id;lease.base=copy.serverRev;lease.saved=false }
  }
  fun abandonEditor(lease:EditorLease) { synchronized(editors) {lease.active=false;editors.remove(lease)} }
- fun editorWrite(lease:EditorLease,body:String)=EditorWrite(lease,body,lease.sequence.incrementAndGet())
+ fun editorWrite(lease:EditorLease,body:String)=EditorWrite(lease,body,lease.decisionJournal,lease.sequence.incrementAndGet())
  /** Allocation occurs before dispatch; delayed callbacks cannot replace a newer accepted write. */
  suspend fun persistEditor(write:EditorWrite,commit:Boolean=false):Boolean=editorMutex.withLock { persistEditorLocked(write,commit) }
  private suspend fun persistEditorLocked(write:EditorWrite,commit:Boolean):Boolean {
@@ -108,7 +112,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    // Once the server holds the editor's own words they are the new base; newer text a sync brought in is not.
    synchronized(editors) { if(note!=null && !note.pending && note.body==lease.known) lease.base=note.serverRev }
    // A disappeared note must not erase the last editor words; only the note/outbox commit is refused.
-   dao.putDraft(DraftEntity(draftId,write.body,System.currentTimeMillis()))
+   dao.putDraft(write.draft())
    if(commit && !missing && noteId!=null) {
     // Words the editor never changed must not replace newer text a sync brought in.
     if(note!!.body!=write.body && write.body!=lease.known) { save(write.body,noteId,baseVersion=lease.base);lease.known=write.body;lease.saved=true }
@@ -135,7 +139,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   fun current()=synchronized(editors) {lease.active && write.sequence>=lease.accepted && write.sequence==lease.sequence.get()}
   requireLocal(current(),LocalOperationProblem.EditorChanged) {"The editor changed. Save the current text with this recording."}
   val result=db.withTransaction {
-   dao.putDraft(DraftEntity(lease.draftId,write.body,System.currentTimeMillis()))
+   dao.putDraft(write.draft())
    val value=save()
    requireLocal(current(),LocalOperationProblem.EditorChangedWhileSaving) {"The editor changed while this recording was saved. Try again."}
    dao.draftSnapshot(lease.draftId)?.takeIf {it.body==write.body}?.let {dao.clearDraftSnapshot(it.id,it.body,it.updatedAt)}
@@ -154,12 +158,34 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  }
  val refused = dao.refusedOutbox().map { rows -> rows.filter { it.noteId!=null }.associate { it.noteId!! to it.error!! } }
  /** The way out of a refused change that never loses words: the text becomes a new note, and the original follows the server again. */
- suspend fun keepRefusedAsNewNote(id:String):String = db.withTransaction {
+ suspend fun keepRefusedAsNewNote(id:String,rationaleLabel:String,reviewDateLabel:String):String = db.withTransaction {
   val note=dao.get(id)?.note(); requireLocal(note!=null,LocalOperationProblem.NoteUnavailable) { "This note is no longer available." }
-  val copy=save(note.body)
+  val queued=dao.outbox().filter {it.noteId==id}
+  val journal=queued.firstNotNullOfOrNull {row ->Json.decodeFromString<OutboxOperation>(row.payload).decisionJournal}
+  val body=buildString {
+   append(note.body)
+   journal?.rationale?.takeIf {it.isNotBlank()}?.let {append("\n\n## ",rationaleLabel,"\n",it)}
+   journal?.reviewOn?.takeIf {it.isNotBlank()}?.let {append("\n\n## ",reviewDateLabel,"\n",it)}
+  }
+  val copy=save(body)
+  if(journal!=null) {
+   for(item in dao.attachmentsForNote(id)) {
+    // A previous audio upload was bound to the refused note. Reuse the bytes under the new note ID.
+    val attachment=if(item.kind=="recording" && item.remoteId!=null && java.io.File(item.localPath).isFile)
+     item.copy(remoteId=null,status="queued",error=null,serverEpoch="") else item
+    dao.putAttachment(attachment.copy(noteId=copy))
+    if(item.kind=="recording") dao.recording(item.id)?.let {dao.putRecording(it.copy(noteId=copy))}
+   }
+  }
   if(note.pinned || note.privateNote) setFlags(copy,pinned=note.pinned.takeIf { it },privateNote=note.privateNote.takeIf { it })
-  dao.outbox().filter { it.noteId==id }.forEach { dao.removeOutbox(it.opId) }
-  if(note.serverRev==0 || dao.tombstone(id)!=null) { dao.remove(id);dao.clearLabels(id) } else dao.putRefresh(RefreshNoteEntity(id))
+  queued.forEach { dao.removeOutbox(it.opId) }
+  if(note.serverRev==0 || dao.tombstone(id)!=null) {
+   dao.remove(id);dao.clearLabels(id)
+   if(journal!=null) {
+    dao.removeOutput("annotation","decision-journal/$id/member:journal")
+    dao.removeOutput("annotation","decision-journal/$id/panel")
+   }
+  } else dao.putRefresh(RefreshNoteEntity(id))
   copy
  }
  fun timeline() = notes
@@ -204,9 +230,9 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
  suspend fun capture(write:EditorWrite,sourceRef:String?=null):String = editorMutex.withLock {
   val id=inCaptureTransaction(write.lease) {draftId ->
    requireLocal(write.body.isNotBlank() || dao.draftImageSnapshots(draftId).isNotEmpty(),LocalOperationProblem.EditorChanged)
-   val saved=create(write.body,sourceRef=sourceRef)
+   val saved=save(write.body,sourceRef=sourceRef,decisionJournal=write.decisionJournal)
    transferDraftImages(draftId,saved)
-   dao.clearDraft(draftId,write.body)
+   dao.acknowledgeCapture(draftId,write.body,write.decisionJournal?.let {Json.encodeToString(it)})
    saved
   }
   write.lease.accepted=maxOf(write.lease.accepted,write.sequence)
@@ -231,17 +257,52 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
    synchronized(editors) { editors.filter { it.noteId==id }.forEach { it.active=false };editors.removeAll { it.noteId==id } }
   }
  }
- suspend fun save(body: String,id: String? = null,sourceUrl: String? = null,sourceKind: String = "android",sourceRef: String? = null,historyKind:String="edit",baseVersion:Int?=null): String {
+ suspend fun save(body: String,id: String? = null,sourceUrl: String? = null,sourceKind: String = "android",sourceRef: String? = null,historyKind:String="edit",baseVersion:Int?=null,decisionJournal:DecisionJournal?=null): String {
   requireLocal(body.toByteArray().size <= 1_000_000,LocalOperationProblem.NoteTooLarge) { "Note is too large." }
   val noteId = id ?: uuidV7()
   db.withTransaction {
    val old = dao.get(noteId); val now = System.currentTimeMillis()
    // A note whose creation the server refused (too long, say) is created again by its next save.
-   val refusedCreate=dao.outbox().filter { it.noteId==noteId && it.error!=null && Json.decodeFromString<OutboxOperation>(it.payload).type=="note.create" }.onEach { dao.removeOutbox(it.opId) }
+   val refusedCreate=dao.outbox().firstNotNullOfOrNull { row ->
+    if(row.noteId==noteId && row.error!=null) Json.decodeFromString<OutboxOperation>(row.payload).takeIf {it.type=="note.create"} else null
+   }
+   refusedCreate?.let {dao.removeOutbox(it.opId)}
+   val journal=decisionJournal ?: refusedCreate?.decisionJournal
    val note = old?.note()?.copy(body=body,title=titleOf(body),updatedAt=now,pending=true,syncError=null,machine=old.machine && old.body==body,updatedViaAgent=false) ?: Note(noteId,body,sourceUrl=sourceUrl,sourceKind=sourceKind,sourceRef=sourceRef,pending=true)
    putNote(note,localEdit=true,historyKind=historyKind)
-   enqueue(OutboxOperation(type=if(old==null || refusedCreate.isNotEmpty()) "note.create" else "note.update",noteId=noteId,body=body,baseVersion=baseVersion?:old?.serverRev,createdAt=note.createdAt,sourceUrl=note.sourceUrl,sourceKind=note.sourceKind,sourceRef=note.sourceRef))
+   if(journal!=null) putDecisionAnnotations(noteId,journal)
+   val operation=if(refusedCreate!=null) {
+    // The retry is a fresh create with the same note identity and the latest local privacy and flag state.
+    refusedCreate.copy(opId=uuidV7(),body=body,baseVersion=null,privateNote=note.privateNote,pinned=note.pinned,
+     archived=note.archived,trashed=note.trashed,privateAt=note.privateAt,pinnedAt=note.pinnedAt,
+     archivedAt=note.archivedAt,trashedAt=note.trashedAt)
+   } else OutboxOperation(type=if(old==null) "note.create" else "note.update",noteId=noteId,body=body,
+    baseVersion=baseVersion?:old?.serverRev,createdAt=note.createdAt,sourceUrl=note.sourceUrl,
+    sourceKind=note.sourceKind,sourceRef=note.sourceRef,decisionJournal=journal)
+   enqueue(operation)
   }; onChange(); return noteId
+ }
+ /** Match the annotations pulled after sync so offline decisions open in the same views. */
+ private suspend fun putDecisionAnnotations(noteId:String,journal:DecisionJournal) {
+  val items=buildJsonArray {
+   add(buildJsonObject {
+    put("type","command");put("id","journal");put("title","Open decision journal")
+    put("args",buildJsonObject {put("note_id",noteId)})
+   })
+   val points=journal.rationale.codePoints().toArray()
+   for(start in points.indices step 280) add(buildJsonObject {
+    put("type","text");put("text",String(points,start,minOf(280,points.size-start)))
+   })
+  }
+  val panel=buildJsonObject {put("ui",1);put("items",items)}
+  for((kind,value) in listOf("member:journal" to JsonObject(emptyMap()),"panel" to panel)) {
+   val outputId="decision-journal/$noteId/$kind"
+   val annotation=buildJsonObject {
+    put("id",outputId);put("plugin","decision-journal");put("plugin_id","decision-journal")
+    put("note_id",noteId);put("kind",kind);put("payload",value)
+   }
+   dao.putOutput(PluginOutputEntity("annotation",outputId,noteId,annotation.toString()))
+  }
  }
  suspend fun setFlags(id: String,pinned: Boolean?=null,archived: Boolean?=null,trashed: Boolean?=null,privateNote: Boolean?=null) {
   db.withTransaction { val note = dao.get(id)?.note() ?: return@withTransaction; val now=System.currentTimeMillis(); putNote(note.copy(pinned=pinned?:note.pinned,archived=archived?:note.archived,trashed=trashed?:note.trashed,privateNote=privateNote?:note.privateNote,updatedAt=now,pending=true,updatedViaAgent=false,pinnedAt=if(pinned!=null) now else note.pinnedAt,archivedAt=if(archived!=null) now else note.archivedAt,trashedAt=if(trashed!=null) now else note.trashedAt,privateAt=if(privateNote!=null) now else note.privateAt)); enqueue(OutboxOperation(type="note.flags",noteId=id,at=now,pinned=pinned,archived=archived,trashed=trashed,privateNote=privateNote)) }; onChange()

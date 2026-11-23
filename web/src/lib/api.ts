@@ -14,6 +14,7 @@ import type {
   SignedInAccount,
   Attachment,
   Credential,
+  DecisionFields,
   Flags,
   Manifest,
   Meta,
@@ -422,11 +423,16 @@ export const api = {
         signal,
       }),
     ),
-  createNote: (body: string, key: string) =>
+  createNote: (body: string, key: string, decision_journal?: DecisionFields) =>
     result<Note>(
       generatedClient.POST("/api/v1/notes", {
         params: { header: { "idempotency-key": key } },
-        body: { body, private: false, source: { kind: "web" } },
+        body: {
+          body,
+          private: false,
+          source: { kind: "web" },
+          decision_journal,
+        },
       }),
     ),
   updateNote: (id: string, body: string, version: number) =>

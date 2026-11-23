@@ -121,7 +121,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
    Column(Modifier.padding(bottom=28.dp)) {
     Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},focusCapture=focusCapture,
      onCaptureFocused=onCaptureFocused,onSave={model.saveLocal(it)})
-    DecisionRecordAction(model)
+    if(!supportsDecisionCapture(model.manifest.collectAsState().value)) DecisionRecordAction(model)
    }
   }
   if(writable && proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }

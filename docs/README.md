@@ -18,6 +18,7 @@ Completed milestones and remaining delivery/physical-phone gates are recorded in
 | `decisions/2026-10-30-reviewed-chat-note-actions.md` | Chat note creation and editing with previews, explicit confirmation, guarded undo and permission consent |
 | `decisions/2026-10-31-ask-note-action-ux.md` | Discoverable Ask examples, grouped note previews, confirmation and contextual undo feedback |
 | `decisions/2026-10-25-header-wave.md` | Existing wave in the compact Android header and web upper chrome, with theme and accessibility constraints |
+| `decisions/2026-11-25-notes-grid-layout.md` | Optional per-device grid of note tiles on the wide web home |
 | `development/multiuser-migration.md` | Lossless SQLite import, identity mapping, sequence reconciliation and cutover gates |
 | `development/multiuser-delivery.md` | Hosted delivery evidence, production recovery and remaining acceptance checks |
 | `decisions/2026-10-31-thinking-desk.md` | Manual chronological thinking histories, directed note relations and deliberate idea collisions |

@@ -12,7 +12,7 @@ from spunto.ai.errors import AIError
 from spunto.ai.output import Output, field
 from spunto.ai.passages import evidence, passages
 from spunto.api.errors import Problem
-from spunto.core.notes import MAX_BODY
+from spunto.core.notes import MAX_BODY, MAX_QUERY
 from spunto.core.reviewed_notes import metadata, replacement, transact
 from spunto.host.language import tr
 from spunto.host.plugin import ContextError
@@ -311,6 +311,11 @@ def store(ctx, action_id, action):
         del pending[actions[0][0]]
 
 
+def quoted(text):
+    # A selector may fill the whole question; its quotes must still fit a search.
+    return '"' + text.replace('"', "")[: MAX_QUERY - 2] + '"'
+
+
 async def unique_target(ctx, plan, current):
     note_id = plan.target_ids[0]
     selector = plan.selector.strip()
@@ -321,7 +326,7 @@ async def unique_target(ctx, plan, current):
         return False
     if selector == note_id:
         return True
-    found = await ctx.notes.search('"' + selector.replace('"', "") + '"', limit=2, match_any=True)
+    found = await ctx.notes.search(quoted(selector), limit=2, match_any=True)
     if found["hits"]:
         return [note["id"] for note in found["hits"]] == [note_id]
     note = await ctx.notes.evidence(note_id)
@@ -335,7 +340,7 @@ async def unique_target(ctx, plan, current):
         return False
     # Natural qualifiers such as "Expedition briefing note" may not occur in
     # the note. Only its actual title may resolve that otherwise empty search.
-    found = await ctx.notes.search('"' + title.replace('"', "") + '"', limit=2, match_any=True)
+    found = await ctx.notes.search(quoted(title), limit=2, match_any=True)
     return [candidate["id"] for candidate in found["hits"]] == [note_id]
 
 

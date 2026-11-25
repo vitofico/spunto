@@ -18,6 +18,7 @@ from spunto.core.text import set_labels as apply_labels
 from spunto.store.db import Store, now_ms
 
 MAX_BODY = 100_000
+MAX_QUERY = 500
 COALESCE_MS = 10 * 60 * 1000
 
 
@@ -1135,8 +1136,10 @@ class Notes:
         machine: bool | None = None,
         match_any: bool = False,
     ) -> dict:
-        if len(query) > 500:
-            raise Problem(422, "validation_failed", "query must have at most 500 characters.")
+        if len(query) > MAX_QUERY:
+            raise Problem(
+                422, "validation_failed", f"query must have at most {MAX_QUERY} characters."
+            )
         match, inline = search_query(query, match_any=match_any)
         if not match and not inline and query.strip():
             # Punctuation alone has no words to match; listing every note would read as hits.

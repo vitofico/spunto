@@ -468,7 +468,11 @@ export default function Timeline({
             title={t("timeline.no_notes_here_yet")}
           />
         ))}
-      <section aria-label={t("review.notes")} aria-busy={notes.isPending}>
+      <section
+        className="note-list"
+        aria-label={t("review.notes")}
+        aria-busy={notes.isPending}
+      >
         {groups.map((group) => (
           <section key={group.title} aria-label={group.title}>
             <h2 className="overline day">{group.title}</h2>

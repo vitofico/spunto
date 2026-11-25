@@ -36,6 +36,7 @@ import { Icon } from "./components/core/Icon";
 import { useToast } from "./components/core/Toast";
 import { NotFound } from "./components/core/NotFound";
 import { formatShortcut } from "./lib/platform";
+import { saveNotesLayout, useNotesLayout } from "./lib/notes-layout";
 import { useModalFocus } from "./components/core/useModalFocus";
 import { NotificationLink } from "./features/Notifications";
 import { AccountIdentityLink } from "./features/AccountIdentity";
@@ -485,6 +486,20 @@ function UnencryptedBand() {
   );
 }
 /** j/k land on the card's link to its note, or on the card itself. */
+export function NotesLayoutButton() {
+  const grid = useNotesLayout() === "grid";
+  return (
+    <button
+      className="button layout-toggle"
+      aria-label={t("app.grid_layout")}
+      title={t("app.grid_layout")}
+      aria-pressed={grid}
+      onClick={() => saveNotesLayout(grid ? "column" : "grid")}
+    >
+      <Icon name="grid" />
+    </button>
+  );
+}
 function focusEntry(entry: HTMLElement) {
   const link = entry.querySelector<HTMLElement>('a[href^="/n/"]');
   if (link) return link.focus();
@@ -1012,6 +1027,7 @@ export default function App() {
             <Icon name="ask" />
           </button>
         )}
+        {location === "/" && <NotesLayoutButton />}
         <Link
           href="/settings"
           className="button home-settings"

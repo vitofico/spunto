@@ -1028,3 +1028,17 @@ async def test_real_postgres_reviewed_edit_create_authoring_and_stale_undo(pg, s
     finally:
         await host.close()
         await gateway.close()
+
+
+async def test_selector_at_the_question_limit_still_resolves_its_target(ai_host):
+    host, provider = ai_host
+    domain = Notes(host.store, OWNER)
+    question = ("Change Monday to Tuesday in Meeting " + "and keep the rest as it is " * 20)[
+        : ask.MAX_QUESTION
+    ].strip()
+    target = await domain.create("# Meeting\n\nMonday. " + question)
+    provider.action_plan = plan(
+        "edit", target=target["id"], selector=question, before="Monday.", after="Tuesday."
+    )
+    output = await request(host, question, note_actions=True)
+    assert action(output)["stage"] == "preview"

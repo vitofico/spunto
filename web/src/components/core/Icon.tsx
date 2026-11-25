@@ -14,9 +14,7 @@ const glyphs = {
   ask: (
     <path d="M20 10.5a7.5 7.5 0 0 1-7.5 7.5H9l-4 3v-5a7.5 7.5 0 0 1 5.5-13h2a7.5 7.5 0 0 1 7.5 7.5ZM8 10.5h.1m3.9 0h.1m3.9 0h.1" />
   ),
-  grid: (
-    <path d="M5 5h5.5v5.5H5zM13.5 5H19v5.5h-5.5zM5 13.5h5.5V19H5zM13.5 13.5H19V19h-5.5z" />
-  ),
+  width: <path d="M4 5v14M20 5v14M7.5 12h9M10 9l-3 3 3 3M14 9l3 3-3 3" />,
   stats: <path d="M4 4v16h16M8 16v-4m5 4V8m5 8V5" />,
   hash: (
     <>

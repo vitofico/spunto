@@ -2144,9 +2144,6 @@ mark[data-match] {
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.app[data-home="true"] .home-settings {
-  margin-left: auto;
-}
 
 .note-pane .entry-title .time {
   position: static;
@@ -2206,7 +2203,7 @@ mark[data-match] {
   overflow: hidden;
 }
 
-/* Grid layout (per device): the home widens and each day's notes flow left to right as tiles. */
+/* Full width (per device): the home's single column of notes widens to the page. */
 .app[data-home="true"] .topbar .button.layout-toggle {
   display: none;
 }
@@ -2217,39 +2214,7 @@ mark[data-match] {
   .app[data-home="true"] .topbar .layout-toggle[aria-pressed="true"] {
     color: var(--accent);
   }
-  :root[data-notes-layout="grid"] .app[data-home="true"] {
-    --column-width: 1440px;
-  }
-  :root[data-notes-layout="grid"] .app[data-home="true"] .composer {
-    max-width: var(--measure);
-  }
-  :root[data-notes-layout="grid"] .app[data-home="true"] .note-pane {
-    display: grid;
-    margin-bottom: var(--s-32);
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    gap: var(--s-16);
-    margin-right: 0;
-    padding: 0;
-    background: transparent;
-  }
-  :root[data-notes-layout="grid"] .app[data-home="true"] .note-pane .entry {
-    min-width: 0;
-    padding: 18px 16px 16px;
-    border-radius: 16px;
-    background: var(--raised);
-  }
-  :root[data-notes-layout="grid"]
-    .app[data-home="true"]
-    .note-pane
-    .entry
-    + .entry {
-    border-top: 0;
-  }
-  :root[data-notes-layout="grid"]
-    .app[data-home="true"]
-    .note-pane
-    .entry
-    > .more {
-    right: 4px;
+  :root[data-notes-layout="wide"] .app[data-home="true"] {
+    --column-width: 100%;
   }
 }

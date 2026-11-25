@@ -487,16 +487,16 @@ function UnencryptedBand() {
 }
 /** j/k land on the card's link to its note, or on the card itself. */
 export function NotesLayoutButton() {
-  const grid = useNotesLayout() === "grid";
+  const wide = useNotesLayout() === "wide";
   return (
     <button
       className="button layout-toggle"
-      aria-label={t("app.grid_layout")}
-      title={t("app.grid_layout")}
-      aria-pressed={grid}
-      onClick={() => saveNotesLayout(grid ? "column" : "grid")}
+      aria-label={t("app.full_width")}
+      title={t("app.full_width")}
+      aria-pressed={wide}
+      onClick={() => saveNotesLayout(wide ? "column" : "wide")}
     >
-      <Icon name="grid" />
+      <Icon name="width" />
     </button>
   );
 }

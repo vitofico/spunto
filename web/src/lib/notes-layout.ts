@@ -1,9 +1,11 @@
 import { useSyncExternalStore } from "react";
-export type NotesLayout = "column" | "grid";
+export type NotesLayout = "column" | "wide";
 export const notesLayoutKey = "spunto:notes-layout";
 export function readNotesLayout(): NotesLayout {
   try {
-    return localStorage.getItem(notesLayoutKey) === "grid" ? "grid" : "column";
+    const saved = localStorage.getItem(notesLayoutKey);
+    // "grid" is what the earlier tile layout saved; it now means the full-width column.
+    return saved === "wide" || saved === "grid" ? "wide" : "column";
   } catch {
     return "column";
   }
@@ -36,5 +38,5 @@ function subscribe(listener: () => void) {
   return () => observer.disconnect();
 }
 const current = (): NotesLayout =>
-  document.documentElement.dataset.notesLayout === "grid" ? "grid" : "column";
+  document.documentElement.dataset.notesLayout === "wide" ? "wide" : "column";
 export const useNotesLayout = () => useSyncExternalStore(subscribe, current);

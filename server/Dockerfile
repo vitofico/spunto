@@ -46,11 +46,12 @@ ENV PATH=/app/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     SPUNTO_VERSION=${VERSION} \
     SPUNTO_WEB_DIR=/app/web
-# The pinned base includes the apt fix from DSA-6607-1. Apply DSA-6613-1
-# until the official base also includes the zlib update.
+# The pinned base includes the apt fix from DSA-6607-1. Apply the zlib
+# (DSA-6613-1) and zstd (CVE-2026-124851) updates until the official base has them.
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends --only-upgrade zlib1g \
+    && apt-get install --yes --no-install-recommends --only-upgrade zlib1g libzstd1 \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge 1:1.3.dfsg+really1.3.1-1+deb13u1 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libzstd1)" ge 1.5.7+dfsg-1+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 # uv builds an unseeded application environment; runtime package installers are
 # unused, and pip's vendored dependencies carry separate vulnerability advisories.

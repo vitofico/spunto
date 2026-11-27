@@ -59,6 +59,7 @@ class NotesRepository(val db: SpuntoDatabase, val replicaId:String="", private v
   editors.filter { it.draftId==draftId }.forEach { it.active=false };editors.removeAll {it.draftId==draftId}
   EditorLease(noteId,draftId).also { editors+=it }
  }
+ fun ownsEditor(lease:EditorLease):Boolean = synchronized(editors) {lease in editors && lease.active}
  /**
   * The words an editor opens with (unsaved draft words, else the note) and the server version they grew from.
   * A sync that replaced the note after the draft was written left the text the draft grew from in the history.

@@ -323,4 +323,6 @@
     <string name="core_picker_source_limit">Rimuovi una fonte prima di aggiungerne un’altra.</string>
     <string name="core_link_upgrade_server">Aggiorna il server Spunto per inserire in sicurezza i collegamenti alle note.</string>
     <string name="core_link_waiting_to_sync">Collegamento inserito sul server. In attesa di sincronizzazione.</string>
+    <string name="core_expand_composer">Espandi editor</string>
+    <string name="core_capture_insert">Inserisci</string>
 </resources>

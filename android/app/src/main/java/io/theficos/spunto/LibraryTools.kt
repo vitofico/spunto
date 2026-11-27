@@ -1,12 +1,18 @@
 package io.theficos.spunto
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.plugins.bool
 import io.theficos.spunto.core.plugins.objects
@@ -20,8 +26,20 @@ internal fun libraryCommandAvailable(manifest:JsonObject,pluginId:String,command
   (plugin["contributes"] as? JsonObject)?.objects("commands")?.any {it.string("id")==commandId}==true
 }
 
-@Composable internal fun AskNotesButton(onClick:()->Unit) {
+@Composable internal fun AskNotesButton(showLabel:Boolean=false,onClick:()->Unit) {
  val resources=LocalContext.current.resources
+ if(showLabel) {
+  TextButton(onClick=onClick,modifier=Modifier.heightIn(min=48.dp).semantics {
+   contentDescription=resources.getString(R.string.core_ask_notes)
+  },contentPadding=PaddingValues(horizontal=12.dp),colors=ButtonDefaults.textButtonColors(
+   containerColor=MaterialTheme.colorScheme.primaryContainer,contentColor=MaterialTheme.colorScheme.onPrimaryContainer,
+  )) {
+   Icon(painterResource(R.drawable.ic_ask),contentDescription=null,modifier=Modifier.size(18.dp))
+   Spacer(Modifier.width(6.dp))
+   Text(resources.getString(R.string.core_ask))
+  }
+  return
+ }
  IconButton(onClick=onClick,modifier=Modifier.size(48.dp)) {
   Icon(painterResource(R.drawable.ic_ask),contentDescription=resources.getString(R.string.core_ask_notes),modifier=Modifier.size(21.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
  }

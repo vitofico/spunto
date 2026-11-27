@@ -17,6 +17,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
@@ -79,6 +80,7 @@ import kotlinx.coroutines.flow.flowOf
  val keyboard=LocalSoftwareKeyboardController.current
  var ready by remember(id) { mutableStateOf(false) }
  var focused by remember(id) { mutableStateOf(false) }
+ var captureBodyFocused by remember(id,draftId) { mutableStateOf(false) }
  // Focus once per page visit: returning from a note, a rotation or a permission dialog restores this flag, so the keyboard stays down.
  var focusSpent by rememberSaveable(id,draftId) { mutableStateOf(false) }
  ReportDrawnWhen { ready && (autoDictate || !autoFocus || focused || focusSpent) }
@@ -466,12 +468,13 @@ import kotlinx.coroutines.flow.flowOf
  }
  // A hidden keyboard ends typing. The home composer remains docked.
  val imeVisible=WindowInsets.isImeVisible;val focusManager=LocalFocusManager.current;var keyboardShown by remember { mutableStateOf(false) }
- LaunchedEffect(imeVisible) { if(keyboardShown && !imeVisible && focused && id=="capture" && !listening) focusManager.clearFocus();keyboardShown=imeVisible }
+ LaunchedEffect(imeVisible) { if(keyboardShown && !imeVisible && (focused || captureBodyFocused) && id=="capture" && !listening) focusManager.clearFocus();keyboardShown=imeVisible }
  val captureWorking=saving || imageBusy || startingVoice || listening || recordingActive(recording.phase)
  val captureNeedsAttention=recordingNeedsPermission || dictation.phase in setOf(DictationPhase.NeedsPermission,DictationPhase.NeedsLanguage) ||
   recording.phase==RecordingPhase.Failed || pendingRecording!=null || recoveries.isNotEmpty()
  if(captureDock) SideEffect {
-  onCaptureContentChanged(focused || imeVisible || captureWorking || captureNeedsAttention,
+  // IME insets belong to the whole window and can report visible during Activity recreation.
+  onCaptureContentChanged(captureBodyFocused || captureWorking || captureNeedsAttention,
    value.text.isNotBlank() || imageCount>0 || decision!=null || pendingRecording!=null || recoveries.isNotEmpty())
  }
  val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
@@ -527,7 +530,8 @@ import kotlinx.coroutines.flow.flowOf
       Icon(painterResource(R.drawable.ic_expand),contentDescription=context.getString(R.string.settings_capture_mode_minimize),modifier=Modifier.size(20.dp))
      }
     }
-    Column(Modifier.weight(1f,fill=captureExpanded).verticalScroll(rememberScrollState()).padding(bottom=SpuntoSpacing.s8),
+    Column(Modifier.weight(1f,fill=captureExpanded).verticalScroll(rememberScrollState())
+     .onFocusChanged {captureBodyFocused=it.hasFocus}.focusGroup().padding(bottom=SpuntoSpacing.s8),
      verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
      bodyContent()
      attachmentsAndVoice()

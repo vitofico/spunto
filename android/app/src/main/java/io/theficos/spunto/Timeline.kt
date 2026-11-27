@@ -194,7 +194,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
 @Composable private fun NotebookFeedViewport(progress:State<Float>?,openDockHeight:Dp,content:@Composable (Dp)->Unit) {
  // Transfer the space below the feed to its scroll padding as the composer becomes an overlay.
  // Their sum stays constant, so the viewport can grow without clamping the current scroll position.
- val footprint=openDockHeight+8.dp
+ val footprint=openDockHeight+8.dp+SpuntoSpacing.s12
  val reserve=with(LocalDensity.current) { lerp(footprint.roundToPx(),0,progress?.value ?: 1f).toDp() }
  val bottomPadding=if(progress==null) 10.dp else maxOf(84.dp,footprint+10.dp)-reserve
  Box(Modifier.fillMaxSize().padding(bottom=reserve).clipToBounds()) {content(bottomPadding)}

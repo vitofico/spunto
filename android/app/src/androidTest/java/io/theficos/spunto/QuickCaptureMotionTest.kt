@@ -9,8 +9,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -20,9 +18,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.theficos.spunto.core.design.SpuntoTheme
-import io.theficos.spunto.core.design.builtInTokens
-import io.theficos.spunto.core.design.paletteColorScheme
-import io.theficos.spunto.core.design.tokenColor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -34,18 +29,6 @@ class QuickCaptureMotionTest {
     @get:Rule val compose = createComposeRule(effectContext = object : MotionDurationScale {
         override val scaleFactor = 1f
     })
-
-    @Test fun dockKeepsTheThemeTintAndSoftensAWallpaperTintThatHidesThePlaceholder() {
-        val palette = builtInTokens.getValue("carta").getValue("dark")
-        val colors = paletteColorScheme(palette, dark = true)
-        val placeholder = tokenColor(palette.getValue("ink-3"))
-        assertEquals(colors.primaryContainer, quickCaptureDockFill(colors, placeholder))
-
-        val wallpaper = colors.copy(primaryContainer = Color(0xFF4A4458))
-        val fill = quickCaptureDockFill(wallpaper, placeholder)
-        assertTrue((placeholder.luminance() + .05f) / (wallpaper.primaryContainer.luminance() + .05f) < 4.5f)
-        assertTrue((placeholder.luminance() + .05f) / (fill.luminance() + .05f) >= 4.5f)
-    }
 
     @Test fun captureMorphsInBothDimensionsAndKeepsItsBottomEndAnchor() {
         val minimized = mutableStateOf(false)

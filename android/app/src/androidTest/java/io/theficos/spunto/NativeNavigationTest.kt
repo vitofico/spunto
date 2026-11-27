@@ -166,18 +166,24 @@ class NativeNavigationTest {
    compose.onNode(option).performClick().assertIsSelected()
    repeat(2) {compose.onNodeWithContentDescription("Back").performClick()}
   }
+  fun waitForPencil() {
+   compose.waitUntil(10_000) {
+    compose.onAllNodesWithTag("quick-capture-pencil").fetchSemanticsNodes(atLeastOneRootRequired=false).size==1 &&
+     pencil.isDisplayed()
+   }
+  }
   try {
    openAppearance()
    choose("Always compact")
-   pencil.assertIsDisplayed()
+   waitForPencil()
    dock.assertDoesNotExist()
    compose.activityRule.scenario.recreate()
-   pencil.assertIsDisplayed()
+   waitForPencil()
    pencil.performClick()
    waitForCapture()
    dock.assertIsDisplayed()
    compose.onNodeWithContentDescription("Minimize Quick Capture").performClick()
-   pencil.assertIsDisplayed()
+   waitForPencil()
    openAppearance()
    choose("Collapses while scrolling")
    waitForCapture()

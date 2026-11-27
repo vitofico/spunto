@@ -13,17 +13,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -43,8 +47,21 @@ import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
+import io.theficos.spunto.core.design.SpuntoColors
 
 private val quickCaptureEasing = CubicBezierEasing(.38f, .08f, .43f, 1f)
+
+internal fun quickCaptureDockFill(colors: ColorScheme, placeholder: Color): Color {
+    val surface = colors.surfaceContainerLow
+    val tint = colors.primaryContainer
+    val inks = listOf(colors.onSurface, colors.onSurfaceVariant, colors.primary, colors.error, placeholder)
+        .map { it.luminance() }
+    // Android wallpaper colours can pair a dynamic container with the selected theme's text.
+    return listOf(tint, lerp(surface, tint, .5f)).firstOrNull { candidate ->
+        val background = candidate.luminance()
+        inks.all { (maxOf(it, background) + .05f) / (minOf(it, background) + .05f) >= 4.5f }
+    } ?: surface
+}
 
 @Composable
 internal fun rememberQuickCaptureProgress(minimized: Boolean): State<Float> =
@@ -70,7 +87,10 @@ internal fun QuickCaptureMorph(
     val context = LocalContext.current
     val density = LocalDensity.current
     val colors = MaterialTheme.colorScheme
+    val placeholder = SpuntoColors.ink3
+    val fill = remember(colors, placeholder) { quickCaptureDockFill(colors, placeholder) }
     val shape = RoundedCornerShape(lerp(20.dp, 17.dp, fraction))
+    val outline = lerp(colors.outlineVariant, colors.primary, .6f)
     val dockAlpha = 1f - (fraction / .28f).coerceIn(0f, 1f)
     val pencilAlpha = ((fraction - .54f) / .4f).coerceIn(0f, 1f)
     val showDock = !minimized || dockAlpha > 0f
@@ -81,8 +101,8 @@ internal fun QuickCaptureMorph(
             .padding(start = 12.dp, end = lerp(12.dp, 16.dp, fraction), bottom = lerp(8.dp, 12.dp, fraction))
             .testTag("quick-capture-morph")
             .shadow(lerp(2.dp, 6.dp, fraction), shape, clip = true)
-            .background(lerp(colors.surfaceContainerLow, colors.primary, fraction), shape)
-            .border(1.dp, colors.outlineVariant.copy(alpha = colors.outlineVariant.alpha * (1f - fraction)), shape)
+            .background(lerp(fill, colors.primary, fraction), shape)
+            .border(1.dp, outline.copy(alpha = outline.alpha * (1f - fraction)), shape)
             // The moving surface remains a hit boundary even before the pencil becomes active.
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
         content = {

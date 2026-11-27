@@ -56,6 +56,7 @@ import kotlinx.serialization.json.*
  var mode by remember { mutableStateOf(model.container.preferences.getString("mode","system")!!) }
  var black by remember { mutableStateOf(model.container.preferences.getBoolean("black",false)) }
  var backgroundStyle by remember { mutableStateOf(normalizedBackgroundStyle(model.container.preferences.getString("background-style","artwork"))) }
+ var compactCapture by remember { mutableStateOf(model.container.preferences.getBoolean("quick-capture-compact",false)) }
  var wallpaper by remember { mutableStateOf(model.container.preferences.getBoolean("wallpaper",false)) }
  var readingFace by remember { mutableStateOf(normalizedReadingFace(model.container.preferences.getString("reading-face","serif").orEmpty())) }
  var readingSize by remember { mutableStateOf(normalizedReadingSize(model.container.preferences.getString("reading-size","M").orEmpty())) }
@@ -178,7 +179,7 @@ import kotlinx.serialization.json.*
    if(isLabelsNavigationRoute(route)) TextButton(onClick={navigationOpen=true},modifier=modifier.semantics {contentDescription=navigationLabel}) {Text("${navigationTitle(context,route,navigationLabels,manifest,catalog)} ▾",style=if(compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface,maxLines=1,overflow=TextOverflow.Ellipsis)}
    else routeTitle(context,route)?.let { Text(it,modifier=modifier,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis) }
   }
-  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable && route!="timeline" || route in setOf("settings","appearance","plugins","status",WorkspaceModelsRoute,WhatsNewRoute)),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
+  Scaffold(modifier=Modifier.spuntoBackground(enabled=filterable && !editingCapture || route in setOf("settings","appearance","plugins","status",WorkspaceModelsRoute,WhatsNewRoute)),containerColor=androidx.compose.ui.graphics.Color.Transparent,contentColor=MaterialTheme.colorScheme.onSurface,topBar={
    if(editingCapture) TopAppBar(
     title={ Text(context.getString(R.string.new_note)) },
     navigationIcon={ IconButton(onClick=::closeCapture) {
@@ -189,7 +190,7 @@ import kotlinx.serialization.json.*
    else if(brandedHeader) {
     val density=LocalDensity.current
     val textMeasurer=rememberTextMeasurer()
-    Column(Modifier.fillMaxWidth().spuntoBackground()
+    Column(Modifier.fillMaxWidth()
      .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal))) {
      BoxWithConstraints(Modifier.fillMaxWidth()) {
       val wordmarkSize=when {
@@ -251,7 +252,7 @@ import kotlinx.serialization.json.*
      route=="timeline" -> Timeline(model,onNote=openNote,onReview={nav.open("review")},from=createdFrom,to=createdTo,
       focusCapture=focusCapture,onCaptureFocused={focusCapture=false},captureExpanded=editingCapture,
       onExpandCapture={ captureExpanded=true;focusCapture=true },onCollapseCapture=::closeCapture,
-      snackbarContent={SnackbarHost(snackbar)})
+      snackbarContent={SnackbarHost(snackbar)},compactCapture=compactCapture)
      route.substringBefore(':') in setOf("note","note-edit") -> NoteScreen(model,route.substringAfter(':'),onClose={nav.back()},onNote=openNote,onBackReady={noteBack=it},startEditing=route.startsWith("note-edit:"))
      route=="search" -> SearchScreen(model,onNote=openNote,from=createdFrom,to=createdTo)
      route=="tools" -> if(owner) GlobalToolsScreen(model)
@@ -278,7 +279,11 @@ import kotlinx.serialization.json.*
      },catalog=appearanceManifest?.catalog ?: ThemeCatalog(builtInThemeCards,false),accent=if(themeOverride) accent else activeSelection.accent,onAccent={ choice ->
       val selected=resolveThemeSelection(requestedTheme,choice,appearanceManifest?.catalog)
       applyDeviceTheme(model.container.preferences,requestedTheme,choice,selected,manifestFingerprint,clearWallpaper=true);theme=requestedTheme;accent=choice;themeOverride=true;wallpaper=false
-     },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()},backgroundStyle=backgroundStyle,onBackgroundStyle={backgroundStyle=it;model.container.preferences.edit().putString("background-style",it).apply()})
+     },instanceName=appearanceManifest?.let { value -> value.catalog.cards.firstOrNull { it.id==value.instance.id }?.name } ?: builtInThemes.firstOrNull { it.id==instance?.string("id") }?.name ?: "Carta",readingFace=readingFace,readingSize=readingSize,onReadingFace={readingFace=it;model.container.preferences.edit().putString("reading-face",it).apply()},onReadingSize={readingSize=it;model.container.preferences.edit().putString("reading-size",it).apply()},backgroundStyle=backgroundStyle,onBackgroundStyle={backgroundStyle=it;model.container.preferences.edit().putString("background-style",it).apply()},
+      compactCapture=compactCapture,onCompactCapture={
+       compactCapture=it
+       model.container.preferences.edit().putBoolean("quick-capture-compact",it).apply()
+      })
      route=="plugins" -> PluginsScreen(model) { nav.open("plugin:$it") }
      route.startsWith("plugin:") -> PluginScreen(model,route.substringAfter(':'),onReview={nav.open("review")})
     }

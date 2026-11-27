@@ -39,7 +39,7 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
 }
 
 /** 05 §8.4 (R24): compact theme cards and "Only on this phone"; mode, pure black and wallpaper colours; the reading face and size. */
-@Composable fun AppearanceScreen(theme:String,mode:String,black:Boolean,wallpaper:Boolean,onTheme:(String)->Unit,onMode:(String)->Unit,onBlack:(Boolean)->Unit,onWallpaper:(Boolean)->Unit,themeOverride:Boolean=true,onUseInstance:(()->Unit)?=null,catalog:ThemeCatalog=ThemeCatalog(builtInThemeCards,false),accent:String?=null,onAccent:((String?)->Unit)?=null,instanceName:String="Carta",readingFace:String="serif",readingSize:String="M",onReadingFace:(String)->Unit={},onReadingSize:(String)->Unit={},backgroundStyle:String="artwork",onBackgroundStyle:(String)->Unit={}) {
+@Composable fun AppearanceScreen(theme:String,mode:String,black:Boolean,wallpaper:Boolean,onTheme:(String)->Unit,onMode:(String)->Unit,onBlack:(Boolean)->Unit,onWallpaper:(Boolean)->Unit,themeOverride:Boolean=true,onUseInstance:(()->Unit)?=null,catalog:ThemeCatalog=ThemeCatalog(builtInThemeCards,false),accent:String?=null,onAccent:((String?)->Unit)?=null,instanceName:String="Carta",readingFace:String="serif",readingSize:String="M",onReadingFace:(String)->Unit={},onReadingSize:(String)->Unit={},backgroundStyle:String="artwork",onBackgroundStyle:(String)->Unit={},compactCapture:Boolean=false,onCompactCapture:(Boolean)->Unit={}) {
  val resources=LocalContext.current.resources
  val dark=mode=="dark" || mode=="system" && isSystemInDarkTheme()
  val selectedCard=catalog.cards.firstOrNull { it.id==theme && it.available }
@@ -60,6 +60,21 @@ internal fun applyWindowNightMode(context:Context,mode:String) {
      }
     }
     Text(resources.getString(R.string.settings_background_help),Modifier.padding(horizontal=SpuntoSpacing.s16).padding(bottom=SpuntoSpacing.s12),style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   }
+  }
+  item {
+   SettingsSection(resources.getString(R.string.settings_plugin_quick_capture_name))
+   AppearanceGroup(Modifier.selectableGroup()) {
+    listOf(false to R.string.settings_capture_mode_adaptive,true to R.string.settings_capture_mode_compact).forEach { (compact,label) ->
+     val selected=compact==compactCapture
+     if(compact) AppearanceDivider()
+     Row(Modifier.fillMaxWidth().heightIn(min=56.dp).selectable(selected,role=Role.RadioButton,
+      onClick={onCompactCapture(compact)}).padding(horizontal=SpuntoSpacing.s16,vertical=SpuntoSpacing.s8),
+      verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s12)) {
+      RadioButton(selected=selected,onClick=null)
+      Text(resources.getString(label),Modifier.weight(1f),style=MaterialTheme.typography.bodyLarge)
+     }
+    }
    }
   }
   item {

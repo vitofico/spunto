@@ -1,5 +1,6 @@
 package io.theficos.spunto
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -16,6 +17,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** Actual root navigation and replica, guarded local synthetic fixtures; no microphone. */
 @RunWith(AndroidJUnit4::class)
@@ -64,17 +67,22 @@ class NativeNavigationTest {
  }
  private fun todayFilter()=compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_today)))
 
- @Test fun notebookScrollKeepsCaptureDockedAndExpansionReturnsTheSameDraft() {
+ @Test fun notebookScrollMinimizesCaptureAndExpansionReturnsTheSameDraft() {
   val authority=runBlocking {LocalFixtureAuthority.require(container)}
   val repository=container.repository
   val original=runBlocking {repository.draft("capture").first()?.body}
   val fixture="Synthetic dock fixture ${System.nanoTime()}"
   val draft="$fixture draft"
   val revised="$draft\n\nExpanded edit"
-  val notes=List(12) {index ->Note(uuidV7(),"# $fixture $index\n\nNotebook excerpt")}
+  val yesterday=LocalDate.now().minusDays(1).atTime(12,0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+  val now=System.currentTimeMillis()
+  val notes=List(20) {index ->
+   Note(uuidV7(),"# $fixture $index\n\nNotebook excerpt",createdAt=(if(index<10) now else yesterday)-index)
+  }
   val inserted=mutableListOf<String>()
   val feed=compose.onNodeWithTag("notebook-feed")
   val dock=compose.onNodeWithTag("quick-capture-dock")
+  val pencil=compose.onNodeWithTag("quick-capture-pencil")
   val editor=compose.onNodeWithContentDescription("Note text")
   try {
    runBlocking {
@@ -91,10 +99,22 @@ class NativeNavigationTest {
    val feedBounds=feed.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
    val dockBounds=dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
    assertTrue("The feed ends before the capture dock",feedBounds.bottom<=dockBounds.top)
-   feed.performScrollToIndex(11)
-   assertEquals(dockBounds,dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
-
    editor.performTextReplacement(draft)
+   closeSoftKeyboard()
+   feed.performScrollToIndex(4)
+   pencil.assertIsDisplayed().assert(
+    SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Draft available"),
+   )
+   dock.assertDoesNotExist()
+   val visibleDate=compose.onNode(hasTestTag("notebook-date-header") and hasContentDescription("Today"))
+    .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+   val entry=compose.onAllNodesWithContentDescription(fixture,substring=true).fetchSemanticsNodes().first()
+   assertEquals(entry.boundsInRoot.width,visibleDate.width,1f)
+   val beforeOpen=feed.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+   pencil.performClick()
+   waitForCapture(draft)
+   val afterOpen=feed.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+   assertEquals("Opening the pencil preserves the list position",beforeOpen,afterOpen,.01f)
    val editingFeed=feed.assertExists().fetchSemanticsNode().boundsInRoot
    val editingDock=dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
    assertTrue("Typing keeps the dock separate from the feed",editingFeed.bottom<=editingDock.top)
@@ -108,11 +128,17 @@ class NativeNavigationTest {
    editor.assertTextEquals(revised)
    dock.assertIsDisplayed()
    closeSoftKeyboard()
+   feed.performScrollToIndex(0)
    compose.onNodeWithContentDescription("Search").assertIsDisplayed().performClick()
    compose.onNodeWithContentDescription("Back").performClick()
    waitForCapture(revised)
    editor.assertTextEquals(revised)
    assertDraft(revised)
+   feed.performScrollToIndex(19)
+   pencil.assertIsDisplayed()
+   val yesterdayDate=compose.onNode(hasTestTag("notebook-date-header") and hasContentDescription("Yesterday"))
+    .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+   assertEquals("The next date takes the same pinned position",visibleDate.top,yesterdayDate.top,1f)
   } finally {
    try {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}
    finally {
@@ -121,6 +147,44 @@ class NativeNavigationTest {
      for(id in inserted) repository.dao.remove(id)
     }
    }
+  }
+ }
+
+ @Test fun alwaysCompactIsDeviceLocalAndShowsThePencilAtTheTop() {
+  val preferences=container.preferences
+  val key="quick-capture-compact"
+  val original=preferences.all[key] as? Boolean
+  val dock=compose.onNodeWithTag("quick-capture-dock")
+  val pencil=compose.onNodeWithTag("quick-capture-pencil")
+  fun openAppearance() {
+   compose.onNodeWithContentDescription("Settings").performClick()
+   compose.onNode(hasText("Appearance") and hasClickAction()).performClick()
+  }
+  fun choose(label:String) {
+   val option=hasText(label) and hasClickAction()
+   compose.onNode(hasScrollAction()).performScrollToNode(option)
+   compose.onNode(option).performClick().assertIsSelected()
+   repeat(2) {compose.onNodeWithContentDescription("Back").performClick()}
+  }
+  try {
+   openAppearance()
+   choose("Always compact")
+   pencil.assertIsDisplayed()
+   dock.assertDoesNotExist()
+   compose.activityRule.scenario.recreate()
+   pencil.assertIsDisplayed()
+   pencil.performClick()
+   waitForCapture()
+   dock.assertIsDisplayed()
+   compose.onNodeWithContentDescription("Minimize Quick Capture").performClick()
+   pencil.assertIsDisplayed()
+   openAppearance()
+   choose("Collapses while scrolling")
+   waitForCapture()
+   dock.assertIsDisplayed()
+   pencil.assertDoesNotExist()
+  } finally {
+   preferences.edit().apply { if(original==null) remove(key) else putBoolean(key,original) }.commit()
   }
  }
 

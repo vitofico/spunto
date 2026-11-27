@@ -27,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +56,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,focusCapture:Boolean=false,onCaptureFocused:()->Unit={},onExpandCapture:(()->Unit)?=null,captureExpanded:Boolean=false,modifier:Modifier=Modifier,onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,focusCapture:Boolean=false,onCaptureFocused:()->Unit={},onExpandCapture:(()->Unit)?=null,captureExpanded:Boolean=false,
+ captureMinimized:Boolean=false,onMinimizeCapture:(()->Unit)?=null,
+ onCaptureContentChanged:(engaged:Boolean,hasDraft:Boolean)->Unit={_,_->},
+ modifier:Modifier=Modifier,onSave:suspend (String)->Unit) {
  val captureDock=onExpandCapture!=null
  val collapsedDock=captureDock && !captureExpanded
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
@@ -180,8 +184,8 @@ import kotlinx.coroutines.flow.flowOf
   androidx.compose.runtime.withFrameNanos { }
   if(autoDictate && mic) micTap() else if(autoFocus && !focusSpent) { focusSpent=true; focus.requestFocus(); keyboard?.show() }
  }
- LaunchedEffect(focusCapture,ready,canWrite) {
-  if(focusCapture && ready && canWrite) {
+ LaunchedEffect(focusCapture,ready,canWrite,captureMinimized) {
+  if(focusCapture && ready && canWrite && !captureMinimized) {
    withFrameNanos { }
    focus.requestFocus()
    keyboard?.show()
@@ -463,6 +467,13 @@ import kotlinx.coroutines.flow.flowOf
  // A hidden keyboard ends typing. The home composer remains docked.
  val imeVisible=WindowInsets.isImeVisible;val focusManager=LocalFocusManager.current;var keyboardShown by remember { mutableStateOf(false) }
  LaunchedEffect(imeVisible) { if(keyboardShown && !imeVisible && focused && id=="capture" && !listening) focusManager.clearFocus();keyboardShown=imeVisible }
+ val captureWorking=saving || imageBusy || startingVoice || listening || recordingActive(recording.phase)
+ val captureNeedsAttention=recordingNeedsPermission || dictation.phase in setOf(DictationPhase.NeedsPermission,DictationPhase.NeedsLanguage) ||
+  recording.phase==RecordingPhase.Failed || pendingRecording!=null || recoveries.isNotEmpty()
+ if(captureDock) SideEffect {
+  onCaptureContentChanged(focused || imeVisible || captureWorking || captureNeedsAttention,
+   value.text.isNotBlank() || imageCount>0 || decision!=null || pendingRecording!=null || recoveries.isNotEmpty())
+ }
  val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
  // A label already typed in full offers nothing to complete, so the tools stay.
  val suggestions=prefix?.let {labelCounts.filter {label -> label.key.startsWith(it,true) && !label.path.equals(it,true)}.sortedByDescending {it.count}.take(5)}.orEmpty()
@@ -493,7 +504,10 @@ import kotlinx.coroutines.flow.flowOf
   })
  }
  if(captureDock) {
-  Surface(modifier=modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),
+  // Keep the editor lease, pending content and draft machinery mounted behind the pencil.
+  if(captureMinimized) return
+  // The expanded field starts at the surface edge, where a rounded clip can cut off its first glyph.
+  Surface(modifier=modifier.fillMaxWidth(),shape=if(collapsedDock) RoundedCornerShape(20.dp) else RectangleShape,
    color=if(collapsedDock) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.background,
    border=if(collapsedDock) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null,
    shadowElevation=if(collapsedDock) 2.dp else 0.dp) {
@@ -504,6 +518,13 @@ import kotlinx.coroutines.flow.flowOf
       color=MaterialTheme.colorScheme.primary)
      IconButton(onClick=checkNotNull(onExpandCapture),modifier=Modifier.size(48.dp)) {
       Icon(painterResource(R.drawable.ic_expand_composer),contentDescription=context.getString(R.string.core_expand_composer),modifier=Modifier.size(20.dp))
+     }
+     if(onMinimizeCapture!=null) IconButton(onClick={
+      focusManager.clearFocus()
+      keyboard?.hide()
+      onMinimizeCapture()
+     },enabled=!captureWorking,modifier=Modifier.size(48.dp)) {
+      Icon(painterResource(R.drawable.ic_expand),contentDescription=context.getString(R.string.settings_capture_mode_minimize),modifier=Modifier.size(20.dp))
      }
     }
     Column(Modifier.weight(1f,fill=captureExpanded).verticalScroll(rememberScrollState()).padding(bottom=SpuntoSpacing.s8),

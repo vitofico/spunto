@@ -5,6 +5,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.espresso.Espresso.closeSoftKeyboard
+import io.theficos.spunto.core.design.SpuntoSpacing
 import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.core.model.labelKey
 import io.theficos.spunto.core.model.uuidV7
@@ -30,6 +31,13 @@ class NativeNavigationTest {
  private fun waitForCapture(text:String?=null) {
   val editable=hasContentDescription("Note text") and isEnabled()
   compose.waitUntil(10_000) {compose.onAllNodes(if(text==null) editable else editable and hasText(text)).fetchSemanticsNodes(atLeastOneRootRequired=false).isNotEmpty()}
+ }
+ private fun waitForPencil() {
+  val pencil=compose.onNodeWithTag("quick-capture-pencil")
+  compose.waitUntil(10_000) {
+   compose.onAllNodesWithTag("quick-capture-pencil").fetchSemanticsNodes(atLeastOneRootRequired=false).size==1 &&
+    pencil.isDisplayed()
+  }
  }
  private fun openSheet() {
   compose.onNodeWithContentDescription("Choose labels and views").performClick()
@@ -98,11 +106,13 @@ class NativeNavigationTest {
    compose.waitUntil(10_000) {compose.onAllNodesWithText("Notebook excerpt",substring=true).fetchSemanticsNodes().isNotEmpty()}
    val feedBounds=feed.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
    val dockBounds=dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-   assertTrue("The feed ends before the capture dock",feedBounds.bottom<=dockBounds.top)
+   val gutter=with(compose.density) {SpuntoSpacing.s12.roundToPx()}
+   assertTrue("The feed leaves a visible gap above Quick Capture",dockBounds.top-feedBounds.bottom>=gutter-1)
    editor.performTextReplacement(draft)
    closeSoftKeyboard()
    feed.performScrollToIndex(4)
-   pencil.assertIsDisplayed().assert(
+   waitForPencil()
+   pencil.assert(
     SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,"Draft available"),
    )
    dock.assertDoesNotExist()
@@ -117,7 +127,7 @@ class NativeNavigationTest {
    assertEquals("Opening the pencil preserves the list position",beforeOpen,afterOpen,.01f)
    val editingFeed=feed.assertExists().fetchSemanticsNode().boundsInRoot
    val editingDock=dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-   assertTrue("Typing keeps the dock separate from the feed",editingFeed.bottom<=editingDock.top)
+   assertTrue("Typing preserves the gap above Quick Capture",editingDock.top-editingFeed.bottom>=gutter-1)
    compose.onNodeWithText("Save",useUnmergedTree=true).assertIsDisplayed().assertIsEnabled()
    compose.onNodeWithContentDescription("Expand composer").performClick()
    compose.onNodeWithText("New note").assertIsDisplayed()
@@ -135,7 +145,7 @@ class NativeNavigationTest {
    editor.assertTextEquals(revised)
    assertDraft(revised)
    feed.performScrollToIndex(19)
-   pencil.assertIsDisplayed()
+   waitForPencil()
    val yesterdayDate=compose.onNode(hasTestTag("notebook-date-header") and hasContentDescription("Yesterday"))
     .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
    assertEquals("The next date takes the same pinned position",visibleDate.top,yesterdayDate.top,1f)
@@ -165,12 +175,6 @@ class NativeNavigationTest {
    compose.onNode(hasScrollAction()).performScrollToNode(option)
    compose.onNode(option).performClick().assertIsSelected()
    repeat(2) {compose.onNodeWithContentDescription("Back").performClick()}
-  }
-  fun waitForPencil() {
-   compose.waitUntil(10_000) {
-    compose.onAllNodesWithTag("quick-capture-pencil").fetchSemanticsNodes(atLeastOneRootRequired=false).size==1 &&
-     pencil.isDisplayed()
-   }
   }
   try {
    openAppearance()

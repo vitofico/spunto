@@ -15,11 +15,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.*
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -58,11 +59,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 
 @Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,focusCapture:Boolean=false,onCaptureFocused:()->Unit={},onExpandCapture:(()->Unit)?=null,captureExpanded:Boolean=false,
- captureMinimized:Boolean=false,onMinimizeCapture:(()->Unit)?=null,
- onCaptureContentChanged:(engaged:Boolean,hasDraft:Boolean)->Unit={_,_->},
+ captureMinimized:Boolean=false,onMinimizeCapture:(()->Unit)?=null,onOpenCapture:()->Unit={},
+ captureProgress:State<Float>?=null,openDockHeight:Dp=0.dp,onOpenDockHeightChanged:(Dp)->Unit={},onCaptureEngagementChanged:(Boolean)->Unit={},
  modifier:Modifier=Modifier,onSave:suspend (String)->Unit) {
  val captureDock=onExpandCapture!=null
  val collapsedDock=captureDock && !captureExpanded
+ val dockProgress=if(collapsedDock) captureProgress ?: rememberQuickCaptureProgress(captureMinimized) else null
+ val dockInteractive by remember(dockProgress,captureMinimized) {
+  derivedStateOf { !captureMinimized && (dockProgress?.value ?: 0f)==0f }
+ }
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -186,8 +191,9 @@ import kotlinx.coroutines.flow.flowOf
   androidx.compose.runtime.withFrameNanos { }
   if(autoDictate && mic) micTap() else if(autoFocus && !focusSpent) { focusSpent=true; focus.requestFocus(); keyboard?.show() }
  }
- LaunchedEffect(focusCapture,ready,canWrite,captureMinimized) {
-  if(focusCapture && ready && canWrite && !captureMinimized) {
+ LaunchedEffect(focusCapture,ready,canWrite,dockInteractive) {
+  // Wait for the dock to finish reopening before the keyboard moves its bottom edge.
+  if(focusCapture && ready && canWrite && dockInteractive) {
    withFrameNanos { }
    focus.requestFocus()
    keyboard?.show()
@@ -474,8 +480,7 @@ import kotlinx.coroutines.flow.flowOf
   recording.phase==RecordingPhase.Failed || pendingRecording!=null || recoveries.isNotEmpty()
  if(captureDock) SideEffect {
   // IME insets belong to the whole window and can report visible during Activity recreation.
-  onCaptureContentChanged(captureBodyFocused || captureWorking || captureNeedsAttention,
-   value.text.isNotBlank() || imageCount>0 || decision!=null || pendingRecording!=null || recoveries.isNotEmpty())
+  onCaptureEngagementChanged(captureBodyFocused || captureWorking || captureNeedsAttention)
  }
  val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
  // A label already typed in full offers nothing to complete, so the tools stay.
@@ -507,13 +512,7 @@ import kotlinx.coroutines.flow.flowOf
   })
  }
  if(captureDock) {
-  // Keep the editor lease, pending content and draft machinery mounted behind the pencil.
-  if(captureMinimized) return
-  // The expanded field starts at the surface edge, where a rounded clip can cut off its first glyph.
-  Surface(modifier=modifier.fillMaxWidth(),shape=if(collapsedDock) RoundedCornerShape(20.dp) else RectangleShape,
-   color=if(collapsedDock) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.background,
-   border=if(collapsedDock) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null,
-   shadowElevation=if(collapsedDock) 2.dp else 0.dp) {
+  val dockContent:@Composable ()->Unit={
    Column(Modifier.padding(horizontal=if(collapsedDock) 12.dp else 0.dp)) {
     if(collapsedDock) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
      Text(context.getString(R.string.settings_plugin_quick_capture_name).uppercase(LocalConfiguration.current.locales[0]),
@@ -539,6 +538,14 @@ import kotlinx.coroutines.flow.flowOf
     HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
     toolbar()
    }
+  }
+  if(dockProgress!=null) {
+   val hasDraft=value.text.isNotBlank() || imageCount>0 || decision!=null || pendingRecording!=null || recoveries.isNotEmpty()
+   QuickCaptureMorph(captureMinimized,dockProgress,openDockHeight,dockInteractive,hasDraft,onOpenCapture,
+    onOpenDockHeightChanged,modifier,dockContent)
+  } else {
+   // The expanded field starts at the surface edge, where a rounded clip can cut off its first glyph.
+   Surface(modifier=modifier.fillMaxWidth(),shape=RectangleShape,color=MaterialTheme.colorScheme.background,content=dockContent)
   }
  } else {
   Column(modifier,verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {

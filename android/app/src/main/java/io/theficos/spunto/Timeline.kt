@@ -24,6 +24,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.roundToInt
@@ -35,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.util.lerp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -118,8 +120,8 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  var overrideMode by rememberSaveable { mutableStateOf(compactCapture) }
  var requestFocus by rememberSaveable { mutableStateOf(false) }
  var engaged by remember { mutableStateOf(false) }
- var hasDraft by remember { mutableStateOf(false) }
  var dockHeightDp by rememberSaveable { mutableFloatStateOf(0f) }
+ val visibleDockHeight = remember { mutableIntStateOf(0) }
  val density=LocalDensity.current
  val scrollThreshold=with(density) { 48.dp.roundToPx() }
  LaunchedEffect(listState,scrollThreshold) {
@@ -139,6 +141,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val override=captureOverride.takeIf {overrideMode==compactCapture}
  val minimized=writable && !captureExpanded && canMinimize && override!=true && !focusCapture && !requestFocus &&
   (!engaged || override==false)
+ val dockProgress=if(writable && !captureExpanded) rememberQuickCaptureProgress(minimized) else null
  // After Save the new entry, with its day header, is scrolled into view, with a brief context.getString(R.string.core_saved).
  LaunchedEffect(savedId) {
   val id=savedId ?: return@LaunchedEffect
@@ -159,14 +162,8 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
   onCollapseCapture()
   savedId=id
  }
- Column(Modifier.fillMaxSize().imePadding()) {
-  if(!captureExpanded) Box(Modifier.weight(1f)) {
-   // Keep the original scroll range in adaptive mode so a short feed cannot jump back to the top.
-   val bottomPadding=when {
-    !minimized -> 10.dp
-    compactCapture -> 84.dp
-    else -> maxOf(84.dp,(dockHeightDp+10f).dp)
-   }
+ Box(Modifier.fillMaxSize().imePadding()) {
+  if(!captureExpanded) NotebookFeedViewport(dockProgress,dockHeightDp.dp) { bottomPadding ->
    NoteList(model,page,grouped=true,listState,onNote,notebook=true,bottomPadding=bottomPadding,empty={
     if(from.isNotBlank() || to.isNotBlank()) Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
     else { Text(context.getString(R.string.core_quiet_place),style=MaterialTheme.typography.titleLarge); Text(context.getString(R.string.core_share_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -174,20 +171,6 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
     if(legacyDecision) item(key="record-decision") { DecisionRecordAction(model) }
     if(writable && proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }
     slip?.let { (output,note) -> item(key="slip") { DailySlip(model,output,note,onNote) { slipHidden.value="${LocalDate.now()}/${output.id}";model.container.preferences.edit().putString("slip-hidden",slipHidden.value).apply() } } }
-   }
-   Box(Modifier.align(Alignment.BottomCenter).padding(bottom=if(minimized) 72.dp else 0.dp)) {snackbarContent()}
-   if(minimized) FloatingActionButton(
-    onClick={captureOverride=true;requestFocus=true},
-    modifier=Modifier.align(Alignment.BottomEnd).padding(end=16.dp,bottom=12.dp).testTag("quick-capture-pencil").semantics {
-     if(hasDraft) stateDescription=context.getString(R.string.settings_capture_mode_has_draft)
-    },
-    containerColor=MaterialTheme.colorScheme.primary,contentColor=MaterialTheme.colorScheme.onPrimary,
-   ) {
-    Box(Modifier.size(56.dp)) {
-     Icon(painterResource(R.drawable.ic_quick_capture_pencil),contentDescription=context.getString(R.string.settings_plugin_quick_capture_name),modifier=Modifier.align(Alignment.Center))
-     if(hasDraft) Box(Modifier.align(Alignment.TopEnd).padding(7.dp).size(7.dp)
-      .background(MaterialTheme.colorScheme.onPrimary,RoundedCornerShape(50)))
-    }
    }
   }
   if(writable) Composer(model,autoFocus=false,onPlainCaptureSaved=::captured,onRecordingSaved={captured(it)},
@@ -197,11 +180,24 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
     onCaptureFocused()
    },onExpandCapture=onExpandCapture,captureExpanded=captureExpanded,captureMinimized=minimized,
    onMinimizeCapture=if(canMinimize) {{captureOverride=false}} else null,
-   onCaptureContentChanged={ active,draft -> engaged=active;hasDraft=draft },
-   modifier=if(captureExpanded) Modifier.weight(1f).padding(horizontal=20.dp) else Modifier
-    .testTag("quick-capture-dock").onSizeChanged {dockHeightDp=with(density) {it.height.toDp().value}}
-    .padding(start=12.dp,end=12.dp,bottom=8.dp),onSave={model.saveLocal(it)})
+   onOpenCapture={captureOverride=true;requestFocus=true},
+   captureProgress=dockProgress,openDockHeight=dockHeightDp.dp,onOpenDockHeightChanged={dockHeightDp=it.value},
+   onCaptureEngagementChanged={engaged=it},
+   modifier=if(captureExpanded) Modifier.fillMaxSize().padding(horizontal=20.dp) else Modifier
+    .align(Alignment.BottomEnd).onSizeChanged {visibleDockHeight.intValue=it.height},onSave={model.saveLocal(it)})
+  if(!captureExpanded) Box(Modifier.align(Alignment.BottomCenter).offset {
+   IntOffset(0,if(writable) -visibleDockHeight.intValue else 0)
+  }) {snackbarContent()}
  }
+}
+
+@Composable private fun NotebookFeedViewport(progress:State<Float>?,openDockHeight:Dp,content:@Composable (Dp)->Unit) {
+ // Transfer the space below the feed to its scroll padding as the composer becomes an overlay.
+ // Their sum stays constant, so the viewport can grow without clamping the current scroll position.
+ val footprint=openDockHeight+8.dp+SpuntoSpacing.s12
+ val reserve=with(LocalDensity.current) { lerp(footprint.roundToPx(),0,progress?.value ?: 1f).toDp() }
+ val bottomPadding=if(progress==null) 10.dp else maxOf(84.dp,footprint+10.dp)-reserve
+ Box(Modifier.fillMaxSize().padding(bottom=reserve).clipToBounds()) {content(bottomPadding)}
 }
 
 /** The day's slip (03 §5, S5): its date, the note, Archive, and × for context.getString(R.string.core_not_today). */

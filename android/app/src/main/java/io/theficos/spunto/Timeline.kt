@@ -27,6 +27,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -85,7 +86,8 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
 }
 
 @Composable fun Timeline(model:SpuntoViewModel,onNote:(String)->Unit,onReview:()->Unit,from:String="",to:String="",
- focusCapture:Boolean=false,onCaptureFocused:()->Unit={}) {
+ focusCapture:Boolean=false,onCaptureFocused:()->Unit={},captureExpanded:Boolean=false,
+ onExpandCapture:()->Unit={},onCollapseCapture:()->Unit={},snackbarContent:@Composable ()->Unit={}) {
  val context=LocalContext.current
  val range=remember(from,to) { runCatching { CreatedRange.parse(from,to) } }
  val spec=remember(range.getOrNull(),range.isSuccess) { TimelineSpec(created=range.getOrDefault(CreatedRange()),valid=range.isSuccess) }
@@ -95,37 +97,43 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val writable by model.workspaceCanWrite.collectAsState()
  val proposals=waitingProposals(model,outputs).size
  val listState=rememberLazyListState()
- LaunchedEffect(focusCapture) {if(focusCapture) listState.scrollToItem(0)}
  val feedback=LocalFeedback.current
- // Only a launch onto the timeline focuses the composer; opening the app on a note and coming back must not.
- val launchedOnNote=(LocalContext.current as? android.app.Activity)?.intent?.getStringExtra("noteId")!=null
  var savedId by remember { mutableStateOf<String?>(null) }
  val slipHidden=remember { mutableStateOf(model.container.preferences.getString("slip-hidden","").orEmpty()) }
  val slip=dailySlip(outputs,notes,model.container.manifest::enabled) { slipHidden.value=="${LocalDate.now()}/${it.id}" }
- val lead=(if(writable) 1 else 0)+(if(writable && proposals>=3) 1 else 0)+(if(slip!=null) 1 else 0)
+ val manifest by model.manifest.collectAsState()
+ val lead=(if(writable && !supportsDecisionCapture(manifest)) 1 else 0)+(if(writable && proposals>=3) 1 else 0)+(if(slip!=null) 1 else 0)
  // After Save the new entry, with its day header, is scrolled into view, with a brief context.getString(R.string.core_saved).
  LaunchedEffect(savedId) {
   val id=savedId ?: return@LaunchedEffect
   feedback.show(context.getString(R.string.core_saved))
-  withTimeoutOrNull(3_000) { snapshotFlow { page.itemSnapshotList.items.indexOfFirst { it.id==id } }.first { it>=0 } }?.let { index ->
+  withTimeoutOrNull(3_000) { snapshotFlow { page.itemSnapshotList.items }.first { notes -> notes.any {it.id==id} } }?.let { snapshot ->
    // The first row for an entry is its group's header when it opens one.
-   listState.animateScrollToItem(lead+timelineRows(context,page.itemSnapshotList.items.map { it.note() },grouped=true).indexOfFirst { it.index==index }.coerceAtLeast(0))
+   val index=snapshot.indexOfFirst {it.id==id}
+   listState.animateScrollToItem(lead+timelineRows(context,snapshot.map {it.note()},grouped=true).indexOfFirst {it.index==index}.coerceAtLeast(0))
   }
   savedId=null
  }
- NoteList(model,page,grouped=true,listState,onNote,empty={
-  if(from.isNotBlank() || to.isNotBlank()) Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
-  else { Text(context.getString(R.string.core_quiet_place),style=MaterialTheme.typography.titleLarge); Text(context.getString(R.string.core_share_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
- }) {
-  if(writable) item(key="composer") {
-   Column(Modifier.padding(bottom=28.dp)) {
-    Composer(model,compact=true,autoFocus=false,onPlainCaptureSaved={savedId=it},focusCapture=focusCapture,
-     onCaptureFocused=onCaptureFocused,onSave={model.saveLocal(it)})
-    if(!supportsDecisionCapture(model.manifest.collectAsState().value)) DecisionRecordAction(model)
+ fun captured(id:String) {
+  onCollapseCapture()
+  savedId=id
+ }
+ Column(Modifier.fillMaxSize().imePadding()) {
+  if(!captureExpanded) Box(Modifier.weight(1f)) {
+   NoteList(model,page,grouped=true,listState,onNote,notebook=true,empty={
+    if(from.isNotBlank() || to.isNotBlank()) Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
+    else { Text(context.getString(R.string.core_quiet_place),style=MaterialTheme.typography.titleLarge); Text(context.getString(R.string.core_share_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
+   }) {
+    if(writable && !supportsDecisionCapture(manifest)) item(key="record-decision") { DecisionRecordAction(model) }
+    if(writable && proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }
+    slip?.let { (output,note) -> item(key="slip") { DailySlip(model,output,note,onNote) { slipHidden.value="${LocalDate.now()}/${output.id}";model.container.preferences.edit().putString("slip-hidden",slipHidden.value).apply() } } }
    }
+   Box(Modifier.align(Alignment.BottomCenter)) {snackbarContent()}
   }
-  if(writable && proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }
-  slip?.let { (output,note) -> item(key="slip") { DailySlip(model,output,note,onNote) { slipHidden.value="${LocalDate.now()}/${output.id}";model.container.preferences.edit().putString("slip-hidden",slipHidden.value).apply() } } }
+  if(writable) Composer(model,autoFocus=false,onPlainCaptureSaved=::captured,onRecordingSaved={captured(it)},
+   focusCapture=focusCapture,onCaptureFocused=onCaptureFocused,onExpandCapture=onExpandCapture,captureExpanded=captureExpanded,
+   modifier=if(captureExpanded) Modifier.weight(1f).padding(horizontal=20.dp) else Modifier
+    .testTag("quick-capture-dock").padding(start=12.dp,end=12.dp,bottom=8.dp),onSave={model.saveLocal(it)})
  }
 }
 
@@ -148,14 +156,15 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
 }
 
 /** The paged entry list shared by the timeline and every filter: sticky headers, long-press actions, swipe to archive. */
-@Composable private fun NoteList(model:SpuntoViewModel,page:LazyPagingItems<NoteEntity>,grouped:Boolean,listState:LazyListState,onNote:(String)->Unit,restore:Boolean=false,empty:@Composable ColumnScope.()->Unit,lead:LazyListScope.()->Unit={}) {
+@Composable private fun NoteList(model:SpuntoViewModel,page:LazyPagingItems<NoteEntity>,grouped:Boolean,listState:LazyListState,onNote:(String)->Unit,restore:Boolean=false,notebook:Boolean=false,empty:@Composable ColumnScope.()->Unit,lead:LazyListScope.()->Unit={}) {
  val context=LocalContext.current
  var actionsFor by remember { mutableStateOf<String?>(null) }
  // Rows and the notes they point at come from one snapshot, so a shrinking list never leaves a row past its end.
  val snapshot=page.itemSnapshotList.items
  val notes=remember(snapshot) { snapshot.map { it.note() } }
  val rows=remember(notes,grouped) { timelineRows(context,notes,grouped) }
- LazyColumn(Modifier.fillMaxSize(),state=listState,contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(0.dp)) {
+ val modifier=Modifier.fillMaxSize().then(if(notebook) Modifier.testTag("notebook-feed") else Modifier)
+ LazyColumn(modifier,state=listState,contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=if(notebook) 10.dp else SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(0.dp)) {
   lead()
   // Paging reports NotLoading before the first page arrives, so wait until the list has been read once.
   if(page.itemCount==0 && page.loadState.refresh is LoadState.NotLoading && page.loadState.source.refresh is LoadState.NotLoading && page.itemSnapshotList.isEmpty() && page.loadState.append.endOfPaginationReached) item(key="empty") { Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),content=empty) }
@@ -163,10 +172,10 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
    val note=notes[row.index]
    if(row.header!=null) stickyHeader(key="h:${note.id}",contentType="header") {
     // Drawn above the entries that scroll under it.
-    Text(row.header.uppercase(),Modifier.zIndex(1f).padding(top=8.dp,bottom=16.dp).background(MaterialTheme.colorScheme.background).semantics { heading();contentDescription=row.header },style=SpuntoType.overline.copy(fontWeight=FontWeight.SemiBold,letterSpacing=2.sp),color=MaterialTheme.colorScheme.primary)
+    Text(row.header.uppercase(),Modifier.zIndex(1f).background(MaterialTheme.colorScheme.background).padding(top=if(notebook) 10.dp else 8.dp,bottom=if(notebook) 8.dp else 16.dp).semantics { heading();contentDescription=row.header },style=SpuntoType.overline.copy(fontWeight=FontWeight.SemiBold,letterSpacing=2.sp),color=MaterialTheme.colorScheme.primary)
    } else item(key=note.id,contentType="entry") {
     if(row.index<page.itemCount) page[row.index] // tells the pager how far the reader has got, so the next page loads
-    NoteEntry(model,note,onNote,entryTime(context,note.createdAt,row.group),onActions={ actionsFor=note.id },restore=restore,paneStart=row.index==0 || rows.any {it.header!=null && it.index==row.index},paneEnd=row.index==notes.lastIndex || rows.any {it.header!=null && it.index==row.index+1})
+    NoteEntry(model,note,onNote,entryTime(context,note.createdAt,row.group),onActions={ actionsFor=note.id },restore=restore,paneStart=row.index==0 || rows.any {it.header!=null && it.index==row.index},paneEnd=row.index==notes.lastIndex || rows.any {it.header!=null && it.index==row.index+1},notebook=notebook)
    }
   }
  }
@@ -175,7 +184,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  }
 }
 
-@Composable fun NoteEntry(model:SpuntoViewModel,note:Note,onNote:(String)->Unit,time:String?=null,onActions:(()->Unit)?=null,restore:Boolean=false,paneStart:Boolean=true,paneEnd:Boolean=true) {
+@Composable fun NoteEntry(model:SpuntoViewModel,note:Note,onNote:(String)->Unit,time:String?=null,onActions:(()->Unit)?=null,restore:Boolean=false,paneStart:Boolean=true,paneEnd:Boolean=true,notebook:Boolean=false) {
  val context=LocalContext.current
  val locale=androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
  val outputs by model.outputs.collectAsState()
@@ -183,22 +192,27 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val nav=LocalNavigator.current
  val feedback=LocalFeedback.current
  val writable by model.workspaceCanWrite.collectAsState()
+ val gutter=if(notebook) 0.dp else 24.dp
+ val topCorner=if(paneStart) 16.dp else 0.dp
+ val bottomCorner=if(paneEnd) 16.dp else 0.dp
+ val shape=RoundedCornerShape(topStart=topCorner,topEnd=topCorner,bottomStart=bottomCorner,bottomEnd=bottomCorner)
  fun archive(archived:Boolean) { model.flags(note.id,archived=archived);feedback.show(if(archived) context.getString(R.string.core_archived) else context.getString(R.string.core_unarchived),context.getString(R.string.core_undo)) { model.flags(note.id,archived=!archived) } }
  fun trash() { model.flags(note.id,trashed=true);feedback.show(context.getString(R.string.core_moved_trash),context.getString(R.string.core_undo)) { model.flags(note.id,trashed=false) } }
  val entry=@Composable {
-  Column(Modifier.fillMaxWidth().padding(end=24.dp).clip(RoundedCornerShape(topStart=if(paneStart) 16.dp else 0.dp,topEnd=if(paneStart) 16.dp else 0.dp,bottomStart=if(paneEnd) 16.dp else 0.dp,bottomEnd=if(paneEnd) 16.dp else 0.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).combinedClickable(role=Role.Button,onClickLabel=context.getString(R.string.core_open),onLongClickLabel=context.getString(R.string.core_more_actions),onLongClick=onActions,onClick={ onNote(note.id) }).semantics {
+  Column(Modifier.fillMaxWidth().padding(end=gutter).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow).combinedClickable(role=Role.Button,onClickLabel=context.getString(R.string.core_open),onLongClickLabel=context.getString(R.string.core_more_actions),onLongClick=onActions,onClick={ onNote(note.id) }).semantics {
    contentDescription=entryDescription(context,note,time ?: noteTime(note.createdAt,locale))
    customActions=(if(writable) listOf(
     CustomAccessibilityAction(if(note.pinned) context.getString(R.string.core_unpin) else context.getString(R.string.core_pin)) { model.flags(note.id,pinned=!note.pinned);true },
     CustomAccessibilityAction(if(note.archived) context.getString(R.string.core_unarchive) else context.getString(R.string.core_archive)) { archive(!note.archived);true },
     if(note.trashed) CustomAccessibilityAction(context.getString(R.string.core_restore)) { model.flags(note.id,trashed=false);true } else CustomAccessibilityAction(context.getString(R.string.core_move_trash)) { trash();true },
    ) else emptyList())+listOfNotNull(onActions?.let { CustomAccessibilityAction(context.getString(R.string.core_more_actions)) { it();true } })
-  }.padding(horizontal=16.dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+  }.padding(horizontal=if(notebook) 12.dp else 16.dp,vertical=if(notebook) 8.dp else 12.dp),verticalArrangement=Arrangement.spacedBy(if(notebook) 4.dp else 8.dp)) {
    val preview=remember(note.body,note.title) {notePreview(note.body,note.title)}
    val previewActions=@Composable {
     if(note.pinned) Icon(painterResource(R.drawable.ic_pin),contentDescription=null,modifier=Modifier.size(14.dp),tint=SpuntoColors.ink3)
     if(note.pending) Text("◯",style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
-    if(onActions!=null) IconButton(onClick=onActions,modifier=Modifier.size(40.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
+    if(notebook && time!=null) Text(time,Modifier.padding(start=8.dp).clearAndSetSemantics {},style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
+    if(!notebook && onActions!=null) IconButton(onClick=onActions,modifier=Modifier.size(40.dp)) {Icon(painterResource(R.drawable.ic_more),contentDescription=context.getString(R.string.core_more_actions),modifier=Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)}
    }
    val previewType=SpuntoType.copy(reading=SpuntoType.reading.copy(fontFamily=readingFont(),fontSize=17.sp,lineHeight=26.sp),readingSmall=SpuntoType.readingSmall.copy(fontSize=15.sp,lineHeight=22.sp))
    val hasPreviewTasks=remember(preview.body) {preview.body.lines().any {taskLine.containsMatchIn(it)}}
@@ -206,12 +220,13 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
     if(preview.body.isNotBlank()) CompositionLocalProvider(LocalSpuntoType provides previewType,LocalCompactMarkdown provides true) {
      val openPreviewLink:(String)->Unit={if(it.startsWith("/n/")) onNote(it.substringAfter("/n/")) else if(it.startsWith("/a/")) onNote(note.id)}
      if(hasPreviewTasks) FoldedBody(preview.body) {text -> Markdown(text,note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")},hideLabels=true,onToggle=if(writable) ({model.toggleTask(note,it+preview.bodyStartLine)}) else null)}
-     else Markdown(preview.body.take(1200),note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")},maxLines=2,hideLabels=true)
+     else Markdown(preview.body.take(1200),note.machine,onLink=openPreviewLink,onLabel={nav.filter("label:$it")},maxLines=if(notebook && preview.title!=null) 1 else 2,hideLabels=true)
     }
    }
    if(preview.title!=null) {
     Row(verticalAlignment=Alignment.CenterVertically) {
-     Text(preview.title,Modifier.weight(1f),style=previewType.reading.copy(fontFamily=if(note.machine) uiFont() else readingFont()))
+     Text(preview.title,Modifier.weight(1f),style=previewType.reading.copy(fontFamily=if(note.machine) uiFont() else readingFont(),
+      fontWeight=if(notebook) FontWeight.SemiBold else previewType.reading.fontWeight))
      previewActions()
     }
     previewBody()
@@ -223,7 +238,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
    }
    if(preview.labels.isNotEmpty()) FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
     preview.labels.forEach {path -> Surface(color=MaterialTheme.colorScheme.primaryContainer,contentColor=MaterialTheme.colorScheme.onPrimaryContainer,shape=RoundedCornerShape(50)) {
-     Text(path,Modifier.clickable(role=Role.Button) {nav.filter("label:$path")}.padding(horizontal=12.dp,vertical=7.dp),style=MaterialTheme.typography.labelMedium)
+     Text(path,Modifier.clickable(role=Role.Button) {nav.filter("label:$path")}.padding(horizontal=if(notebook) 8.dp else 12.dp,vertical=if(notebook) 5.dp else 7.dp),style=if(notebook) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium)
     } }
    }
    if(meta.isNotBlank()) Text(meta,style=MaterialTheme.typography.labelSmall,color=SpuntoColors.ink3)
@@ -246,7 +261,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  // Swipe right archives; the visible route is the long-press sheet and the accessibility action.
  val swipe=rememberSwipeToDismissBoxState(confirmValueChange={ if(it==SwipeToDismissBoxValue.StartToEnd) archive(true);false })
  SwipeToDismissBox(swipe,enableDismissFromEndToStart=false,backgroundContent={
-  if(swipe.dismissDirection!=SwipeToDismissBoxValue.Settled) Row(Modifier.fillMaxSize().padding(end=24.dp).clip(RoundedCornerShape(topStart=if(paneStart) 16.dp else 0.dp,topEnd=if(paneStart) 16.dp else 0.dp,bottomStart=if(paneEnd) 16.dp else 0.dp,bottomEnd=if(paneEnd) 16.dp else 0.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
+  if(swipe.dismissDirection!=SwipeToDismissBoxValue.Settled) Row(Modifier.fillMaxSize().padding(end=gutter).clip(shape).background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal=SpuntoSpacing.s20),horizontalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),verticalAlignment=Alignment.CenterVertically) {
    Icon(painterResource(R.drawable.ic_archive),contentDescription=null,tint=MaterialTheme.colorScheme.onPrimaryContainer);Text(context.getString(R.string.core_archive),color=MaterialTheme.colorScheme.onPrimaryContainer)
   }
  }) { entry() }

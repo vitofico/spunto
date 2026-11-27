@@ -20,13 +20,16 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -52,7 +55,9 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 
-@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,focusCapture:Boolean=false,onCaptureFocused:()->Unit={},onSave:suspend (String)->Unit) {
+@Composable fun Composer(model:SpuntoViewModel,id:String="capture",initial:String="",draftId:String=id,autoFocus:Boolean=true,autoDictate:Boolean=false,canSaveEmpty:Boolean=false,onTextChanged:(String)->Unit={},onFinishReady:((suspend ()->Unit)?)->Unit={},allowVoiceCapture:Boolean=draftId=="capture" || id!="capture",onPlainCaptureSaved:((String)->Unit)?=null,onRecordingSaved:suspend (String)->Unit={},startNewParagraph:Boolean=false,showSaveAction:Boolean=true,boxed:Boolean=id=="capture",tools:Boolean=true,compact:Boolean=false,placeholder:String?=null,trailing:(@Composable ()->Unit)?=null,caret:Int?=null,focusCapture:Boolean=false,onCaptureFocused:()->Unit={},onExpandCapture:(()->Unit)?=null,captureExpanded:Boolean=false,modifier:Modifier=Modifier,onSave:suspend (String)->Unit) {
+ val captureDock=onExpandCapture!=null
+ val collapsedDock=captureDock && !captureExpanded
  var lease by remember(id,draftId) {mutableStateOf(model.repository.beginEditor(id.takeUnless {it=="capture"},draftId))}
  val editorLease=lease
  val latestLease by rememberUpdatedState(lease)
@@ -282,6 +287,22 @@ import kotlinx.coroutines.flow.flowOf
   }
  }
  DisposableEffect(owner) { val observer=LifecycleEventObserver { _,event -> if(event==Lifecycle.Event.ON_STOP) {session.stopAndKeep();voice.onForegroundChanged(false)} else if(event==Lifecycle.Event.ON_START) voice.onForegroundChanged(true) }; owner.lifecycle.addObserver(observer); onDispose { owner.lifecycle.removeObserver(observer); session.stopAndKeep();voice.onForegroundChanged(false) } }
+ if(captureDock) LaunchedEffect(owner,model) {
+  owner.lifecycle.currentStateFlow.collect { state ->
+   // The widget and tile can open the same draft in a separate activity.
+   if(state==Lifecycle.State.RESUMED && !model.repository.ownsEditor(lease)) {
+    ready=false
+    lease=model.repository.beginEditor(null,draftId)
+    val restored=model.repository.openEditor(lease).first.orEmpty()
+    value=TextFieldValue(restored,TextRange(restored.length))
+    decision=lease.decisionJournal
+    captureGeneration++
+    dictatedText=false
+    saved=false
+    ready=true
+   }
+  }
+ }
  val listening=dictation.phase in setOf(DictationPhase.Starting,DictationPhase.Listening,DictationPhase.Stopping)
  fun ownerValue(new:TextFieldValue) {
   ownerRevision++;if(listening) session.stopAndKeep()
@@ -290,7 +311,11 @@ import kotlinx.coroutines.flow.flowOf
   saved=false;value=new
  }
  val prefix=Regex("(?:^|\\s)#([\\p{L}\\p{N}_/-]*)$").find(value.text.take(value.selection.start))?.groupValues?.get(1)
- fun insertAtCaret(text:String,at:Int=value.selection.min,replaceTo:Int=value.selection.max) { ownerValue(TextFieldValue(value.text.replaceRange(at,replaceTo,text),TextRange(at+text.length)));focus.requestFocus() }
+ fun insertAtCaret(text:String,at:Int=value.selection.min,replaceTo:Int=value.selection.max) {
+  ownerValue(TextFieldValue(value.text.replaceRange(at,replaceTo,text),TextRange(at+text.length)))
+  focus.requestFocus()
+  if(captureDock) scope.launch {withFrameNanos {};keyboard?.show()}
+ }
  // "#" lands at the caret and opens label suggestions; a checklist item starts on its own line.
  fun insertLabel() { val before=value.text.getOrNull(value.selection.min-1);insertAtCaret(if(before==null || before.isWhitespace() || before in "([") "#" else " #") }
  fun insertTask() {
@@ -390,14 +415,13 @@ import kotlinx.coroutines.flow.flowOf
   language=when(language) {"it-IT" -> "en-US";"en-US" -> if(autoAvailable) "auto" else "it-IT";else -> "it-IT"};device.update(language=language)
   if(restart) start() else session.clearNotice()
  }}
- Column(verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
-  Surface(shape=if(compact) androidx.compose.foundation.shape.RoundedCornerShape(12.dp) else MaterialTheme.shapes.large,color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,border=if(boxed) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null) {
-   Column(Modifier.fillMaxWidth().padding(if(compact) 12.dp else if(boxed) SpuntoSpacing.s16 else 0.dp),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+ val bodyContent:@Composable ()->Unit={
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
-     Box(Modifier.weight(1f).heightIn(min=if(compact) 48.dp else if(boxed) 96.dp else 48.dp),contentAlignment=if(compact) Alignment.CenterStart else Alignment.TopStart) {
-      val fieldStyle=if(compact) SpuntoType.reading.copy(fontSize=16.sp,lineHeight=23.sp) else SpuntoType.reading
-      if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=if(compact) fieldStyle else if(boxed) MaterialTheme.typography.bodyLarge else fieldStyle.copy(fontStyle=FontStyle.Italic))
-      BasicTextField(value=value,maxLines=if(compact && !focused) 2 else Int.MAX_VALUE,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=fieldStyle.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription=context.getString(R.string.core_note_text) },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
+     val fieldHeight=when { compact || collapsedDock -> 48.dp;captureExpanded -> 120.dp;boxed -> 96.dp;else -> 48.dp }
+     Box(Modifier.weight(1f).heightIn(min=fieldHeight),contentAlignment=if(compact) Alignment.CenterStart else Alignment.TopStart) {
+      val fieldStyle=when { collapsedDock -> SpuntoType.reading.copy(fontSize=20.sp,lineHeight=27.sp);compact -> SpuntoType.reading.copy(fontSize=16.sp,lineHeight=23.sp);else -> SpuntoType.reading }
+      if(value.text.isEmpty()) Text(placeholder ?: context.getString(R.string.core_placeholder),color=SpuntoColors.ink3,style=when { captureDock || compact -> fieldStyle;boxed -> MaterialTheme.typography.bodyLarge;else -> fieldStyle.copy(fontStyle=FontStyle.Italic) })
+      BasicTextField(value=value,maxLines=if(collapsedDock || compact && !focused) 2 else Int.MAX_VALUE,enabled=ready && !closing && (id=="capture" || !saving),onValueChange={ownerValue(it)},textStyle=fieldStyle.copy(color=MaterialTheme.colorScheme.onSurface),cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),modifier=Modifier.fillMaxWidth().heightIn(min=if(captureDock) fieldHeight else 0.dp).focusRequester(focus).onFocusChanged { focused=it.isFocused }.semantics { contentDescription=context.getString(R.string.core_note_text) },visualTransformation=MarkdownEditorHighlight(MaterialTheme.colorScheme.primary,MaterialTheme.colorScheme.surfaceContainer,if(voice.hasSession) recording.partialSpan else dictation.partialSpan,MaterialTheme.colorScheme.onSurfaceVariant))
      }
      if(compact && showSaveAction && (!focused || value.text.count {it=='\n'}<3)) Button(onClick={saveNow()},enabled=canSave && !startingVoice,modifier=Modifier.heightIn(min=48.dp),shape=androidx.compose.foundation.shape.RoundedCornerShape(10.dp),contentPadding=PaddingValues(horizontal=16.dp,vertical=10.dp),colors=ButtonDefaults.buttonColors(disabledContainerColor=MaterialTheme.colorScheme.primary.copy(alpha=.8f),disabledContentColor=MaterialTheme.colorScheme.onPrimary)) {
       Text(context.getString(if(saving) R.string.sys_saving else R.string.sys_save),style=SpuntoType.readingSmall.copy(fontSize=15.sp))
@@ -416,8 +440,8 @@ import kotlinx.coroutines.flow.flowOf
      dictation.phase==DictationPhase.NeedsLanguage -> DictationNotice(dictationMessage(context,dictation),context.getString(R.string.core_download)) {scope.launch {PlatformSpeechEngine.download(context,language)}}
      listening || dictationMessage(context,dictation).isNotEmpty() && (dictation.phase!=DictationPhase.Idle || dictation.notice==DictationNoticeKind.NoSpeech) -> DictationNotice(dictationMessage(context,dictation))
     }
-   }
-  }
+ }
+ val attachmentsAndVoice:@Composable ()->Unit={
   if(imageStore!=null && imageCount>0) Row(verticalAlignment=Alignment.CenterVertically) {
    Text(context.resources.getQuantityString(R.plurals.core_images_to_attach,imageCount,imageCount),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=SpuntoColors.ink3)
    TextButton(onClick={
@@ -436,15 +460,14 @@ import kotlinx.coroutines.flow.flowOf
   VoiceControls(recording,voiceFacts.transcriptionActive,pendingRecording,recoveries,ready && !closing && !saving,onStop={voice.stopCapture()},onDiscard={clip ->scope.launch {try {voice.discard(clip);if(recoveredId==clip) recoveredId=null} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=context.getString(R.string.core_clip_discard_failed)}}},onRecover={clip ->scope.launch {try {if(journal.firstOrNull {it.id==clip}?.state !in setOf("ready","recoverable")) voice.recover(clip);recoveredId=clip} catch(cancelled:CancellationException) {throw cancelled} catch(error:Exception) {model.message.value=context.getString(R.string.core_clip_recover_failed)}}},saveAction=if(showSaveAction) context.getString(R.string.core_save) else context.getString(R.string.core_done))
   pendingRecording?.let {row ->AttachmentPlayer(model,row.id,context.getString(R.string.core_recording_time,recordingTime(row.durationMs)),AttachmentEntity(row.id,row.noteId.orEmpty(),row.finalPath,"audio/ogg",kind="recording",durationMs=row.durationMs,byteSize=row.byteSize,sha256=row.sha256,serverUrl=row.serverUrl,status="local-only"))}
  }
- // Hiding the keyboard ends typing in the capture composer: focus goes, so its bar undocks and the list
- // stops holding the composer in place (a focused item stays composed, which kept day headers from sticking).
+ // A hidden keyboard ends typing. The home composer remains docked.
  val imeVisible=WindowInsets.isImeVisible;val focusManager=LocalFocusManager.current;var keyboardShown by remember { mutableStateOf(false) }
  LaunchedEffect(imeVisible) { if(keyboardShown && !imeVisible && focused && id=="capture" && !listening) focusManager.clearFocus();keyboardShown=imeVisible }
  val docked=id!="capture" || canSaveEmpty || focused || value.text.isNotEmpty() || imageCount>0 || listening || recordingActive(recording.phase) || pendingRecording!=null || dictation.phase==DictationPhase.NeedsLanguage
  // A label already typed in full offers nothing to complete, so the tools stay.
  val suggestions=prefix?.let {labelCounts.filter {label -> label.key.startsWith(it,true) && !label.path.equals(it,true)}.sortedByDescending {it.count}.take(5)}.orEmpty()
  val newLabel=prefix?.takeIf {it.isNotEmpty() && labelCounts.none {label -> label.path.equals(it,true)}}
- if(docked && (!compact || focused || listening || recordingActive(recording.phase) || pendingRecording!=null)) BottomBar {
+ val toolbar:@Composable ()->Unit={
   ComposerToolbar(tools={
    if(prefix!=null && (suggestions.isNotEmpty() || newLabel!=null)) {
     suggestions.forEach {label -> SuggestionChip(onClick={val caret=value.selection.start;insertAtCaret(label.path+" ",caret-prefix.length,caret)},label={Text("#${label.path}")})}
@@ -454,15 +477,71 @@ import kotlinx.coroutines.flow.flowOf
     TextButton(onClick=switchLanguage,modifier=Modifier.heightIn(min=48.dp).semantics {contentDescription=context.getString(R.string.core_dictation_language,languageName(context,language))}) {Text(languageName(context,language))}
     if(listening) ComposerDictationAction(true,true,startingVoice) {session.stopAndKeep()}
    } else if(tools) {
-    IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_add_label)})}
-    IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription=context.getString(R.string.core_add_task),modifier=Modifier.size(24.dp))}
-    if(id!="capture" || onPlainCaptureSaved!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=canWrite && ready && !closing && !saving && !imageBusy) {Icon(painterResource(R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
+    val recordAvailable=allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33
+    val recordEnabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty()
+    if(captureDock) CaptureInsertMenu(ready && !closing,recordAvailable,recordEnabled,::insertLabel,::insertTask,::recordTap)
+    else {
+     IconButton(onClick={insertLabel()},enabled=ready && !closing) {Text("#",style=MaterialTheme.typography.titleLarge.copy(fontFamily=uiFont()),modifier=Modifier.semantics {contentDescription=context.getString(R.string.core_add_label)})}
+     IconButton(onClick={insertTask()},enabled=ready && !closing) {Icon(painterResource(R.drawable.ic_checklist),contentDescription=context.getString(R.string.core_add_task),modifier=Modifier.size(24.dp))}
+    }
+    if(id!="capture" || onPlainCaptureSaved!=null) IconButton(onClick={pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))},enabled=canWrite && ready && !closing && !saving && !imageBusy) {Icon(painterResource(if(captureDock) R.drawable.ic_attach else R.drawable.ic_image),contentDescription=context.getString(R.string.core_add_image),modifier=Modifier.size(24.dp))}
     if(mic) ComposerDictationAction(ready && !closing && !voice.hasSession && pendingRecording==null,false,startingVoice) {micTap()}
-    if(allowVoiceCapture && voiceFacts.captureAllowed && android.os.Build.VERSION.SDK_INT>=33) TextButton(onClick={recordTap()},enabled=ready && !closing && !saving && !startingVoice && !listening && !recordingActive(recording.phase) && pendingRecording==null && recoveries.isEmpty(),modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_record))}
+    if(!captureDock && recordAvailable) TextButton(onClick={recordTap()},enabled=recordEnabled,modifier=Modifier.heightIn(min=48.dp)) {Text(context.getString(R.string.core_record))}
    }
   },save={
    if(showSaveAction && (!compact || focused && value.text.count {it=='\n'}>=3)) ComposerSaveAction(enabled=canSave,saving=saving,startingVoice=startingVoice) {saveNow()} else trailing?.invoke()
   })
+ }
+ if(captureDock) {
+  Surface(modifier=modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),
+   color=if(collapsedDock) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.background,
+   border=if(collapsedDock) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null,
+   shadowElevation=if(collapsedDock) 2.dp else 0.dp) {
+   Column(Modifier.padding(horizontal=if(collapsedDock) 12.dp else 0.dp)) {
+    if(collapsedDock) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+     Text(context.getString(R.string.settings_plugin_quick_capture_name).uppercase(LocalConfiguration.current.locales[0]),
+      Modifier.weight(1f).semantics {heading()},style=SpuntoType.overline.copy(fontWeight=FontWeight.SemiBold),
+      color=MaterialTheme.colorScheme.primary)
+     IconButton(onClick=checkNotNull(onExpandCapture),modifier=Modifier.size(48.dp)) {
+      Icon(painterResource(R.drawable.ic_expand_composer),contentDescription=context.getString(R.string.core_expand_composer),modifier=Modifier.size(20.dp))
+     }
+    }
+    Column(Modifier.weight(1f,fill=captureExpanded).verticalScroll(rememberScrollState()).padding(bottom=SpuntoSpacing.s8),
+     verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+     bodyContent()
+     attachmentsAndVoice()
+    }
+    HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant)
+    toolbar()
+   }
+  }
+ } else {
+  Column(modifier,verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {
+   Surface(shape=if(compact) RoundedCornerShape(12.dp) else MaterialTheme.shapes.large,
+    color=if(boxed) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+    border=if(boxed) BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant) else null) {
+    Column(Modifier.fillMaxWidth().padding(if(compact) 12.dp else if(boxed) SpuntoSpacing.s16 else 0.dp),
+     verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8)) {bodyContent()}
+   }
+   attachmentsAndVoice()
+  }
+  if(docked && (!compact || focused || listening || recordingActive(recording.phase) || pendingRecording!=null)) BottomBar(toolbar)
+ }
+}
+
+@Composable private fun CaptureInsertMenu(enabled:Boolean,recordAvailable:Boolean,recordEnabled:Boolean,
+ onLabel:()->Unit,onTask:()->Unit,onRecord:()->Unit) {
+ val context=LocalContext.current
+ var expanded by remember { mutableStateOf(false) }
+ Box {
+  IconButton(onClick={expanded=true},enabled=enabled) {
+   Icon(painterResource(R.drawable.ic_capture_insert),contentDescription=context.getString(R.string.core_capture_insert),modifier=Modifier.size(24.dp))
+  }
+  DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
+   DropdownMenuItem(text={Text(context.getString(R.string.core_add_label))},onClick={expanded=false;onLabel()})
+   DropdownMenuItem(text={Text(context.getString(R.string.core_add_task))},onClick={expanded=false;onTask()})
+   if(recordAvailable) DropdownMenuItem(text={Text(context.getString(R.string.core_record))},enabled=recordEnabled,onClick={expanded=false;onRecord()})
+  }
  }
 }
 private fun languageName(context:Context,tag:String)=when(tag) {"it-IT" -> context.getString(R.string.core_italian);"en-US" -> context.getString(R.string.core_english);else -> context.getString(R.string.core_auto)}

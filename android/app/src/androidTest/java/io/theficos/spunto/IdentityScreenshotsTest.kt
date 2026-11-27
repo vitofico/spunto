@@ -154,15 +154,20 @@ class IdentityScreenshotsTest {
    for(tag in listOf("fr","es")) {
     compose.runOnIdle {scale.value=1.6f;narrow.value=true;language.value=tag}
     val localized=context.createConfigurationContext(Configuration(context.resources.configuration).apply {setLocale(Locale.forLanguageTag(tag))})
-    val moreId=compose.onAllNodesWithContentDescription(localized.getString(R.string.core_more_actions)).fetchSemanticsNodes().minBy {it.boundsInRoot.top}.id
-    val more=compose.onNode(SemanticsMatcher("topmost localized More") {it.id==moreId})
-    more.assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+    val filter=compose.onNodeWithContentDescription(localized.getString(R.string.core_filter_notes))
+    filter.assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+    compose.onNodeWithContentDescription(localized.getString(R.string.core_expand_composer)).assertIsDisplayed()
+    compose.onNodeWithText(localized.getString(R.string.sys_save)).assertIsDisplayed()
     val frame=compose.onNodeWithTag("identity-canvas").fetchSemanticsNode().boundsInRoot
-    val button=more.fetchSemanticsNode().boundsInRoot
-    assertTrue("Localized More must stay inside the narrow home",button.left>=frame.left && button.right<=frame.right)
+    val button=filter.fetchSemanticsNode().boundsInRoot
+    assertTrue("Localized Filter must stay inside the narrow home",button.left>=frame.left && button.right<=frame.right)
     capture("spunto-carta-$tag-320-160.png")
-    more.performClick()
-    compose.onNodeWithText(localized.getString(R.string.core_filter_notes)).assertIsDisplayed()
+    filter.performClick()
+    // The fixture localizes the home subtree; the separate native sheet uses the host activity's locale.
+    val title=hasText(context.getString(R.string.core_filter_notes)) and hasAnyAncestor(isDialog())
+    compose.waitUntil(10_000) {
+     compose.onAllNodes(title).fetchSemanticsNodes().size==1 && compose.onNode(title).isDisplayed()
+    }
     pressBack()
     compose.waitForIdle()
    }

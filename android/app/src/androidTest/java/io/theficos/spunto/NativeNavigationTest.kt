@@ -4,11 +4,15 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.espresso.Espresso.closeSoftKeyboard
+import io.theficos.spunto.core.model.Note
 import io.theficos.spunto.core.model.labelKey
+import io.theficos.spunto.core.model.uuidV7
+import io.theficos.spunto.data.local.NoteEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,6 +64,66 @@ class NativeNavigationTest {
  }
  private fun todayFilter()=compose.onNodeWithContentDescription(container.context.getString(R.string.core_clear_date_filter,container.context.getString(R.string.core_today)))
 
+ @Test fun notebookScrollKeepsCaptureDockedAndExpansionReturnsTheSameDraft() {
+  val authority=runBlocking {LocalFixtureAuthority.require(container)}
+  val repository=container.repository
+  val original=runBlocking {repository.draft("capture").first()?.body}
+  val fixture="Synthetic dock fixture ${System.nanoTime()}"
+  val draft="$fixture draft"
+  val revised="$draft\n\nExpanded edit"
+  val notes=List(12) {index ->Note(uuidV7(),"# $fixture $index\n\nNotebook excerpt")}
+  val inserted=mutableListOf<String>()
+  val feed=compose.onNodeWithTag("notebook-feed")
+  val dock=compose.onNodeWithTag("quick-capture-dock")
+  val editor=compose.onNodeWithContentDescription("Note text")
+  try {
+   runBlocking {
+    authority.requireCurrent()
+    for(note in notes) {
+     check(repository.dao.get(note.id)==null)
+     repository.dao.put(NoteEntity.from(note))
+     inserted+=note.id
+    }
+   }
+   waitForCapture()
+   homeTitle()
+   compose.waitUntil(10_000) {compose.onAllNodesWithText("Notebook excerpt",substring=true).fetchSemanticsNodes().isNotEmpty()}
+   val feedBounds=feed.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+   val dockBounds=dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+   assertTrue("The feed ends before the capture dock",feedBounds.bottom<=dockBounds.top)
+   feed.performScrollToIndex(11)
+   assertEquals(dockBounds,dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
+
+   editor.performTextReplacement(draft)
+   val editingFeed=feed.assertExists().fetchSemanticsNode().boundsInRoot
+   val editingDock=dock.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+   assertTrue("Typing keeps the dock separate from the feed",editingFeed.bottom<=editingDock.top)
+   compose.onNodeWithText("Save",useUnmergedTree=true).assertIsDisplayed().assertIsEnabled()
+   compose.onNodeWithContentDescription("Expand composer").performClick()
+   compose.onNodeWithText("New note").assertIsDisplayed()
+   waitForCapture(draft)
+   editor.assertTextEquals(draft).performTextReplacement(revised)
+   compose.onNodeWithContentDescription("Back").performClick()
+   waitForCapture(revised)
+   editor.assertTextEquals(revised)
+   dock.assertIsDisplayed()
+   closeSoftKeyboard()
+   compose.onNodeWithContentDescription("Search").assertIsDisplayed().performClick()
+   compose.onNodeWithContentDescription("Back").performClick()
+   waitForCapture(revised)
+   editor.assertTextEquals(revised)
+   assertDraft(revised)
+  } finally {
+   try {authority.restoreCaptureDraft(original) {compose.activityRule.scenario.close()}}
+   finally {
+    runBlocking {
+     authority.requireCurrent()
+     for(id in inserted) repository.dao.remove(id)
+    }
+   }
+  }
+ }
+
  @Test fun dateFiltersStayOffTheTimelineAndApplyOnlyAfterConfirmation() {
   waitForCapture()
   compose.onNodeWithText("Dates").assertDoesNotExist()
@@ -100,9 +164,9 @@ class NativeNavigationTest {
    compose.mainClock.advanceTimeBy(400);compose.waitForIdle()
    runBlocking {withTimeout(10_000) {repository.draft("capture").first {it?.body==body}}}
    openSheet()
-   compose.onNodeWithText("All notes").assertIsSelected()
+   compose.onNode(hasText("All notes") and hasAnyAncestor(isDialog())).assertIsSelected()
    filterLabels("Synthetic_no_matching_label_${System.nanoTime()}")
-   compose.onNodeWithText("All notes").assertIsSelected()
+   compose.onNode(hasText("All notes") and hasAnyAncestor(isDialog())).assertIsSelected()
    assertDraft(body)
    compose.onNodeWithContentDescription("Close sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
    compose.onNode(labelFilterMatcher()).assertDoesNotExist()
@@ -156,7 +220,7 @@ class NativeNavigationTest {
    assertNavigationTitle("#$path")
    compose.onNodeWithContentDescription("Note text").assertDoesNotExist();assertDraft(draftBody)
    openSheet()
-   compose.onNodeWithText("All notes").performClick()
+   compose.onNode(hasText("All notes") and hasAnyAncestor(isDialog())).performClick()
    homeTitle()
    waitForCapture(draftBody);compose.onNodeWithContentDescription("Note text").assertTextEquals(draftBody)
    assertDraft(draftBody)

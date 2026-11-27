@@ -323,4 +323,6 @@
     <string name="core_picker_source_limit">Entferne eine Quelle, bevor du eine weitere hinzufügst.</string>
     <string name="core_link_upgrade_server">Aktualisiere deinen Spunto-Server, um Notizlinks sicher einzufügen.</string>
     <string name="core_link_waiting_to_sync">Link auf dem Server eingefügt. Synchronisierung steht noch aus.</string>
+    <string name="core_expand_composer">Editor vergrößern</string>
+    <string name="core_capture_insert">Einfügen</string>
 </resources>

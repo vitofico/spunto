@@ -21,16 +21,20 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -87,14 +91,19 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
 
 @Composable fun Timeline(model:SpuntoViewModel,onNote:(String)->Unit,onReview:()->Unit,from:String="",to:String="",
  focusCapture:Boolean=false,onCaptureFocused:()->Unit={},captureExpanded:Boolean=false,
- onExpandCapture:()->Unit={},onCollapseCapture:()->Unit={},snackbarContent:@Composable ()->Unit={}) {
+ onExpandCapture:()->Unit={},onCollapseCapture:()->Unit={},snackbarContent:@Composable ()->Unit={},
+ compactCapture:Boolean=false) {
  val context=LocalContext.current
+ val focusManager=LocalFocusManager.current
+ val keyboard=LocalSoftwareKeyboardController.current
  val range=remember(from,to) { runCatching { CreatedRange.parse(from,to) } }
  val spec=remember(range.getOrNull(),range.isSuccess) { TimelineSpec(created=range.getOrDefault(CreatedRange()),valid=range.isSuccess) }
  val page=model.paging(spec).collectAsLazyPagingItems()
  val outputs by model.outputs.collectAsState()
  val notes by model.notes.collectAsState()
  val writable by model.workspaceCanWrite.collectAsState()
+ val owner by model.workspaceIsOwner.collectAsState()
+ val online by model.online.collectAsState()
  val proposals=waitingProposals(model,outputs).size
  val listState=rememberLazyListState()
  val feedback=LocalFeedback.current
@@ -102,7 +111,34 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val slipHidden=remember { mutableStateOf(model.container.preferences.getString("slip-hidden","").orEmpty()) }
  val slip=dailySlip(outputs,notes,model.container.manifest::enabled) { slipHidden.value=="${LocalDate.now()}/${it.id}" }
  val manifest by model.manifest.collectAsState()
- val lead=(if(writable && !supportsDecisionCapture(manifest)) 1 else 0)+(if(writable && proposals>=3) 1 else 0)+(if(slip!=null) 1 else 0)
+ val legacyDecision=writable && !supportsDecisionCapture(manifest) && "record-decision" in decisionActionIds(manifest,owner,online)
+ val lead=(if(legacyDecision) 1 else 0)+(if(writable && proposals>=3) 1 else 0)+(if(slip!=null) 1 else 0)
+ var browsing by rememberSaveable { mutableStateOf(false) }
+ var captureOverride by rememberSaveable { mutableStateOf<Boolean?>(null) }
+ var overrideMode by rememberSaveable { mutableStateOf(compactCapture) }
+ var requestFocus by rememberSaveable { mutableStateOf(false) }
+ var engaged by remember { mutableStateOf(false) }
+ var hasDraft by remember { mutableStateOf(false) }
+ var dockHeightDp by rememberSaveable { mutableFloatStateOf(0f) }
+ val density=LocalDensity.current
+ val scrollThreshold=with(density) { 48.dp.roundToPx() }
+ LaunchedEffect(listState,scrollThreshold) {
+  snapshotFlow {
+   when {
+    !listState.canScrollBackward -> false
+    listState.firstVisibleItemIndex>0 || listState.firstVisibleItemScrollOffset>=scrollThreshold -> true
+    else -> null
+   }
+  }.filterNotNull().collect { browsing=it }
+ }
+ LaunchedEffect(browsing,compactCapture) {
+  if(overrideMode!=compactCapture || !browsing && !compactCapture) captureOverride=null
+  overrideMode=compactCapture
+ }
+ val canMinimize=compactCapture || browsing
+ val override=captureOverride.takeIf {overrideMode==compactCapture}
+ val minimized=writable && !captureExpanded && canMinimize && override!=true && !focusCapture && !requestFocus &&
+  (!engaged || override==false)
  // After Save the new entry, with its day header, is scrolled into view, with a brief context.getString(R.string.core_saved).
  LaunchedEffect(savedId) {
   val id=savedId ?: return@LaunchedEffect
@@ -115,25 +151,56 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
   savedId=null
  }
  fun captured(id:String) {
+  captureOverride=null
+  if(canMinimize) {
+   focusManager.clearFocus()
+   keyboard?.hide()
+  }
   onCollapseCapture()
   savedId=id
  }
  Column(Modifier.fillMaxSize().imePadding()) {
   if(!captureExpanded) Box(Modifier.weight(1f)) {
-   NoteList(model,page,grouped=true,listState,onNote,notebook=true,empty={
+   // Keep the original scroll range in adaptive mode so a short feed cannot jump back to the top.
+   val bottomPadding=when {
+    !minimized -> 10.dp
+    compactCapture -> 84.dp
+    else -> maxOf(84.dp,(dockHeightDp+10f).dp)
+   }
+   NoteList(model,page,grouped=true,listState,onNote,notebook=true,bottomPadding=bottomPadding,empty={
     if(from.isNotBlank() || to.isNotBlank()) Text(context.getString(R.string.core_no_date_notes),color=SpuntoColors.ink3)
     else { Text(context.getString(R.string.core_quiet_place),style=MaterialTheme.typography.titleLarge); Text(context.getString(R.string.core_share_hint),color=MaterialTheme.colorScheme.onSurfaceVariant) }
    }) {
-    if(writable && !supportsDecisionCapture(manifest)) item(key="record-decision") { DecisionRecordAction(model) }
+    if(legacyDecision) item(key="record-decision") { DecisionRecordAction(model) }
     if(writable && proposals>=3) item(key="review") { TextButton(onClick=onReview,modifier=Modifier.heightIn(min=48.dp)) { Text(context.resources.getQuantityString(R.plurals.core_suggestions_review,proposals,proposals)) } }
     slip?.let { (output,note) -> item(key="slip") { DailySlip(model,output,note,onNote) { slipHidden.value="${LocalDate.now()}/${output.id}";model.container.preferences.edit().putString("slip-hidden",slipHidden.value).apply() } } }
    }
-   Box(Modifier.align(Alignment.BottomCenter)) {snackbarContent()}
+   Box(Modifier.align(Alignment.BottomCenter).padding(bottom=if(minimized) 72.dp else 0.dp)) {snackbarContent()}
+   if(minimized) FloatingActionButton(
+    onClick={captureOverride=true;requestFocus=true},
+    modifier=Modifier.align(Alignment.BottomEnd).padding(end=16.dp,bottom=12.dp).testTag("quick-capture-pencil").semantics {
+     if(hasDraft) stateDescription=context.getString(R.string.settings_capture_mode_has_draft)
+    },
+    containerColor=MaterialTheme.colorScheme.primary,contentColor=MaterialTheme.colorScheme.onPrimary,
+   ) {
+    Box(Modifier.size(56.dp)) {
+     Icon(painterResource(R.drawable.ic_quick_capture_pencil),contentDescription=context.getString(R.string.settings_plugin_quick_capture_name),modifier=Modifier.align(Alignment.Center))
+     if(hasDraft) Box(Modifier.align(Alignment.TopEnd).padding(7.dp).size(7.dp)
+      .background(MaterialTheme.colorScheme.onPrimary,RoundedCornerShape(50)))
+    }
+   }
   }
   if(writable) Composer(model,autoFocus=false,onPlainCaptureSaved=::captured,onRecordingSaved={captured(it)},
-   focusCapture=focusCapture,onCaptureFocused=onCaptureFocused,onExpandCapture=onExpandCapture,captureExpanded=captureExpanded,
+   focusCapture=focusCapture || requestFocus,onCaptureFocused={
+    if(canMinimize) captureOverride=true
+    requestFocus=false
+    onCaptureFocused()
+   },onExpandCapture=onExpandCapture,captureExpanded=captureExpanded,captureMinimized=minimized,
+   onMinimizeCapture=if(canMinimize) {{captureOverride=false}} else null,
+   onCaptureContentChanged={ active,draft -> engaged=active;hasDraft=draft },
    modifier=if(captureExpanded) Modifier.weight(1f).padding(horizontal=20.dp) else Modifier
-    .testTag("quick-capture-dock").padding(start=12.dp,end=12.dp,bottom=8.dp),onSave={model.saveLocal(it)})
+    .testTag("quick-capture-dock").onSizeChanged {dockHeightDp=with(density) {it.height.toDp().value}}
+    .padding(start=12.dp,end=12.dp,bottom=8.dp),onSave={model.saveLocal(it)})
  }
 }
 
@@ -156,7 +223,7 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
 }
 
 /** The paged entry list shared by the timeline and every filter: sticky headers, long-press actions, swipe to archive. */
-@Composable private fun NoteList(model:SpuntoViewModel,page:LazyPagingItems<NoteEntity>,grouped:Boolean,listState:LazyListState,onNote:(String)->Unit,restore:Boolean=false,notebook:Boolean=false,empty:@Composable ColumnScope.()->Unit,lead:LazyListScope.()->Unit={}) {
+@Composable private fun NoteList(model:SpuntoViewModel,page:LazyPagingItems<NoteEntity>,grouped:Boolean,listState:LazyListState,onNote:(String)->Unit,restore:Boolean=false,notebook:Boolean=false,bottomPadding:Dp=SpuntoSpacing.s20,empty:@Composable ColumnScope.()->Unit,lead:LazyListScope.()->Unit={}) {
  val context=LocalContext.current
  var actionsFor by remember { mutableStateOf<String?>(null) }
  // Rows and the notes they point at come from one snapshot, so a shrinking list never leaves a row past its end.
@@ -164,15 +231,26 @@ internal fun entryDescription(context:Context,note:Note,time:String):String {
  val notes=remember(snapshot) { snapshot.map { it.note() } }
  val rows=remember(notes,grouped) { timelineRows(context,notes,grouped) }
  val modifier=Modifier.fillMaxSize().then(if(notebook) Modifier.testTag("notebook-feed") else Modifier)
- LazyColumn(modifier,state=listState,contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=if(notebook) 10.dp else SpuntoSpacing.s20),verticalArrangement=Arrangement.spacedBy(0.dp)) {
+ LazyColumn(modifier,state=listState,contentPadding=PaddingValues(start=SpuntoSpacing.s20,end=SpuntoSpacing.s20,bottom=bottomPadding),verticalArrangement=Arrangement.spacedBy(0.dp)) {
   lead()
   // Paging reports NotLoading before the first page arrives, so wait until the list has been read once.
   if(page.itemCount==0 && page.loadState.refresh is LoadState.NotLoading && page.loadState.source.refresh is LoadState.NotLoading && page.itemSnapshotList.isEmpty() && page.loadState.append.endOfPaginationReached) item(key="empty") { Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),verticalArrangement=Arrangement.spacedBy(SpuntoSpacing.s8),content=empty) }
   rows.forEach { row ->
    val note=notes[row.index]
-   if(row.header!=null) stickyHeader(key="h:${note.id}",contentType="header") {
-    // Drawn above the entries that scroll under it.
-    Text(row.header.uppercase(),Modifier.zIndex(1f).background(MaterialTheme.colorScheme.background).padding(top=if(notebook) 10.dp else 8.dp,bottom=if(notebook) 8.dp else 16.dp).semantics { heading();contentDescription=row.header },style=SpuntoType.overline.copy(fontWeight=FontWeight.SemiBold,letterSpacing=2.sp),color=MaterialTheme.colorScheme.primary)
+   if(row.header!=null) stickyHeader(key="h:${note.id}",contentType="header") { index ->
+    val paper=MaterialTheme.colorScheme.background
+    val rail=Modifier.fillMaxWidth().zIndex(1f).padding(end=if(notebook) 0.dp else 24.dp)
+     .drawWithContent {
+      // Cover passing notes across the whole card width once the header sticks.
+      // In its normal position the row leaves the woodgrain visible.
+      val first=listState.firstVisibleItemIndex
+      if(first>index || first==index && listState.firstVisibleItemScrollOffset>0) drawRect(paper)
+      drawContent()
+     }
+     .padding(top=if(notebook) 10.dp else 8.dp,bottom=if(notebook) 8.dp else 16.dp)
+     .semantics { heading();contentDescription=row.header }
+    Text(row.header.uppercase(),rail.then(if(notebook) Modifier.testTag("notebook-date-header") else Modifier),
+     style=SpuntoType.overline.copy(fontWeight=FontWeight.SemiBold,letterSpacing=2.sp),color=MaterialTheme.colorScheme.primary)
    } else item(key=note.id,contentType="entry") {
     if(row.index<page.itemCount) page[row.index] // tells the pager how far the reader has got, so the next page loads
     NoteEntry(model,note,onNote,entryTime(context,note.createdAt,row.group),onActions={ actionsFor=note.id },restore=restore,paneStart=row.index==0 || rows.any {it.header!=null && it.index==row.index},paneEnd=row.index==notes.lastIndex || rows.any {it.header!=null && it.index==row.index+1},notebook=notebook)

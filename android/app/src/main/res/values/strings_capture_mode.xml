@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_capture_mode_adaptive">Collapses while scrolling</string>
+    <string name="settings_capture_mode_compact">Always compact</string>
+    <string name="settings_capture_mode_minimize">Minimize Quick Capture</string>
+    <string name="settings_capture_mode_has_draft">Draft available</string>
+</resources>
